@@ -159,7 +159,7 @@ export default function ProjectCard({ project, expanded, onToggleExpand, onEdit,
       style={{ borderLeft: `3px solid ${cfg.line}` }}
     >
       {/* Card body */}
-      <div className="px-5 pt-5 pb-4 cursor-pointer" onClick={onToggleExpand}>
+      <div className="px-5 pt-5 pb-4">
 
         {/* Title row */}
         <div className="flex items-start gap-3 mb-3">
