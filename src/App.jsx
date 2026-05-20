@@ -21,7 +21,7 @@ function App() {
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        setProjects(snapshot.docs.map(d => ({ id: d.id, ...d.data() })))
+        setProjects(snapshot.docs.map(d => ({ ...d.data(), id: d.id })))
         setLoading(false)
         setConnected(true)
       },
