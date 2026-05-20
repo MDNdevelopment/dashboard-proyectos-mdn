@@ -127,9 +127,14 @@ function Sidebar({ projects, activeFilter, onFilterChange, onNewProject, connect
           </svg>
           Nuevo proyecto
         </button>
-        <p className="text-[11px] font-semibold text-[#888] text-center mt-3">
-          {new Date().toLocaleDateString('es-VE', { weekday: 'short', day: 'numeric', month: 'short' })}
-        </p>
+        <div className="mt-3 text-center">
+          <p className="text-[18px] font-bold text-[#111] leading-none">
+            {new Date().toLocaleDateString('es-VE', { day: 'numeric', month: 'short' })}
+          </p>
+          <p className="text-[11px] font-medium text-[#888] mt-0.5 capitalize">
+            {new Date().toLocaleDateString('es-VE', { weekday: 'long' })}
+          </p>
+        </div>
       </div>
     </aside>
   )
