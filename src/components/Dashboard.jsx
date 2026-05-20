@@ -10,13 +10,8 @@ const FILTER_LABELS = {
 
 function Dashboard({ projects, loading, activeFilter, onNewProject, onEditProject, onUpdateProject, onDeleteProject, onMenuToggle }) {
   const [search, setSearch] = useState('')
-  const [expandedIds, setExpandedIds] = useState(new Set())
-
-  const toggleExpanded = id => setExpandedIds(prev => {
-    const next = new Set(prev)
-    next.has(id) ? next.delete(id) : next.add(id)
-    return next
-  })
+  const [expandedMap, setExpandedMap] = useState({})
+  const toggleExpanded = id => setExpandedMap(prev => ({ ...prev, [id]: !prev[id] }))
 
   const getTasksOf = p => p.phases?.flatMap(ph => ph.tasks ?? []) ?? []
 
@@ -154,7 +149,7 @@ function Dashboard({ projects, loading, activeFilter, onNewProject, onEditProjec
               <ProjectCard
                 key={project.id}
                 project={project}
-                expanded={expandedIds.has(project.id)}
+                expanded={!!expandedMap[project.id]}
                 onToggleExpand={() => toggleExpanded(project.id)}
                 onEdit={() => onEditProject(project)}
                 onUpdate={u => onUpdateProject(project.id, u)}

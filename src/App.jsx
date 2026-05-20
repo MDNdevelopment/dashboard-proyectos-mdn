@@ -45,7 +45,7 @@ function App() {
   }
 
   return (
-    <div className="flex min-h-screen bg-[#0d0d0d]">
+    <div className="flex min-h-screen bg-[#f2f0e8]">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
