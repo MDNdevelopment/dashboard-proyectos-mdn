@@ -1,3 +1,5 @@
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 
 const DEPARTMENTS = ['Redes', 'Diseño', 'Audiovisual', 'Tecnología']
 
@@ -15,22 +17,35 @@ const VIEW_ICONS = {
   Completado:  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="8" cy="8" r="6.5"/><path d="M5 8.5l2 2 4-4" strokeLinecap="round" strokeLinejoin="round"/></svg>,
 }
 
+const TICKET_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="1" y="3" width="14" height="10" rx="1.5"/><path d="M1 6h14" strokeLinecap="round"/><path d="M5 10h6" strokeLinecap="round"/></svg>
+const BELL_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M8 1.5a4.5 4.5 0 0 1 4.5 4.5c0 2.5.8 3.5 1.5 4.5H2c.7-1 1.5-2 1.5-4.5A4.5 4.5 0 0 1 8 1.5Z" strokeLinecap="round" strokeLinejoin="round"/><path d="M6.5 13a1.5 1.5 0 0 0 3 0" strokeLinecap="round"/></svg>
+
 function Sidebar({ projects, activeFilter, onFilterChange, onNewProject, connected }) {
-  const counts = {
+  const { signOut, userProfile } = useAuth()
+  const isITAdmin = userProfile?.department_id === 0 && (userProfile?.access_level >= 3 || userProfile?.admin === true)
+  const location = useLocation()
+  const navigate = useNavigate()
+  const hasProjects = projects != null
+
+  const counts = hasProjects ? {
     all:           projects.length,
     'En proceso':  projects.filter(p => p.status === 'En proceso').length,
     'Pendiente':   projects.filter(p => p.status === 'Pendiente').length,
     'Completado':  projects.filter(p => p.status === 'Completado').length,
-  }
+  } : {}
 
   const deptCounts = {}
-  DEPARTMENTS.forEach(d => {
-    deptCounts[d] = projects.filter(p =>
-      (p.departments ?? (p.department ? [p.department] : [])).includes(d)
-    ).length
-  })
+  if (hasProjects) {
+    DEPARTMENTS.forEach(d => {
+      deptCounts[d] = projects.filter(p =>
+        (p.departments ?? (p.department ? [p.department] : [])).includes(d)
+      ).length
+    })
+  }
 
-  const hasDepts = DEPARTMENTS.some(d => deptCounts[d] > 0)
+  const hasDepts = hasProjects && DEPARTMENTS.some(d => deptCounts[d] > 0)
+  const ticketsActive = location.pathname === '/tickets'
+  const notifActive = location.pathname === '/tickets/notificaciones'
 
   return (
     <aside className="w-[230px] flex-shrink-0 bg-white border-r border-[#e0ddd4] flex flex-col h-full">
@@ -41,93 +56,137 @@ function Sidebar({ projects, activeFilter, onFilterChange, onNewProject, connect
           <p className="text-[14px] font-bold text-[#111] leading-none tracking-tight">MDN</p>
           <p className="text-[11px] font-medium text-[#666] mt-0.5">Publicidad</p>
         </div>
-        <div className={`flex items-center gap-1.5 text-[11px] font-semibold ${connected ? 'text-[#16a34a]' : 'text-[#888]'}`}>
-          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${connected ? 'bg-[#22c55e] animate-pulse' : 'bg-[#bbb]'}`} />
-          {connected ? 'En vivo' : 'Conectando...'}
-        </div>
+        {hasProjects && (
+          <div className={`flex items-center gap-1.5 text-[11px] font-semibold ${connected ? 'text-[#16a34a]' : 'text-[#888]'}`}>
+            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${connected ? 'bg-[#22c55e] animate-pulse' : 'bg-[#bbb]'}`} />
+            {connected ? 'En vivo' : 'Conectando...'}
+          </div>
+        )}
       </div>
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 overflow-y-auto">
 
-        <p className="text-[10px] font-mono font-bold tracking-[0.16em] uppercase text-[#888] px-2 mb-2">
-          Vistas
-        </p>
-
-        <div className="space-y-0.5">
-          {VIEWS.map(view => {
-            const active = activeFilter === view.key
-            return (
-              <button
-                key={view.key}
-                onClick={() => onFilterChange(view.key)}
-                className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13px] font-medium transition-all text-left ${
-                  active
-                    ? 'bg-[#FFB800] text-[#111]'
-                    : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
-                }`}
-              >
-                <span className={`flex-shrink-0 ${active ? 'text-[#111]' : 'text-[#666]'}`}>
-                  {VIEW_ICONS[view.key]}
-                </span>
-                <span className="flex-1">{view.label}</span>
-                <span className={`text-[11px] font-mono font-bold min-w-[22px] text-center px-1.5 py-0.5 rounded-md ${
-                  active ? 'bg-black/12 text-[#111]' : 'bg-[#f0ede3] text-[#555]'
-                }`}>
-                  {counts[view.key] ?? 0}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-
-        {hasDepts && (
+        {hasProjects && (
           <>
-            <div className="h-px bg-[#ece9df] mx-2 my-4" />
             <p className="text-[10px] font-mono font-bold tracking-[0.16em] uppercase text-[#888] px-2 mb-2">
-              Departamentos
+              Vistas
             </p>
+
             <div className="space-y-0.5">
-              {DEPARTMENTS.filter(d => deptCounts[d] > 0).map(dept => {
-                const key = `dept:${dept}`
-                const active = activeFilter === key
+              {VIEWS.map(view => {
+                const active = activeFilter === view.key
                 return (
                   <button
-                    key={dept}
-                    onClick={() => onFilterChange(key)}
+                    key={view.key}
+                    onClick={() => { onFilterChange(view.key); if (ticketsActive) navigate('/') }}
                     className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13px] font-medium transition-all text-left ${
                       active
                         ? 'bg-[#FFB800] text-[#111]'
                         : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
                     }`}
                   >
-                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${active ? 'bg-[#111]' : 'bg-[#bbb]'}`} />
-                    <span className="flex-1">{dept}</span>
+                    <span className={`flex-shrink-0 ${active ? 'text-[#111]' : 'text-[#666]'}`}>
+                      {VIEW_ICONS[view.key]}
+                    </span>
+                    <span className="flex-1">{view.label}</span>
                     <span className={`text-[11px] font-mono font-bold min-w-[22px] text-center px-1.5 py-0.5 rounded-md ${
                       active ? 'bg-black/12 text-[#111]' : 'bg-[#f0ede3] text-[#555]'
                     }`}>
-                      {deptCounts[dept]}
+                      {counts[view.key] ?? 0}
                     </span>
                   </button>
                 )
               })}
             </div>
+
+            {hasDepts && (
+              <>
+                <div className="h-px bg-[#ece9df] mx-2 my-4" />
+                <p className="text-[10px] font-mono font-bold tracking-[0.16em] uppercase text-[#888] px-2 mb-2">
+                  Departamentos
+                </p>
+                <div className="space-y-0.5">
+                  {DEPARTMENTS.filter(d => deptCounts[d] > 0).map(dept => {
+                    const key = `dept:${dept}`
+                    const active = activeFilter === key
+                    return (
+                      <button
+                        key={dept}
+                        onClick={() => { onFilterChange(key); if (ticketsActive) navigate('/') }}
+                        className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13px] font-medium transition-all text-left ${
+                          active
+                            ? 'bg-[#FFB800] text-[#111]'
+                            : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+                        }`}
+                      >
+                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${active ? 'bg-[#111]' : 'bg-[#bbb]'}`} />
+                        <span className="flex-1">{dept}</span>
+                        <span className={`text-[11px] font-mono font-bold min-w-[22px] text-center px-1.5 py-0.5 rounded-md ${
+                          active ? 'bg-black/12 text-[#111]' : 'bg-[#f0ede3] text-[#555]'
+                        }`}>
+                          {deptCounts[dept]}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+
+            <div className="h-px bg-[#ece9df] mx-2 my-4" />
           </>
         )}
+
+        <p className="text-[10px] font-mono font-bold tracking-[0.16em] uppercase text-[#888] px-2 mb-2">
+          Herramientas
+        </p>
+        <div className="space-y-0.5">
+          <Link
+            to="/tickets"
+            className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13px] font-medium transition-all text-left ${
+              ticketsActive
+                ? 'bg-[#FFB800] text-[#111]'
+                : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+            }`}
+          >
+            <span className={`flex-shrink-0 ${ticketsActive ? 'text-[#111]' : 'text-[#666]'}`}>
+              {TICKET_ICON}
+            </span>
+            <span className="flex-1">Tickets de soporte</span>
+          </Link>
+          {isITAdmin && (
+            <Link
+              to="/tickets/notificaciones"
+              className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13px] font-medium transition-all text-left ${
+                notifActive
+                  ? 'bg-[#FFB800] text-[#111]'
+                  : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+              }`}
+            >
+              <span className={`flex-shrink-0 ${notifActive ? 'text-[#111]' : 'text-[#666]'}`}>
+                {BELL_ICON}
+              </span>
+              <span className="flex-1">Notificaciones</span>
+            </Link>
+          )}
+        </div>
       </nav>
 
       {/* CTA */}
       <div className="px-4 pb-6 pt-3 border-t border-[#ece9df]">
-        <button
-          onClick={onNewProject}
-          className="w-full bg-[#111] text-white text-[13px] font-bold py-2.5 rounded-xl hover:bg-[#222] transition-colors flex items-center justify-center gap-2"
-        >
-          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.8">
-            <path d="M6 1v10M1 6h10" strokeLinecap="round"/>
-          </svg>
-          Nuevo proyecto
-        </button>
-        <div className="mt-3 text-center">
+        {hasProjects && (
+          <button
+            onClick={onNewProject}
+            className="w-full bg-[#111] text-white text-[13px] font-bold py-2.5 rounded-xl hover:bg-[#222] transition-colors flex items-center justify-center gap-2"
+          >
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.8">
+              <path d="M6 1v10M1 6h10" strokeLinecap="round"/>
+            </svg>
+            Nuevo proyecto
+          </button>
+        )}
+        <div className={`${hasProjects ? 'mt-3' : ''} text-center`}>
           <p className="text-[18px] font-bold text-[#111] leading-none">
             {new Date().toLocaleDateString('es-VE', { day: 'numeric', month: 'short' })}
           </p>
@@ -135,6 +194,12 @@ function Sidebar({ projects, activeFilter, onFilterChange, onNewProject, connect
             {new Date().toLocaleDateString('es-VE', { weekday: 'long' })}
           </p>
         </div>
+        <button
+          onClick={signOut}
+          className="mt-3 w-full text-[12px] font-medium text-[#999] hover:text-[#111] transition-colors py-1.5 rounded-lg hover:bg-[#f5f3eb]"
+        >
+          Cerrar sesión
+        </button>
       </div>
     </aside>
   )
