@@ -1,0 +1,79 @@
+import { useState } from 'react'
+import { Navigate, Link } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
+import MDNLogo from '../components/MDNLogo'
+
+export default function LoginPage() {
+  const { session, signIn } = useAuth()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  if (session) return <Navigate to="/" replace />
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+    const { error } = await signIn(email, password)
+    if (error) setError('Correo o contraseña incorrectos')
+    setLoading(false)
+  }
+
+  return (
+    <div className="main-bg min-h-screen flex items-center justify-center px-4">
+      <div className="bg-white rounded-2xl border border-[#e0ddd4] p-8 w-full max-w-[360px]">
+        <div className="flex flex-col items-center mb-7">
+          <MDNLogo size={48} />
+          <p className="text-[13px] font-medium text-[#888] mt-3">MDN Publicidad</p>
+        </div>
+
+        <h1 className="text-[18px] font-bold text-[#111] mb-1">Iniciar sesión</h1>
+        <p className="text-[13px] text-[#888] mb-6">Ingresa tus credenciales para continuar</p>
+
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <input
+            className="input-base"
+            type="email"
+            placeholder="Correo electrónico"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            required
+            autoComplete="email"
+          />
+          <input
+            className="input-base"
+            type="password"
+            placeholder="Contraseña"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            required
+            autoComplete="current-password"
+          />
+
+          {error && (
+            <p className="text-[12px] text-red-500 font-medium">{error}</p>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-[#FFB800] text-[#111] text-[13px] font-bold py-2.5 rounded-xl hover:bg-[#e6a600] transition-colors disabled:opacity-60 mt-1"
+          >
+            {loading ? 'Ingresando...' : 'Ingresar'}
+          </button>
+        </form>
+
+        <div className="mt-5 text-center">
+          <Link
+            to="/forgot-password"
+            className="text-[12px] text-[#888] hover:text-[#111] transition-colors"
+          >
+            ¿Olvidaste tu contraseña?
+          </Link>
+        </div>
+      </div>
+    </div>
+  )
+}
