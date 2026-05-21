@@ -81,11 +81,11 @@ function Sidebar({ projects, activeFilter, onFilterChange, onNewProject, connect
 
             <div className="space-y-0.5">
               {VIEWS.map(view => {
-                const active = activeFilter === view.key
+                const active = activeFilter === view.key && !isTicketsRoute
                 return (
                   <button
                     key={view.key}
-                    onClick={() => { onFilterChange(view.key); if (ticketsActive) navigate('/') }}
+                    onClick={() => { onFilterChange(view.key); if (isTicketsRoute) navigate('/') }}
                     className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13px] font-medium transition-all text-left ${
                       active
                         ? 'bg-[#FFB800] text-[#111]'
@@ -115,11 +115,11 @@ function Sidebar({ projects, activeFilter, onFilterChange, onNewProject, connect
                 <div className="space-y-0.5">
                   {DEPARTMENTS.filter(d => deptCounts[d] > 0).map(dept => {
                     const key = `dept:${dept}`
-                    const active = activeFilter === key
+                    const active = activeFilter === key && !isTicketsRoute
                     return (
                       <button
                         key={dept}
-                        onClick={() => { onFilterChange(key); if (ticketsActive) navigate('/') }}
+                        onClick={() => { onFilterChange(key); if (isTicketsRoute) navigate('/') }}
                         className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13px] font-medium transition-all text-left ${
                           active
                             ? 'bg-[#FFB800] text-[#111]'
