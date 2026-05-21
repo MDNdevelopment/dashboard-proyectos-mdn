@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
@@ -19,10 +20,12 @@ const VIEW_ICONS = {
 
 const TICKET_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="1" y="3" width="14" height="10" rx="1.5"/><path d="M1 6h14" strokeLinecap="round"/><path d="M5 10h6" strokeLinecap="round"/></svg>
 const BELL_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M8 1.5a4.5 4.5 0 0 1 4.5 4.5c0 2.5.8 3.5 1.5 4.5H2c.7-1 1.5-2 1.5-4.5A4.5 4.5 0 0 1 8 1.5Z" strokeLinecap="round" strokeLinejoin="round"/><path d="M6.5 13a1.5 1.5 0 0 0 3 0" strokeLinecap="round"/></svg>
+const CHART_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="1" y="8" width="3" height="6" rx="1"/><rect x="6" y="5" width="3" height="9" rx="1"/><rect x="11" y="2" width="3" height="12" rx="1"/></svg>
 
 function Sidebar({ projects, activeFilter, onFilterChange, onNewProject, connected }) {
   const { signOut, userProfile } = useAuth()
   const isITAdmin = userProfile?.department_id === 0 && (userProfile?.access_level >= 3 || userProfile?.admin === true)
+  const canAnalytics = userProfile?.access_level >= 3 || userProfile?.admin === true
   const location = useLocation()
   const navigate = useNavigate()
   const hasProjects = projects != null
@@ -44,8 +47,11 @@ function Sidebar({ projects, activeFilter, onFilterChange, onNewProject, connect
   }
 
   const hasDepts = hasProjects && DEPARTMENTS.some(d => deptCounts[d] > 0)
+  const isTicketsRoute = location.pathname.startsWith('/tickets')
   const ticketsActive = location.pathname === '/tickets'
+  const analyticsActive = location.pathname === '/tickets/analytics'
   const notifActive = location.pathname === '/tickets/notificaciones'
+  const [ticketsOpen, setTicketsOpen] = useState(isTicketsRoute)
 
   return (
     <aside className="w-[230px] flex-shrink-0 bg-white border-r border-[#e0ddd4] flex flex-col h-full">
@@ -142,33 +148,75 @@ function Sidebar({ projects, activeFilter, onFilterChange, onNewProject, connect
           Herramientas
         </p>
         <div className="space-y-0.5">
-          <Link
-            to="/tickets"
+          {/* Tickets de soporte — menú desplegable */}
+          <button
+            onClick={() => setTicketsOpen(o => !o)}
             className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13px] font-medium transition-all text-left ${
-              ticketsActive
+              isTicketsRoute && !ticketsOpen
                 ? 'bg-[#FFB800] text-[#111]'
-                : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+                : isTicketsRoute
+                  ? 'text-[#111] bg-[#f5f3eb]'
+                  : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
             }`}
           >
-            <span className={`flex-shrink-0 ${ticketsActive ? 'text-[#111]' : 'text-[#666]'}`}>
+            <span className={`flex-shrink-0 ${isTicketsRoute ? 'text-[#111]' : 'text-[#666]'}`}>
               {TICKET_ICON}
             </span>
             <span className="flex-1">Tickets de soporte</span>
-          </Link>
-          {isITAdmin && (
-            <Link
-              to="/tickets/notificaciones"
-              className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13px] font-medium transition-all text-left ${
-                notifActive
-                  ? 'bg-[#FFB800] text-[#111]'
-                  : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
-              }`}
+            <svg
+              width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8"
+              className={`flex-shrink-0 transition-transform duration-200 ${ticketsOpen ? 'rotate-180' : ''}`}
             >
-              <span className={`flex-shrink-0 ${notifActive ? 'text-[#111]' : 'text-[#666]'}`}>
-                {BELL_ICON}
-              </span>
-              <span className="flex-1">Notificaciones</span>
-            </Link>
+              <path d="M2 3.5l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+
+          {ticketsOpen && (
+            <div className="ml-3 pl-3 border-l-2 border-[#ece9df] space-y-0.5 mt-0.5">
+              <Link
+                to="/tickets"
+                className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[12.5px] font-medium transition-all text-left ${
+                  ticketsActive
+                    ? 'bg-[#FFB800] text-[#111]'
+                    : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+                }`}
+              >
+                <span className={`flex-shrink-0 ${ticketsActive ? 'text-[#111]' : 'text-[#666]'}`}>
+                  {TICKET_ICON}
+                </span>
+                <span className="flex-1">Lista de tickets</span>
+              </Link>
+              {canAnalytics && (
+                <Link
+                  to="/tickets/analytics"
+                  className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[12.5px] font-medium transition-all text-left ${
+                    analyticsActive
+                      ? 'bg-[#FFB800] text-[#111]'
+                      : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+                  }`}
+                >
+                  <span className={`flex-shrink-0 ${analyticsActive ? 'text-[#111]' : 'text-[#666]'}`}>
+                    {CHART_ICON}
+                  </span>
+                  <span className="flex-1">Analíticas</span>
+                </Link>
+              )}
+              {isITAdmin && (
+                <Link
+                  to="/tickets/notificaciones"
+                  className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[12.5px] font-medium transition-all text-left ${
+                    notifActive
+                      ? 'bg-[#FFB800] text-[#111]'
+                      : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+                  }`}
+                >
+                  <span className={`flex-shrink-0 ${notifActive ? 'text-[#111]' : 'text-[#666]'}`}>
+                    {BELL_ICON}
+                  </span>
+                  <span className="flex-1">Notificaciones</span>
+                </Link>
+              )}
+            </div>
           )}
         </div>
       </nav>

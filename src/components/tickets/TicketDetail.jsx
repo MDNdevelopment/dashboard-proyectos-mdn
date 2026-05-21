@@ -3,7 +3,8 @@ import { supabase } from '../../supabase'
 import { useAuth } from '../../context/AuthContext'
 import TicketStatusBadge from './TicketStatusBadge'
 import TicketComments from './TicketComments'
-import { CATEGORY } from './constants'
+import { CATEGORY, SLA_STATUS } from './constants'
+import { getSlaStatusKey } from './slaUtils'
 
 export default function TicketDetail({ ticket, onClose, onUpdated }) {
   const { userProfile } = useAuth()
@@ -89,12 +90,25 @@ export default function TicketDetail({ ticket, onClose, onUpdated }) {
               <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[10px] mb-0.5">Creado</p>
               <p className="text-[#333]">{createdAt}</p>
             </div>
+            {(() => {
+              const slaKey = getSlaStatusKey(ticket)
+              const sla = slaKey ? SLA_STATUS[slaKey] : null
+              return sla ? (
+                <div>
+                  <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[10px] mb-0.5">SLA</p>
+                  <span className={`inline-block text-[11px] font-mono font-bold px-2 py-0.5 rounded-md ${sla.color}`}>
+                    {sla.label}
+                  </span>
+                </div>
+              ) : null
+            })()}
             {ticket.resolved_at && (
               <div>
                 <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[10px] mb-0.5">Resuelto</p>
                 <p className="text-[#333]">
                   {new Date(ticket.resolved_at).toLocaleString('es-VE', {
                     day: 'numeric', month: 'long', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit',
                   })}
                 </p>
               </div>

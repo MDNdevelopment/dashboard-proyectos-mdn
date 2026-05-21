@@ -22,3 +22,13 @@ export const STATUS = {
 export const PRIORITIES = ['baja', 'media', 'alta', 'urgente']
 export const CATEGORIES = ['hardware', 'software', 'red', 'accesos', 'otro']
 export const STATUSES   = ['abierto', 'en_progreso', 'resuelto']
+
+export const SLA_HOURS = {
+  urgente: 4, alta: 12, media: 24, baja: 48,
+}
+
+export const SLA_STATUS = {
+  overdue:  { label: 'Vencido',    color: 'bg-[#fce4ec] text-[#c62828]' },
+  warning:  { label: 'Por vencer', color: 'bg-[#fff3e0] text-[#e65100]' },
+  on_track: { label: 'A tiempo',   color: 'bg-[#e8f5e9] text-[#2e7d32]' },
+}

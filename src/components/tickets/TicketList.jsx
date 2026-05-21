@@ -6,11 +6,28 @@ export default function TicketList({ tickets, loading, onSelect, isIT }) {
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterPriority, setFilterPriority] = useState('all')
   const [filterCategory, setFilterCategory] = useState('all')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
 
   const filtered = tickets.filter(t => {
     if (filterStatus !== 'all' && t.status !== filterStatus) return false
     if (filterPriority !== 'all' && t.priority !== filterPriority) return false
     if (filterCategory !== 'all' && t.category !== filterCategory) return false
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase()
+      const inTitle = t.title?.toLowerCase().includes(q)
+      const inDesc = t.description?.toLowerCase().includes(q)
+      if (!inTitle && !inDesc) return false
+    }
+    if (dateFrom) {
+      if (new Date(t.created_at) < new Date(dateFrom)) return false
+    }
+    if (dateTo) {
+      const end = new Date(dateTo)
+      end.setHours(23, 59, 59, 999)
+      if (new Date(t.created_at) > end) return false
+    }
     return true
   })
 
@@ -24,8 +41,18 @@ export default function TicketList({ tickets, loading, onSelect, isIT }) {
 
   return (
     <div>
+      {/* Search */}
+      <div className="mb-3">
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          placeholder="Buscar por titulo o descripcion..."
+          className="input-base text-[12px] py-1.5 w-full"
+        />
+      </div>
       {/* Filters */}
-      <div className="flex gap-2 flex-wrap mb-4">
+      <div className="grid grid-cols-3 gap-2 mb-2">
         <select
           value={filterStatus}
           onChange={e => setFilterStatus(e.target.value)}
@@ -50,6 +77,28 @@ export default function TicketList({ tickets, loading, onSelect, isIT }) {
           <option value="all">Todas las categorias</option>
           {CATEGORIES.map(c => <option key={c} value={c}>{CATEGORY[c].label}</option>)}
         </select>
+      </div>
+      <div className="flex items-center gap-3 mb-4">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] font-mono text-[#888]">Desde</span>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={e => setDateFrom(e.target.value)}
+            className="input-base text-[12px] py-1.5"
+            style={{ width: 'auto' }}
+          />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] font-mono text-[#888]">Hasta</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={e => setDateTo(e.target.value)}
+            className="input-base text-[12px] py-1.5"
+            style={{ width: 'auto' }}
+          />
+        </div>
       </div>
 
       {filtered.length === 0 ? (
