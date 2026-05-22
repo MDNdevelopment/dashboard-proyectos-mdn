@@ -21,6 +21,7 @@ const VIEW_ICONS = {
 const TICKET_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="1" y="3" width="14" height="10" rx="1.5"/><path d="M1 6h14" strokeLinecap="round"/><path d="M5 10h6" strokeLinecap="round"/></svg>
 const BELL_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M8 1.5a4.5 4.5 0 0 1 4.5 4.5c0 2.5.8 3.5 1.5 4.5H2c.7-1 1.5-2 1.5-4.5A4.5 4.5 0 0 1 8 1.5Z" strokeLinecap="round" strokeLinejoin="round"/><path d="M6.5 13a1.5 1.5 0 0 0 3 0" strokeLinecap="round"/></svg>
 const CHART_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="1" y="8" width="3" height="6" rx="1"/><rect x="6" y="5" width="3" height="9" rx="1"/><rect x="11" y="2" width="3" height="12" rx="1"/></svg>
+const ADS_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M2 11V5l6-3 6 3v6l-6 3-6-3Z" strokeLinejoin="round"/><path d="M8 2v12M2 5l6 3 6-3" strokeLinecap="round"/></svg>
 
 function Sidebar({ projects, activeFilter, onFilterChange, onNewProject, connected }) {
   const { signOut, userProfile } = useAuth()
@@ -52,6 +53,10 @@ function Sidebar({ projects, activeFilter, onFilterChange, onNewProject, connect
   const analyticsActive = location.pathname === '/tickets/analytics'
   const notifActive = location.pathname === '/tickets/notificaciones'
   const [ticketsOpen, setTicketsOpen] = useState(isTicketsRoute)
+
+  const isAdsRoute = location.pathname.startsWith('/ads')
+  const adsActive = location.pathname === '/ads'
+  const [adsOpen, setAdsOpen] = useState(isAdsRoute)
 
   return (
     <aside className="w-[230px] flex-shrink-0 bg-white border-r border-[#e0ddd4] flex flex-col h-full">
@@ -216,6 +221,46 @@ function Sidebar({ projects, activeFilter, onFilterChange, onNewProject, connect
                   <span className="flex-1">Notificaciones</span>
                 </Link>
               )}
+            </div>
+          )}
+          {/* Campañas & Tácticas — menú desplegable */}
+          <button
+            onClick={() => setAdsOpen(o => !o)}
+            className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13px] font-medium transition-all text-left ${
+              isAdsRoute && !adsOpen
+                ? 'bg-[#FFB800] text-[#111]'
+                : isAdsRoute
+                  ? 'text-[#111] bg-[#f5f3eb]'
+                  : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+            }`}
+          >
+            <span className={`flex-shrink-0 ${isAdsRoute ? 'text-[#111]' : 'text-[#666]'}`}>
+              {ADS_ICON}
+            </span>
+            <span className="flex-1">Campañas</span>
+            <svg
+              width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8"
+              className={`flex-shrink-0 transition-transform duration-200 ${adsOpen ? 'rotate-180' : ''}`}
+            >
+              <path d="M2 3.5l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+
+          {adsOpen && (
+            <div className="ml-3 pl-3 border-l-2 border-[#ece9df] space-y-0.5 mt-0.5">
+              <Link
+                to="/ads"
+                className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[12.5px] font-medium transition-all text-left ${
+                  adsActive
+                    ? 'bg-[#FFB800] text-[#111]'
+                    : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+                }`}
+              >
+                <span className={`flex-shrink-0 ${adsActive ? 'text-[#111]' : 'text-[#666]'}`}>
+                  {ADS_ICON}
+                </span>
+                <span className="flex-1">Lista de campañas</span>
+              </Link>
             </div>
           )}
         </div>
