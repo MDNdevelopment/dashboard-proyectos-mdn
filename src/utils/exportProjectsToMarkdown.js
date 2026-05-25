@@ -1,15 +1,16 @@
-import { getProjectProgress, getGlobalProgress } from './projectProgress'
+import { getProjectProgress } from './projectProgress'
 
 const TASK_CHECKBOX = { completada: '[x]', pendiente: '[ ]', en_proceso: '[ ]', pausada: '[ ]' }
 
 export function exportProjectsToMarkdown(projects, usersMap = new Map()) {
   const today = new Date().toISOString().slice(0, 10)
-  const { percent: globalPercent, doneTasks, totalTasks } = getGlobalProgress(projects)
+  const completedProjects = projects.filter(p => p.status === 'Completado').length
+  const globalPercent = projects.length ? Math.round(completedProjects / projects.length * 100) : 0
   const lines = [
     `# Proyectos MDN Publicidad — ${today}`,
     '',
     `Total: ${projects.length} proyecto${projects.length !== 1 ? 's' : ''}`,
-    `Progreso global: ${globalPercent}% (${doneTasks} de ${totalTasks} tareas completadas)`,
+    `Progreso global: ${globalPercent}% (${completedProjects} de ${projects.length} proyectos completados)`,
     '',
   ]
 

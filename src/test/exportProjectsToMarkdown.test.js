@@ -85,10 +85,27 @@ describe('exportProjectsToMarkdown', () => {
     expect(md).not.toContain('Participantes')
   })
 
-  it('includes global progress line in the header', () => {
-    // fixture has 2 tasks: 1 completada, 1 en_proceso → 50% per-project → 50% global
+  it('includes global progress line in the header based on completed projects', () => {
+    // fixture has 1 project with status "En proceso" → 0 de 1 completados → 0%
     const md = exportProjectsToMarkdown(fixture)
-    expect(md).toContain('Progreso global: 50% (1 de 2 tareas completadas)')
+    expect(md).toContain('Progreso global: 0% (0 de 1 proyectos completados)')
+  })
+
+  it('shows 100% global progress when all projects are Completado', () => {
+    const done = [{ ...fixture[0], status: 'Completado' }]
+    const md = exportProjectsToMarkdown(done)
+    expect(md).toContain('Progreso global: 100% (1 de 1 proyectos completados)')
+  })
+
+  it('calculates correct global progress with mixed statuses', () => {
+    const mixed = [
+      { ...fixture[0], status: 'Completado' },
+      { ...fixture[0], id: 'uuid-2', status: 'En proceso' },
+      { ...fixture[0], id: 'uuid-3', status: 'Pendiente' },
+      { ...fixture[0], id: 'uuid-4', status: 'Completado' },
+    ]
+    const md = exportProjectsToMarkdown(mixed)
+    expect(md).toContain('Progreso global: 50% (2 de 4 proyectos completados)')
   })
 
   it('includes per-project progress line for each project with tasks', () => {
@@ -104,6 +121,6 @@ describe('exportProjectsToMarkdown', () => {
 
   it('shows 0% global progress when no projects', () => {
     const md = exportProjectsToMarkdown([])
-    expect(md).toContain('Progreso global: 0% (0 de 0 tareas completadas)')
+    expect(md).toContain('Progreso global: 0% (0 de 0 proyectos completados)')
   })
 })
