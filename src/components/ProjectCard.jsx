@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { getProjectProgress } from '../utils/projectProgress'
 
 const STATUS = {
   'Pendiente':  { text: '#92400e', bg: '#fef9ee', border: '#fde68a', line: '#f59e0b', label: 'Pendiente'  },
@@ -130,9 +131,7 @@ function StatusBadge({ status, onChange }) {
 export default function ProjectCard({ project, expanded, onToggleExpand, onEdit, onUpdate, onDelete }) {
 
   const depts = project.departments ?? (project.department ? [project.department] : [])
-  const allTasks = project.phases?.flatMap(ph => ph.tasks ?? []) ?? []
-  const completed = allTasks.filter(t => t.status === 'completada').length
-  const progress = allTasks.length ? Math.round(completed / allTasks.length * 100) : 0
+  const { completed, total: totalTasks, percent: progress } = getProjectProgress(project)
   const status = project.status ?? 'Pendiente'
   const cfg = STATUS[status] ?? STATUS['Pendiente']
 
@@ -192,7 +191,7 @@ export default function ProjectCard({ project, expanded, onToggleExpand, onEdit,
         )}
 
         {/* Progress */}
-        {allTasks.length > 0 && (
+        {totalTasks > 0 && (
           <div>
             <div className="flex justify-between items-center mb-1.5">
               <span className="text-[12px] font-medium text-[#888]">Progreso</span>
@@ -204,7 +203,7 @@ export default function ProjectCard({ project, expanded, onToggleExpand, onEdit,
                 style={{ width: `${progress}%`, background: cfg.line }}
               />
             </div>
-            <p className="text-[11px] font-medium text-[#777] mt-1.5">{completed} de {allTasks.length} tareas completadas</p>
+            <p className="text-[11px] font-medium text-[#777] mt-1.5">{completed} de {totalTasks} tareas completadas</p>
           </div>
         )}
       </div>

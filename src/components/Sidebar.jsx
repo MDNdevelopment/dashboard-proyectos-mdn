@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import MDNLogo from './MDNLogo'
 
 const DEPARTMENTS = ['Redes', 'Diseño', 'Audiovisual', 'Tecnología']
 
@@ -23,8 +24,19 @@ const BELL_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" st
 const CHART_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="1" y="8" width="3" height="6" rx="1"/><rect x="6" y="5" width="3" height="9" rx="1"/><rect x="11" y="2" width="3" height="12" rx="1"/></svg>
 const ADS_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M2 11V5l6-3 6 3v6l-6 3-6-3Z" strokeLinejoin="round"/><path d="M8 2v12M2 5l6 3 6-3" strokeLinecap="round"/></svg>
 
-function Sidebar({ projects, activeFilter, onFilterChange, onNewProject, connected }) {
+function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
   const { signOut, userProfile } = useAuth()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef(null)
+
+  useEffect(() => {
+    if (!menuOpen) return
+    function handleClick(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [menuOpen])
   const isITAdmin = userProfile?.department_id === 0 && (userProfile?.access_level >= 3 || userProfile?.admin === true)
   const canAnalytics = userProfile?.access_level >= 3 || userProfile?.admin === true
   const location = useLocation()
@@ -64,16 +76,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, onNewProject, connect
 
       {/* Brand */}
       <div className="px-5 pt-6 pb-5 border-b border-[#ece9df]">
-        <div className="mb-3">
-          <p className="text-[14px] font-bold text-[#111] leading-none tracking-tight">MDN</p>
-          <p className="text-[11px] font-medium text-[#666] mt-0.5">Publicidad</p>
-        </div>
-        {hasProjects && (
-          <div className={`flex items-center gap-1.5 text-[11px] font-semibold ${connected ? 'text-[#16a34a]' : 'text-[#888]'}`}>
-            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${connected ? 'bg-[#22c55e] animate-pulse' : 'bg-[#bbb]'}`} />
-            {connected ? 'En vivo' : 'Conectando...'}
-          </div>
-        )}
+        <MDNLogo size={72} />
       </div>
 
       {/* Navigation */}
@@ -267,33 +270,67 @@ function Sidebar({ projects, activeFilter, onFilterChange, onNewProject, connect
         </div>
       </nav>
 
-      {/* CTA */}
-      <div className="px-4 pb-6 pt-3 border-t border-[#ece9df]">
-        {hasProjects && (
+      {/* User menu */}
+      <div className="px-4 pb-5 pt-3 border-t border-[#ece9df] relative" ref={menuRef}>
+        <div className="flex items-center gap-2.5">
+          {/* Avatar */}
+          {userProfile?.avatar_url ? (
+            <img
+              src={userProfile.avatar_url}
+              alt=""
+              className="w-9 h-9 rounded-full object-cover flex-shrink-0 border border-[#e0ddd4]"
+            />
+          ) : (
+            <div className="w-9 h-9 rounded-full flex-shrink-0 bg-[#FFB800] flex items-center justify-center">
+              <span className="text-[13px] font-bold text-[#111]">
+                {((userProfile?.first_name?.[0] ?? '') + (userProfile?.last_name?.[0] ?? '')).toUpperCase() || '?'}
+              </span>
+            </div>
+          )}
+
+          {/* Info */}
+          <div className="flex-1 min-w-0">
+            <p className="text-[13px] font-semibold text-[#111] truncate leading-snug">
+              {userProfile ? `${userProfile.first_name} ${userProfile.last_name}` : '—'}
+            </p>
+            <p className="text-[11px] text-[#888] truncate leading-snug">
+              {userProfile?.email ?? ''}
+            </p>
+            {(userProfile?.department?.department_name || userProfile?.position?.position_name) && (
+              <p className="text-[10.5px] font-mono text-[#666] truncate leading-snug mt-0.5">
+                {[userProfile.department?.department_name, userProfile.position?.position_name].filter(Boolean).join(' · ')}
+              </p>
+            )}
+          </div>
+
+          {/* 3-dot trigger */}
           <button
-            onClick={onNewProject}
-            className="w-full bg-[#111] text-white text-[13px] font-bold py-2.5 rounded-xl hover:bg-[#222] transition-colors flex items-center justify-center gap-2"
+            onClick={() => setMenuOpen(o => !o)}
+            aria-label="Opciones de usuario"
+            className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-[#999] hover:text-[#111] hover:bg-[#f0ede3] transition-colors"
           >
-            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.8">
-              <path d="M6 1v10M1 6h10" strokeLinecap="round"/>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+              <circle cx="8" cy="3" r="1.4"/>
+              <circle cx="8" cy="8" r="1.4"/>
+              <circle cx="8" cy="13" r="1.4"/>
             </svg>
-            Nuevo proyecto
           </button>
-        )}
-        <div className={`${hasProjects ? 'mt-3' : ''} text-center`}>
-          <p className="text-[18px] font-bold text-[#111] leading-none">
-            {new Date().toLocaleDateString('es-VE', { day: 'numeric', month: 'short' })}
-          </p>
-          <p className="text-[11px] font-medium text-[#888] mt-0.5 capitalize">
-            {new Date().toLocaleDateString('es-VE', { weekday: 'long' })}
-          </p>
         </div>
-        <button
-          onClick={signOut}
-          className="mt-3 w-full text-[12px] font-medium text-[#999] hover:text-[#111] transition-colors py-1.5 rounded-lg hover:bg-[#f5f3eb]"
-        >
-          Cerrar sesión
-        </button>
+
+        {/* Popover */}
+        {menuOpen && (
+          <div className="absolute bottom-full left-4 right-4 mb-2 bg-white border border-[#e0ddd4] rounded-xl shadow-lg overflow-hidden">
+            <button
+              onClick={() => { setMenuOpen(false); signOut() }}
+              className="w-full flex items-center gap-2.5 px-4 py-3 text-[13px] font-medium text-[#444] hover:bg-[#f5f3eb] hover:text-[#111] transition-colors text-left"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
+                <path d="M6 2H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3M11 11l3-3-3-3M14 8H6" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              Cerrar sesión
+            </button>
+          </div>
+        )}
       </div>
     </aside>
   )

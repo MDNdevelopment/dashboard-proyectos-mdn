@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
-import {
-  collection, onSnapshot, addDoc, updateDoc,
-  doc, deleteDoc, serverTimestamp, query, orderBy
-} from 'firebase/firestore'
-import { db } from '../firebase'
+import { supabase } from '../supabase'
 import Sidebar from './Sidebar'
 import ProjectModal from './ProjectModal'
+import MDNLogo from './MDNLogo'
+import { exportProjectsToMarkdown, downloadMarkdown } from '../utils/exportProjectsToMarkdown'
+
+const normalize = (row) => ({ ...row, createdAt: row.created_at })
 
 export default function AppLayout() {
   const [projects, setProjects] = useState([])
@@ -17,31 +17,64 @@ export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   useEffect(() => {
-    const q = query(collection(db, 'projects'), orderBy('createdAt', 'desc'))
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        setProjects(snapshot.docs.map(d => ({ ...d.data(), id: d.id })))
+    let channel
+
+    const init = async () => {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) {
         setLoading(false)
-        setConnected(true)
-      },
-      () => { setLoading(false); setConnected(false) }
-    )
-    return unsubscribe
+        setConnected(false)
+        return
+      }
+
+      setProjects(data.map(normalize))
+      setLoading(false)
+      setConnected(true)
+
+      channel = supabase
+        .channel('projects-changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, (payload) => {
+          setProjects(prev => {
+            if (payload.eventType === 'INSERT') return [normalize(payload.new), ...prev]
+            if (payload.eventType === 'UPDATE') return prev.map(p => p.id === payload.new.id ? normalize(payload.new) : p)
+            if (payload.eventType === 'DELETE') return prev.filter(p => p.id !== payload.old.id)
+            return prev
+          })
+        })
+        .subscribe()
+    }
+
+    init()
+    return () => { if (channel) supabase.removeChannel(channel) }
   }, [])
 
   const createProject = async (data) => {
-    await addDoc(collection(db, 'projects'), { ...data, createdAt: serverTimestamp() })
+    await supabase.from('projects').insert(data)
   }
 
   const updateProject = async (id, updates) => {
-    await updateDoc(doc(db, 'projects', id), updates)
+    await supabase.from('projects').update(updates).eq('id', id)
   }
 
   const deleteProject = async (id) => {
     if (window.confirm('¿Eliminar este proyecto? Esta acción no se puede deshacer.')) {
-      await deleteDoc(doc(db, 'projects', id))
+      await supabase.from('projects').delete().eq('id', id)
     }
+  }
+
+  const exportProjects = async () => {
+    const { data: users } = await supabase
+      .from('users')
+      .select('user_id, first_name, last_name')
+    const usersMap = new Map(
+      (users ?? []).map(u => [u.user_id, `${u.first_name} ${u.last_name}`.trim()])
+    )
+    const today = new Date().toISOString().slice(0, 10)
+    downloadMarkdown(`proyectos-mdn-${today}.md`, exportProjectsToMarkdown(projects, usersMap))
   }
 
   return (
@@ -58,12 +91,24 @@ export default function AppLayout() {
           projects={projects}
           activeFilter={activeFilter}
           onFilterChange={(f) => { setActiveFilter(f); setSidebarOpen(false) }}
-          onNewProject={() => setModalProject(null)}
           connected={connected}
         />
       </div>
 
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 flex flex-col">
+        {/* Mobile top bar — visible on all routes */}
+        <div className="lg:hidden flex items-center justify-between px-5 py-3.5 bg-white border-b border-[#e8e5db] sticky top-0 z-30">
+          <button onClick={() => setSidebarOpen(o => !o)} className="text-[#777] hover:text-[#111] transition-colors">
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M3 5h14M3 10h14M3 15h14" strokeLinecap="round"/>
+            </svg>
+          </button>
+          <MDNLogo size={32} />
+          <button onClick={() => setModalProject(null)} className="bg-[#0d0d0d] text-white text-[12px] font-semibold px-3 py-1.5 rounded-lg">
+            + Nuevo
+          </button>
+        </div>
+
         <Outlet context={{
           projects,
           loading,
@@ -73,6 +118,7 @@ export default function AppLayout() {
           onUpdateProject: updateProject,
           onDeleteProject: deleteProject,
           onMenuToggle: () => setSidebarOpen(o => !o),
+          onExport: exportProjects,
         }} />
       </div>
 
