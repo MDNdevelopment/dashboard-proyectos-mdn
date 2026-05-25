@@ -40,7 +40,7 @@ export default function TicketsPage() {
   return (
     <>
       <main className="flex-1 overflow-y-auto main-bg h-screen">
-        <div className="max-w-3xl mx-auto px-6 py-8">
+        <div className="max-w-5xl mx-auto px-6 py-8">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <div>

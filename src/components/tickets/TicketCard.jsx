@@ -1,5 +1,6 @@
 import TicketStatusBadge from './TicketStatusBadge'
-import { CATEGORY } from './constants'
+import { CATEGORY, SLA_STATUS } from './constants'
+import { getSlaStatusKey } from './slaUtils'
 
 export default function TicketCard({ ticket, onClick, isIT }) {
   const requesterName = ticket.requester
@@ -10,6 +11,9 @@ export default function TicketCard({ ticket, onClick, isIT }) {
     day: 'numeric', month: 'short', year: 'numeric',
   })
 
+  const slaKey = getSlaStatusKey(ticket)
+  const sla = slaKey ? SLA_STATUS[slaKey] : null
+
   return (
     <button
       onClick={() => onClick(ticket)}
@@ -17,13 +21,23 @@ export default function TicketCard({ ticket, onClick, isIT }) {
     >
       <div className="flex items-start justify-between gap-3 mb-2">
         <p className="text-[14px] font-semibold text-[#111] leading-snug flex-1">{ticket.title}</p>
-        <TicketStatusBadge type="status" value={ticket.status} />
+        <div className="flex items-center gap-1">
+          <span className="text-[10px] font-mono text-[#888] uppercase tracking-wider">Estado:</span>
+          <TicketStatusBadge type="status" value={ticket.status} />
+        </div>
       </div>
       <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[10px] font-mono text-[#888] uppercase tracking-wider">Prioridad:</span>
         <TicketStatusBadge type="priority" value={ticket.priority} />
+        <span className="text-[10px] font-mono text-[#888] uppercase tracking-wider">Categoría:</span>
         <span className="text-[11px] font-mono text-[#888] bg-[#f5f3eb] px-2 py-0.5 rounded-md">
           {CATEGORY[ticket.category]?.label ?? ticket.category}
         </span>
+        {sla && (
+          <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md ${sla.color}`}>
+            {sla.label}
+          </span>
+        )}
         {isIT && (
           <span className="text-[11px] text-[#888]">{requesterName}</span>
         )}

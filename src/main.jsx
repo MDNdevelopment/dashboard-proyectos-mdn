@@ -11,6 +11,7 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx'
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx'
 import TicketsPage from './pages/TicketsPage.jsx'
 import NotificationPreferencesPage from './pages/NotificationPreferencesPage.jsx'
+import TicketAnalyticsPage from './pages/TicketAnalyticsPage.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -23,6 +24,7 @@ createRoot(document.getElementById('root')).render(
           <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
             <Route path="/tickets" element={<TicketsPage />} />
             <Route path="/tickets/notificaciones" element={<NotificationPreferencesPage />} />
+            <Route path="/tickets/analytics" element={<TicketAnalyticsPage />} />
             <Route path="/*" element={<App />} />
           </Route>
         </Routes>
