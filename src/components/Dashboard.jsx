@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import ProjectCard from './ProjectCard'
+import { getGlobalProgress } from '../utils/projectProgress'
 
 const FILTER_LABELS = {
   all: 'Todos los proyectos',
@@ -8,12 +9,10 @@ const FILTER_LABELS = {
   'Completado': 'Completados',
 }
 
-function Dashboard({ projects, loading, activeFilter, onNewProject, onEditProject, onUpdateProject, onDeleteProject, onMenuToggle }) {
+function Dashboard({ projects, loading, activeFilter, onNewProject, onEditProject, onUpdateProject, onDeleteProject, onMenuToggle, onExport }) {
   const [search, setSearch] = useState('')
   const [expandedMap, setExpandedMap] = useState({})
   const toggleExpanded = id => setExpandedMap(prev => ({ ...prev, [id]: !prev[id] }))
-
-  const getTasksOf = p => p.phases?.flatMap(ph => ph.tasks ?? []) ?? []
 
   const filtered = projects.filter(p => {
     const depts = p.departments ?? (p.department ? [p.department] : [])
@@ -31,14 +30,7 @@ function Dashboard({ projects, loading, activeFilter, onNewProject, onEditProjec
     return true
   })
 
-  const allTasks = projects.flatMap(getTasksOf)
-  const doneTasks = allTasks.filter(t => t.status === 'completada').length
-  const avgProgress = projects.length
-    ? Math.round(projects.reduce((s, p) => {
-        const t = getTasksOf(p)
-        return s + (t.length ? Math.round(t.filter(x => x.status === 'completada').length / t.length * 100) : 0)
-      }, 0) / projects.length)
-    : 0
+  const { percent: avgProgress, doneTasks, totalTasks } = getGlobalProgress(projects)
 
   const title = activeFilter.startsWith('dept:')
     ? activeFilter.replace('dept:', '')
@@ -49,26 +41,13 @@ function Dashboard({ projects, loading, activeFilter, onNewProject, onEditProjec
     { label: 'En proceso',       value: projects.filter(p => p.status === 'En proceso').length,    color: '#2563eb', mono: false },
     { label: 'Pendientes',       value: projects.filter(p => p.status === 'Pendiente').length,     color: '#d97706', mono: false },
     { label: 'Completados',      value: projects.filter(p => p.status === 'Completado').length,    color: '#16a34a', mono: false },
-    { label: 'Avance global',    value: `${avgProgress}%`,  sub: `${doneTasks} / ${allTasks.length} tareas`, color: '#111', mono: true },
+    { label: 'Avance global',    value: `${avgProgress}%`,  sub: `${doneTasks} / ${totalTasks} tareas`, color: '#111', mono: true },
   ]
 
   return (
     <div className="main-bg min-h-screen">
 
-      {/* Mobile bar */}
-      <div className="lg:hidden flex items-center justify-between px-5 py-3.5 bg-white border-b border-[#e8e5db] sticky top-0 z-30">
-        <button onClick={onMenuToggle} className="text-[#777] hover:text-[#111] transition-colors">
-          <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
-            <path d="M3 5h14M3 10h14M3 15h14" strokeLinecap="round"/>
-          </svg>
-        </button>
-        <span className="bg-[#FFB800] text-[#111] font-mono text-[10px] font-bold px-2 py-0.5 rounded tracking-widest uppercase">MDN</span>
-        <button onClick={onNewProject} className="bg-[#0d0d0d] text-white text-[12px] font-semibold px-3 py-1.5 rounded-lg">
-          + Nuevo
-        </button>
-      </div>
-
-      <div className="px-6 lg:px-10 pt-8 pb-16 max-w-[1400px]">
+<div className="px-6 lg:px-10 pt-8 pb-16 max-w-[1400px]">
 
         {/* Header */}
         <div className="flex items-end justify-between mb-7 gap-4">
@@ -80,15 +59,29 @@ function Dashboard({ projects, loading, activeFilter, onNewProject, onEditProjec
               {title}
             </h1>
           </div>
-          <button
-            onClick={onNewProject}
-            className="hidden lg:flex items-center gap-2 bg-[#0d0d0d] text-white text-[13px] font-semibold px-4 py-2.5 rounded-xl hover:bg-[#222] transition-colors shadow-sm flex-shrink-0"
-          >
-            <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.8">
-              <path d="M6 1v10M1 6h10" strokeLinecap="round"/>
-            </svg>
-            Nuevo proyecto
-          </button>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {!activeFilter.startsWith('dept:') && (
+              <button
+                onClick={onExport}
+                className="flex items-center gap-2 bg-white border border-[#e0ddd4] text-[#111] text-[13px] font-semibold px-4 py-2.5 rounded-xl hover:bg-[#f5f3eb] transition-colors shadow-sm"
+              >
+                <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M7 1v8M4 6l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M1 10v1a2 2 0 002 2h8a2 2 0 002-2v-1" strokeLinecap="round"/>
+                </svg>
+                Exportar
+              </button>
+            )}
+            <button
+              onClick={onNewProject}
+              className="hidden lg:flex items-center gap-2 bg-[#0d0d0d] text-white text-[13px] font-semibold px-4 py-2.5 rounded-xl hover:bg-[#222] transition-colors shadow-sm"
+            >
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.8">
+                <path d="M6 1v10M1 6h10" strokeLinecap="round"/>
+              </svg>
+              Nuevo proyecto
+            </button>
+          </div>
         </div>
 
         {/* Metrics */}
