@@ -1,4 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
+import { supabase } from '../supabase'
+import { useAuth } from '../context/AuthContext'
 
 const DEPARTMENTS = ['Redes', 'Diseño', 'Audiovisual', 'Tecnología']
 const STATUSES = ['Pendiente', 'En proceso', 'Completado']
@@ -11,6 +14,7 @@ const mkPhase = () => ({ id: uid(), name: '', tasks: [mkTask()] })
 export default function ProjectModal({ project, onClose, onSave }) {
   const isEdit = !!project
   const nameRef = useRef(null)
+  const { userProfile } = useAuth()
 
   const [form, setForm] = useState(() => project
     ? {
@@ -20,11 +24,23 @@ export default function ProjectModal({ project, onClose, onSave }) {
         requirements: project.requirements ?? '',
         status: project.status ?? 'Pendiente',
         phases: project.phases?.length ? project.phases : [mkPhase()],
+        members: project.members ?? [],
       }
-    : { name: '', departments: [], team: '', requirements: '', status: 'Pendiente', phases: [mkPhase()] }
+    : { name: '', departments: [], team: '', requirements: '', status: 'Pendiente', phases: [mkPhase()], members: [] }
   )
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [users, setUsers] = useState([])
+
+  useEffect(() => {
+    if (!userProfile?.company_id) return
+    supabase
+      .from('users')
+      .select('user_id, first_name, last_name, avatar_url')
+      .eq('company_id', userProfile.company_id)
+      .order('first_name')
+      .then(({ data }) => setUsers(data ?? []))
+  }, [userProfile?.company_id])
 
   useEffect(() => { setTimeout(() => nameRef.current?.focus(), 80) }, [])
   useEffect(() => {
@@ -35,6 +51,7 @@ export default function ProjectModal({ project, onClose, onSave }) {
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const toggleDept = d => set('departments', form.departments.includes(d) ? form.departments.filter(x => x !== d) : [...form.departments, d])
+  const toggleMember = id => set('members', form.members.includes(id) ? form.members.filter(x => x !== id) : [...form.members, id])
 
   const addPhase = () => set('phases', [...form.phases, mkPhase()])
   const delPhase = id => set('phases', form.phases.filter(p => p.id !== id))
@@ -57,9 +74,12 @@ export default function ProjectModal({ project, onClose, onSave }) {
         requirements: form.requirements.trim(),
         status: form.status,
         phases: form.phases.filter(p => p.name.trim()).map(p => ({ ...p, tasks: p.tasks.filter(t => t.name.trim()) })),
+        members: form.members,
       })
     } catch { setError('Error al guardar.'); setLoading(false) }
   }
+
+  const selectedUsers = users.filter(u => form.members.includes(u.user_id))
 
   return (
     <div
@@ -119,6 +139,18 @@ export default function ProjectModal({ project, onClose, onSave }) {
               })}
             </div>
           </Field>
+
+          {/* Members */}
+          {users.length > 0 && (
+            <Field label="Miembros del proyecto">
+              <MemberPicker
+                users={users}
+                selected={form.members}
+                selectedUsers={selectedUsers}
+                onToggle={toggleMember}
+              />
+            </Field>
+          )}
 
           {/* Team + Status */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -257,6 +289,178 @@ export default function ProjectModal({ project, onClose, onSave }) {
     </div>
   )
 }
+
+// ─── Avatar ────────────────────────────────────────────────────────────────────
+
+const AVATAR_COLORS = [
+  '#d97706','#059669','#2563eb','#7c3aed',
+  '#db2777','#0891b2','#65a30d','#dc2626',
+]
+
+function avatarColor(userId) {
+  let hash = 0
+  for (let i = 0; i < userId.length; i++) hash = (hash * 31 + userId.charCodeAt(i)) >>> 0
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length]
+}
+
+function Avatar({ user, size = 28 }) {
+  const initials = `${user.first_name?.[0] ?? ''}${user.last_name?.[0] ?? ''}`.toUpperCase()
+  const style = { width: size, height: size, fontSize: size * 0.38, flexShrink: 0 }
+
+  if (user.avatar_url) {
+    return (
+      <img
+        src={user.avatar_url}
+        alt={initials}
+        style={{ ...style, borderRadius: '50%', objectFit: 'cover' }}
+      />
+    )
+  }
+
+  return (
+    <span
+      style={{ ...style, background: avatarColor(user.user_id), borderRadius: '50%', color: '#fff', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'DM Mono, monospace', letterSpacing: '-0.02em' }}
+    >
+      {initials}
+    </span>
+  )
+}
+
+// ─── MemberPicker ───────────────────────────────────────────────────────────────
+
+function MemberPicker({ users, selected, selectedUsers, onToggle }) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 })
+  const triggerRef = useRef(null)
+  const popoverRef = useRef(null)
+
+  const openPicker = () => {
+    if (!triggerRef.current) return
+    const r = triggerRef.current.getBoundingClientRect()
+    const popH = 280
+    const top = window.innerHeight - r.bottom < popH + 8 ? r.top - popH - 4 : r.bottom + 4
+    setPos({ top, left: r.left, width: Math.max(r.width, 260) })
+    setOpen(true)
+  }
+
+  useEffect(() => {
+    if (!open) return
+    const fn = e => {
+      if (!popoverRef.current?.contains(e.target) && !triggerRef.current?.contains(e.target)) {
+        setOpen(false)
+        setSearch('')
+      }
+    }
+    document.addEventListener('mousedown', fn)
+    return () => document.removeEventListener('mousedown', fn)
+  }, [open])
+
+  const filtered = users.filter(u => {
+    const q = search.toLowerCase()
+    return !q || `${u.first_name} ${u.last_name}`.toLowerCase().includes(q)
+  })
+
+  return (
+    <div>
+      {/* Selected chips */}
+      <div className="flex flex-wrap gap-1.5 mb-2 min-h-[28px]">
+        {selectedUsers.length === 0 ? (
+          <span className="text-[12px] text-[#bbb] self-center">Sin miembros asignados</span>
+        ) : (
+          selectedUsers.map(u => (
+            <span key={u.user_id} className="inline-flex items-center gap-1.5 pl-1 pr-2 py-0.5 rounded-full bg-[#f5f3eb] border border-[#e0ddd4] text-[12px] font-medium text-[#333]">
+              <Avatar user={u} size={20} />
+              {u.first_name} {u.last_name}
+              <button
+                type="button"
+                onClick={() => onToggle(u.user_id)}
+                aria-label={`Quitar a ${u.first_name} ${u.last_name}`}
+                className="text-[#bbb] hover:text-[#555] transition-colors ml-0.5 leading-none"
+              >
+                <svg width="9" height="9" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
+            </span>
+          ))
+        )}
+      </div>
+
+      {/* Trigger */}
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={openPicker}
+        className="text-[12px] font-semibold text-[#555] hover:text-[#111] border border-[#e0ddd4] hover:border-[#bbb] px-3 py-1 rounded-lg transition-all flex items-center gap-1.5"
+      >
+        <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <path d="M6 1v10M1 6h10" strokeLinecap="round"/>
+        </svg>
+        Añadir miembro
+      </button>
+
+      {/* Popover */}
+      {open && createPortal(
+        <div
+          ref={popoverRef}
+          style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 9999 }}
+          className="bg-white border border-[#e8e5db] rounded-xl shadow-lg overflow-hidden"
+          onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); setOpen(false); setSearch('') } }}
+        >
+          {/* Search */}
+          <div className="p-2 border-b border-[#f0ede4]">
+            <div className="relative">
+              <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#999] pointer-events-none" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="6.5" cy="6.5" r="5"/>
+                <path d="M10.5 10.5L14 14" strokeLinecap="round"/>
+              </svg>
+              <input
+                autoFocus
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Buscar miembro..."
+                className="w-full bg-[#faf9f5] border border-[#e0ddd4] rounded-lg pl-8 pr-3 py-1.5 text-[12px] text-[#111] placeholder-[#bbb] outline-none focus:border-[#bbb] transition-colors font-sans"
+              />
+            </div>
+          </div>
+
+          {/* User list */}
+          <div className="max-h-56 overflow-y-auto py-1">
+            {filtered.length === 0 ? (
+              <p className="text-[12px] text-[#bbb] text-center py-4">Sin resultados</p>
+            ) : (
+              filtered.map(u => {
+                const isSel = selected.includes(u.user_id)
+                return (
+                  <button
+                    key={u.user_id}
+                    type="button"
+                    onClick={() => onToggle(u.user_id)}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-[#f5f3eb] transition-colors text-left"
+                  >
+                    <Avatar user={u} size={28} />
+                    <span className="flex-1 text-[13px] font-medium text-[#222]">
+                      {u.first_name} {u.last_name}
+                    </span>
+                    {isSel && (
+                      <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="#22c55e" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/>
+                      </svg>
+                    )}
+                  </button>
+                )
+              })
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  )
+}
+
+// ─── Field ─────────────────────────────────────────────────────────────────────
 
 function Field({ label, children }) {
   return (

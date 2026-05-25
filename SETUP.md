@@ -1,52 +1,33 @@
 # Guía de Configuración y Despliegue
 
-## 1. Crear proyecto en Firebase (5 minutos)
+## 1. Crear proyecto en Supabase (5 minutos)
 
-1. Ve a https://console.firebase.google.com
-2. Clic en **"Añadir proyecto"** → escribe el nombre → continuar
-3. En el panel del proyecto, clic en el ícono **`</>`** (Web) para registrar la app
-4. Escribe un nombre de app (ej: `dashboard`) → clic en **"Registrar app"**
-5. Copia los valores del objeto `firebaseConfig` que aparece — los necesitarás luego
+1. Ve a https://supabase.com y crea una cuenta o inicia sesión.
+2. Clic en **"New project"** → elige organización → escribe nombre y contraseña de BD → **Create project**.
+3. En el panel del proyecto ve a **Settings → API** y copia:
+   - **Project URL** → valor para `VITE_SUPABASE_URL`
+   - **anon / public** key → valor para `VITE_SUPABASE_ANON_KEY`
 
-## 2. Activar Firestore
+## 2. Crear la tabla `projects`
 
-1. En el menú izquierdo de Firebase → **Firestore Database**
-2. Clic en **"Crear base de datos"**
-3. Seleccionar **"Iniciar en modo de prueba"** → Siguiente → Listo
+1. En el panel de Supabase ve a **SQL Editor**.
+2. Copia y ejecuta el contenido de `supabase/migrations/20260525000000_create_projects.sql`.
 
-### Reglas de seguridad (para acceso público)
-
-Ve a Firestore → pestaña **Reglas** → pega esto y publica:
-
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if true;
-    }
-  }
-}
-```
+   Esto crea la tabla, activa RLS con acceso de lectura/escritura para usuarios autenticados, y habilita actualizaciones en tiempo real.
 
 ## 3. Probar en local
 
-1. Copia `.env.example` como `.env.local`
-2. Rellena los valores de Firebase:
+1. Crea el archivo `.env.local` en la raíz del proyecto con:
    ```
-   VITE_FIREBASE_API_KEY=...
-   VITE_FIREBASE_AUTH_DOMAIN=...
-   VITE_FIREBASE_PROJECT_ID=...
-   VITE_FIREBASE_STORAGE_BUCKET=...
-   VITE_FIREBASE_MESSAGING_SENDER_ID=...
-   VITE_FIREBASE_APP_ID=...
+   VITE_SUPABASE_URL=https://tu-proyecto.supabase.co
+   VITE_SUPABASE_ANON_KEY=tu-anon-key
    ```
-3. Ejecutar:
+2. Ejecutar:
    ```bash
    npm install
    npm run dev
    ```
-4. Abre http://localhost:5173
+3. Abre http://localhost:5173 e inicia sesión.
 
 ## 4. Desplegar en Netlify
 
@@ -54,7 +35,6 @@ service cloud.firestore {
 1. Ejecuta `npm run build` → se genera la carpeta `dist/`
 2. Ve a https://netlify.com → Log in
 3. Arrastra la carpeta `dist/` al área de deploy de Netlify
-4. Netlify te da el link en segundos
 
 ### Opción B — GitHub + Auto-deploy (recomendado)
 1. Sube este proyecto a un repositorio de GitHub
@@ -62,13 +42,10 @@ service cloud.firestore {
 3. Conecta tu repositorio
 4. Build command: `npm run build`
 5. Publish directory: `dist`
-6. Ve a **Site configuration → Environment variables** y añade las 6 variables de Firebase
-
-### Variables de entorno en Netlify
-Ve a: Site → Site configuration → Environment variables → Add variable
-
-Añade cada una de las 6 variables `VITE_FIREBASE_*` con sus valores reales.
+6. Ve a **Site configuration → Environment variables** y añade las 2 variables de Supabase:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
 
 ---
 
-Una vez desplegado, el link es permanente y cualquier persona que lo abra verá los proyectos en tiempo real.
+Una vez desplegado, cualquier usuario autenticado puede ver y gestionar proyectos en tiempo real desde cualquier pestaña o dispositivo.

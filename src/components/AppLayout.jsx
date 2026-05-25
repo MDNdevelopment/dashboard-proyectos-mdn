@@ -1,12 +1,10 @@
 import { useState, useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
-import {
-  collection, onSnapshot, addDoc, updateDoc,
-  doc, deleteDoc, serverTimestamp, query, orderBy
-} from 'firebase/firestore'
-import { db } from '../firebase'
+import { supabase } from '../supabase'
 import Sidebar from './Sidebar'
 import ProjectModal from './ProjectModal'
+
+const normalize = (row) => ({ ...row, createdAt: row.created_at })
 
 export default function AppLayout() {
   const [projects, setProjects] = useState([])
@@ -17,30 +15,52 @@ export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   useEffect(() => {
-    const q = query(collection(db, 'projects'), orderBy('createdAt', 'desc'))
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        setProjects(snapshot.docs.map(d => ({ ...d.data(), id: d.id })))
+    let channel
+
+    const init = async () => {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) {
         setLoading(false)
-        setConnected(true)
-      },
-      () => { setLoading(false); setConnected(false) }
-    )
-    return unsubscribe
+        setConnected(false)
+        return
+      }
+
+      setProjects(data.map(normalize))
+      setLoading(false)
+      setConnected(true)
+
+      channel = supabase
+        .channel('projects-changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, (payload) => {
+          setProjects(prev => {
+            if (payload.eventType === 'INSERT') return [normalize(payload.new), ...prev]
+            if (payload.eventType === 'UPDATE') return prev.map(p => p.id === payload.new.id ? normalize(payload.new) : p)
+            if (payload.eventType === 'DELETE') return prev.filter(p => p.id !== payload.old.id)
+            return prev
+          })
+        })
+        .subscribe()
+    }
+
+    init()
+    return () => { if (channel) supabase.removeChannel(channel) }
   }, [])
 
   const createProject = async (data) => {
-    await addDoc(collection(db, 'projects'), { ...data, createdAt: serverTimestamp() })
+    await supabase.from('projects').insert(data)
   }
 
   const updateProject = async (id, updates) => {
-    await updateDoc(doc(db, 'projects', id), updates)
+    await supabase.from('projects').update(updates).eq('id', id)
   }
 
   const deleteProject = async (id) => {
     if (window.confirm('¿Eliminar este proyecto? Esta acción no se puede deshacer.')) {
-      await deleteDoc(doc(db, 'projects', id))
+      await supabase.from('projects').delete().eq('id', id)
     }
   }
 
