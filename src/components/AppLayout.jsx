@@ -3,6 +3,8 @@ import { Outlet } from 'react-router-dom'
 import { supabase } from '../supabase'
 import Sidebar from './Sidebar'
 import ProjectModal from './ProjectModal'
+import MDNLogo from './MDNLogo'
+import { exportProjectsToMarkdown, downloadMarkdown } from '../utils/exportProjectsToMarkdown'
 
 const normalize = (row) => ({ ...row, createdAt: row.created_at })
 
@@ -64,6 +66,17 @@ export default function AppLayout() {
     }
   }
 
+  const exportProjects = async () => {
+    const { data: users } = await supabase
+      .from('users')
+      .select('user_id, first_name, last_name')
+    const usersMap = new Map(
+      (users ?? []).map(u => [u.user_id, `${u.first_name} ${u.last_name}`.trim()])
+    )
+    const today = new Date().toISOString().slice(0, 10)
+    downloadMarkdown(`proyectos-mdn-${today}.md`, exportProjectsToMarkdown(projects, usersMap))
+  }
+
   return (
     <div className="flex min-h-screen bg-[#f2f0e8]">
       {sidebarOpen && (
@@ -78,12 +91,24 @@ export default function AppLayout() {
           projects={projects}
           activeFilter={activeFilter}
           onFilterChange={(f) => { setActiveFilter(f); setSidebarOpen(false) }}
-          onNewProject={() => setModalProject(null)}
           connected={connected}
         />
       </div>
 
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 flex flex-col">
+        {/* Mobile top bar — visible on all routes */}
+        <div className="lg:hidden flex items-center justify-between px-5 py-3.5 bg-white border-b border-[#e8e5db] sticky top-0 z-30">
+          <button onClick={() => setSidebarOpen(o => !o)} className="text-[#777] hover:text-[#111] transition-colors">
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M3 5h14M3 10h14M3 15h14" strokeLinecap="round"/>
+            </svg>
+          </button>
+          <MDNLogo size={32} />
+          <button onClick={() => setModalProject(null)} className="bg-[#0d0d0d] text-white text-[12px] font-semibold px-3 py-1.5 rounded-lg">
+            + Nuevo
+          </button>
+        </div>
+
         <Outlet context={{
           projects,
           loading,
@@ -93,6 +118,7 @@ export default function AppLayout() {
           onUpdateProject: updateProject,
           onDeleteProject: deleteProject,
           onMenuToggle: () => setSidebarOpen(o => !o),
+          onExport: exportProjects,
         }} />
       </div>
 

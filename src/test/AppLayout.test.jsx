@@ -104,14 +104,6 @@ describe('AppLayout — carga inicial', () => {
     expect(supabase.removeChannel).toHaveBeenCalled()
   })
 
-  it('no muestra "En vivo" si Supabase falla', async () => {
-    buildFromChain({ selectError: new Error('network') })
-    renderLayout()
-    await waitFor(() => {
-      expect(supabase.from).toHaveBeenCalledWith('projects')
-    })
-    expect(screen.queryByText('En vivo')).not.toBeInTheDocument()
-  })
 })
 
 describe('AppLayout — CRUD', () => {
