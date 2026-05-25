@@ -48,6 +48,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, onNewProject, connect
   }
 
   const hasDepts = hasProjects && DEPARTMENTS.some(d => deptCounts[d] > 0)
+  const isProjectsRoute = location.pathname === '/'
   const isTicketsRoute = location.pathname.startsWith('/tickets')
   const ticketsActive = location.pathname === '/tickets'
   const analyticsActive = location.pathname === '/tickets/analytics'
@@ -86,11 +87,11 @@ function Sidebar({ projects, activeFilter, onFilterChange, onNewProject, connect
 
             <div className="space-y-0.5">
               {VIEWS.map(view => {
-                const active = activeFilter === view.key && !isTicketsRoute
+                const active = isProjectsRoute && activeFilter === view.key
                 return (
                   <button
                     key={view.key}
-                    onClick={() => { onFilterChange(view.key); if (isTicketsRoute) navigate('/') }}
+                    onClick={() => { onFilterChange(view.key); if (isTicketsRoute || isAdsRoute) navigate('/') }}
                     className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13px] font-medium transition-all text-left ${
                       active
                         ? 'bg-[#FFB800] text-[#111]'
@@ -120,11 +121,11 @@ function Sidebar({ projects, activeFilter, onFilterChange, onNewProject, connect
                 <div className="space-y-0.5">
                   {DEPARTMENTS.filter(d => deptCounts[d] > 0).map(dept => {
                     const key = `dept:${dept}`
-                    const active = activeFilter === key && !isTicketsRoute
+                    const active = isProjectsRoute && activeFilter === key
                     return (
                       <button
                         key={dept}
-                        onClick={() => { onFilterChange(key); if (isTicketsRoute) navigate('/') }}
+                        onClick={() => { onFilterChange(key); if (isTicketsRoute || isAdsRoute) navigate('/') }}
                         className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13px] font-medium transition-all text-left ${
                           active
                             ? 'bg-[#FFB800] text-[#111]'
