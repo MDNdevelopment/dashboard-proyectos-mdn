@@ -10,6 +10,7 @@ function App() {
     onEditProject,
     onUpdateProject,
     onDeleteProject,
+    onDuplicateProject,
     onMenuToggle,
     onExport,
   } = useOutletContext()
@@ -23,6 +24,7 @@ function App() {
       onEditProject={onEditProject}
       onUpdateProject={onUpdateProject}
       onDeleteProject={onDeleteProject}
+      onDuplicateProject={onDuplicateProject}
       onMenuToggle={onMenuToggle}
       onExport={onExport}
     />
