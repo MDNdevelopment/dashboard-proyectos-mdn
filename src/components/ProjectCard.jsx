@@ -128,7 +128,7 @@ function StatusBadge({ status, onChange }) {
   )
 }
 
-export default function ProjectCard({ project, expanded, onToggleExpand, onEdit, onUpdate, onDelete }) {
+export default function ProjectCard({ project, expanded, onToggleExpand, onEdit, onUpdate, onDelete, onDuplicate }) {
 
   const depts = project.departments ?? (project.department ? [project.department] : [])
   const { completed, total: totalTasks, percent: progress } = getProjectProgress(project)
@@ -221,6 +221,12 @@ export default function ProjectCard({ project, expanded, onToggleExpand, onEdit,
         </button>
 
         <div className="flex items-center gap-1">
+          <button
+            onClick={onDuplicate}
+            className="text-[12px] font-semibold text-[#777] hover:text-[#111] transition-colors px-2.5 py-1 rounded-lg hover:bg-[#f5f3eb]"
+          >
+            Duplicar
+          </button>
           <button
             onClick={onEdit}
             className="text-[12px] font-semibold text-[#777] hover:text-[#111] transition-colors px-2.5 py-1 rounded-lg hover:bg-[#f5f3eb]"

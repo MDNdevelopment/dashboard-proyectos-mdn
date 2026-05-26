@@ -39,7 +39,7 @@ export default function AppLayout() {
         .channel('projects-changes')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, (payload) => {
           setProjects(prev => {
-            if (payload.eventType === 'INSERT') return [normalize(payload.new), ...prev]
+            if (payload.eventType === 'INSERT') return prev.some(p => p.id === payload.new.id) ? prev : [normalize(payload.new), ...prev]
             if (payload.eventType === 'UPDATE') return prev.map(p => p.id === payload.new.id ? normalize(payload.new) : p)
             if (payload.eventType === 'DELETE') return prev.filter(p => p.id !== payload.old.id)
             return prev
@@ -54,6 +54,28 @@ export default function AppLayout() {
 
   const createProject = async (data) => {
     await supabase.from('projects').insert(data)
+  }
+
+  const duplicateProject = async (project) => {
+    const regenIds = (phases) => (phases ?? []).map(ph => ({
+      ...ph,
+      id: Math.random().toString(36).slice(2),
+      tasks: (ph.tasks ?? []).map(t => ({ ...t, id: Math.random().toString(36).slice(2) })),
+    }))
+    const { data, error } = await supabase
+      .from('projects')
+      .insert({
+        name: `Copia de ${project.name}`,
+        team: project.team,
+        requirements: project.requirements,
+        departments: project.departments ?? [],
+        phases: regenIds(project.phases),
+        status: 'Pendiente',
+      })
+      .select()
+      .single()
+    if (error || !data) return
+    setProjects(prev => prev.some(p => p.id === data.id) ? prev : [normalize(data), ...prev])
   }
 
   const updateProject = async (id, updates) => {
@@ -117,6 +139,7 @@ export default function AppLayout() {
           onEditProject: (p) => setModalProject(p),
           onUpdateProject: updateProject,
           onDeleteProject: deleteProject,
+          onDuplicateProject: duplicateProject,
           onMenuToggle: () => setSidebarOpen(o => !o),
           onExport: exportProjects,
         }} />
