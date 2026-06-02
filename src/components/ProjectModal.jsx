@@ -2,6 +2,22 @@ import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from '../supabase'
 import { useAuth } from '../context/AuthContext'
+import {
+  DndContext,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 const DEPARTMENTS = ['Redes', 'Diseño', 'Audiovisual', 'Tecnología']
 const STATUSES = ['Pendiente', 'En proceso', 'Completado']
@@ -61,6 +77,14 @@ export default function ProjectModal({ project, onClose, onSave }) {
   const setTask = (pid, tid, name) => set('phases', form.phases.map(p =>
     p.id === pid ? { ...p, tasks: p.tasks.map(t => t.id === tid ? { ...t, name } : t) } : p
   ))
+  const moveTask = (pid, fromIdx, toIdx) => set('phases', form.phases.map(p =>
+    p.id === pid ? { ...p, tasks: arrayMove(p.tasks, fromIdx, toIdx) } : p
+  ))
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
 
   const submit = async e => {
     e?.preventDefault()
@@ -228,27 +252,31 @@ export default function ProjectModal({ project, onClose, onSave }) {
                     )}
                   </div>
 
-                  <div className="space-y-2 mb-2">
-                    {phase.tasks.map(task => (
-                      <div key={task.id} className="flex items-center gap-2">
-                        <span className="w-1 h-1 rounded-full bg-[#ddd] flex-shrink-0" />
-                        <input
-                          value={task.name}
-                          onChange={e => setTask(phase.id, task.id, e.target.value)}
-                          placeholder="Nombre de la tarea"
-                          className="flex-1 border border-[#e0ddd4] rounded-lg px-3 py-1.5 text-[13px] text-[#444] placeholder-[#bbb] outline-none focus:border-[#bbb] bg-white font-sans"
-                        />
-                        {phase.tasks.length > 1 && (
-                          <button type="button" onClick={() => delTask(phase.id, task.id)}
-                            className="text-[#ccc] hover:text-[#ef4444] transition-colors w-5 h-5 flex items-center justify-center flex-shrink-0">
-                            <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
-                            </svg>
-                          </button>
-                        )}
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={({ active, over }) => {
+                      if (!over || active.id === over.id) return
+                      const tasks = phase.tasks
+                      const from = tasks.findIndex(t => t.id === active.id)
+                      const to = tasks.findIndex(t => t.id === over.id)
+                      moveTask(phase.id, from, to)
+                    }}
+                  >
+                    <SortableContext items={phase.tasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+                      <div className="space-y-2 mb-2">
+                        {phase.tasks.map(task => (
+                          <SortableTask
+                            key={task.id}
+                            task={task}
+                            canDelete={phase.tasks.length > 1}
+                            onChangeName={name => setTask(phase.id, task.id, name)}
+                            onDelete={() => delTask(phase.id, task.id)}
+                          />
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    </SortableContext>
+                  </DndContext>
 
                   <button type="button" onClick={() => addTask(phase.id)}
                     className="text-[12px] font-semibold text-[#aaa] hover:text-[#555] transition-colors flex items-center gap-1 mt-1">
@@ -455,6 +483,49 @@ function MemberPicker({ users, selected, selectedUsers, onToggle }) {
           </div>
         </div>,
         document.body
+      )}
+    </div>
+  )
+}
+
+// ─── SortableTask ───────────────────────────────────────────────────────────────
+
+function SortableTask({ task, canDelete, onChangeName, onDelete }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id })
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={`flex items-center gap-2${isDragging ? ' opacity-60 shadow-md rounded-lg' : ''}`}
+    >
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        className="text-[#ccc] hover:text-[#888] transition-colors flex-shrink-0 cursor-grab active:cursor-grabbing focus:outline-none"
+        tabIndex={0}
+        aria-label="Reordenar tarea"
+      >
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+          <circle cx="4" cy="2.5" r="1"/><circle cx="8" cy="2.5" r="1"/>
+          <circle cx="4" cy="6" r="1"/><circle cx="8" cy="6" r="1"/>
+          <circle cx="4" cy="9.5" r="1"/><circle cx="8" cy="9.5" r="1"/>
+        </svg>
+      </button>
+      <input
+        value={task.name}
+        onChange={e => onChangeName(e.target.value)}
+        placeholder="Nombre de la tarea"
+        className="flex-1 border border-[#e0ddd4] rounded-lg px-3 py-1.5 text-[13px] text-[#444] placeholder-[#bbb] outline-none focus:border-[#bbb] bg-white font-sans"
+      />
+      {canDelete && (
+        <button type="button" onClick={onDelete}
+          className="text-[#ccc] hover:text-[#ef4444] transition-colors w-5 h-5 flex items-center justify-center flex-shrink-0">
+          <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
       )}
     </div>
   )
