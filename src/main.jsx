@@ -13,6 +13,7 @@ import TicketsPage from './pages/TicketsPage.jsx'
 import NotificationPreferencesPage from './pages/NotificationPreferencesPage.jsx'
 import TicketAnalyticsPage from './pages/TicketAnalyticsPage.jsx'
 import AdsPage from './pages/AdsPage.jsx'
+import TareasPage from './pages/TareasPage.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -27,6 +28,7 @@ createRoot(document.getElementById('root')).render(
             <Route path="/tickets/notificaciones" element={<NotificationPreferencesPage />} />
             <Route path="/tickets/analytics" element={<TicketAnalyticsPage />} />
             <Route path="/ads" element={<AdsPage />} />
+            <Route path="/tareas" element={<TareasPage />} />
             <Route path="/*" element={<App />} />
           </Route>
         </Routes>

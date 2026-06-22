@@ -18,6 +18,13 @@ function renderSidebar(userProfile) {
   )
 }
 
+describe('Sidebar — enlace Gestión de Tareas', () => {
+  it('muestra el botón de Tareas QC / Cierre en la barra lateral', () => {
+    renderSidebar({ department_id: 1, access_level: 1, admin: false })
+    expect(screen.getByRole('button', { name: /tareas qc \/ cierre/i })).toBeInTheDocument()
+  })
+})
+
 describe('Sidebar — enlace Notificaciones', () => {
   it('es visible para IT con access_level >= 3', () => {
     renderSidebar({ department_id: 0, access_level: 3, admin: false })
