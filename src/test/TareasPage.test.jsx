@@ -5,9 +5,8 @@ import { vi } from 'vitest'
 // ── Mock supabase ────────────────────────────────────────────────────────────
 vi.mock('../supabase', () => {
   const channel = { on: vi.fn().mockReturnThis(), subscribe: vi.fn().mockReturnThis() }
-  const mockFrom = vi.fn()
 
-  // Default: return empty arrays
+  const mockFrom = vi.fn()
   const makeQuery = (result = []) => ({
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
@@ -17,7 +16,7 @@ vi.mock('../supabase', () => {
   mockFrom.mockImplementation(table => {
     if (table === 'teams') return makeQuery(MOCK_TEAMS)
     if (table === 'team_members') return makeQuery(MOCK_MEMBERS)
-    if (table === 'tareas') return makeQuery(MOCK_TAREAS)
+    if (table === 'tasks') return makeQuery(MOCK_TASKS)
     if (table === 'users') return makeQuery(MOCK_USERS)
     return makeQuery([])
   })
@@ -44,19 +43,19 @@ const MOCK_TEAMS = [
 const MOCK_MEMBERS = [
   { id: 'm1', team_id: 'team-1', user_id: 'u1', created_at: '2026-01-01T00:00:00Z' },
 ]
-const MOCK_TAREAS = [
+const MOCK_TASKS = [
   {
-    id: 'ta-1',
+    id: 'task-1',
     team_id: 'team-1',
     company_id: 'co-1',
-    cliente: 'Banco ABC',
-    tarea: 'Crear story para instagram',
-    estatus: 'En proceso',
-    fecha_solicitud: '2026-06-22',
-    fecha_entrega: '2099-12-31',
-    responsable_id: 'u1',
-    apoyo_id: null,
-    capturado_por: 'u1',
+    client: 'Banco ABC',
+    description: 'Crear story para instagram',
+    status: 'En proceso',
+    request_date: '2026-06-22',
+    due_date: '2099-12-31',
+    assignee_id: 'u1',
+    support_id: null,
+    created_by: 'u1',
     created_at: '2026-06-22T10:00:00Z',
   },
 ]

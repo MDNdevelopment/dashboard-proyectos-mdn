@@ -21,9 +21,9 @@ export default function TareasPage() {
   const { userProfile } = useAuth()
   const [teams, setTeams] = useState([])
   const [teamMembers, setTeamMembers] = useState([])
-  const [tareas, setTareas] = useState([])
-  const [usersMap, setUsersMap] = useState(new Map())  // user_id → user object
-  const [allUsers, setAllUsers] = useState([])          // for pickers
+  const [tasks, setTasks] = useState([])
+  const [usersMap, setUsersMap] = useState(new Map())
+  const [allUsers, setAllUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [activeView, setActiveView] = useState('panorama')
   const [activeTeamId, setActiveTeamId] = useState(null)
@@ -33,29 +33,27 @@ export default function TareasPage() {
 
   const activeTeam = teams.find(t => t.id === activeTeamId) ?? null
 
-  // ── Data loading ────────────────────────────────────────────────────────────
   const loadAll = useCallback(async () => {
     if (!userProfile?.company_id) return
     setLoading(true)
     const companyId = userProfile.company_id
 
-    const [teamsRes, membersRes, tareasRes, usersRes] = await Promise.all([
+    const [teamsRes, membersRes, tasksRes, usersRes] = await Promise.all([
       supabase.from('teams').select('*').eq('company_id', companyId).order('created_at'),
       supabase.from('team_members').select('*'),
-      supabase.from('tareas').select('*').eq('company_id', companyId).order('created_at', { ascending: false }),
+      supabase.from('tasks').select('*').eq('company_id', companyId).order('created_at', { ascending: false }),
       supabase.from('users').select('user_id, first_name, last_name, avatar_url, access_level').eq('company_id', companyId).order('first_name'),
     ])
 
     const fetchedTeams = teamsRes.data ?? []
     setTeams(fetchedTeams)
     setTeamMembers(membersRes.data ?? [])
-    setTareas(tareasRes.data ?? [])
+    setTasks(tasksRes.data ?? [])
 
     const users = usersRes.data ?? []
     setAllUsers(users)
     setUsersMap(new Map(users.map(u => [u.user_id, u])))
 
-    // Auto-select first team if none selected
     setActiveTeamId(prev => prev ?? (fetchedTeams[0]?.id ?? null))
     setLoading(false)
   }, [userProfile?.company_id])
@@ -64,13 +62,12 @@ export default function TareasPage() {
     loadAll()
   }, [loadAll])
 
-  // ── Realtime subscription ───────────────────────────────────────────────────
   useEffect(() => {
     if (!userProfile?.company_id) return
     let channel = supabase
-      .channel('tareas-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tareas' }, payload => {
-        setTareas(prev => {
+      .channel('tasks-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, payload => {
+        setTasks(prev => {
           if (payload.eventType === 'INSERT') {
             return prev.some(t => t.id === payload.new.id) ? prev : [payload.new, ...prev]
           }
@@ -90,43 +87,31 @@ export default function TareasPage() {
     return () => { supabase.removeChannel(channel) }
   }, [userProfile?.company_id, loadAll])
 
-  // ── CRUD callbacks ──────────────────────────────────────────────────────────
-  function handleCreated(tarea) {
-    setTareas(prev => [tarea, ...prev])
+  function handleCreated(task) {
+    setTasks(prev => [task, ...prev])
   }
 
-  function handleUpdated(tarea) {
-    if (tarea._deleted) {
-      setTareas(prev => prev.filter(t => t.id !== tarea.id))
+  function handleUpdated(task) {
+    if (task._deleted) {
+      setTasks(prev => prev.filter(t => t.id !== task.id))
     } else {
-      setTareas(prev => prev.map(t => t.id === tarea.id ? tarea : t))
+      setTasks(prev => prev.map(t => t.id === task.id ? task : t))
     }
   }
 
-  function openNewTask() {
-    setTaskModal(undefined)   // undefined → create mode
-  }
-  function openEditTask(t) {
-    setTaskModal(t)           // object → edit mode
-  }
-  function closeTaskModal() {
-    setTaskModal(null)        // null → closed
-  }
+  function openNewTask() { setTaskModal(undefined) }
+  function openEditTask(task) { setTaskModal(task) }
+  function closeTaskModal() { setTaskModal(null) }
 
-  // ── View ────────────────────────────────────────────────────────────────────
   function selectTeam(teamId) {
     setActiveTeamId(teamId)
     if (activeView === 'panorama') setActiveView('team')
   }
 
-  const viewsRequiringTeam = ['team', 'base', 'kanban', 'standup']
-
   return (
     <>
       <main className="flex-1 overflow-y-auto main-bg h-screen">
         <div className="max-w-7xl mx-auto px-6 py-8">
-
-          {/* Page header */}
           <div className="flex items-center justify-between mb-6">
             <div>
               <h1 className="text-[24px] font-bold text-[#111] leading-tight">Gestión de Tareas</h1>
@@ -157,9 +142,7 @@ export default function TareasPage() {
             </div>
           </div>
 
-          {/* Team pills + view tabs */}
           <div className="flex flex-col gap-3 mb-6">
-            {/* Team selector */}
             {teams.length > 0 && (
               <div className="flex flex-wrap gap-1.5 items-center">
                 <span className="text-[10.5px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] mr-1">Team</span>
@@ -178,8 +161,6 @@ export default function TareasPage() {
                 ))}
               </div>
             )}
-
-            {/* View tabs */}
             <div className="flex bg-white border border-[#e0ddd4] rounded-xl p-1 w-fit">
               {VIEWS.map(v => (
                 <button
@@ -197,7 +178,6 @@ export default function TareasPage() {
             </div>
           </div>
 
-          {/* No teams notice */}
           {!loading && teams.length === 0 && (
             <div className="bg-white rounded-xl border border-[#e0ddd4] p-10 text-center mb-4">
               <p className="text-[15px] font-semibold text-[#888] mb-1">No hay teams creados</p>
@@ -211,7 +191,6 @@ export default function TareasPage() {
             </div>
           )}
 
-          {/* Views */}
           {loading ? (
             <div className="flex items-center justify-center py-20">
               <div className="w-6 h-6 border-2 border-[#FFB800] border-t-transparent rounded-full animate-spin" />
@@ -219,56 +198,28 @@ export default function TareasPage() {
           ) : (
             <>
               {activeView === 'panorama' && (
-                <PanoramaView
-                  teams={teams}
-                  tareas={tareas}
-                  onSelectTeam={selectTeam}
-                />
+                <PanoramaView teams={teams} tasks={tasks} onSelectTeam={selectTeam} />
               )}
               {activeView === 'team' && (
-                <TeamView
-                  team={activeTeam}
-                  tareas={tareas}
-                  usersMap={usersMap}
-                  onOpenTask={openEditTask}
-                />
+                <TeamView team={activeTeam} tasks={tasks} usersMap={usersMap} onOpenTask={openEditTask} />
               )}
               {activeView === 'base' && (
-                <BaseView
-                  tareas={tareas}
-                  teams={teams}
-                  team={activeTeam}
-                  usersMap={usersMap}
-                  onOpenTask={openEditTask}
-                />
+                <BaseView tasks={tasks} teams={teams} team={activeTeam} usersMap={usersMap} onOpenTask={openEditTask} />
               )}
               {activeView === 'kanban' && (
-                <KanbanView
-                  team={activeTeam}
-                  tareas={tareas}
-                  usersMap={usersMap}
-                  onOpenTask={openEditTask}
-                  onUpdated={handleUpdated}
-                />
+                <KanbanView team={activeTeam} tasks={tasks} usersMap={usersMap} onOpenTask={openEditTask} onUpdated={handleUpdated} />
               )}
               {activeView === 'standup' && (
-                <StandupView
-                  team={activeTeam}
-                  tareas={tareas}
-                  teams={teams}
-                  usersMap={usersMap}
-                  onOpenTask={openEditTask}
-                />
+                <StandupView team={activeTeam} tasks={tasks} teams={teams} usersMap={usersMap} onOpenTask={openEditTask} />
               )}
             </>
           )}
         </div>
       </main>
 
-      {/* Task modal — null = closed, undefined = create, object = edit */}
       {taskModal !== null && (
         <TaskModal
-          tarea={taskModal === undefined ? null : taskModal}
+          task={taskModal === undefined ? null : taskModal}
           teams={teams}
           users={allUsers}
           defaultTeamId={activeTeamId}
@@ -278,7 +229,6 @@ export default function TareasPage() {
         />
       )}
 
-      {/* Team manager modal */}
       {showTeamManager && (
         <TeamManagerModal
           teams={teams}

@@ -2,46 +2,46 @@ import { useState, useMemo } from 'react'
 import { isLate, isDragged, isClosed, fmtShort, ESTADOS, COL_META } from './constants'
 import { Avatar } from './UserPickerSingle'
 
-function StatusBadge({ estatus }) {
-  const meta = COL_META[estatus] ?? { color: '#ccc', textColor: '#111' }
+function StatusBadge({ status }) {
+  const meta = COL_META[status] ?? { color: '#ccc', textColor: '#111' }
   return (
     <span
       className="inline-block px-2 py-0.5 rounded-full text-[11px] font-bold"
       style={{ background: meta.color + '22', color: meta.color, border: `1px solid ${meta.color}44` }}
     >
-      {estatus}
+      {status}
     </span>
   )
 }
 
-export default function BaseView({ tareas, teams, team, usersMap, onOpenTask }) {
+export default function BaseView({ tasks, teams, team, usersMap, onOpenTask }) {
   const [q, setQ] = useState('')
-  const [fEstatus, setFEstatus] = useState('')
-  const [fCliente, setFCliente] = useState('')
-  const [fApoyo, setFApoyo] = useState('')   // '' | 'con_apoyo' | 'sin_apoyo'
-  const [fAlerta, setFAlerta] = useState('') // '' | 'late' | 'drag' | 'ok'
+  const [fStatus, setFStatus] = useState('')
+  const [fClient, setFClient] = useState('')
+  const [fSupport, setFSupport] = useState('')  // '' | 'with' | 'without'
+  const [fAlert, setFAlert] = useState('')      // '' | 'late' | 'drag' | 'ok'
 
-  const teamTareas = team ? tareas.filter(t => t.team_id === team.id) : []
-  const clientes = useMemo(() =>
-    [...new Set(teamTareas.map(t => t.cliente).filter(Boolean))].sort(),
-    [teamTareas]
+  const teamTasks = team ? tasks.filter(t => t.team_id === team.id) : []
+  const clients = useMemo(
+    () => [...new Set(teamTasks.map(t => t.client).filter(Boolean))].sort(),
+    [teamTasks]
   )
 
-  const filtered = teamTareas.filter(t => {
+  const filtered = teamTasks.filter(t => {
     const sq = q.toLowerCase()
-    if (sq && !((t.cliente ?? '').toLowerCase().includes(sq) || (t.tarea ?? '').toLowerCase().includes(sq))) return false
-    if (fEstatus && t.estatus !== fEstatus) return false
-    if (fCliente && t.cliente !== fCliente) return false
-    if (fApoyo === 'con_apoyo' && !t.apoyo_id) return false
-    if (fApoyo === 'sin_apoyo' && t.apoyo_id) return false
-    if (fAlerta === 'late' && !isLate(t)) return false
-    if (fAlerta === 'drag' && !isDragged(t)) return false
-    if (fAlerta === 'ok' && (isLate(t) || isDragged(t))) return false
+    if (sq && !((t.client ?? '').toLowerCase().includes(sq) || (t.description ?? '').toLowerCase().includes(sq))) return false
+    if (fStatus && t.status !== fStatus) return false
+    if (fClient && t.client !== fClient) return false
+    if (fSupport === 'with' && !t.support_id) return false
+    if (fSupport === 'without' && t.support_id) return false
+    if (fAlert === 'late' && !isLate(t)) return false
+    if (fAlert === 'drag' && !isDragged(t)) return false
+    if (fAlert === 'ok' && (isLate(t) || isDragged(t))) return false
     return true
-  }).sort((a, b) => (b.fecha_solicitud ?? '').localeCompare(a.fecha_solicitud ?? ''))
+  }).sort((a, b) => (b.request_date ?? '').localeCompare(a.request_date ?? ''))
 
-  const hasFilters = q || fEstatus || fCliente || fApoyo || fAlerta
-  function clearFilters() { setQ(''); setFEstatus(''); setFCliente(''); setFApoyo(''); setFAlerta('') }
+  const hasFilters = q || fStatus || fClient || fSupport || fAlert
+  function clearFilters() { setQ(''); setFStatus(''); setFClient(''); setFSupport(''); setFAlert('') }
 
   function userDisplay(id) {
     const u = usersMap.get(id)
@@ -71,56 +71,37 @@ export default function BaseView({ tareas, teams, team, usersMap, onOpenTask }) 
             className="pl-8 pr-3 py-2 text-[12.5px] bg-white border border-[#e0ddd4] rounded-lg outline-none focus:border-[#bbb] transition-colors w-52"
           />
         </div>
-        <select
-          value={fEstatus}
-          onChange={e => setFEstatus(e.target.value)}
-          className="input-base text-[12.5px] py-2 w-auto"
-        >
+        <select value={fStatus} onChange={e => setFStatus(e.target.value)} className="input-base text-[12.5px] py-2 w-auto">
           <option value="">Estatus: todos</option>
           {ESTADOS.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
-        <select
-          value={fCliente}
-          onChange={e => setFCliente(e.target.value)}
-          className="input-base text-[12.5px] py-2 w-auto"
-        >
+        <select value={fClient} onChange={e => setFClient(e.target.value)} className="input-base text-[12.5px] py-2 w-auto">
           <option value="">Cliente: todos</option>
-          {clientes.map(c => <option key={c} value={c}>{c}</option>)}
+          {clients.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-        <select
-          value={fApoyo}
-          onChange={e => setFApoyo(e.target.value)}
-          className="input-base text-[12.5px] py-2 w-auto"
-        >
+        <select value={fSupport} onChange={e => setFSupport(e.target.value)} className="input-base text-[12.5px] py-2 w-auto">
           <option value="">Apoyo dir.: todos</option>
-          <option value="con_apoyo">Con apoyo</option>
-          <option value="sin_apoyo">Sin apoyo</option>
+          <option value="with">Con apoyo</option>
+          <option value="without">Sin apoyo</option>
         </select>
-        <select
-          value={fAlerta}
-          onChange={e => setFAlerta(e.target.value)}
-          className="input-base text-[12.5px] py-2 w-auto"
-        >
+        <select value={fAlert} onChange={e => setFAlert(e.target.value)} className="input-base text-[12.5px] py-2 w-auto">
           <option value="">Alerta: todas</option>
           <option value="late">Retrasadas</option>
           <option value="drag">Arrastradas &gt;7 días</option>
           <option value="ok">Al día</option>
         </select>
         {hasFilters && (
-          <button
-            onClick={clearFilters}
-            className="text-[12px] font-semibold text-[#888] hover:text-[#111] transition-colors"
-          >
+          <button onClick={clearFilters} className="text-[12px] font-semibold text-[#888] hover:text-[#111] transition-colors">
             Limpiar filtros
           </button>
         )}
         <span className="ml-auto text-[12px] text-[#888]">
-          {hasFilters ? `${filtered.length} de ${teamTareas.length}` : teamTareas.length} tarea{teamTareas.length !== 1 ? 's' : ''}
+          {hasFilters ? `${filtered.length} de ${teamTasks.length}` : teamTasks.length} tarea{teamTasks.length !== 1 ? 's' : ''}
         </span>
       </div>
 
       {/* Table */}
-      {teamTareas.length === 0 ? (
+      {teamTasks.length === 0 ? (
         <div className="bg-white rounded-xl border border-[#e0ddd4] p-10 text-center">
           <p className="text-[14px] font-medium text-[#888] mb-1">Sin tareas</p>
           <p className="text-[12px] text-[#bbb]">Crea la primera tarea con el botón "Nueva tarea"</p>
@@ -148,8 +129,8 @@ export default function BaseView({ tareas, teams, team, usersMap, onOpenTask }) 
               </thead>
               <tbody>
                 {filtered.map(t => {
-                  const resp = userDisplay(t.responsable_id)
-                  const apoyo = userDisplay(t.apoyo_id)
+                  const resp = userDisplay(t.assignee_id)
+                  const support = userDisplay(t.support_id)
                   const late = isLate(t)
                   const drag = isDragged(t)
                   return (
@@ -160,13 +141,13 @@ export default function BaseView({ tareas, teams, team, usersMap, onOpenTask }) 
                     >
                       <td className="px-4 py-3 font-medium text-[#111] max-w-[140px] truncate">
                         {late && <span className="text-red-500 mr-1">⚠</span>}
-                        {t.cliente || <span className="text-[#bbb]">—</span>}
+                        {t.client || <span className="text-[#bbb]">—</span>}
                       </td>
                       <td className="px-4 py-3 text-[#333] max-w-[220px]">
-                        <span className="line-clamp-2">{t.tarea}</span>
+                        <span className="line-clamp-2">{t.description}</span>
                         {drag && !late && <span className="block text-[11px] text-[#F0871F] mt-0.5">Arrastrada</span>}
                       </td>
-                      <td className="px-4 py-3"><StatusBadge estatus={t.estatus} /></td>
+                      <td className="px-4 py-3"><StatusBadge status={t.status} /></td>
                       <td className="px-4 py-3">
                         {resp ? (
                           <div className="flex items-center gap-1.5">
@@ -176,16 +157,16 @@ export default function BaseView({ tareas, teams, team, usersMap, onOpenTask }) 
                         ) : <span className="text-[#bbb]">—</span>}
                       </td>
                       <td className="px-4 py-3">
-                        {apoyo ? (
+                        {support ? (
                           <div className="flex items-center gap-1.5">
                             <span className="text-[11px]">🤝</span>
-                            <span className="text-[12px] text-[#555]">{apoyo.name}</span>
+                            <span className="text-[12px] text-[#555]">{support.name}</span>
                           </div>
                         ) : <span className="text-[#bbb]">—</span>}
                       </td>
-                      <td className="px-4 py-3 text-[12px] font-mono text-[#666]">{fmtShort(t.fecha_solicitud)}</td>
+                      <td className="px-4 py-3 text-[12px] font-mono text-[#666]">{fmtShort(t.request_date)}</td>
                       <td className="px-4 py-3 text-[12px] font-mono text-[#666]">
-                        {late ? <span className="text-red-500">{fmtShort(t.fecha_entrega)}</span> : fmtShort(t.fecha_entrega)}
+                        {late ? <span className="text-red-500">{fmtShort(t.due_date)}</span> : fmtShort(t.due_date)}
                       </td>
                       <td className="px-4 py-3">
                         <button

@@ -42,9 +42,9 @@ export function daysBetween(a, b) {
   return Math.round((b - a) / (24 * 3600 * 1000))
 }
 
-/** ISO week number of a tarea's fecha_solicitud. */
-export function taskWeek(t) {
-  const d = parseD(t.fecha_solicitud)
+/** ISO week number of a task's request_date. */
+export function taskWeek(task) {
+  const d = parseD(task.request_date)
   return d ? isoWeek(d) : null
 }
 
@@ -55,24 +55,24 @@ export function fmtShort(s) {
 }
 
 // ─── Task state helpers ──────────────────────────────────────────────────────
-export function isClosed(t) {
-  return t.estatus === 'Terminado'
+export function isClosed(task) {
+  return task.status === 'Terminado'
 }
 
-export function isLate(t) {
-  if (isClosed(t)) return false
-  const fe = parseD(t.fecha_entrega)
+export function isLate(task) {
+  if (isClosed(task)) return false
+  const fe = parseD(task.due_date)
   return fe !== null && fe < today()
 }
 
-export function isDragged(t) {
-  if (isClosed(t)) return false
-  const fs = parseD(t.fecha_solicitud)
+export function isDragged(task) {
+  if (isClosed(task)) return false
+  const fs = parseD(task.request_date)
   return fs !== null && daysBetween(fs, today()) > 7
 }
 
-export function isBlocked(t) {
-  return t.estatus === 'Bloqueado'
+export function isBlocked(task) {
+  return task.status === 'Bloqueado'
 }
 
 // ─── Semáforo ────────────────────────────────────────────────────────────────
@@ -92,17 +92,17 @@ export function lightOf(pct, total) {
 /**
  * Compute week metrics for a given team's tasks.
  * @param {string} teamId
- * @param {Array}  allTareas  full tareas array
+ * @param {Array}  allTasks   full tasks array
  * @param {number} weekNum    ISO week number to scope to
  */
-export function teamWeekStats(teamId, allTareas, weekNum) {
-  const all = allTareas.filter(t => t.team_id === teamId)
+export function teamWeekStats(teamId, allTasks, weekNum) {
+  const all = allTasks.filter(t => t.team_id === teamId)
   const tasks = all.filter(t => taskWeek(t) === weekNum)
   const total = tasks.length
-  const cerradas = tasks.filter(isClosed).length
-  const pct = total ? Math.round((cerradas / total) * 100) : 0
-  const bloqueados = all.filter(isBlocked).length
-  const retrasados = all.filter(isLate).length
-  const apoyo = all.filter(t => t.apoyo_id && !isClosed(t)).length
-  return { teamId, total, cerradas, pct, bloqueados, retrasados, apoyo }
+  const closed = tasks.filter(isClosed).length
+  const pct = total ? Math.round((closed / total) * 100) : 0
+  const blocked = all.filter(isBlocked).length
+  const late = all.filter(isLate).length
+  const support = all.filter(t => t.support_id && !isClosed(t)).length
+  return { teamId, total, cerradas: closed, pct, bloqueados: blocked, retrasados: late, apoyo: support }
 }

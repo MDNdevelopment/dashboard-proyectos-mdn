@@ -23,19 +23,17 @@ function KpiCard({ label, value, sub, color }) {
 }
 
 function SemLight({ light }) {
-  const DOT_COLOR = { green: '#16A34A', yellow: '#FFB800', red: '#E14848', none: '#bbb' }
-  const color = DOT_COLOR[light.cls] ?? '#bbb'
   return (
-    <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold" style={{ color }}>
-      <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, display: 'inline-block' }} />
+    <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold" style={{ color: light.color }}>
+      <span style={{ width: 8, height: 8, borderRadius: '50%', background: light.color, display: 'inline-block' }} />
       {light.label}
     </span>
   )
 }
 
-export default function PanoramaView({ teams, tareas, onSelectTeam }) {
+export default function PanoramaView({ teams, tasks, onSelectTeam }) {
   const wk = isoWeek(new Date())
-  const stats = teams.map((t, i) => ({ ...teamWeekStats(t.id, tareas, wk), team: t, palette: teamPalette(i) }))
+  const stats = teams.map((t, i) => ({ ...teamWeekStats(t.id, tasks, wk), team: t, palette: teamPalette(i) }))
   const gTotal = stats.reduce((a, s) => a + s.total, 0)
   const gCer = stats.reduce((a, s) => a + s.cerradas, 0)
   const gPct = gTotal ? Math.round((gCer / gTotal) * 100) : 0
@@ -44,7 +42,6 @@ export default function PanoramaView({ teams, tareas, onSelectTeam }) {
   const ranked = [...stats].sort((a, b) => (b.total ? b.pct : -1) - (a.total ? a.pct : -1) || b.cerradas - a.cerradas)
   const withMov = stats.filter(s => s.total > 0)
 
-  // mentor suggestion
   let mentorNote = null
   if (withMov.length >= 2) {
     const top = ranked.find(s => s.total > 0)
@@ -56,7 +53,6 @@ export default function PanoramaView({ teams, tareas, onSelectTeam }) {
 
   return (
     <div className="space-y-6">
-      {/* Global KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <KpiCard label="Tareas semana" value={gTotal} sub={`Semana ${wk}`} />
         <KpiCard label="Cerradas" value={`${gCer} / ${gTotal}`} sub="Procesos completados" color="#16A34A" />
@@ -65,7 +61,6 @@ export default function PanoramaView({ teams, tareas, onSelectTeam }) {
         <KpiCard label="Retrasados" value={gRet} sub="Entregas vencidas" color={gRet ? '#E14848' : undefined} />
       </div>
 
-      {/* Team cards */}
       {teams.length === 0 ? (
         <div className="bg-white rounded-xl border border-[#e0ddd4] p-10 text-center">
           <p className="text-[14px] font-medium text-[#888] mb-1">Aún no hay teams</p>
@@ -82,9 +77,7 @@ export default function PanoramaView({ teams, tareas, onSelectTeam }) {
                 onClick={() => onSelectTeam(s.team.id)}
                 className="bg-white rounded-xl border border-[#e0ddd4] p-4 text-left hover:border-[#FFB800] hover:shadow-md transition-all group"
               >
-                {/* strip */}
                 <div className="h-1.5 rounded-full mb-3" style={{ background: isLead ? '#FFB800' : s.palette.bg }} />
-                {/* rank + avatar */}
                 <div className="flex items-center gap-2.5 mb-3">
                   <div
                     className="w-9 h-9 rounded-full flex items-center justify-center text-[14px] font-bold flex-shrink-0"
@@ -98,7 +91,6 @@ export default function PanoramaView({ teams, tareas, onSelectTeam }) {
                   </div>
                   <span className="ml-auto text-[11px] font-mono text-[#888]">#{i + 1}</span>
                 </div>
-                {/* big number */}
                 <div className="mb-2">
                   <span className="text-[28px] font-bold leading-none" style={{ color: lg.color }}>
                     {s.total ? `${s.pct}%` : '—'}
@@ -107,11 +99,9 @@ export default function PanoramaView({ teams, tareas, onSelectTeam }) {
                     {s.total ? `${s.cerradas}/${s.total} tareas` : 'sin movimiento'}
                   </span>
                 </div>
-                {/* progress bar */}
                 <div className="h-1.5 rounded-full bg-[#f0ede3] mb-3 overflow-hidden">
                   <div className="h-full rounded-full transition-all" style={{ width: `${s.pct}%`, background: lg.color }} />
                 </div>
-                {/* stats row */}
                 <div className="flex items-center justify-between text-[11.5px] text-[#888]">
                   <span><b className="text-[#111]">{s.bloqueados}</b> bloq.</span>
                   <span><b className="text-[#111]">{s.retrasados}</b> atraso</span>
@@ -123,7 +113,6 @@ export default function PanoramaView({ teams, tareas, onSelectTeam }) {
         </div>
       )}
 
-      {/* Mentor note */}
       {mentorNote && (
         <div className="bg-[#fffbeb] border border-[#fde68a] rounded-xl px-4 py-3 flex gap-3 items-start">
           <svg className="flex-shrink-0 mt-0.5 text-[#FFB800]" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

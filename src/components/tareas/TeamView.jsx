@@ -12,7 +12,7 @@ function KpiCard({ label, value, sub, color }) {
   )
 }
 
-export default function TeamView({ team, tareas, usersMap, onOpenTask }) {
+export default function TeamView({ team, tasks, usersMap, onOpenTask }) {
   if (!team) {
     return (
       <div className="bg-white rounded-xl border border-[#e0ddd4] p-10 text-center">
@@ -22,49 +22,39 @@ export default function TeamView({ team, tareas, usersMap, onOpenTask }) {
   }
 
   const wk = isoWeek(new Date())
-  const all = tareas.filter(t => t.team_id === team.id)
-  const tasks = all.filter(t => taskWeek(t) === wk)
-  const total = tasks.length
-  const cerradas = tasks.filter(isClosed).length
-  const pct = total ? Math.round((cerradas / total) * 100) : 0
-  const bloqueados = all.filter(isBlocked).length
-  const retrasados = all.filter(isLate).length
-  const apoyoN = all.filter(t => t.apoyo_id && !isClosed(t)).length
+  const all = tasks.filter(t => t.team_id === team.id)
+  const weekTasks = all.filter(t => taskWeek(t) === wk)
+  const total = weekTasks.length
+  const closed = weekTasks.filter(isClosed).length
+  const pct = total ? Math.round((closed / total) * 100) : 0
+  const blocked = all.filter(isBlocked).length
+  const late = all.filter(isLate).length
+  const supportCount = all.filter(t => t.support_id && !isClosed(t)).length
 
   const semLabel = !total ? 'Sin movimiento' : pct >= 90 ? 'Team al día' : pct >= 70 ? 'Atención: retrasos leves' : 'Alerta: plan de acción'
   const semColor = !total ? '#bbb' : pct >= 90 ? '#16A34A' : pct < 70 ? '#E14848' : '#F0871F'
 
-  // Pipeline distribution
-  const counts = ESTADOS.map(e => ({ e, n: all.filter(t => t.estatus === e).length }))
+  const counts = ESTADOS.map(e => ({ e, n: all.filter(t => t.status === e).length }))
   const tot = all.length
 
-  // Table by client
-  const clientes = [...new Set(tasks.map(t => t.cliente).filter(Boolean))].sort()
-
-  function userName(id) {
-    const u = usersMap.get(id)
-    return u ? `${u.first_name} ${u.last_name}` : '—'
-  }
+  const clients = [...new Set(weekTasks.map(t => t.client).filter(Boolean))].sort()
 
   return (
     <div className="space-y-4">
-      {/* Header */}
       <div>
         <h2 className="text-[18px] font-bold text-[#111]">Team {team.name}</h2>
         <p className="text-[12.5px] text-[#888]">Semana {wk}</p>
       </div>
 
-      {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <KpiCard label="Planificadas" value={total} sub={`Semana ${wk}`} />
-        <KpiCard label="Cerradas" value={`${cerradas}/${total}`} sub="Completadas" color="#16A34A" />
+        <KpiCard label="Cerradas" value={`${closed}/${total}`} sub="Completadas" color="#16A34A" />
         <KpiCard label="Cumplimiento" value={`${pct}%`} sub={semLabel} color={semColor} />
-        <KpiCard label="Bloqueados" value={bloqueados} sub={bloqueados ? 'Esta semana' : 'Sin bloqueos'} color={bloqueados ? '#E14848' : undefined} />
-        <KpiCard label="Retrasados" value={retrasados} sub="Entregas vencidas" color={retrasados ? '#E14848' : undefined} />
-        <KpiCard label="Apoyo dir." value={apoyoN} sub={apoyoN ? 'Activos' : 'Ninguno'} />
+        <KpiCard label="Bloqueados" value={blocked} sub={blocked ? 'Esta semana' : 'Sin bloqueos'} color={blocked ? '#E14848' : undefined} />
+        <KpiCard label="Retrasados" value={late} sub="Entregas vencidas" color={late ? '#E14848' : undefined} />
+        <KpiCard label="Apoyo dir." value={supportCount} sub={supportCount ? 'Activos' : 'Ninguno'} />
       </div>
 
-      {/* Pipeline distribution */}
       {tot > 0 && (
         <div className="bg-white rounded-xl border border-[#e0ddd4] p-4">
           <p className="text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-3">
@@ -72,11 +62,7 @@ export default function TeamView({ team, tareas, usersMap, onOpenTask }) {
           </p>
           <div className="flex rounded-full overflow-hidden h-2 mb-3">
             {counts.filter(c => c.n > 0).map(c => (
-              <div
-                key={c.e}
-                style={{ width: `${(c.n / tot) * 100}%`, background: COL_META[c.e]?.color ?? '#ccc' }}
-                title={`${c.e}: ${c.n}`}
-              />
+              <div key={c.e} style={{ width: `${(c.n / tot) * 100}%`, background: COL_META[c.e]?.color ?? '#ccc' }} title={`${c.e}: ${c.n}`} />
             ))}
           </div>
           <div className="flex flex-wrap gap-3">
@@ -90,8 +76,7 @@ export default function TeamView({ team, tareas, usersMap, onOpenTask }) {
         </div>
       )}
 
-      {/* Client table */}
-      {tasks.length === 0 ? (
+      {weekTasks.length === 0 ? (
         <div className="bg-white rounded-xl border border-[#e0ddd4] p-8 text-center">
           <p className="text-[13px] text-[#888]">Sin movimiento en la semana {wk}</p>
           <p className="text-[12px] text-[#bbb] mt-1">No hay tareas con fecha de solicitud esta semana</p>
@@ -110,14 +95,12 @@ export default function TeamView({ team, tareas, usersMap, onOpenTask }) {
                 </tr>
               </thead>
               <tbody>
-                {(clientes.length > 0 ? clientes : ['(sin cliente)']).map(cl => {
-                  const ct = tasks.filter(t => (t.cliente || '(sin cliente)') === cl)
+                {(clients.length > 0 ? clients : ['(sin cliente)']).map(cl => {
+                  const ct = weekTasks.filter(t => (t.client || '(sin cliente)') === cl)
                   const tt = ct.length
                   const cer = ct.filter(isClosed).length
                   const pp = tt ? Math.round((cer / tt) * 100) : 0
                   const lg = lightOf(pp, tt)
-                  const DOT = { green: '#16A34A', yellow: '#FFB800', red: '#E14848', none: '#bbb' }
-                  const dotColor = DOT[lg.cls] ?? '#bbb'
                   return (
                     <tr key={cl} className="border-b border-[#f5f3eb] last:border-0 hover:bg-[#faf9f5]">
                       <td className="px-4 py-3 font-medium text-[#111]">{cl}</td>
@@ -132,8 +115,8 @@ export default function TeamView({ team, tareas, usersMap, onOpenTask }) {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold" style={{ color: dotColor }}>
-                          <span style={{ width: 7, height: 7, borderRadius: '50%', background: dotColor, display: 'inline-block' }} />
+                        <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold" style={{ color: lg.color }}>
+                          <span style={{ width: 7, height: 7, borderRadius: '50%', background: lg.color, display: 'inline-block' }} />
                           {lg.label}
                         </span>
                       </td>

@@ -17,18 +17,16 @@ import {
 // ─── isoWeek ────────────────────────────────────────────────────────────────
 describe('isoWeek', () => {
   it('returns correct ISO week for a known Monday', () => {
-    // 2026-06-22 is a Monday — week 26
     expect(isoWeek(new Date(2026, 5, 22))).toBe(26)
   })
 
   it('returns the same week for all days Mon–Sun', () => {
-    // June 22 (Mon) to June 28 (Sun) are all week 26
     const weeks = [22, 23, 24, 25, 26, 27, 28].map(d => isoWeek(new Date(2026, 5, d)))
     expect(new Set(weeks).size).toBe(1)
     expect(weeks[0]).toBe(26)
   })
 
-  it('week 1 for Jan 5, 2026 (first week with majority days in 2026)', () => {
+  it('week 2 for Jan 5, 2026', () => {
     expect(isoWeek(new Date(2026, 0, 5))).toBe(2)
   })
 })
@@ -43,7 +41,7 @@ describe('parseD', () => {
     expect(d.getDate()).toBe(15)
   })
 
-  it('returns null for empty string', () => {
+  it('returns null for empty/falsy input', () => {
     expect(parseD('')).toBeNull()
     expect(parseD(null)).toBeNull()
     expect(parseD(undefined)).toBeNull()
@@ -66,14 +64,13 @@ describe('daysBetween', () => {
 
 // ─── taskWeek ────────────────────────────────────────────────────────────────
 describe('taskWeek', () => {
-  it('returns the ISO week of fecha_solicitud', () => {
-    const tarea = { fecha_solicitud: '2026-06-22' }
-    expect(taskWeek(tarea)).toBe(26)
+  it('returns the ISO week of request_date', () => {
+    expect(taskWeek({ request_date: '2026-06-22' })).toBe(26)
   })
 
-  it('returns null when fecha_solicitud is missing', () => {
-    expect(taskWeek({ fecha_solicitud: null })).toBeNull()
-    expect(taskWeek({ fecha_solicitud: '' })).toBeNull()
+  it('returns null when request_date is missing', () => {
+    expect(taskWeek({ request_date: null })).toBeNull()
+    expect(taskWeek({ request_date: '' })).toBeNull()
   })
 })
 
@@ -95,12 +92,12 @@ describe('fmtShort', () => {
 // ─── isClosed ────────────────────────────────────────────────────────────────
 describe('isClosed', () => {
   it('returns true for Terminado', () => {
-    expect(isClosed({ estatus: 'Terminado' })).toBe(true)
+    expect(isClosed({ status: 'Terminado' })).toBe(true)
   })
 
   it('returns false for other statuses', () => {
     for (const s of ['En proceso', 'Por revisar', 'Bloqueado', 'Pendiente']) {
-      expect(isClosed({ estatus: s })).toBe(false)
+      expect(isClosed({ status: s })).toBe(false)
     }
   })
 })
@@ -108,46 +105,46 @@ describe('isClosed', () => {
 // ─── isLate ──────────────────────────────────────────────────────────────────
 describe('isLate', () => {
   it('returns false for a closed task regardless of date', () => {
-    expect(isLate({ estatus: 'Terminado', fecha_entrega: '2000-01-01' })).toBe(false)
+    expect(isLate({ status: 'Terminado', due_date: '2000-01-01' })).toBe(false)
   })
 
-  it('returns true when delivery date is in the past', () => {
-    expect(isLate({ estatus: 'En proceso', fecha_entrega: '2020-01-01' })).toBe(true)
+  it('returns true when due_date is in the past', () => {
+    expect(isLate({ status: 'En proceso', due_date: '2020-01-01' })).toBe(true)
   })
 
-  it('returns false when delivery date is in the future', () => {
-    expect(isLate({ estatus: 'En proceso', fecha_entrega: '2099-12-31' })).toBe(false)
+  it('returns false when due_date is in the future', () => {
+    expect(isLate({ status: 'En proceso', due_date: '2099-12-31' })).toBe(false)
   })
 
-  it('returns false when no delivery date', () => {
-    expect(isLate({ estatus: 'En proceso', fecha_entrega: null })).toBe(false)
+  it('returns false when no due_date', () => {
+    expect(isLate({ status: 'En proceso', due_date: null })).toBe(false)
   })
 })
 
 // ─── isDragged ───────────────────────────────────────────────────────────────
 describe('isDragged', () => {
   it('returns false for a closed task', () => {
-    expect(isDragged({ estatus: 'Terminado', fecha_solicitud: '2020-01-01' })).toBe(false)
+    expect(isDragged({ status: 'Terminado', request_date: '2020-01-01' })).toBe(false)
   })
 
   it('returns true when task was requested more than 7 days ago', () => {
-    expect(isDragged({ estatus: 'En proceso', fecha_solicitud: '2020-01-01' })).toBe(true)
+    expect(isDragged({ status: 'En proceso', request_date: '2020-01-01' })).toBe(true)
   })
 
   it('returns false when task was requested recently', () => {
-    const future = new Date()
-    future.setDate(future.getDate() - 3)
-    const s = future.toISOString().slice(0, 10)
-    expect(isDragged({ estatus: 'En proceso', fecha_solicitud: s })).toBe(false)
+    const recent = new Date()
+    recent.setDate(recent.getDate() - 3)
+    const s = recent.toISOString().slice(0, 10)
+    expect(isDragged({ status: 'En proceso', request_date: s })).toBe(false)
   })
 })
 
 // ─── isBlocked ───────────────────────────────────────────────────────────────
 describe('isBlocked', () => {
   it('returns true only for Bloqueado status', () => {
-    expect(isBlocked({ estatus: 'Bloqueado' })).toBe(true)
-    expect(isBlocked({ estatus: 'En proceso' })).toBe(false)
-    expect(isBlocked({ estatus: 'Pendiente' })).toBe(false)
+    expect(isBlocked({ status: 'Bloqueado' })).toBe(true)
+    expect(isBlocked({ status: 'En proceso' })).toBe(false)
+    expect(isBlocked({ status: 'Pendiente' })).toBe(false)
   })
 })
 
@@ -179,45 +176,39 @@ describe('teamWeekStats', () => {
   const TEAM_ID = 'team-1'
   const WK = 26  // week of 2026-06-22
 
-  const tareas = [
-    { id: '1', team_id: TEAM_ID, estatus: 'Terminado',   fecha_solicitud: '2026-06-22', fecha_entrega: '2099-12-31', apoyo_id: null },
-    { id: '2', team_id: TEAM_ID, estatus: 'Bloqueado',   fecha_solicitud: '2026-06-23', fecha_entrega: '2099-12-31', apoyo_id: 'u1' },
-    { id: '3', team_id: TEAM_ID, estatus: 'En proceso',  fecha_solicitud: '2026-06-24', fecha_entrega: '2020-01-01', apoyo_id: null },
-    { id: '4', team_id: 'other', estatus: 'Terminado',   fecha_solicitud: '2026-06-22', fecha_entrega: null,         apoyo_id: null },
+  const tasks = [
+    { id: '1', team_id: TEAM_ID, status: 'Terminado',  request_date: '2026-06-22', due_date: '2099-12-31', support_id: null },
+    { id: '2', team_id: TEAM_ID, status: 'Bloqueado',  request_date: '2026-06-23', due_date: '2099-12-31', support_id: 'u1' },
+    { id: '3', team_id: TEAM_ID, status: 'En proceso', request_date: '2026-06-24', due_date: '2020-01-01', support_id: null },
+    { id: '4', team_id: 'other', status: 'Terminado',  request_date: '2026-06-22', due_date: null,         support_id: null },
   ]
 
   it('only counts tasks for the given team', () => {
-    const s = teamWeekStats(TEAM_ID, tareas, WK)
-    expect(s.total).toBe(3)   // 3 tasks this week (all 3 are in week 26)
+    expect(teamWeekStats(TEAM_ID, tasks, WK).total).toBe(3)
   })
 
-  it('cerradas counts Terminado tasks', () => {
-    const s = teamWeekStats(TEAM_ID, tareas, WK)
-    expect(s.cerradas).toBe(1)
+  it('cerradas counts Terminado tasks this week', () => {
+    expect(teamWeekStats(TEAM_ID, tasks, WK).cerradas).toBe(1)
   })
 
   it('pct is correct', () => {
-    const s = teamWeekStats(TEAM_ID, tareas, WK)
-    expect(s.pct).toBe(33)   // 1/3 = 33%
+    expect(teamWeekStats(TEAM_ID, tasks, WK).pct).toBe(33)
   })
 
-  it('bloqueados counts Bloqueado status (all team tasks, not just week)', () => {
-    const s = teamWeekStats(TEAM_ID, tareas, WK)
-    expect(s.bloqueados).toBe(1)
+  it('bloqueados counts Bloqueado across all team tasks', () => {
+    expect(teamWeekStats(TEAM_ID, tasks, WK).bloqueados).toBe(1)
   })
 
-  it('retrasados counts late tasks', () => {
-    const s = teamWeekStats(TEAM_ID, tareas, WK)
-    expect(s.retrasados).toBe(1)   // task 3 has past fecha_entrega
+  it('retrasados counts tasks with past due_date', () => {
+    expect(teamWeekStats(TEAM_ID, tasks, WK).retrasados).toBe(1)
   })
 
-  it('apoyo counts tasks with apoyo_id that are not closed', () => {
-    const s = teamWeekStats(TEAM_ID, tareas, WK)
-    expect(s.apoyo).toBe(1)   // task 2 has apoyo_id and is not Terminado
+  it('apoyo counts tasks with support_id that are not closed', () => {
+    expect(teamWeekStats(TEAM_ID, tasks, WK).apoyo).toBe(1)
   })
 
   it('returns 0 totals for unknown team', () => {
-    const s = teamWeekStats('non-existent', tareas, WK)
+    const s = teamWeekStats('non-existent', tasks, WK)
     expect(s.total).toBe(0)
     expect(s.cerradas).toBe(0)
     expect(s.pct).toBe(0)

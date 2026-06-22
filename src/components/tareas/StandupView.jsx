@@ -2,34 +2,34 @@ import { useState } from 'react'
 import { isoWeek, taskWeek, isClosed, isLate, isDragged, isBlocked, daysBetween, parseD, today, fmtShort, COL_META } from './constants'
 import { Avatar } from './UserPickerSingle'
 
-function FocusItem({ tarea, why, icon, usersMap, onOpen }) {
-  const resp = tarea.responsable_id ? usersMap.get(tarea.responsable_id) : null
+function FocusItem({ task, why, icon, usersMap, onOpen }) {
+  const assignee = task.assignee_id ? usersMap.get(task.assignee_id) : null
   return (
     <div
       className="flex items-start gap-3 p-3 bg-white rounded-xl border border-[#e0ddd4] hover:border-[#FFB800] cursor-pointer transition-colors"
-      onClick={() => onOpen(tarea)}
+      onClick={() => onOpen(task)}
     >
       <span className="text-[16px] flex-shrink-0 mt-0.5">{icon}</span>
       <div className="flex-1 min-w-0">
-        <p className="text-[13px] font-bold text-[#111] truncate">{tarea.cliente || 'Sin cliente'}</p>
-        <p className="text-[12px] text-[#555] line-clamp-2">{tarea.tarea}</p>
+        <p className="text-[13px] font-bold text-[#111] truncate">{task.client || 'Sin cliente'}</p>
+        <p className="text-[12px] text-[#555] line-clamp-2">{task.description}</p>
         <div className="flex items-center gap-2 mt-1">
           <span
             className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full"
-            style={{ background: (COL_META[tarea.estatus]?.color ?? '#ccc') + '22', color: COL_META[tarea.estatus]?.color ?? '#888' }}
+            style={{ background: (COL_META[task.status]?.color ?? '#ccc') + '22', color: COL_META[task.status]?.color ?? '#888' }}
           >
             {why}
           </span>
-          {resp && (
+          {assignee && (
             <span className="flex items-center gap-1 text-[11px] text-[#888]">
-              <Avatar user={resp} size={14} />
-              {resp.first_name}
+              <Avatar user={assignee} size={14} />
+              {assignee.first_name}
             </span>
           )}
         </div>
       </div>
       <button
-        onClick={e => { e.stopPropagation(); onOpen(tarea) }}
+        onClick={e => { e.stopPropagation(); onOpen(task) }}
         className="text-[11px] font-semibold text-[#888] hover:text-[#111] transition-colors flex-shrink-0"
       >
         Abrir
@@ -38,7 +38,7 @@ function FocusItem({ tarea, why, icon, usersMap, onOpen }) {
   )
 }
 
-export default function StandupView({ team, tareas, teams, usersMap, onOpenTask }) {
+export default function StandupView({ team, tasks, teams, usersMap, onOpenTask }) {
   const [copied, setCopied] = useState(false)
   const wk = isoWeek(new Date())
 
@@ -50,13 +50,13 @@ export default function StandupView({ team, tareas, teams, usersMap, onOpenTask 
     )
   }
 
-  const all = tareas.filter(t => t.team_id === team.id)
+  const all = tasks.filter(t => t.team_id === team.id)
   const thisWeek = all.filter(t => taskWeek(t) === wk)
-  const cerradas = thisWeek.filter(isClosed)
-  const bloqueadas = all.filter(t => !isClosed(t) && isBlocked(t))
-  const porRevisar = all.filter(t => !isClosed(t) && t.estatus === 'Por revisar')
-  const arrastradas = all.filter(t => !isClosed(t) && !isBlocked(t) && (isLate(t) || (isDragged(t) && !porRevisar.find(x => x.id === t.id))))
-  const apoyoList = all.filter(t => t.apoyo_id && !isClosed(t))
+  const closed = thisWeek.filter(isClosed)
+  const blocked = all.filter(t => !isClosed(t) && isBlocked(t))
+  const inReview = all.filter(t => !isClosed(t) && t.status === 'Por revisar')
+  const dragged = all.filter(t => !isClosed(t) && !isBlocked(t) && (isLate(t) || (isDragged(t) && !inReview.find(x => x.id === t.id))))
+  const supportList = all.filter(t => t.support_id && !isClosed(t))
 
   function userName(id) {
     const u = usersMap.get(id)
@@ -67,32 +67,34 @@ export default function StandupView({ team, tareas, teams, usersMap, onOpenTask 
     const lines = []
     lines.push(`📋 Stand-up Team ${team.name} — Semana ${wk}`)
     lines.push('')
-    lines.push(`✅ Cerradas esta semana: ${cerradas.length}/${thisWeek.length}`)
-    if (cerradas.length) {
-      cerradas.forEach(t => { lines.push(`  • ${t.cliente || '(sin cliente)'} — ${t.tarea}`) })
+    lines.push(`✅ Cerradas esta semana: ${closed.length}/${thisWeek.length}`)
+    if (closed.length) {
+      closed.forEach(t => { lines.push(`  • ${t.client || '(sin cliente)'} — ${t.description}`) })
     }
-    if (bloqueadas.length) {
+    if (blocked.length) {
       lines.push('')
       lines.push('🔴 Bloqueadas:')
-      bloqueadas.forEach(t => { lines.push(`  • ${t.cliente || '(sin cliente)'} — ${t.tarea}`) })
+      blocked.forEach(t => { lines.push(`  • ${t.client || '(sin cliente)'} — ${t.description}`) })
     }
-    if (porRevisar.length) {
+    if (inReview.length) {
       lines.push('')
       lines.push('🔵 Por revisar:')
-      porRevisar.forEach(t => { lines.push(`  • ${t.cliente || '(sin cliente)'} — ${t.tarea}`) })
+      inReview.forEach(t => { lines.push(`  • ${t.client || '(sin cliente)'} — ${t.description}`) })
     }
-    if (arrastradas.length) {
+    if (dragged.length) {
       lines.push('')
       lines.push('⏳ Pendientes arrastrados:')
-      arrastradas.forEach(t => {
-        const why = isLate(t) ? `Entrega vencida (${fmtShort(t.fecha_entrega)})` : `Arrastrada ${daysBetween(parseD(t.fecha_solicitud), today())} días`
-        lines.push(`  • ${t.cliente || '(sin cliente)'} — ${t.tarea} (${why})`)
+      dragged.forEach(t => {
+        const why = isLate(t)
+          ? `Entrega vencida (${fmtShort(t.due_date)})`
+          : `Arrastrada ${daysBetween(parseD(t.request_date), today())} días`
+        lines.push(`  • ${t.client || '(sin cliente)'} — ${t.description} (${why})`)
       })
     }
-    if (apoyoList.length) {
+    if (supportList.length) {
       lines.push('')
       lines.push('🤝 Apoyo de dirección:')
-      apoyoList.forEach(t => { lines.push(`  • ${t.cliente || '(sin cliente)'} — ${t.tarea} → ${userName(t.apoyo_id)}`) })
+      supportList.forEach(t => { lines.push(`  • ${t.client || '(sin cliente)'} — ${t.description} → ${userName(t.support_id)}`) })
     }
     return lines.join('\n')
   }
@@ -104,11 +106,10 @@ export default function StandupView({ team, tareas, teams, usersMap, onOpenTask 
     })
   }
 
-  const hasFocus = bloqueadas.length + porRevisar.length + arrastradas.length + apoyoList.length
+  const hasFocus = blocked.length + inReview.length + dragged.length + supportList.length
 
   return (
     <div className="space-y-5">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-[17px] font-bold text-[#111]">Stand-up · Team {team.name}</h2>
@@ -132,13 +133,12 @@ export default function StandupView({ team, tareas, teams, usersMap, onOpenTask 
         </button>
       </div>
 
-      {/* Week summary row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { label: 'Planificadas', value: thisWeek.length, color: undefined },
-          { label: 'Cerradas', value: cerradas.length, color: '#16A34A' },
-          { label: 'Bloqueadas', value: bloqueadas.length, color: bloqueadas.length ? '#E14848' : undefined },
-          { label: 'Apoyo dir.', value: apoyoList.length, color: apoyoList.length ? '#F0871F' : undefined },
+          { label: 'Cerradas', value: closed.length, color: '#16A34A' },
+          { label: 'Bloqueadas', value: blocked.length, color: blocked.length ? '#E14848' : undefined },
+          { label: 'Apoyo dir.', value: supportList.length, color: supportList.length ? '#F0871F' : undefined },
         ].map(k => (
           <div key={k.label} className="bg-white rounded-xl border border-[#e0ddd4] px-4 py-3">
             <p className="text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1">{k.label}</p>
@@ -147,73 +147,68 @@ export default function StandupView({ team, tareas, teams, usersMap, onOpenTask 
         ))}
       </div>
 
-      {/* Focus lists */}
-      {hasFocus === 0 && cerradas.length === 0 ? (
+      {hasFocus === 0 && closed.length === 0 ? (
         <div className="bg-white rounded-xl border border-[#e0ddd4] p-8 text-center">
           <p className="text-[14px] font-medium text-[#888]">Sin movimiento esta semana</p>
           <p className="text-[12px] text-[#bbb] mt-1">Cuando se carguen tareas aparecerán aquí los puntos de foco</p>
         </div>
       ) : (
         <>
-          {bloqueadas.length > 0 && (
+          {blocked.length > 0 && (
             <section>
-              <p className="text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#E14848] mb-2">🔴 Bloqueadas ({bloqueadas.length})</p>
+              <p className="text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#E14848] mb-2">🔴 Bloqueadas ({blocked.length})</p>
               <div className="space-y-2">
-                {bloqueadas.map(t => (
-                  <FocusItem key={t.id} tarea={t} why="Bloqueado" icon="🔴" usersMap={usersMap} onOpen={onOpenTask} />
-                ))}
+                {blocked.map(t => <FocusItem key={t.id} task={t} why="Bloqueado" icon="🔴" usersMap={usersMap} onOpen={onOpenTask} />)}
               </div>
             </section>
           )}
-          {porRevisar.length > 0 && (
+          {inReview.length > 0 && (
             <section>
-              <p className="text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#3B6FE0] mb-2">🔵 Por revisar ({porRevisar.length})</p>
+              <p className="text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#3B6FE0] mb-2">🔵 Por revisar ({inReview.length})</p>
               <div className="space-y-2">
-                {porRevisar.map(t => (
-                  <FocusItem key={t.id} tarea={t} why="Necesita revisión" icon="🔵" usersMap={usersMap} onOpen={onOpenTask} />
-                ))}
+                {inReview.map(t => <FocusItem key={t.id} task={t} why="Necesita revisión" icon="🔵" usersMap={usersMap} onOpen={onOpenTask} />)}
               </div>
             </section>
           )}
-          {arrastradas.length > 0 && (
+          {dragged.length > 0 && (
             <section>
-              <p className="text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#F0871F] mb-2">⏳ Arrastradas / atrasadas ({arrastradas.length})</p>
+              <p className="text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#F0871F] mb-2">⏳ Arrastradas / atrasadas ({dragged.length})</p>
               <div className="space-y-2">
-                {arrastradas.map(t => {
+                {dragged.map(t => {
                   const why = isLate(t)
-                    ? `Entrega vencida ${fmtShort(t.fecha_entrega)}`
-                    : `Arrastrada ${daysBetween(parseD(t.fecha_solicitud), today())} días`
-                  return <FocusItem key={t.id} tarea={t} why={why} icon="⏳" usersMap={usersMap} onOpen={onOpenTask} />
+                    ? `Entrega vencida ${fmtShort(t.due_date)}`
+                    : `Arrastrada ${daysBetween(parseD(t.request_date), today())} días`
+                  return <FocusItem key={t.id} task={t} why={why} icon="⏳" usersMap={usersMap} onOpen={onOpenTask} />
                 })}
               </div>
             </section>
           )}
-          {apoyoList.length > 0 && (
+          {supportList.length > 0 && (
             <section>
-              <p className="text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-2">🤝 Apoyo de dirección ({apoyoList.length})</p>
+              <p className="text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-2">🤝 Apoyo de dirección ({supportList.length})</p>
               <div className="space-y-2">
-                {apoyoList.map(t => {
-                  const apoyo = usersMap.get(t.apoyo_id)
-                  const why = apoyo ? `Apoyo: ${apoyo.first_name} ${apoyo.last_name}` : 'Apoyo de dirección'
-                  return <FocusItem key={t.id} tarea={t} why={why} icon="🤝" usersMap={usersMap} onOpen={onOpenTask} />
+                {supportList.map(t => {
+                  const support = usersMap.get(t.support_id)
+                  const why = support ? `Apoyo: ${support.first_name} ${support.last_name}` : 'Apoyo de dirección'
+                  return <FocusItem key={t.id} task={t} why={why} icon="🤝" usersMap={usersMap} onOpen={onOpenTask} />
                 })}
               </div>
             </section>
           )}
-          {cerradas.length > 0 && (
+          {closed.length > 0 && (
             <section>
-              <p className="text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#16A34A] mb-2">✅ Cerradas esta semana ({cerradas.length})</p>
+              <p className="text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#16A34A] mb-2">✅ Cerradas esta semana ({closed.length})</p>
               <div className="space-y-1">
-                {cerradas.map(t => (
+                {closed.map(t => (
                   <div
                     key={t.id}
                     onClick={() => onOpenTask(t)}
                     className="flex items-center gap-3 px-3 py-2 bg-[#f0fdf4] border border-[#dcfce7] rounded-xl cursor-pointer hover:border-[#16A34A]/30 transition-colors"
                   >
                     <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="#16A34A" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>
-                    <span className="text-[12.5px] font-medium text-[#111]">{t.cliente || '(sin cliente)'}</span>
-                    <span className="text-[12px] text-[#555] flex-1 truncate">— {t.tarea}</span>
-                    {t.fecha_cierre && <span className="text-[11px] font-mono text-[#888]">{fmtShort(t.fecha_cierre)}</span>}
+                    <span className="text-[12.5px] font-medium text-[#111]">{t.client || '(sin cliente)'}</span>
+                    <span className="text-[12px] text-[#555] flex-1 truncate">— {t.description}</span>
+                    {t.closed_date && <span className="text-[11px] font-mono text-[#888]">{fmtShort(t.closed_date)}</span>}
                   </div>
                 ))}
               </div>
@@ -222,14 +217,10 @@ export default function StandupView({ team, tareas, teams, usersMap, onOpenTask 
         </>
       )}
 
-      {/* Report preview */}
       <section className="bg-[#faf9f5] border border-[#e0ddd4] rounded-xl overflow-hidden">
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#e0ddd4] bg-white">
           <p className="text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">Reporte para WhatsApp</p>
-          <button
-            onClick={copyReport}
-            className="text-[11.5px] font-semibold text-[#888] hover:text-[#111] transition-colors"
-          >
+          <button onClick={copyReport} className="text-[11.5px] font-semibold text-[#888] hover:text-[#111] transition-colors">
             {copied ? '✓ Copiado' : 'Copiar'}
           </button>
         </div>
