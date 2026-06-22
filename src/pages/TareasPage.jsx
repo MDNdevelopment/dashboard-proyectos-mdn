@@ -42,7 +42,7 @@ export default function TareasPage() {
       supabase.from('teams').select('*').eq('company_id', companyId).order('created_at'),
       supabase.from('team_members').select('*'),
       supabase.from('tasks').select('*').eq('company_id', companyId).order('created_at', { ascending: false }),
-      supabase.from('users').select('user_id, first_name, last_name, avatar_url, access_level').eq('company_id', companyId).order('first_name'),
+      supabase.from('users').select('user_id, first_name, last_name, avatar_url, access_level, position:positions(position_name)').eq('company_id', companyId).order('first_name'),
     ])
 
     const fetchedTeams = teamsRes.data ?? []
@@ -110,17 +110,17 @@ export default function TareasPage() {
 
   return (
     <>
-      <main className="flex-1 overflow-y-auto main-bg h-screen">
-        <div className="max-w-7xl mx-auto px-6 py-8">
-          <div className="flex items-center justify-between mb-6">
+      <main className="flex-1 overflow-y-auto main-bg">
+        <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
             <div>
               <h1 className="text-[24px] font-bold text-[#111] leading-tight">Gestión de Tareas</h1>
               <p className="text-[13px] text-[#888] mt-0.5">QC · Cierre · Stand-up semanal</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
               <button
                 onClick={() => setShowTeamManager(true)}
-                className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-[#e0ddd4] text-[13px] font-semibold text-[#555] hover:bg-[#f5f3eb] hover:text-[#111] transition-colors"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl border border-[#e0ddd4] text-[13px] font-semibold text-[#555] hover:bg-[#f5f3eb] hover:text-[#111] transition-colors"
               >
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
                   <circle cx="6" cy="5.5" r="2.5"/>
@@ -132,7 +132,7 @@ export default function TareasPage() {
               </button>
               <button
                 onClick={openNewTask}
-                className="flex items-center gap-2 bg-[#111] text-white text-[13px] font-bold px-4 py-2.5 rounded-xl hover:bg-[#222] transition-colors"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-[#111] text-white text-[13px] font-bold px-4 py-2.5 rounded-xl hover:bg-[#222] transition-colors"
               >
                 <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.8">
                   <path d="M6 1v10M1 6h10" strokeLinecap="round"/>
@@ -161,12 +161,12 @@ export default function TareasPage() {
                 ))}
               </div>
             )}
-            <div className="flex bg-white border border-[#e0ddd4] rounded-xl p-1 w-fit">
+            <div className="flex bg-white border border-[#e0ddd4] rounded-xl p-1 w-full sm:w-fit">
               {VIEWS.map(v => (
                 <button
                   key={v.key}
                   onClick={() => setActiveView(v.key)}
-                  className={`px-4 py-1.5 rounded-lg text-[12.5px] font-semibold transition-all ${
+                  className={`flex-1 sm:flex-none px-2.5 sm:px-4 py-1.5 rounded-lg text-[12.5px] font-semibold transition-all ${
                     activeView === v.key
                       ? 'bg-[#111] text-white'
                       : 'text-[#666] hover:text-[#111] hover:bg-[#f5f3eb]'

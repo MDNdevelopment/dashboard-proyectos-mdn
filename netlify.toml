@@ -18,6 +18,18 @@
   force = true
 
 [[redirects]]
+  from = "/api/employees"
+  to = "/.netlify/functions/create-employee"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/evaluation-analysis"
+  to = "/.netlify/functions/evaluation-analysis"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200

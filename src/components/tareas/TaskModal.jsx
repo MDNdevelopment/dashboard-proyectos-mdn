@@ -191,6 +191,7 @@ export default function TaskModal({ task = null, teams = [], users = [], default
               onChange={id => set('support_id', id)}
               placeholder="¿Requiere apoyo de dirección?"
               clearable
+              minLevel={3}
             />
           </div>
 

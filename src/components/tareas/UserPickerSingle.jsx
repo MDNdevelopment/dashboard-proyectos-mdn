@@ -29,13 +29,14 @@ export function Avatar({ user, size = 28 }) {
 /**
  * A single-user picker (for responsable_id / apoyo_id).
  * Props:
- *   users        - array of { user_id, first_name, last_name, avatar_url }
+ *   users        - array of { user_id, first_name, last_name, avatar_url, access_level, position }
  *   selectedId   - currently selected user_id (string | null)
  *   onChange     - (user_id | null) => void
  *   placeholder  - string  (default "Seleccionar persona")
  *   clearable    - bool    (default true) — show "Ninguno" option
+ *   minLevel     - number  (default 0) — only show users with access_level >= minLevel
  */
-export default function UserPickerSingle({ users = [], selectedId, onChange, placeholder = 'Seleccionar persona', clearable = true }) {
+export default function UserPickerSingle({ users = [], selectedId, onChange, placeholder = 'Seleccionar persona', clearable = true, minLevel = 0 }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [pos, setPos] = useState({ top: 0, left: 0, width: 0 })
@@ -45,6 +46,7 @@ export default function UserPickerSingle({ users = [], selectedId, onChange, pla
   const selectedUser = users.find(u => u.user_id === selectedId) ?? null
 
   const openPicker = () => {
+    if (open) { setOpen(false); setSearch(''); return }
     if (!triggerRef.current) return
     const r = triggerRef.current.getBoundingClientRect()
     const popH = 280
@@ -64,7 +66,12 @@ export default function UserPickerSingle({ users = [], selectedId, onChange, pla
     return () => document.removeEventListener('mousedown', fn)
   }, [open])
 
+  function userMeta(u) {
+    return [u.position?.position_name, u.access_level != null && `Nivel ${u.access_level}`].filter(Boolean).join(' · ')
+  }
+
   const filtered = users.filter(u => {
+    if ((u.access_level ?? 0) < minLevel) return false
     const q = search.toLowerCase()
     return !q || `${u.first_name} ${u.last_name}`.toLowerCase().includes(q)
   })
@@ -83,9 +90,14 @@ export default function UserPickerSingle({ users = [], selectedId, onChange, pla
         {selectedUser ? (
           <>
             <Avatar user={selectedUser} size={22} />
-            <span className="flex-1 text-[13px] font-medium text-[#111]">
-              {selectedUser.first_name} {selectedUser.last_name}
-            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-medium text-[#111] truncate">
+                {selectedUser.first_name} {selectedUser.last_name}
+              </p>
+              {userMeta(selectedUser) && (
+                <p className="text-[11px] font-mono text-[#888] truncate">{userMeta(selectedUser)}</p>
+              )}
+            </div>
             {clearable && (
               <span
                 role="button"
@@ -158,7 +170,12 @@ export default function UserPickerSingle({ users = [], selectedId, onChange, pla
                   className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-[#f5f3eb] transition-colors text-left"
                 >
                   <Avatar user={u} size={26} />
-                  <span className="flex-1 text-[13px] font-medium text-[#222]">{u.first_name} {u.last_name}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-medium text-[#222] truncate">{u.first_name} {u.last_name}</p>
+                    {userMeta(u) && (
+                      <p className="text-[11px] font-mono text-[#888] truncate">{userMeta(u)}</p>
+                    )}
+                  </div>
                   {selectedId === u.user_id && (
                     <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="#22c55e" strokeWidth={2.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/>

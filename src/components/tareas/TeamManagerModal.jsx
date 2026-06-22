@@ -97,9 +97,9 @@ export default function TeamManagerModal({ teams, teamMembers, users, onClose, o
           </button>
         </div>
 
-        <div className="flex flex-1 min-h-0">
+        <div className="flex flex-col sm:flex-row flex-1 min-h-0">
           {/* Left panel — team list */}
-          <div className="w-[200px] flex-shrink-0 border-r border-[#ece9df] p-3 flex flex-col gap-1 overflow-y-auto">
+          <div className="w-full sm:w-[200px] flex-shrink-0 border-b sm:border-b-0 sm:border-r border-[#ece9df] p-3 flex flex-col gap-1 overflow-y-auto max-h-40 sm:max-h-none">
             {teams.map(t => (
               <button
                 key={t.id}
@@ -208,7 +208,7 @@ export default function TeamManagerModal({ teams, teamMembers, users, onClose, o
                               {u.first_name} {u.last_name}
                             </p>
                             <p className="text-[11px] font-mono text-[#888]">
-                              Nivel {u.access_level ?? '—'}
+                              {[u.position?.position_name, `Nivel ${u.access_level ?? '—'}`].filter(Boolean).join(' · ')}
                             </p>
                           </div>
                           <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
