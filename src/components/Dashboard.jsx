@@ -9,7 +9,7 @@ const FILTER_LABELS = {
   'Completado': 'Completados',
 }
 
-function Dashboard({ projects, loading, activeFilter, onNewProject, onEditProject, onUpdateProject, onDeleteProject, onMenuToggle, onExport }) {
+function Dashboard({ projects, loading, activeFilter, onNewProject, onEditProject, onUpdateProject, onDeleteProject, onDuplicateProject, onMenuToggle, onExport }) {
   const [search, setSearch] = useState('')
   const [expandedMap, setExpandedMap] = useState({})
   const toggleExpanded = id => setExpandedMap(prev => ({ ...prev, [id]: !prev[id] }))
@@ -147,6 +147,7 @@ function Dashboard({ projects, loading, activeFilter, onNewProject, onEditProjec
                 onEdit={() => onEditProject(project)}
                 onUpdate={u => onUpdateProject(project.id, u)}
                 onDelete={() => onDeleteProject(project.id)}
+                onDuplicate={() => onDuplicateProject(project)}
               />
             ))}
           </div>

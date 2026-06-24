@@ -64,7 +64,7 @@ function buildFromChain({ selectData = [], selectError = null } = {}) {
     }
   })
 
-  return { eqMock, updateMock, deleteMock, insertMock }
+  return { eqMock, updateMock, deleteMock, insertMock, singleMock }
 }
 
 function renderLayout() {
@@ -195,6 +195,44 @@ describe('AppLayout — CRUD', () => {
 
     vi.restoreAllMocks()
   })
+
+  it('duplicateProject llama a insert con status Pendiente y sin id ni created_at', async () => {
+    const insertedRow = { ...sampleProject, id: 'uuid-dup', status: 'Pendiente', created_at: '2026-05-26T00:00:00Z' }
+    const { insertMock, singleMock } = buildFromChain({ selectData: [insertedRow] })
+
+    const sourceProject = {
+      ...sampleProject,
+      status: 'Completado',
+      phases: [
+        { id: 'phase-1', name: 'Fase A', tasks: [{ id: 'task-1', name: 'Tarea 1', status: 'completada' }] },
+      ],
+    }
+
+    let capturedCtx
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route element={<AppLayout />}>
+            <Route index element={<CaptureContext onCapture={(c) => { capturedCtx = c }} />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    )
+
+    await waitFor(() => expect(capturedCtx).toBeDefined())
+    await act(() => capturedCtx.onDuplicateProject(sourceProject))
+
+    expect(insertMock).toHaveBeenCalledTimes(1)
+    const inserted = insertMock.mock.calls[0][0]
+    expect(inserted.status).toBe('Pendiente')
+    expect(inserted.id).toBeUndefined()
+    expect(inserted.created_at).toBeUndefined()
+    expect(inserted.name).toBe(`Copia de ${sourceProject.name}`)
+    expect(inserted.phases[0].id).not.toBe('phase-1')
+    expect(inserted.phases[0].tasks[0].id).not.toBe('task-1')
+    // Verifies the .select().single() chain is used to get the DB row back
+    expect(singleMock).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('AppLayout — realtime payload handling', () => {
@@ -229,6 +267,24 @@ describe('AppLayout — realtime payload handling', () => {
     renderLayout()
     await waitFor(() => expect(realtimeCallback).toBeDefined())
     act(() => realtimeCallback({ eventType: 'DELETE', new: null, old: sampleProject }))
+  })
+
+  it('INSERT con id duplicado no añade el proyecto dos veces', async () => {
+    let capturedCtx
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route element={<AppLayout />}>
+            <Route index element={<CaptureContext onCapture={(c) => { capturedCtx = c }} />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    )
+    await waitFor(() => expect(realtimeCallback).toBeDefined())
+    await waitFor(() => expect(capturedCtx).toBeDefined())
+    const countBefore = capturedCtx.projects.length
+    act(() => realtimeCallback({ eventType: 'INSERT', new: sampleProject, old: null }))
+    await waitFor(() => expect(capturedCtx.projects.length).toBe(countBefore))
   })
 })
 
