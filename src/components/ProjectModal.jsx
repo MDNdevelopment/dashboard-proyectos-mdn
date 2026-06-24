@@ -252,24 +252,28 @@ export default function ProjectModal({ project, onClose, onSave }) {
                     )}
                   </div>
 
-                  <div className="space-y-2 mb-2">
-                    {phase.tasks.map(task => (
-                      <div key={task.id} className="flex items-center gap-2">
-                        <span className="w-1 h-1 rounded-full bg-[#ddd] flex-shrink-0" />
-                        <input
-                          value={task.name}
-                          onChange={e => setTask(phase.id, task.id, e.target.value)}
-                          placeholder="Nombre de la tarea"
-                          className="flex-1 border border-[#e0ddd4] rounded-lg px-3 py-1.5 text-[15px] text-[#444] placeholder-[#bbb] outline-none focus:border-[#bbb] bg-white font-sans"
-                        />
-                        {phase.tasks.length > 1 && (
-                          <button type="button" onClick={() => delTask(phase.id, task.id)}
-                            className="text-[#ccc] hover:text-[#ef4444] transition-colors w-5 h-5 flex items-center justify-center flex-shrink-0">
-                            <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
-                            </svg>
-                          </button>
-                        )}
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={({ active, over }) => {
+                      if (!over || active.id === over.id) return
+                      const tasks = phase.tasks
+                      const from = tasks.findIndex(t => t.id === active.id)
+                      const to = tasks.findIndex(t => t.id === over.id)
+                      moveTask(phase.id, from, to)
+                    }}
+                  >
+                    <SortableContext items={phase.tasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+                      <div className="space-y-2 mb-2">
+                        {phase.tasks.map(task => (
+                          <SortableTask
+                            key={task.id}
+                            task={task}
+                            canDelete={phase.tasks.length > 1}
+                            onChangeName={name => setTask(phase.id, task.id, name)}
+                            onDelete={() => delTask(phase.id, task.id)}
+                          />
+                        ))}
                       </div>
                     </SortableContext>
                   </DndContext>
