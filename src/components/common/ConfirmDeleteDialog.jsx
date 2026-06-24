@@ -37,7 +37,7 @@ export default function ConfirmDeleteDialog({
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-[#ece9df]">
-          <h2 className="text-[16px] font-bold text-[#111]">Eliminar {itemLabel}</h2>
+          <h2 className="text-[18px] font-bold text-[#111]">Eliminar {itemLabel}</h2>
           <button
             type="button"
             onClick={onCancel}
@@ -52,7 +52,7 @@ export default function ConfirmDeleteDialog({
 
         {/* Body */}
         <div className="px-6 py-5 space-y-4">
-          <p className="text-[13px] text-[#555]">
+          <p className="text-[15px] text-[#555]">
             {message ?? (
               <>
                 Esta acción <strong>no se puede deshacer</strong>. Para confirmar, escribe el
@@ -62,7 +62,7 @@ export default function ConfirmDeleteDialog({
           </p>
 
           <div>
-            <label className="block text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+            <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
               Nombre del {itemLabel}
             </label>
             <input
@@ -80,7 +80,7 @@ export default function ConfirmDeleteDialog({
               type="button"
               onClick={onCancel}
               disabled={confirming}
-              className="px-4 py-2 rounded-xl text-[13px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors disabled:opacity-50"
+              className="px-4 py-2 rounded-xl text-[15px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors disabled:opacity-50"
             >
               Cancelar
             </button>
@@ -88,7 +88,7 @@ export default function ConfirmDeleteDialog({
               type="button"
               onClick={onConfirm}
               disabled={!canDelete || confirming}
-              className="px-4 py-2 rounded-xl text-[13px] font-bold bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 rounded-xl text-[15px] font-bold bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {confirming ? 'Eliminando…' : 'Eliminar'}
             </button>

@@ -92,7 +92,7 @@ export default function AvatarUpload({ user, onUploaded, size = 72, label = 'Cam
           </span>
         </button>
         {label && (
-          <span className="text-[11px] font-mono text-[#999] cursor-pointer hover:text-[#555] transition-colors"
+          <span className="text-[13px] font-mono text-[#999] cursor-pointer hover:text-[#555] transition-colors"
             onClick={() => inputRef.current?.click()}>
             {label}
           </span>
@@ -116,7 +116,7 @@ export default function AvatarUpload({ user, onUploaded, size = 72, label = 'Cam
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
             {/* Header */}
             <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-[#ece9df]">
-              <h3 className="text-[15px] font-bold text-[#111]">Recortar foto</h3>
+              <h3 className="text-[17px] font-bold text-[#111]">Recortar foto</h3>
               <button
                 type="button"
                 onClick={handleCancel}
@@ -149,12 +149,12 @@ export default function AvatarUpload({ user, onUploaded, size = 72, label = 'Cam
                 />
               </ReactCrop>
 
-              <p className="text-[11px] font-mono text-[#888] text-center">
+              <p className="text-[13px] font-mono text-[#888] text-center">
                 La imagen se recortará a un círculo (máx. 512×512 px, ~WebP 85%).
               </p>
 
               {error && (
-                <div className="w-full bg-red-50 border border-red-200 text-red-700 text-[12px] rounded-lg px-3 py-2 text-center">
+                <div className="w-full bg-red-50 border border-red-200 text-red-700 text-[14px] rounded-lg px-3 py-2 text-center">
                   {error}
                 </div>
               )}
@@ -165,7 +165,7 @@ export default function AvatarUpload({ user, onUploaded, size = 72, label = 'Cam
               <button
                 type="button"
                 onClick={handleCancel}
-                className="px-4 py-2 rounded-xl text-[13px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
+                className="px-4 py-2 rounded-xl text-[15px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
               >
                 Cancelar
               </button>
@@ -173,7 +173,7 @@ export default function AvatarUpload({ user, onUploaded, size = 72, label = 'Cam
                 type="button"
                 onClick={handleUpload}
                 disabled={!completedCrop?.width || uploading}
-                className="px-4 py-2 rounded-xl text-[13px] font-bold bg-[#FFB800] text-[#111] hover:bg-[#f0ad00] transition-colors disabled:opacity-50"
+                className="px-4 py-2 rounded-xl text-[15px] font-bold bg-[#FFB800] text-[#111] hover:bg-[#f0ad00] transition-colors disabled:opacity-50"
               >
                 {uploading ? 'Subiendo…' : 'Subir foto'}
               </button>

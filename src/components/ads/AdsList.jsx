@@ -154,13 +154,13 @@ export default function AdsList({ campaigns, loading, canManage, usersMap, onSel
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Buscar táctica, cliente, responsable..."
-          className="input-base text-[12px] py-1.5 flex-1 min-w-[200px]"
+          className="input-base text-[14px] py-1.5 flex-1 min-w-[200px]"
         />
         <div className="flex gap-2">
           <select
             value={filterStatus}
             onChange={e => setFilterStatus(e.target.value)}
-            className="input-base text-[12px] py-1.5"
+            className="input-base text-[14px] py-1.5"
           >
             <option value="all">Todos los estados</option>
             {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
@@ -168,7 +168,7 @@ export default function AdsList({ campaigns, loading, canManage, usersMap, onSel
           <select
             value={filterPriority}
             onChange={e => setFilterPriority(e.target.value)}
-            className="input-base text-[12px] py-1.5"
+            className="input-base text-[14px] py-1.5"
           >
             <option value="all">Todas las prioridades</option>
             {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
@@ -176,7 +176,7 @@ export default function AdsList({ campaigns, loading, canManage, usersMap, onSel
           <select
             value={filterClient}
             onChange={e => setFilterClient(e.target.value)}
-            className="input-base text-[12px] py-1.5"
+            className="input-base text-[14px] py-1.5"
           >
             <option value="all">Todos los clientes</option>
             {clients.map(c => <option key={c} value={c}>{c}</option>)}
@@ -185,14 +185,14 @@ export default function AdsList({ campaigns, loading, canManage, usersMap, onSel
         {(search || filterStatus !== 'all' || filterPriority !== 'all' || filterClient !== 'all') && (
           <button
             onClick={clearFilters}
-            className="px-3 py-1.5 rounded-lg border border-[#e0ddd4] text-[12px] font-medium text-[#555] hover:bg-[#f5f3eb] transition-colors"
+            className="px-3 py-1.5 rounded-lg border border-[#e0ddd4] text-[14px] font-medium text-[#555] hover:bg-[#f5f3eb] transition-colors"
           >
             Limpiar
           </button>
         )}
         <button
           onClick={() => exportCSV(sorted, usersMap)}
-          className="px-3 py-1.5 rounded-lg border border-[#e0ddd4] text-[12px] font-medium text-[#555] hover:bg-[#f5f3eb] transition-colors flex items-center gap-1.5"
+          className="px-3 py-1.5 rounded-lg border border-[#e0ddd4] text-[14px] font-medium text-[#555] hover:bg-[#f5f3eb] transition-colors flex items-center gap-1.5"
         >
           <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
             <path d="M8 1v9M5 7l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
@@ -203,14 +203,14 @@ export default function AdsList({ campaigns, loading, canManage, usersMap, onSel
       </div>
 
       {/* Count */}
-      <p className="text-[11px] font-mono text-[#888] mb-2">
+      <p className="text-[13px] font-mono text-[#888] mb-2">
         {sorted.length} {sorted.length === 1 ? 'resultado' : 'resultados'}
         {filtered.length !== campaigns.length && ` de ${campaigns.length}`}
       </p>
 
       {sorted.length === 0 ? (
         <div className="text-center py-16">
-          <p className="text-[14px] font-medium text-[#888]">
+          <p className="text-[16px] font-medium text-[#888]">
             {campaigns.length === 0 ? 'No hay campañas aún' : 'Sin resultados para los filtros aplicados'}
           </p>
         </div>
@@ -223,7 +223,7 @@ export default function AdsList({ campaigns, loading, canManage, usersMap, onSel
                   <th
                     key={col.key}
                     onClick={col.sortable ? () => handleSort(col.key) : undefined}
-                    className={`px-3 py-2.5 text-[10px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] whitespace-nowrap ${
+                    className={`px-3 py-2.5 text-[12px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] whitespace-nowrap ${
                       col.sortable ? 'cursor-pointer select-none hover:text-[#111]' : ''
                     }`}
                   >
@@ -261,20 +261,20 @@ export default function AdsList({ campaigns, loading, canManage, usersMap, onSel
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-black/30">
           <div className="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full">
-            <p className="text-[15px] font-semibold text-[#111] mb-1">¿Eliminar campaña?</p>
-            <p className="text-[13px] text-[#666] mb-5">
+            <p className="text-[17px] font-semibold text-[#111] mb-1">¿Eliminar campaña?</p>
+            <p className="text-[15px] text-[#666] mb-5">
               Se eliminará <span className="font-semibold">"{confirmDelete.name}"</span> de forma permanente.
             </p>
             <div className="flex gap-3">
               <button
                 onClick={() => setConfirmDelete(null)}
-                className="flex-1 py-2.5 rounded-xl border border-[#e0ddd4] text-[13px] font-semibold text-[#555] hover:bg-[#f5f3eb] transition-colors"
+                className="flex-1 py-2.5 rounded-xl border border-[#e0ddd4] text-[15px] font-semibold text-[#555] hover:bg-[#f5f3eb] transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={() => handleDeleteConfirm(confirmDelete)}
-                className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-[13px] font-bold hover:bg-red-700 transition-colors"
+                className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-[15px] font-bold hover:bg-red-700 transition-colors"
               >
                 Eliminar
               </button>

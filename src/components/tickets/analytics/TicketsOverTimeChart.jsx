@@ -3,9 +3,9 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recha
 export default function TicketsOverTimeChart({ data }) {
   return (
     <div className="bg-white rounded-2xl border border-[#e0ddd4] px-5 py-4">
-      <p className="text-[11px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] mb-4">Tickets por dia</p>
+      <p className="text-[13px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] mb-4">Tickets por dia</p>
       {data.length === 0 ? (
-        <p className="text-[13px] text-[#aaa] text-center py-8">Sin datos</p>
+        <p className="text-[15px] text-[#aaa] text-center py-8">Sin datos</p>
       ) : (
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={data} margin={{ top: 0, right: 4, left: -20, bottom: 0 }}>

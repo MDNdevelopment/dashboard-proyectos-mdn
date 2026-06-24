@@ -97,8 +97,8 @@ export default function EmployeeModal({ employee, departments, positions, onClos
               label=""
             />
             <div>
-              <h2 className="text-[16px] font-bold text-[#111]">Editar empleado</h2>
-              <p className="text-[12px] text-[#888] mt-0.5">{employee.email}</p>
+              <h2 className="text-[18px] font-bold text-[#111]">Editar empleado</h2>
+              <p className="text-[14px] text-[#888] mt-0.5">{employee.email}</p>
             </div>
           </div>
           <button
@@ -116,7 +116,7 @@ export default function EmployeeModal({ employee, departments, positions, onClos
         {/* Form */}
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-[13px] rounded-lg px-3 py-2">
+            <div className="bg-red-50 border border-red-200 text-red-700 text-[15px] rounded-lg px-3 py-2">
               {error}
             </div>
           )}
@@ -124,7 +124,7 @@ export default function EmployeeModal({ employee, departments, positions, onClos
           {/* Nombre + Apellido */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+              <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
                 Nombre *
               </label>
               <input
@@ -137,7 +137,7 @@ export default function EmployeeModal({ employee, departments, positions, onClos
               />
             </div>
             <div>
-              <label className="block text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+              <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
                 Apellido *
               </label>
               <input
@@ -152,7 +152,7 @@ export default function EmployeeModal({ employee, departments, positions, onClos
 
           {/* Teléfono */}
           <div>
-            <label className="block text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+            <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
               Teléfono
             </label>
             <input
@@ -167,7 +167,7 @@ export default function EmployeeModal({ employee, departments, positions, onClos
           {/* Fechas */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+              <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
                 Fecha de nacimiento
               </label>
               <input
@@ -178,7 +178,7 @@ export default function EmployeeModal({ employee, departments, positions, onClos
               />
             </div>
             <div>
-              <label className="block text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+              <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
                 Fecha de ingreso
               </label>
               <input
@@ -193,7 +193,7 @@ export default function EmployeeModal({ employee, departments, positions, onClos
           {/* Departamento + Cargo */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+              <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
                 Departamento
               </label>
               <select
@@ -210,7 +210,7 @@ export default function EmployeeModal({ employee, departments, positions, onClos
               </select>
             </div>
             <div>
-              <label className="block text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+              <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
                 Cargo
               </label>
               <select
@@ -231,7 +231,7 @@ export default function EmployeeModal({ employee, departments, positions, onClos
 
           {/* Nivel de acceso */}
           <div>
-            <label className="block text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+            <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
               Nivel de acceso
             </label>
             <select
@@ -262,7 +262,7 @@ export default function EmployeeModal({ employee, departments, positions, onClos
                 }`}
               />
             </button>
-            <span className="text-[13px] text-[#555]">Administrador</span>
+            <span className="text-[15px] text-[#555]">Administrador</span>
           </div>
 
           {/* Botones */}
@@ -270,14 +270,14 @@ export default function EmployeeModal({ employee, departments, positions, onClos
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl text-[13px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
+              className="px-4 py-2 rounded-xl text-[15px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="px-4 py-2 rounded-xl text-[13px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors disabled:opacity-50"
+              className="px-4 py-2 rounded-xl text-[15px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors disabled:opacity-50"
             >
               {saving ? 'Guardando…' : 'Guardar cambios'}
             </button>

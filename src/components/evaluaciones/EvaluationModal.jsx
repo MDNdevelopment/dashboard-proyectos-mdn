@@ -176,10 +176,10 @@ export default function EvaluationModal({
           {/* Header */}
           <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-[#ece9df]">
             <div>
-              <h2 className="text-[16px] font-bold text-[#111]">
+              <h2 className="text-[18px] font-bold text-[#111]">
                 {isReadOnly ? 'Evaluación' : 'Nueva evaluación'}
               </h2>
-              <p className="text-[12px] text-[#888] mt-0.5">{employeeName}</p>
+              <p className="text-[14px] text-[#888] mt-0.5">{employeeName}</p>
             </div>
             <button
               type="button"
@@ -197,16 +197,16 @@ export default function EvaluationModal({
           <div className="px-6 py-5 space-y-5">
             {/* Período */}
             <div className="flex items-center gap-2">
-              <span className="text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">
+              <span className="text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">
                 Período:
               </span>
-              <span className="text-[12px] font-mono text-[#555] bg-[#f5f3eb] px-2 py-0.5 rounded-full">
+              <span className="text-[14px] font-mono text-[#555] bg-[#f5f3eb] px-2 py-0.5 rounded-full">
                 {firstDay}
               </span>
             </div>
 
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 text-[13px] rounded-lg px-3 py-2">
+              <div className="bg-red-50 border border-red-200 text-red-700 text-[15px] rounded-lg px-3 py-2">
                 {error}
               </div>
             )}
@@ -217,8 +217,8 @@ export default function EvaluationModal({
               </div>
             ) : questions.length === 0 ? (
               <div className="text-center py-10">
-                <p className="text-[14px] font-semibold text-[#888]">Sin preguntas</p>
-                <p className="text-[12px] text-[#bbb] mt-1">
+                <p className="text-[16px] font-semibold text-[#888]">Sin preguntas</p>
+                <p className="text-[14px] text-[#bbb] mt-1">
                   No hay preguntas asignadas al cargo de este empleado.
                 </p>
               </div>
@@ -226,7 +226,7 @@ export default function EvaluationModal({
               <form id="eval-form" onSubmit={handleSubmit} className="space-y-6">
                 {questions.map((q, idx) => (
                   <div key={q.id}>
-                    <label className="block text-[13px] font-semibold text-[#111] mb-2.5">
+                    <label className="block text-[15px] font-semibold text-[#111] mb-2.5">
                       <span className="text-[#bbb] font-mono mr-1.5">{idx + 1}.</span>
                       {q.text}
                     </label>
@@ -242,7 +242,7 @@ export default function EvaluationModal({
                               if (isReadOnly) return
                               setResponses(prev => ({ ...prev, [String(q.id)]: val }))
                             }}
-                            className={`w-10 h-10 rounded-xl text-[14px] font-bold transition-all border ${
+                            className={`w-10 h-10 rounded-xl text-[16px] font-bold transition-all border ${
                               selected
                                 ? 'bg-[#FFB800] text-[#111] border-[#FFB800] shadow-sm'
                                 : 'bg-white text-[#555] border-[#e0ddd4] hover:border-[#FFB800] hover:bg-[#fff8e6]'
@@ -259,11 +259,11 @@ export default function EvaluationModal({
 
                 {/* Comentario */}
                 <div>
-                  <label className="block text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+                  <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
                     Comentario {isReadOnly ? '' : '(opcional)'}
                   </label>
                   {isReadOnly ? (
-                    <p className="text-[13px] text-[#555] bg-[#f5f3eb] rounded-xl px-3 py-2.5 min-h-[60px]">
+                    <p className="text-[15px] text-[#555] bg-[#f5f3eb] rounded-xl px-3 py-2.5 min-h-[60px]">
                       {comment || <span className="text-[#bbb] italic">Sin comentario</span>}
                     </p>
                   ) : (
@@ -288,28 +288,28 @@ export default function EvaluationModal({
                   <button
                     type="button"
                     onClick={() => setShowDelete(true)}
-                    className="px-4 py-2 rounded-xl text-[13px] font-semibold text-red-600 border border-red-200 hover:bg-red-50 transition-colors"
+                    className="px-4 py-2 rounded-xl text-[15px] font-semibold text-red-600 border border-red-200 hover:bg-red-50 transition-colors"
                   >
                     Eliminar
                   </button>
                   <button
                     type="button"
                     onClick={onClose}
-                    className="px-4 py-2 rounded-xl text-[13px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
+                    className="px-4 py-2 rounded-xl text-[15px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
                   >
                     Cerrar
                   </button>
                 </>
               ) : (
                 <>
-                  <div className="text-[12px] text-[#aaa] font-mono">
+                  <div className="text-[14px] text-[#aaa] font-mono">
                     {Object.keys(responses).length}/{questions.length} respondidas
                   </div>
                   <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={onClose}
-                      className="px-4 py-2 rounded-xl text-[13px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
+                      className="px-4 py-2 rounded-xl text-[15px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
                     >
                       Cancelar
                     </button>
@@ -317,7 +317,7 @@ export default function EvaluationModal({
                       type="submit"
                       form="eval-form"
                       disabled={!allAnswered || saving}
-                      className="px-4 py-2 rounded-xl text-[13px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-4 py-2 rounded-xl text-[15px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {saving ? 'Guardando…' : 'Guardar evaluación'}
                     </button>

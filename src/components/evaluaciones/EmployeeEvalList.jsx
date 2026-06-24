@@ -94,7 +94,7 @@ export default function EmployeeEvalList({ companyId, currentUserId }) {
     <>
       {/* Barra superior */}
       <div className="flex items-center gap-3 mb-4">
-        <p className="text-[13px] text-[#888] flex-shrink-0">
+        <p className="text-[15px] text-[#888] flex-shrink-0">
           {employees.length} empleado{employees.length !== 1 ? 's' : ''}
         </p>
         <input
@@ -104,7 +104,7 @@ export default function EmployeeEvalList({ companyId, currentUserId }) {
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
-        <span className="ml-auto text-[11px] font-mono text-[#aaa]">
+        <span className="ml-auto text-[13px] font-mono text-[#aaa]">
           Período: {firstDay}
         </span>
       </div>
@@ -112,10 +112,10 @@ export default function EmployeeEvalList({ companyId, currentUserId }) {
       {/* Estado vacío */}
       {filtered.length === 0 ? (
         <div className="bg-white rounded-xl border border-[#e0ddd4] p-10 text-center">
-          <p className="text-[15px] font-semibold text-[#888] mb-1">
+          <p className="text-[17px] font-semibold text-[#888] mb-1">
             {search ? 'Sin resultados' : 'Sin empleados'}
           </p>
-          <p className="text-[13px] text-[#bbb]">
+          <p className="text-[15px] text-[#bbb]">
             {search
               ? 'Intenta con otro nombre o email.'
               : 'No hay empleados registrados en esta empresa.'}
@@ -140,11 +140,11 @@ export default function EmployeeEvalList({ companyId, currentUserId }) {
                   <button
                     type="button"
                     onClick={() => navigate(`/evaluaciones/empleado/${emp.user_id}`)}
-                    className="text-[14px] font-semibold text-[#111] hover:text-[#FFB800] transition-colors text-left"
+                    className="text-[16px] font-semibold text-[#111] hover:text-[#FFB800] transition-colors text-left"
                   >
                     {emp.first_name} {emp.last_name}
                   </button>
-                  <p className="text-[12px] text-[#666] mt-0.5">
+                  <p className="text-[14px] text-[#666] mt-0.5">
                     {emp.position?.position_name ?? '—'}
                     {emp.department?.department_name ? (
                       <span className="text-[#bbb]"> · {emp.department.department_name}</span>
@@ -155,10 +155,10 @@ export default function EmployeeEvalList({ companyId, currentUserId }) {
                 {/* Score del período si ya fue evaluado */}
                 {evaluated && (
                   <div className="text-center flex-shrink-0">
-                    <span className="text-[20px] font-bold text-[#111]">
+                    <span className="text-[22px] font-bold text-[#111]">
                       {session.total_score?.toFixed(1)}
                     </span>
-                    <span className="text-[11px] text-[#bbb] font-mono"> /5</span>
+                    <span className="text-[13px] text-[#bbb] font-mono"> /5</span>
                   </div>
                 )}
 
@@ -168,7 +168,7 @@ export default function EmployeeEvalList({ companyId, currentUserId }) {
                     <button
                       type="button"
                       onClick={() => setModal({ employee: emp, evaluationId: session.id })}
-                      className="px-3 py-1.5 rounded-lg text-[12px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
+                      className="px-3 py-1.5 rounded-lg text-[14px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
                     >
                       Ver
                     </button>
@@ -176,7 +176,7 @@ export default function EmployeeEvalList({ companyId, currentUserId }) {
                     <button
                       type="button"
                       onClick={() => setModal({ employee: emp, evaluationId: undefined })}
-                      className="px-3 py-1.5 rounded-lg text-[12px] font-bold bg-[#FFB800] text-[#111] hover:bg-[#e6a600] transition-colors"
+                      className="px-3 py-1.5 rounded-lg text-[14px] font-bold bg-[#FFB800] text-[#111] hover:bg-[#e6a600] transition-colors"
                     >
                       Evaluar
                     </button>

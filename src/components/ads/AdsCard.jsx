@@ -51,12 +51,12 @@ export default function AdsCard({
   return (
     <tr className="border-b border-[#f0ede3] hover:bg-[#fafaf7] transition-colors group">
       {/* # */}
-      <td className="px-3 py-2.5 text-[11px] font-mono text-[#aaa]">
+      <td className="px-3 py-2.5 text-[13px] font-mono text-[#aaa]">
         {index + 1}
       </td>
 
       {/* Start date */}
-      <td className="px-3 py-2.5 text-[12px] text-[#555] whitespace-nowrap">
+      <td className="px-3 py-2.5 text-[14px] text-[#555] whitespace-nowrap">
         {fmtDate(campaign.start_date)}
       </td>
 
@@ -65,7 +65,7 @@ export default function AdsCard({
         {isInlineEditing ? (
           <input
             autoFocus
-            className="input-base text-[12px] py-1 w-full"
+            className="input-base text-[14px] py-1 w-full"
             value={inlineEditValue}
             onChange={(e) => onInlineEditChange(e.target.value)}
             onBlur={() => onInlineEditSave(campaign.id)}
@@ -85,12 +85,12 @@ export default function AdsCard({
                   }
                 : undefined
             }
-            className={`text-[13px] font-semibold text-[#111] leading-snug ${canManage ? "cursor-text" : ""}`}
+            className={`text-[15px] font-semibold text-[#111] leading-snug ${canManage ? "cursor-text" : ""}`}
             title={campaign.notes || undefined}
           >
             {campaign.name}
             {campaign.notes && (
-              <p className="text-[11px] font-normal text-[#999] truncate mt-0.5">
+              <p className="text-[13px] font-normal text-[#999] truncate mt-0.5">
                 {campaign.notes}
               </p>
             )}
@@ -99,25 +99,25 @@ export default function AdsCard({
       </td>
 
       {/* Client */}
-      <td className="px-3 py-2.5 text-[12px] text-[#444] whitespace-nowrap">
+      <td className="px-3 py-2.5 text-[14px] text-[#444] whitespace-nowrap">
         {campaign.client}
       </td>
 
       {/* Assignee */}
-      <td className="px-3 py-2.5 text-[12px] text-[#555] whitespace-nowrap">
+      <td className="px-3 py-2.5 text-[14px] text-[#555] whitespace-nowrap">
         {usersMap?.get(campaign.assignee) ?? campaign.assignee ?? "—"}
       </td>
 
       {/* End date */}
       <td
-        className={`px-3 py-2.5 text-[12px] whitespace-nowrap ${dateColor(campaign.end_date)}`}
+        className={`px-3 py-2.5 text-[14px] whitespace-nowrap ${dateColor(campaign.end_date)}`}
       >
         {fmtDate(campaign.end_date)}
       </td>
 
       {/* Priority */}
       <td className="px-3 py-2.5 whitespace-nowrap">
-        <span className="flex items-center gap-1.5 text-[11px] font-mono font-semibold text-[#555]">
+        <span className="flex items-center gap-1.5 text-[13px] font-mono font-semibold text-[#555]">
           <span
             className={`w-2 h-2 rounded-full flex-shrink-0 ${priority?.dot ?? "bg-[#bbb]"}`}
           />
@@ -130,7 +130,7 @@ export default function AdsCard({
         <button
           onClick={handleStatusClick}
           title={canManage ? "Clic para avanzar estado" : undefined}
-          className={`text-[11px] font-mono font-bold px-2.5 py-1 rounded-lg whitespace-nowrap transition-opacity ${
+          className={`text-[13px] font-mono font-bold px-2.5 py-1 rounded-lg whitespace-nowrap transition-opacity ${
             status?.bg ?? "bg-[#f5f3eb]"
           } ${status?.text ?? "text-[#555]"} ${canManage ? "hover:opacity-75 cursor-pointer" : "cursor-default"}`}
         >

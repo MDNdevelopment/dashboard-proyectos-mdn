@@ -48,7 +48,7 @@ export default function TicketList({ tickets, loading, onSelect, isIT }) {
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
           placeholder="Buscar por titulo o descripcion..."
-          className="input-base text-[12px] py-1.5 w-full"
+          className="input-base text-[14px] py-1.5 w-full"
         />
       </div>
       {/* Filters */}
@@ -56,7 +56,7 @@ export default function TicketList({ tickets, loading, onSelect, isIT }) {
         <select
           value={filterStatus}
           onChange={e => setFilterStatus(e.target.value)}
-          className="input-base text-[12px] py-1.5 pr-8"
+          className="input-base text-[14px] py-1.5 pr-8"
         >
           <option value="all">Todos los estados</option>
           {STATUSES.map(s => <option key={s} value={s}>{STATUS[s].label}</option>)}
@@ -64,7 +64,7 @@ export default function TicketList({ tickets, loading, onSelect, isIT }) {
         <select
           value={filterPriority}
           onChange={e => setFilterPriority(e.target.value)}
-          className="input-base text-[12px] py-1.5 pr-8"
+          className="input-base text-[14px] py-1.5 pr-8"
         >
           <option value="all">Todas las prioridades</option>
           {PRIORITIES.map(p => <option key={p} value={p}>{PRIORITY[p].label}</option>)}
@@ -72,7 +72,7 @@ export default function TicketList({ tickets, loading, onSelect, isIT }) {
         <select
           value={filterCategory}
           onChange={e => setFilterCategory(e.target.value)}
-          className="input-base text-[12px] py-1.5 pr-8"
+          className="input-base text-[14px] py-1.5 pr-8"
         >
           <option value="all">Todas las categorias</option>
           {CATEGORIES.map(c => <option key={c} value={c}>{CATEGORY[c].label}</option>)}
@@ -80,22 +80,22 @@ export default function TicketList({ tickets, loading, onSelect, isIT }) {
       </div>
       <div className="flex items-center gap-3 mb-4">
         <div className="flex items-center gap-1.5">
-          <span className="text-[11px] font-mono text-[#888]">Desde</span>
+          <span className="text-[13px] font-mono text-[#888]">Desde</span>
           <input
             type="date"
             value={dateFrom}
             onChange={e => setDateFrom(e.target.value)}
-            className="input-base text-[12px] py-1.5"
+            className="input-base text-[14px] py-1.5"
             style={{ width: 'auto' }}
           />
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="text-[11px] font-mono text-[#888]">Hasta</span>
+          <span className="text-[13px] font-mono text-[#888]">Hasta</span>
           <input
             type="date"
             value={dateTo}
             onChange={e => setDateTo(e.target.value)}
-            className="input-base text-[12px] py-1.5"
+            className="input-base text-[14px] py-1.5"
             style={{ width: 'auto' }}
           />
         </div>
@@ -103,7 +103,7 @@ export default function TicketList({ tickets, loading, onSelect, isIT }) {
 
       {filtered.length === 0 ? (
         <div className="text-center py-16">
-          <p className="text-[14px] font-medium text-[#888]">
+          <p className="text-[16px] font-medium text-[#888]">
             {tickets.length === 0 ? 'No hay tickets aun' : 'Sin resultados para los filtros aplicados'}
           </p>
         </div>

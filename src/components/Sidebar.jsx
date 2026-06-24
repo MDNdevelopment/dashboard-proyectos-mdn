@@ -112,14 +112,14 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 overflow-y-auto">
 
-        <p className="text-[10px] font-mono font-bold tracking-[0.16em] uppercase text-[#888] px-2 mb-2">
+        <p className="text-[12px] font-mono font-bold tracking-[0.16em] uppercase text-[#888] px-2 mb-2">
           Herramientas
         </p>
         <div className="space-y-0.5">
           {/* Proyectos — menú desplegable */}
           <button
             onClick={() => setProjectsOpen(o => !o)}
-            className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13px] font-medium transition-all text-left ${
+            className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all text-left ${
               isProjectsRoute && !projectsOpen
                 ? 'bg-[#FFB800] text-[#111]'
                 : isProjectsRoute
@@ -147,7 +147,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
                   <button
                     key={view.key}
                     onClick={() => { onFilterChange(view.key); if (!isProjectsRoute) navigate('/') }}
-                    className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[12.5px] font-medium transition-all text-left ${
+                    className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
                       active
                         ? 'bg-[#FFB800] text-[#111]'
                         : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
@@ -157,7 +157,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
                       {VIEW_ICONS[view.key]}
                     </span>
                     <span className="flex-1">{view.label}</span>
-                    <span className={`text-[11px] font-mono font-bold min-w-[22px] text-center px-1.5 py-0.5 rounded-md ${
+                    <span className={`text-[13px] font-mono font-bold min-w-[22px] text-center px-1.5 py-0.5 rounded-md ${
                       active ? 'bg-black/12 text-[#111]' : 'bg-[#f0ede3] text-[#555]'
                     }`}>
                       {counts[view.key] ?? 0}
@@ -168,7 +168,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
 
               {hasDepts && (
                 <>
-                  <p className="text-[10px] font-mono font-bold tracking-[0.14em] uppercase text-[#aaa] px-3 pt-2 pb-1">
+                  <p className="text-[12px] font-mono font-bold tracking-[0.14em] uppercase text-[#aaa] px-3 pt-2 pb-1">
                     Departamentos
                   </p>
                   {DEPARTMENTS.filter(d => deptCounts[d] > 0).map(dept => {
@@ -178,7 +178,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
                       <button
                         key={dept}
                         onClick={() => { onFilterChange(key); if (!isProjectsRoute) navigate('/') }}
-                        className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[12.5px] font-medium transition-all text-left ${
+                        className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
                           active
                             ? 'bg-[#FFB800] text-[#111]'
                             : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
@@ -186,7 +186,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
                       >
                         <span className={`w-2 h-2 rounded-full flex-shrink-0 ${active ? 'bg-[#111]' : 'bg-[#bbb]'}`} />
                         <span className="flex-1">{dept}</span>
-                        <span className={`text-[11px] font-mono font-bold min-w-[22px] text-center px-1.5 py-0.5 rounded-md ${
+                        <span className={`text-[13px] font-mono font-bold min-w-[22px] text-center px-1.5 py-0.5 rounded-md ${
                           active ? 'bg-black/12 text-[#111]' : 'bg-[#f0ede3] text-[#555]'
                         }`}>
                           {deptCounts[dept]}
@@ -202,7 +202,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
           {/* Tickets de soporte — menú desplegable */}
           <button
             onClick={() => setTicketsOpen(o => !o)}
-            className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13px] font-medium transition-all text-left ${
+            className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all text-left ${
               isTicketsRoute && !ticketsOpen
                 ? 'bg-[#FFB800] text-[#111]'
                 : isTicketsRoute
@@ -226,7 +226,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
             <div className="ml-3 pl-3 border-l-2 border-[#ece9df] space-y-0.5 mt-0.5">
               <Link
                 to="/tickets"
-                className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[12.5px] font-medium transition-all text-left ${
+                className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
                   ticketsActive
                     ? 'bg-[#FFB800] text-[#111]'
                     : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
@@ -240,7 +240,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
               {canAnalytics && (
                 <Link
                   to="/tickets/analytics"
-                  className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[12.5px] font-medium transition-all text-left ${
+                  className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
                     analyticsActive
                       ? 'bg-[#FFB800] text-[#111]'
                       : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
@@ -255,7 +255,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
               {isITAdmin && (
                 <Link
                   to="/tickets/notificaciones"
-                  className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[12.5px] font-medium transition-all text-left ${
+                  className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
                     notifActive
                       ? 'bg-[#FFB800] text-[#111]'
                       : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
@@ -272,7 +272,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
           {/* Campañas & Tácticas — menú desplegable */}
           <button
             onClick={() => setAdsOpen(o => !o)}
-            className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13px] font-medium transition-all text-left ${
+            className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all text-left ${
               isAdsRoute && !adsOpen
                 ? 'bg-[#FFB800] text-[#111]'
                 : isAdsRoute
@@ -296,7 +296,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
             <div className="ml-3 pl-3 border-l-2 border-[#ece9df] space-y-0.5 mt-0.5">
               <Link
                 to="/ads"
-                className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[12.5px] font-medium transition-all text-left ${
+                className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
                   adsActive
                     ? 'bg-[#FFB800] text-[#111]'
                     : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
@@ -312,7 +312,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
           {/* Gestión de Tareas — menú desplegable */}
           <button
             onClick={() => setTareasOpen(o => !o)}
-            className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13px] font-medium transition-all text-left ${
+            className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all text-left ${
               isTareasRoute && !tareasOpen
                 ? 'bg-[#FFB800] text-[#111]'
                 : isTareasRoute
@@ -336,7 +336,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
             <div className="ml-3 pl-3 border-l-2 border-[#ece9df] space-y-0.5 mt-0.5">
               <Link
                 to="/tareas"
-                className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[12.5px] font-medium transition-all text-left ${
+                className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
                   tareasActive
                     ? 'bg-[#FFB800] text-[#111]'
                     : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
@@ -353,7 +353,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
           {/* Empresa — visible a todos */}
           <button
             onClick={() => setEmpresaOpen(o => !o)}
-            className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13px] font-medium transition-all text-left ${
+            className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all text-left ${
               isEmpresaRoute && !empresaOpen
                 ? 'bg-[#FFB800] text-[#111]'
                 : isEmpresaRoute
@@ -377,7 +377,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
             <div className="ml-3 pl-3 border-l-2 border-[#ece9df] space-y-0.5 mt-0.5">
               <Link
                 to="/empresa"
-                className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[12.5px] font-medium transition-all text-left ${
+                className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
                   empresaActive
                     ? 'bg-[#FFB800] text-[#111]'
                     : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
@@ -392,7 +392,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
                 <>
                   <Link
                     to="/empresa/departamentos"
-                    className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[12.5px] font-medium transition-all text-left ${
+                    className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
                       empresaDeptActive
                         ? 'bg-[#FFB800] text-[#111]'
                         : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
@@ -405,7 +405,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
                   </Link>
                   <Link
                     to="/empresa/empleados"
-                    className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[12.5px] font-medium transition-all text-left ${
+                    className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
                       empresaEmpActive
                         ? 'bg-[#FFB800] text-[#111]'
                         : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
@@ -418,7 +418,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
                   </Link>
                   <Link
                     to="/empresa/preguntas"
-                    className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[12.5px] font-medium transition-all text-left ${
+                    className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
                       empresaPregActive
                         ? 'bg-[#FFB800] text-[#111]'
                         : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
@@ -439,7 +439,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
             <>
               <button
                 onClick={() => setEvalOpen(o => !o)}
-                className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[13px] font-medium transition-all text-left ${
+                className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all text-left ${
                   isEvalRoute && !evalOpen
                     ? 'bg-[#FFB800] text-[#111]'
                     : isEvalRoute
@@ -463,7 +463,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
                 <div className="ml-3 pl-3 border-l-2 border-[#ece9df] space-y-0.5 mt-0.5">
                   <Link
                     to="/evaluaciones"
-                    className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[12.5px] font-medium transition-all text-left ${
+                    className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
                       evalActive
                         ? 'bg-[#FFB800] text-[#111]'
                         : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
@@ -476,7 +476,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
                   </Link>
                   <Link
                     to="/evaluaciones/resumen"
-                    className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[12.5px] font-medium transition-all text-left ${
+                    className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
                       evalResumenActive
                         ? 'bg-[#FFB800] text-[#111]'
                         : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
@@ -506,7 +506,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
             />
           ) : (
             <div className="w-9 h-9 rounded-full flex-shrink-0 bg-[#FFB800] flex items-center justify-center">
-              <span className="text-[13px] font-bold text-[#111]">
+              <span className="text-[15px] font-bold text-[#111]">
                 {((userProfile?.first_name?.[0] ?? '') + (userProfile?.last_name?.[0] ?? '')).toUpperCase() || '?'}
               </span>
             </div>
@@ -514,14 +514,14 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
 
           {/* Info */}
           <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-semibold text-[#111] truncate leading-snug">
+            <p className="text-[15px] font-semibold text-[#111] truncate leading-snug">
               {userProfile ? `${userProfile.first_name} ${userProfile.last_name}` : '—'}
             </p>
-            <p className="text-[11px] text-[#888] truncate leading-snug">
+            <p className="text-[13px] text-[#888] truncate leading-snug">
               {userProfile?.email ?? ''}
             </p>
             {(userProfile?.department?.department_name || userProfile?.position?.position_name) && (
-              <p className="text-[10.5px] font-mono text-[#666] truncate leading-snug mt-0.5">
+              <p className="text-[12.5px] font-mono text-[#666] truncate leading-snug mt-0.5">
                 {[userProfile.department?.department_name, userProfile.position?.position_name].filter(Boolean).join(' · ')}
               </p>
             )}
@@ -546,7 +546,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
           <div className="absolute bottom-full left-4 right-4 mb-2 bg-white border border-[#e0ddd4] rounded-xl shadow-lg overflow-hidden">
             <button
               onClick={() => { setMenuOpen(false); avatarInputRef.current?.click() }}
-              className="w-full flex items-center gap-2.5 px-4 py-3 text-[13px] font-medium text-[#444] hover:bg-[#f5f3eb] hover:text-[#111] transition-colors text-left"
+              className="w-full flex items-center gap-2.5 px-4 py-3 text-[15px] font-medium text-[#444] hover:bg-[#f5f3eb] hover:text-[#111] transition-colors text-left"
             >
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
                 <circle cx="8" cy="6" r="3.5"/>
@@ -556,7 +556,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
             </button>
             <button
               onClick={() => { setMenuOpen(false); signOut() }}
-              className="w-full flex items-center gap-2.5 px-4 py-3 text-[13px] font-medium text-[#444] hover:bg-[#f5f3eb] hover:text-[#111] transition-colors text-left"
+              className="w-full flex items-center gap-2.5 px-4 py-3 text-[15px] font-medium text-[#444] hover:bg-[#f5f3eb] hover:text-[#111] transition-colors text-left"
             >
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
                 <path d="M6 2H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3M11 11l3-3-3-3M14 8H6" strokeLinecap="round" strokeLinejoin="round"/>

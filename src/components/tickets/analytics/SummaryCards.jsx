@@ -1,9 +1,9 @@
 function Card({ label, value, sub }) {
   return (
     <div className="bg-white rounded-2xl border border-[#e0ddd4] px-5 py-4">
-      <p className="text-[10px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] mb-1">{label}</p>
-      <p className="text-[28px] font-bold text-[#111] leading-none">{value}</p>
-      {sub && <p className="text-[11px] text-[#888] mt-1">{sub}</p>}
+      <p className="text-[12px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] mb-1">{label}</p>
+      <p className="text-[30px] font-bold text-[#111] leading-none">{value}</p>
+      {sub && <p className="text-[13px] text-[#888] mt-1">{sub}</p>}
     </div>
   )
 }

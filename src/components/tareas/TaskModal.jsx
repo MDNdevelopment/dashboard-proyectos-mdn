@@ -108,7 +108,7 @@ export default function TaskModal({ task = null, teams = [], users = [], default
     >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-[#ece9df]">
-          <h2 className="text-[16px] font-bold text-[#111]">
+          <h2 className="text-[18px] font-bold text-[#111]">
             {isEdit ? 'Editar tarea' : 'Nueva tarea'}
           </h2>
           <button
@@ -125,13 +125,13 @@ export default function TaskModal({ task = null, teams = [], users = [], default
 
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-[13px] rounded-lg px-3 py-2">
+            <div className="bg-red-50 border border-red-200 text-red-700 text-[15px] rounded-lg px-3 py-2">
               {error}
             </div>
           )}
 
           <div>
-            <label className="block text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Team *</label>
+            <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Team *</label>
             <select className="input-base" value={form.team_id} onChange={e => set('team_id', e.target.value)} required>
               <option value="">Seleccionar team...</option>
               {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -139,7 +139,7 @@ export default function TaskModal({ task = null, teams = [], users = [], default
           </div>
 
           <div>
-            <label className="block text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Cliente</label>
+            <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Cliente</label>
             <input
               className="input-base"
               value={form.client}
@@ -149,7 +149,7 @@ export default function TaskModal({ task = null, teams = [], users = [], default
           </div>
 
           <div>
-            <label className="block text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Descripción de la tarea *</label>
+            <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Descripción de la tarea *</label>
             <textarea
               className="input-base"
               rows={3}
@@ -161,7 +161,7 @@ export default function TaskModal({ task = null, teams = [], users = [], default
           </div>
 
           <div>
-            <label className="block text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Origen / Fuente</label>
+            <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Origen / Fuente</label>
             <input
               className="input-base"
               value={form.source}
@@ -171,7 +171,7 @@ export default function TaskModal({ task = null, teams = [], users = [], default
           </div>
 
           <div>
-            <label className="block text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Responsable</label>
+            <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Responsable</label>
             <UserPickerSingle
               users={users}
               selectedId={form.assignee_id}
@@ -181,7 +181,7 @@ export default function TaskModal({ task = null, teams = [], users = [], default
           </div>
 
           <div>
-            <label className="block text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+            <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
               Apoyo de dirección
               <span className="ml-1 font-normal normal-case text-[#bbb]">(opcional)</span>
             </label>
@@ -197,17 +197,17 @@ export default function TaskModal({ task = null, teams = [], users = [], default
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Fecha solicitud</label>
+              <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Fecha solicitud</label>
               <input type="date" className="input-base" value={form.request_date} onChange={e => set('request_date', e.target.value)} />
             </div>
             <div>
-              <label className="block text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Fecha entrega</label>
+              <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Fecha entrega</label>
               <input type="date" className="input-base" value={form.due_date} onChange={e => set('due_date', e.target.value)} />
             </div>
           </div>
 
           <div>
-            <label className="block text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Estatus</label>
+            <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Estatus</label>
             <select
               className="input-base"
               value={form.status}
@@ -226,22 +226,22 @@ export default function TaskModal({ task = null, teams = [], users = [], default
 
           {form.status === 'Terminado' && (
             <div>
-              <label className="block text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Fecha de cierre</label>
+              <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Fecha de cierre</label>
               <input type="date" className="input-base" value={form.closed_date} onChange={e => set('closed_date', e.target.value)} />
             </div>
           )}
 
           <div className="flex items-center justify-between pt-2">
             {isEdit ? (
-              <button type="button" onClick={handleDelete} className="text-[13px] font-semibold text-red-500 hover:text-red-700 transition-colors">
+              <button type="button" onClick={handleDelete} className="text-[15px] font-semibold text-red-500 hover:text-red-700 transition-colors">
                 Eliminar
               </button>
             ) : <span />}
             <div className="flex items-center gap-2">
-              <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-[13px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors">
+              <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-[15px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors">
                 Cancelar
               </button>
-              <button type="submit" disabled={saving} className="px-4 py-2 rounded-xl text-[13px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors disabled:opacity-50">
+              <button type="submit" disabled={saving} className="px-4 py-2 rounded-xl text-[15px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors disabled:opacity-50">
                 {saving ? 'Guardando…' : (isEdit ? 'Guardar cambios' : 'Crear tarea')}
               </button>
             </div>

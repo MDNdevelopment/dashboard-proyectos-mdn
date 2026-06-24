@@ -124,7 +124,7 @@ export default function QuestionModal({
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-y-auto max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-[#ece9df]">
-          <h2 className="text-[16px] font-bold text-[#111]">
+          <h2 className="text-[18px] font-bold text-[#111]">
             {isEdit ? 'Editar pregunta' : 'Nueva pregunta'}
           </h2>
           <button
@@ -142,14 +142,14 @@ export default function QuestionModal({
         {/* Form */}
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-[13px] rounded-lg px-3 py-2">
+            <div className="bg-red-50 border border-red-200 text-red-700 text-[15px] rounded-lg px-3 py-2">
               {error}
             </div>
           )}
 
           {/* Texto */}
           <div>
-            <label className="block text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+            <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
               Texto de la pregunta *
             </label>
             <textarea
@@ -164,11 +164,11 @@ export default function QuestionModal({
 
           {/* Cargos: lista checkbox agrupada por departamento */}
           <div>
-            <label className="block text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-2">
+            <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-2">
               Cargos que aplican
             </label>
             {departments.length === 0 ? (
-              <p className="text-[12px] text-[#bbb] italic">
+              <p className="text-[14px] text-[#bbb] italic">
                 No hay departamentos ni cargos creados todavía.
               </p>
             ) : (
@@ -180,7 +180,7 @@ export default function QuestionModal({
                   if (deptPositions.length === 0) return null
                   return (
                     <div key={dept.department_id} className="px-3 py-2">
-                      <p className="text-[10px] font-mono font-bold tracking-[0.1em] uppercase text-[#aaa] mb-1.5">
+                      <p className="text-[12px] font-mono font-bold tracking-[0.1em] uppercase text-[#aaa] mb-1.5">
                         {dept.department_name}
                       </p>
                       <div className="space-y-0.5">
@@ -195,7 +195,7 @@ export default function QuestionModal({
                                 isSelected ? 'bg-[#f0fdf4] hover:bg-[#dcfce7]' : 'hover:bg-[#f5f3eb]'
                               }`}
                             >
-                              <span className="flex-1 text-[13px] text-[#111]">
+                              <span className="flex-1 text-[15px] text-[#111]">
                                 {pos.position_name}
                               </span>
                               <span
@@ -224,7 +224,7 @@ export default function QuestionModal({
               </div>
             )}
             {selectedPositionIds.length > 0 && (
-              <p className="text-[11px] text-[#888] mt-1.5">
+              <p className="text-[13px] text-[#888] mt-1.5">
                 {selectedPositionIds.length} cargo{selectedPositionIds.length !== 1 ? 's' : ''} seleccionado{selectedPositionIds.length !== 1 ? 's' : ''}
               </p>
             )}
@@ -232,7 +232,7 @@ export default function QuestionModal({
 
           {/* Tags */}
           <div>
-            <label className="block text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+            <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
               Tags (opcional)
             </label>
             {/* Input para agregar tag */}
@@ -251,7 +251,7 @@ export default function QuestionModal({
                 type="button"
                 onClick={addTag}
                 disabled={!tagInput.trim()}
-                className="px-3 py-2 rounded-xl text-[12px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors disabled:opacity-40"
+                className="px-3 py-2 rounded-xl text-[14px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors disabled:opacity-40"
               >
                 Agregar
               </button>
@@ -262,7 +262,7 @@ export default function QuestionModal({
                 {tags.map(tag => (
                   <span
                     key={tag}
-                    className="inline-flex items-center gap-1 text-[11px] font-medium text-[#92600a] bg-[#fff8e6] border border-[#fde68a] px-2 py-0.5 rounded-md"
+                    className="inline-flex items-center gap-1 text-[13px] font-medium text-[#92600a] bg-[#fff8e6] border border-[#fde68a] px-2 py-0.5 rounded-md"
                   >
                     {tag}
                     <button
@@ -286,14 +286,14 @@ export default function QuestionModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl text-[13px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
+              className="px-4 py-2 rounded-xl text-[15px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="px-4 py-2 rounded-xl text-[13px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors disabled:opacity-50"
+              className="px-4 py-2 rounded-xl text-[15px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors disabled:opacity-50"
             >
               {saving ? 'Guardando…' : isEdit ? 'Guardar cambios' : 'Crear pregunta'}
             </button>

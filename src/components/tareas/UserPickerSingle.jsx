@@ -91,11 +91,11 @@ export default function UserPickerSingle({ users = [], selectedId, onChange, pla
           <>
             <Avatar user={selectedUser} size={22} />
             <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-medium text-[#111] truncate">
+              <p className="text-[15px] font-medium text-[#111] truncate">
                 {selectedUser.first_name} {selectedUser.last_name}
               </p>
               {userMeta(selectedUser) && (
-                <p className="text-[11px] font-mono text-[#888] truncate">{userMeta(selectedUser)}</p>
+                <p className="text-[13px] font-mono text-[#888] truncate">{userMeta(selectedUser)}</p>
               )}
             </div>
             {clearable && (
@@ -114,7 +114,7 @@ export default function UserPickerSingle({ users = [], selectedId, onChange, pla
             )}
           </>
         ) : (
-          <span className="flex-1 text-[13px] text-[#bbb]">{placeholder}</span>
+          <span className="flex-1 text-[15px] text-[#bbb]">{placeholder}</span>
         )}
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" className="flex-shrink-0 text-[#999]">
           <path d="M2 3.5l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
@@ -139,7 +139,7 @@ export default function UserPickerSingle({ users = [], selectedId, onChange, pla
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Buscar..."
-                className="w-full bg-[#faf9f5] border border-[#e0ddd4] rounded-lg pl-8 pr-3 py-1.5 text-[12px] text-[#111] placeholder-[#bbb] outline-none focus:border-[#bbb] transition-colors"
+                className="w-full bg-[#faf9f5] border border-[#e0ddd4] rounded-lg pl-8 pr-3 py-1.5 text-[18px] sm:text-[14px] text-[#111] placeholder-[#bbb] outline-none focus:border-[#bbb] transition-colors"
               />
             </div>
           </div>
@@ -150,8 +150,8 @@ export default function UserPickerSingle({ users = [], selectedId, onChange, pla
                 onClick={() => select(null)}
                 className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-[#f5f3eb] transition-colors text-left"
               >
-                <span className="w-6 h-6 rounded-full bg-[#f0ede3] flex items-center justify-center text-[#999] text-[10px] flex-shrink-0">—</span>
-                <span className="flex-1 text-[13px] text-[#888]">Ninguno</span>
+                <span className="w-6 h-6 rounded-full bg-[#f0ede3] flex items-center justify-center text-[#999] text-[12px] flex-shrink-0">—</span>
+                <span className="flex-1 text-[15px] text-[#888]">Ninguno</span>
                 {!selectedId && (
                   <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="#22c55e" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/>
@@ -160,7 +160,7 @@ export default function UserPickerSingle({ users = [], selectedId, onChange, pla
               </button>
             )}
             {filtered.length === 0 ? (
-              <p className="text-[12px] text-[#bbb] text-center py-4">Sin resultados</p>
+              <p className="text-[14px] text-[#bbb] text-center py-4">Sin resultados</p>
             ) : (
               filtered.map(u => (
                 <button
@@ -171,9 +171,9 @@ export default function UserPickerSingle({ users = [], selectedId, onChange, pla
                 >
                   <Avatar user={u} size={26} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-medium text-[#222] truncate">{u.first_name} {u.last_name}</p>
+                    <p className="text-[15px] font-medium text-[#222] truncate">{u.first_name} {u.last_name}</p>
                     {userMeta(u) && (
-                      <p className="text-[11px] font-mono text-[#888] truncate">{userMeta(u)}</p>
+                      <p className="text-[13px] font-mono text-[#888] truncate">{userMeta(u)}</p>
                     )}
                   </div>
                   {selectedId === u.user_id && (

@@ -37,12 +37,12 @@ export default function TicketForm({ onClose, onCreated }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-black/30">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
         <div className="px-6 pt-6 pb-5 border-b border-[#ece9df]">
-          <h2 className="text-[17px] font-bold text-[#111]">Nuevo ticket de soporte</h2>
+          <h2 className="text-[19px] font-bold text-[#111]">Nuevo ticket de soporte</h2>
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
           <div>
-            <label className="block text-[11px] font-mono font-bold tracking-widest uppercase text-[#888] mb-1.5">
+            <label className="block text-[13px] font-mono font-bold tracking-widest uppercase text-[#888] mb-1.5">
               Titulo
             </label>
             <input
@@ -55,7 +55,7 @@ export default function TicketForm({ onClose, onCreated }) {
           </div>
 
           <div>
-            <label className="block text-[11px] font-mono font-bold tracking-widest uppercase text-[#888] mb-1.5">
+            <label className="block text-[13px] font-mono font-bold tracking-widest uppercase text-[#888] mb-1.5">
               Descripcion
             </label>
             <textarea
@@ -68,7 +68,7 @@ export default function TicketForm({ onClose, onCreated }) {
           </div>
 
           <div>
-            <label className="block text-[11px] font-mono font-bold tracking-widest uppercase text-[#888] mb-1.5">
+            <label className="block text-[13px] font-mono font-bold tracking-widest uppercase text-[#888] mb-1.5">
               Prioridad
             </label>
             <div className="flex gap-2 flex-wrap">
@@ -77,7 +77,7 @@ export default function TicketForm({ onClose, onCreated }) {
                   key={p}
                   type="button"
                   onClick={() => setPriority(p)}
-                  className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold border transition-all ${
+                  className={`px-3 py-1.5 rounded-lg text-[14px] font-semibold border transition-all ${
                     priority === p
                       ? 'border-[#111] bg-[#111] text-white'
                       : 'border-[#e0ddd4] text-[#555] hover:border-[#999]'
@@ -90,7 +90,7 @@ export default function TicketForm({ onClose, onCreated }) {
           </div>
 
           <div>
-            <label className="block text-[11px] font-mono font-bold tracking-widest uppercase text-[#888] mb-1.5">
+            <label className="block text-[13px] font-mono font-bold tracking-widest uppercase text-[#888] mb-1.5">
               Categoria
             </label>
             <div className="flex gap-2 flex-wrap">
@@ -99,7 +99,7 @@ export default function TicketForm({ onClose, onCreated }) {
                   key={c}
                   type="button"
                   onClick={() => setCategory(c)}
-                  className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold border transition-all ${
+                  className={`px-3 py-1.5 rounded-lg text-[14px] font-semibold border transition-all ${
                     category === c
                       ? 'border-[#111] bg-[#111] text-white'
                       : 'border-[#e0ddd4] text-[#555] hover:border-[#999]'
@@ -111,20 +111,20 @@ export default function TicketForm({ onClose, onCreated }) {
             </div>
           </div>
 
-          {error && <p className="text-[12px] text-red-600">{error}</p>}
+          {error && <p className="text-[14px] text-red-600">{error}</p>}
 
           <div className="flex gap-3 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl border border-[#e0ddd4] text-[13px] font-semibold text-[#555] hover:bg-[#f5f3eb] transition-colors"
+              className="flex-1 py-2.5 rounded-xl border border-[#e0ddd4] text-[15px] font-semibold text-[#555] hover:bg-[#f5f3eb] transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={submitting || !title.trim()}
-              className="flex-1 py-2.5 rounded-xl bg-[#111] text-white text-[13px] font-bold hover:bg-[#222] transition-colors disabled:opacity-50"
+              className="flex-1 py-2.5 rounded-xl bg-[#111] text-white text-[15px] font-bold hover:bg-[#222] transition-colors disabled:opacity-50"
             >
               {submitting ? 'Creando...' : 'Crear ticket'}
             </button>

@@ -51,8 +51,8 @@ export default function EvaluacionesPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-[24px] font-bold text-[#111] leading-tight">Evaluaciones</h1>
-            <p className="text-[13px] text-[#888] mt-0.5">Desempeño · Historial · Resumen</p>
+            <h1 className="text-[26px] font-bold text-[#111] leading-tight">Evaluaciones</h1>
+            <p className="text-[15px] text-[#888] mt-0.5">Desempeño · Historial · Resumen</p>
           </div>
         </div>
 
@@ -63,7 +63,7 @@ export default function EvaluacionesPage() {
               <button
                 key={tab.key}
                 onClick={() => navigate(tab.path)}
-                className={`px-4 py-1.5 rounded-lg text-[12.5px] font-semibold transition-all ${
+                className={`px-4 py-1.5 rounded-lg text-[14.5px] font-semibold transition-all ${
                   activeKey === tab.key
                     ? 'bg-[#111] text-white'
                     : 'text-[#666] hover:text-[#111] hover:bg-[#f5f3eb]'

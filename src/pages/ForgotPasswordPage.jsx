@@ -47,23 +47,23 @@ export default function ForgotPasswordPage() {
       <div className="bg-white rounded-2xl border border-[#e0ddd4] p-8 w-full max-w-[360px]">
         <div className="flex flex-col items-center mb-7">
           <MDNLogo size={48} />
-          <p className="text-[13px] font-medium text-[#888] mt-3">MDN Publicidad</p>
+          <p className="text-[15px] font-medium text-[#888] mt-3">MDN Publicidad</p>
         </div>
 
-        <h1 className="text-[18px] font-bold text-[#111] mb-1">Restablecer contraseña</h1>
-        <p className="text-[13px] text-[#888] mb-6">Te enviaremos un enlace a tu correo</p>
+        <h1 className="text-[20px] font-bold text-[#111] mb-1">Restablecer contraseña</h1>
+        <p className="text-[15px] text-[#888] mb-6">Te enviaremos un enlace a tu correo</p>
 
         {sent ? (
           <div className="mb-5 space-y-3">
             <div className="bg-[#f0fdf4] border border-[#bbf7d0] rounded-xl p-4">
-              <p className="text-[13px] text-[#166534] font-medium">
+              <p className="text-[15px] text-[#166534] font-medium">
                 Revisa tu correo para restablecer tu contraseña
               </p>
             </div>
             <button
               onClick={handleResend}
               disabled={countdown > 0 || loading}
-              className="w-full bg-[#FFB800] text-[#111] text-[13px] font-bold py-2.5 rounded-xl hover:bg-[#e6a600] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full bg-[#FFB800] text-[#111] text-[15px] font-bold py-2.5 rounded-xl hover:bg-[#e6a600] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {loading ? 'Enviando...' : countdown > 0 ? `Reenviar enlace (${mm}:${ss})` : 'Reenviar enlace'}
             </button>
@@ -82,7 +82,7 @@ export default function ForgotPasswordPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-[#FFB800] text-[#111] text-[13px] font-bold py-2.5 rounded-xl hover:bg-[#e6a600] transition-colors disabled:opacity-60"
+              className="w-full bg-[#FFB800] text-[#111] text-[15px] font-bold py-2.5 rounded-xl hover:bg-[#e6a600] transition-colors disabled:opacity-60"
             >
               {loading ? 'Enviando...' : 'Enviar enlace'}
             </button>
@@ -92,7 +92,7 @@ export default function ForgotPasswordPage() {
         <div className="mt-5 text-center">
           <Link
             to="/login"
-            className="text-[12px] text-[#888] hover:text-[#111] transition-colors"
+            className="text-[14px] text-[#888] hover:text-[#111] transition-colors"
           >
             Volver al inicio de sesión
           </Link>

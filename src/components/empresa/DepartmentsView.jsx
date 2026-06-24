@@ -215,13 +215,13 @@ export default function DepartmentsView({ companyId }) {
     <>
       {/* Barra superior */}
       <div className="flex items-center justify-between mb-4">
-        <p className="text-[13px] text-[#888]">
+        <p className="text-[15px] text-[#888]">
           {departments.length} departamento{departments.length !== 1 ? 's' : ''}
         </p>
         <button
           type="button"
           onClick={() => setDeptModal(undefined)}
-          className="px-4 py-2 rounded-xl text-[13px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors"
+          className="px-4 py-2 rounded-xl text-[15px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors"
         >
           + Nuevo departamento
         </button>
@@ -230,8 +230,8 @@ export default function DepartmentsView({ companyId }) {
       {/* Estado vacío */}
       {departments.length === 0 ? (
         <div className="bg-white rounded-xl border border-[#e0ddd4] p-10 text-center">
-          <p className="text-[15px] font-semibold text-[#888] mb-1">Sin departamentos</p>
-          <p className="text-[13px] text-[#bbb]">Crea el primer departamento para comenzar.</p>
+          <p className="text-[17px] font-semibold text-[#888] mb-1">Sin departamentos</p>
+          <p className="text-[15px] text-[#bbb]">Crea el primer departamento para comenzar.</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -261,12 +261,12 @@ export default function DepartmentsView({ companyId }) {
                   </button>
 
                   {/* Nombre */}
-                  <span className="flex-1 text-[14px] font-semibold text-[#111]">
+                  <span className="flex-1 text-[16px] font-semibold text-[#111]">
                     {dept.department_name}
                   </span>
 
                   {/* Cantidad de cargos */}
-                  <span className="text-[11px] font-mono text-[#999] bg-[#f5f3eb] px-2 py-0.5 rounded-full">
+                  <span className="text-[13px] font-mono text-[#999] bg-[#f5f3eb] px-2 py-0.5 rounded-full">
                     {positions.length} cargo{positions.length !== 1 ? 's' : ''}
                   </span>
 
@@ -317,7 +317,7 @@ export default function DepartmentsView({ companyId }) {
                 {isExpanded && (
                   <div className="border-t border-[#f0ede3] px-4 py-3">
                     {positions.length === 0 && !isAddingHere && (
-                      <p className="text-[12px] text-[#bbb] italic mb-2">
+                      <p className="text-[14px] text-[#bbb] italic mb-2">
                         Sin cargos. Agrega uno con el botón de abajo.
                       </p>
                     )}
@@ -331,7 +331,7 @@ export default function DepartmentsView({ companyId }) {
                               <>
                                 <input
                                   type="text"
-                                  className="input-base flex-1 !py-1.5 text-[13px]"
+                                  className="input-base flex-1 !py-1.5 text-[15px]"
                                   value={editingPos.position_name}
                                   onChange={e =>
                                     setEditingPos(ep => ({ ...ep, position_name: e.target.value }))
@@ -346,21 +346,21 @@ export default function DepartmentsView({ companyId }) {
                                   type="button"
                                   onClick={handleSaveEditPos}
                                   disabled={savingPos}
-                                  className="px-3 py-1.5 rounded-lg text-[12px] font-bold bg-[#111] text-white hover:bg-[#222] disabled:opacity-50 transition-colors"
+                                  className="px-3 py-1.5 rounded-lg text-[14px] font-bold bg-[#111] text-white hover:bg-[#222] disabled:opacity-50 transition-colors"
                                 >
                                   {savingPos ? '…' : 'Guardar'}
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => setEditingPos(null)}
-                                  className="px-3 py-1.5 rounded-lg text-[12px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
+                                  className="px-3 py-1.5 rounded-lg text-[14px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
                                 >
                                   Cancelar
                                 </button>
                               </>
                             ) : (
                               <>
-                                <span className="flex-1 text-[13px] text-[#333] py-1">
+                                <span className="flex-1 text-[15px] text-[#333] py-1">
                                   {pos.position_name}
                                 </span>
                                 <button
@@ -396,14 +396,14 @@ export default function DepartmentsView({ companyId }) {
                     </div>
 
                     {posError && (
-                      <p className="text-[12px] text-red-600 mb-2">{posError}</p>
+                      <p className="text-[14px] text-red-600 mb-2">{posError}</p>
                     )}
 
                     {isAddingHere ? (
                       <div className="flex items-center gap-2 mt-2">
                         <input
                           type="text"
-                          className="input-base flex-1 !py-1.5 text-[13px]"
+                          className="input-base flex-1 !py-1.5 text-[15px]"
                           value={newPosName}
                           onChange={e => setNewPosName(e.target.value)}
                           onKeyDown={e => {
@@ -417,14 +417,14 @@ export default function DepartmentsView({ companyId }) {
                           type="button"
                           onClick={() => handleAddPosition(dept.department_id)}
                           disabled={savingPos || !newPosName.trim()}
-                          className="px-3 py-1.5 rounded-lg text-[12px] font-bold bg-[#111] text-white hover:bg-[#222] disabled:opacity-50 transition-colors"
+                          className="px-3 py-1.5 rounded-lg text-[14px] font-bold bg-[#111] text-white hover:bg-[#222] disabled:opacity-50 transition-colors"
                         >
                           {savingPos ? '…' : 'Agregar'}
                         </button>
                         <button
                           type="button"
                           onClick={() => { setAddingPos(null); setNewPosName(''); setPosError(null) }}
-                          className="px-3 py-1.5 rounded-lg text-[12px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
+                          className="px-3 py-1.5 rounded-lg text-[14px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
                         >
                           Cancelar
                         </button>
@@ -437,7 +437,7 @@ export default function DepartmentsView({ companyId }) {
                           setNewPosName('')
                           setPosError(null)
                         }}
-                        className="text-[12px] font-semibold text-[#888] hover:text-[#111] transition-colors mt-1"
+                        className="text-[14px] font-semibold text-[#888] hover:text-[#111] transition-colors mt-1"
                       >
                         + Agregar cargo
                       </button>

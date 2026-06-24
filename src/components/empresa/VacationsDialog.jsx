@@ -118,8 +118,8 @@ export default function VacationsDialog({ employee, onClose }) {
           {/* Header */}
           <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-[#ece9df]">
             <div>
-              <h2 className="text-[16px] font-bold text-[#111]">Vacaciones</h2>
-              <p className="text-[12px] text-[#888] mt-0.5">
+              <h2 className="text-[18px] font-bold text-[#111]">Vacaciones</h2>
+              <p className="text-[14px] text-[#888] mt-0.5">
                 {employee.first_name} {employee.last_name}
               </p>
             </div>
@@ -127,7 +127,7 @@ export default function VacationsDialog({ employee, onClose }) {
               <button
                 type="button"
                 onClick={() => { setShowForm(true); setFormError(null) }}
-                className="px-3 py-1.5 rounded-lg text-[12px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors"
+                className="px-3 py-1.5 rounded-lg text-[14px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors"
               >
                 + Nueva
               </button>
@@ -152,13 +152,13 @@ export default function VacationsDialog({ employee, onClose }) {
                 onSubmit={handleCreate}
                 className="bg-[#f5f3eb] rounded-xl p-4 space-y-3"
               >
-                <p className="text-[12px] font-semibold text-[#555]">Nueva vacación</p>
+                <p className="text-[14px] font-semibold text-[#555]">Nueva vacación</p>
                 {formError && (
-                  <p className="text-[12px] text-red-600">{formError}</p>
+                  <p className="text-[14px] text-red-600">{formError}</p>
                 )}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1">
+                    <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1">
                       Inicio *
                     </label>
                     <input
@@ -170,7 +170,7 @@ export default function VacationsDialog({ employee, onClose }) {
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1">
+                    <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1">
                       Fin *
                     </label>
                     <input
@@ -187,14 +187,14 @@ export default function VacationsDialog({ employee, onClose }) {
                   <button
                     type="button"
                     onClick={() => { setShowForm(false); setFormError(null) }}
-                    className="px-3 py-1.5 rounded-lg text-[12px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-white transition-colors"
+                    className="px-3 py-1.5 rounded-lg text-[14px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-white transition-colors"
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
                     disabled={savingNew}
-                    className="px-3 py-1.5 rounded-lg text-[12px] font-bold bg-[#111] text-white hover:bg-[#222] disabled:opacity-50 transition-colors"
+                    className="px-3 py-1.5 rounded-lg text-[14px] font-bold bg-[#111] text-white hover:bg-[#222] disabled:opacity-50 transition-colors"
                   >
                     {savingNew ? 'Guardando…' : 'Crear vacación'}
                   </button>
@@ -209,10 +209,10 @@ export default function VacationsDialog({ employee, onClose }) {
               </div>
             ) : vacations.length === 0 ? (
               <div className="text-center py-8">
-                <p className="text-[14px] font-semibold text-[#888] mb-1">
+                <p className="text-[16px] font-semibold text-[#888] mb-1">
                   Sin vacaciones registradas
                 </p>
-                <p className="text-[12px] text-[#bbb]">Usa "+ Nueva" para agregar una.</p>
+                <p className="text-[14px] text-[#bbb]">Usa "+ Nueva" para agregar una.</p>
               </div>
             ) : (
               <div className="space-y-2">
@@ -223,10 +223,10 @@ export default function VacationsDialog({ employee, onClose }) {
                     <div key={v.id} className="bg-white border border-[#e0ddd4] rounded-xl px-4 py-3">
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="text-[13px] font-semibold text-[#111]">
+                          <p className="text-[15px] font-semibold text-[#111]">
                             {fmtDate(v.start_date)} – {fmtDate(v.end_date)}
                           </p>
-                          <span className={`inline-block mt-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${st.cls}`}>
+                          <span className={`inline-block mt-1 text-[13px] font-semibold px-2 py-0.5 rounded-full ${st.cls}`}>
                             {st.label}
                           </span>
                         </div>
@@ -239,7 +239,7 @@ export default function VacationsDialog({ employee, onClose }) {
                                 type="button"
                                 disabled={isUpdating}
                                 onClick={() => handleStatusChange(v.id, 'approved')}
-                                className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-50 transition-colors"
+                                className="px-2 py-1 rounded-lg text-[13px] font-semibold bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-50 transition-colors"
                               >
                                 Aprobar
                               </button>
@@ -247,7 +247,7 @@ export default function VacationsDialog({ employee, onClose }) {
                                 type="button"
                                 disabled={isUpdating}
                                 onClick={() => handleStatusChange(v.id, 'rejected')}
-                                className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50 transition-colors"
+                                className="px-2 py-1 rounded-lg text-[13px] font-semibold bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50 transition-colors"
                               >
                                 Rechazar
                               </button>
@@ -259,7 +259,7 @@ export default function VacationsDialog({ employee, onClose }) {
                                 type="button"
                                 disabled={isUpdating}
                                 onClick={() => handleStatusChange(v.id, 'completed')}
-                                className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-[#f5f3eb] text-[#555] hover:bg-[#ece9df] disabled:opacity-50 transition-colors"
+                                className="px-2 py-1 rounded-lg text-[13px] font-semibold bg-[#f5f3eb] text-[#555] hover:bg-[#ece9df] disabled:opacity-50 transition-colors"
                               >
                                 Completar
                               </button>
@@ -267,7 +267,7 @@ export default function VacationsDialog({ employee, onClose }) {
                                 type="button"
                                 disabled={isUpdating}
                                 onClick={() => handleStatusChange(v.id, 'rejected')}
-                                className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50 transition-colors"
+                                className="px-2 py-1 rounded-lg text-[13px] font-semibold bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50 transition-colors"
                               >
                                 Rechazar
                               </button>
@@ -278,7 +278,7 @@ export default function VacationsDialog({ employee, onClose }) {
                               type="button"
                               disabled={isUpdating}
                               onClick={() => handleStatusChange(v.id, 'approved')}
-                              className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-50 transition-colors"
+                              className="px-2 py-1 rounded-lg text-[13px] font-semibold bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-50 transition-colors"
                             >
                               Aprobar
                             </button>

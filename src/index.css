@@ -28,7 +28,7 @@ select option { background: #fff; color: #111; }
   border: 1px solid #d8d4c8;
   border-radius: 12px;
   padding: 10px 14px;
-  font-size: 13px;
+  font-size: 15px;
   font-family: 'DM Sans', system-ui, sans-serif;
   color: #111;
   background: #fff;
@@ -37,3 +37,7 @@ select option { background: #fff; color: #111; }
 }
 .input-base:focus  { border-color: #999; }
 .input-base::placeholder { color: #999; }
+
+@media (max-width: 768px) {
+  .input-base { font-size: 18px; }
+}

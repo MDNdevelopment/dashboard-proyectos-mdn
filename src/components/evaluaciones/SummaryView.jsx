@@ -64,16 +64,16 @@ export default function SummaryView({ companyId }) {
     <div className="space-y-4">
       {/* Cabecera con selector de período */}
       <div className="flex items-center gap-3">
-        <p className="text-[13px] text-[#888]">
+        <p className="text-[15px] text-[#888]">
           {rows.length} empleado{rows.length !== 1 ? 's' : ''} evaluado{rows.length !== 1 ? 's' : ''}
         </p>
         <label className="flex items-center gap-2 ml-auto">
-          <span className="text-[11px] font-mono font-bold uppercase tracking-[0.1em] text-[#888]">
+          <span className="text-[13px] font-mono font-bold uppercase tracking-[0.1em] text-[#888]">
             Período
           </span>
           <input
             type="month"
-            className="input-base py-1 text-[13px]"
+            className="input-base py-1 text-[15px]"
             value={selectedMonth}
             onChange={handleMonthChange}
           />
@@ -81,7 +81,7 @@ export default function SummaryView({ companyId }) {
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-[13px] rounded-xl px-4 py-3">
+        <div className="bg-red-50 border border-red-200 text-red-700 text-[15px] rounded-xl px-4 py-3">
           {error}
         </div>
       )}
@@ -92,8 +92,8 @@ export default function SummaryView({ companyId }) {
         </div>
       ) : rows.length === 0 ? (
         <div className="bg-white rounded-xl border border-[#e0ddd4] p-10 text-center">
-          <p className="text-[15px] font-semibold text-[#888] mb-1">Sin datos</p>
-          <p className="text-[13px] text-[#bbb]">
+          <p className="text-[17px] font-semibold text-[#888] mb-1">Sin datos</p>
+          <p className="text-[15px] text-[#bbb]">
             No hay evaluaciones para el período seleccionado.
           </p>
         </div>
@@ -101,13 +101,13 @@ export default function SummaryView({ companyId }) {
         <div className="bg-white rounded-xl border border-[#e0ddd4] overflow-hidden">
           {/* Cabecera de tabla */}
           <div className="grid grid-cols-[1fr_auto_auto] gap-4 px-5 py-2.5 border-b border-[#f0ede3] bg-[#fafaf7]">
-            <span className="text-[10px] font-mono font-bold uppercase tracking-[0.12em] text-[#aaa]">
+            <span className="text-[12px] font-mono font-bold uppercase tracking-[0.12em] text-[#aaa]">
               Empleado
             </span>
-            <span className="text-[10px] font-mono font-bold uppercase tracking-[0.12em] text-[#aaa]">
+            <span className="text-[12px] font-mono font-bold uppercase tracking-[0.12em] text-[#aaa]">
               Cargo
             </span>
-            <span className="text-[10px] font-mono font-bold uppercase tracking-[0.12em] text-[#aaa] text-right">
+            <span className="text-[12px] font-mono font-bold uppercase tracking-[0.12em] text-[#aaa] text-right">
               Score
             </span>
           </div>
@@ -119,28 +119,28 @@ export default function SummaryView({ companyId }) {
             >
               {/* Posición + nombre */}
               <div className="flex items-center gap-2.5 min-w-0">
-                <span className="text-[11px] font-mono text-[#bbb] w-5 flex-shrink-0">
+                <span className="text-[13px] font-mono text-[#bbb] w-5 flex-shrink-0">
                   {idx + 1}
                 </span>
                 <div className="min-w-0">
-                  <p className="text-[14px] font-semibold text-[#111] truncate">
+                  <p className="text-[16px] font-semibold text-[#111] truncate">
                     {row.first_name} {row.last_name}
                   </p>
-                  <p className="text-[11px] text-[#aaa] truncate">{row.email}</p>
+                  <p className="text-[13px] text-[#aaa] truncate">{row.email}</p>
                 </div>
               </div>
 
               {/* Cargo */}
-              <span className="text-[12px] text-[#666] whitespace-nowrap">
+              <span className="text-[14px] text-[#666] whitespace-nowrap">
                 {row.position_name ?? row.position ?? '—'}
               </span>
 
               {/* Score */}
               <div className="text-right flex-shrink-0">
-                <span className={`text-[18px] font-bold ${scoreColor(row.avg_score ?? row.total_score)}`}>
+                <span className={`text-[20px] font-bold ${scoreColor(row.avg_score ?? row.total_score)}`}>
                   {(row.avg_score ?? row.total_score)?.toFixed(1) ?? '—'}
                 </span>
-                <span className="text-[11px] text-[#bbb] font-mono"> /5</span>
+                <span className="text-[13px] text-[#bbb] font-mono"> /5</span>
               </div>
             </div>
           ))}

@@ -8,13 +8,34 @@ import KanbanView from '../components/tareas/KanbanView'
 import StandupView from '../components/tareas/StandupView'
 import TaskModal from '../components/tareas/TaskModal'
 import TeamManagerModal from '../components/tareas/TeamManagerModal'
+import { currentMonthIndex, fmtMonth } from '../components/tareas/constants'
 
 const VIEWS = [
-  { key: 'panorama', label: 'Panorama' },
-  { key: 'team',     label: 'Dashboard' },
-  { key: 'base',     label: 'Base' },
-  { key: 'kanban',   label: 'Kanban' },
-  { key: 'standup',  label: 'Stand-up' },
+  {
+    key: 'panorama',
+    label: 'Panorama',
+    desc: 'Esta sección es la cartelera general de los 4 teams. Aquí ves de un vistazo cómo va la agencia esta semana: el porcentaje de cierre de cada team, quién lidera y los números globales. Úsala para detectar rápido dónde hace falta apoyar.',
+  },
+  {
+    key: 'team',
+    label: 'Dashboard',
+    desc: 'Esta sección es la lupa sobre un team específico. Aquí revisas su semáforo por cliente, el estado de su pipeline y sus cifras. Úsala para entender a fondo cómo va un equipo en particular.',
+  },
+  {
+    key: 'base',
+    label: 'Base',
+    desc: 'Esta sección es la base de tareas, donde vive cada acuerdo. Aquí vacías todo lo que se acuerda por WhatsApp o minuta y lo filtras o buscas. Recuerda: si no está aquí, no existe.',
+  },
+  {
+    key: 'kanban',
+    label: 'Kanban',
+    desc: 'Esta sección es el flujo de trabajo visual. Aquí mueves cada tarea por sus estados —En proceso, Por revisar, Bloqueado, Pendiente, Terminado— hasta cerrarla. Úsala para ver en qué punto está cada cosa y empujarla al cierre.',
+  },
+  {
+    key: 'standup',
+    label: 'Stand-up',
+    desc: 'Esta sección es la agenda de la reunión rápida de 15 minutos. Aquí aparece solo lo que necesita atención (rojo y amarillo) y lo asignado a la dirección. Úsala para reuniones cortas y enfocadas en lo que importa.',
+  },
 ]
 
 export default function TareasPage() {
@@ -27,6 +48,7 @@ export default function TareasPage() {
   const [loading, setLoading] = useState(true)
   const [activeView, setActiveView] = useState('panorama')
   const [activeTeamId, setActiveTeamId] = useState(null)
+  const [monthIdx, setMonthIdx] = useState(currentMonthIndex())
   // null = closed, undefined = new task, object = edit existing
   const [taskModal, setTaskModal] = useState(null)
   const [showTeamManager, setShowTeamManager] = useState(false)
@@ -114,13 +136,13 @@ export default function TareasPage() {
         <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
             <div>
-              <h1 className="text-[24px] font-bold text-[#111] leading-tight">Gestión de Tareas</h1>
-              <p className="text-[13px] text-[#888] mt-0.5">QC · Cierre · Stand-up semanal</p>
+              <h1 className="text-[26px] font-bold text-[#111] leading-tight">Gestión de Tareas</h1>
+              <p className="text-[15px] text-[#888] mt-0.5">QC · Cierre · Stand-up mensual</p>
             </div>
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <button
                 onClick={() => setShowTeamManager(true)}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl border border-[#e0ddd4] text-[13px] font-semibold text-[#555] hover:bg-[#f5f3eb] hover:text-[#111] transition-colors"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl border border-[#e0ddd4] text-[15px] font-semibold text-[#555] hover:bg-[#f5f3eb] hover:text-[#111] transition-colors"
               >
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
                   <circle cx="6" cy="5.5" r="2.5"/>
@@ -132,7 +154,7 @@ export default function TareasPage() {
               </button>
               <button
                 onClick={openNewTask}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-[#111] text-white text-[13px] font-bold px-4 py-2.5 rounded-xl hover:bg-[#222] transition-colors"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-[#111] text-white text-[15px] font-bold px-4 py-2.5 rounded-xl hover:bg-[#222] transition-colors"
               >
                 <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.8">
                   <path d="M6 1v10M1 6h10" strokeLinecap="round"/>
@@ -145,12 +167,12 @@ export default function TareasPage() {
           <div className="flex flex-col gap-3 mb-6">
             {teams.length > 0 && (
               <div className="flex flex-wrap gap-1.5 items-center">
-                <span className="text-[10.5px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] mr-1">Team</span>
+                <span className="text-[12.5px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] mr-1">Team</span>
                 {teams.map(t => (
                   <button
                     key={t.id}
                     onClick={() => selectTeam(t.id)}
-                    className={`px-3 py-1 rounded-full text-[12.5px] font-semibold transition-all ${
+                    className={`px-3 py-1 rounded-full text-[14.5px] font-semibold transition-all ${
                       activeTeamId === t.id
                         ? 'bg-[#FFB800] text-[#111]'
                         : 'bg-white border border-[#e0ddd4] text-[#555] hover:border-[#FFB800] hover:text-[#111]'
@@ -161,30 +183,68 @@ export default function TareasPage() {
                 ))}
               </div>
             )}
-            <div className="flex bg-white border border-[#e0ddd4] rounded-xl p-1 w-full sm:w-fit">
-              {VIEWS.map(v => (
-                <button
-                  key={v.key}
-                  onClick={() => setActiveView(v.key)}
-                  className={`flex-1 sm:flex-none px-2.5 sm:px-4 py-1.5 rounded-lg text-[12.5px] font-semibold transition-all ${
-                    activeView === v.key
-                      ? 'bg-[#111] text-white'
-                      : 'text-[#666] hover:text-[#111] hover:bg-[#f5f3eb]'
-                  }`}
-                >
-                  {v.label}
-                </button>
-              ))}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+              <div className="flex bg-white border border-[#e0ddd4] rounded-xl p-1 w-full sm:w-fit">
+                {VIEWS.map(v => (
+                  <button
+                    key={v.key}
+                    onClick={() => setActiveView(v.key)}
+                    className={`flex-1 sm:flex-none px-2.5 sm:px-4 py-1.5 rounded-lg text-[14.5px] font-semibold transition-all ${
+                      activeView === v.key
+                        ? 'bg-[#111] text-white'
+                        : 'text-[#666] hover:text-[#111] hover:bg-[#f5f3eb]'
+                    }`}
+                  >
+                    {v.label}
+                  </button>
+                ))}
+              </div>
+              {['panorama', 'team', 'standup'].includes(activeView) && (
+                <div className="flex items-center gap-1 bg-white border border-[#e0ddd4] rounded-xl px-1 py-1 w-full sm:w-auto">
+                  <button
+                    onClick={() => setMonthIdx(i => i - 1)}
+                    className="px-2.5 py-1 rounded-lg text-[16px] text-[#555] hover:bg-[#f5f3eb] hover:text-[#111] transition-colors"
+                    aria-label="Mes anterior"
+                  >
+                    ‹
+                  </button>
+                  <span className="flex-1 text-center text-[14.5px] font-semibold text-[#111] min-w-[120px]">
+                    {fmtMonth(monthIdx)}
+                  </span>
+                  <button
+                    onClick={() => setMonthIdx(i => i + 1)}
+                    className="px-2.5 py-1 rounded-lg text-[16px] text-[#555] hover:bg-[#f5f3eb] hover:text-[#111] transition-colors"
+                    aria-label="Mes siguiente"
+                  >
+                    ›
+                  </button>
+                  {monthIdx !== currentMonthIndex() && (
+                    <button
+                      onClick={() => setMonthIdx(currentMonthIndex())}
+                      className="px-2.5 py-1 rounded-lg text-[13.5px] font-semibold text-[#888] hover:bg-[#f5f3eb] hover:text-[#111] transition-colors border-l border-[#e0ddd4] ml-0.5"
+                      aria-label="Volver al mes actual"
+                    >
+                      Hoy
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
+          {VIEWS.find(v => v.key === activeView)?.desc && (
+            <p className="text-[14.5px] text-[#888] leading-relaxed -mt-2 mb-2 max-w-2xl">
+              {VIEWS.find(v => v.key === activeView).desc}
+            </p>
+          )}
+
           {!loading && teams.length === 0 && (
             <div className="bg-white rounded-xl border border-[#e0ddd4] p-10 text-center mb-4">
-              <p className="text-[15px] font-semibold text-[#888] mb-1">No hay teams creados</p>
-              <p className="text-[13px] text-[#bbb] mb-4">Crea el primer team para empezar a gestionar tareas</p>
+              <p className="text-[17px] font-semibold text-[#888] mb-1">No hay teams creados</p>
+              <p className="text-[15px] text-[#bbb] mb-4">Crea el primer team para empezar a gestionar tareas</p>
               <button
                 onClick={() => setShowTeamManager(true)}
-                className="px-4 py-2 bg-[#111] text-white text-[13px] font-bold rounded-xl hover:bg-[#222] transition-colors"
+                className="px-4 py-2 bg-[#111] text-white text-[15px] font-bold rounded-xl hover:bg-[#222] transition-colors"
               >
                 Crear primer team
               </button>
@@ -198,10 +258,10 @@ export default function TareasPage() {
           ) : (
             <>
               {activeView === 'panorama' && (
-                <PanoramaView teams={teams} tasks={tasks} onSelectTeam={selectTeam} />
+                <PanoramaView teams={teams} tasks={tasks} monthIdx={monthIdx} onSelectTeam={selectTeam} />
               )}
               {activeView === 'team' && (
-                <TeamView team={activeTeam} tasks={tasks} usersMap={usersMap} onOpenTask={openEditTask} />
+                <TeamView team={activeTeam} tasks={tasks} usersMap={usersMap} monthIdx={monthIdx} onOpenTask={openEditTask} />
               )}
               {activeView === 'base' && (
                 <BaseView tasks={tasks} teams={teams} team={activeTeam} usersMap={usersMap} onOpenTask={openEditTask} />
@@ -210,7 +270,7 @@ export default function TareasPage() {
                 <KanbanView team={activeTeam} tasks={tasks} usersMap={usersMap} onOpenTask={openEditTask} onUpdated={handleUpdated} />
               )}
               {activeView === 'standup' && (
-                <StandupView team={activeTeam} tasks={tasks} teams={teams} usersMap={usersMap} onOpenTask={openEditTask} />
+                <StandupView team={activeTeam} tasks={tasks} teams={teams} usersMap={usersMap} monthIdx={monthIdx} onOpenTask={openEditTask} />
               )}
             </>
           )}

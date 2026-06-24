@@ -43,8 +43,8 @@ export default function EmpresaPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-[24px] font-bold text-[#111] leading-tight">Empresa</h1>
-            <p className="text-[13px] text-[#888] mt-0.5">Organización · Equipos · Documentos</p>
+            <h1 className="text-[26px] font-bold text-[#111] leading-tight">Empresa</h1>
+            <p className="text-[15px] text-[#888] mt-0.5">Organización · Equipos · Documentos</p>
           </div>
         </div>
 
@@ -54,7 +54,7 @@ export default function EmpresaPage() {
             <button
               key={tab.key}
               onClick={() => navigate(tab.path)}
-              className={`px-4 py-1.5 rounded-lg text-[12.5px] font-semibold transition-all ${
+              className={`px-4 py-1.5 rounded-lg text-[14.5px] font-semibold transition-all ${
                 activeKey === tab.key
                   ? 'bg-[#111] text-white'
                   : 'text-[#666] hover:text-[#111] hover:bg-[#f5f3eb]'
@@ -68,8 +68,8 @@ export default function EmpresaPage() {
         {/* Contenido por tab */}
         {activeKey === 'general' && (
           <div className="bg-white rounded-xl border border-[#e0ddd4] p-10 text-center">
-            <p className="text-[15px] font-semibold text-[#888] mb-1">Próximamente</p>
-            <p className="text-[13px] text-[#bbb]">
+            <p className="text-[17px] font-semibold text-[#888] mb-1">Próximamente</p>
+            <p className="text-[15px] text-[#bbb]">
               Documentos, onboarding y recursos de la empresa.
             </p>
           </div>

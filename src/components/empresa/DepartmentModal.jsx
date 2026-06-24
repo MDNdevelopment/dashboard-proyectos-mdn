@@ -63,7 +63,7 @@ export default function DepartmentModal({ department = null, companyId, onClose,
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-[#ece9df]">
-          <h2 className="text-[16px] font-bold text-[#111]">
+          <h2 className="text-[18px] font-bold text-[#111]">
             {isEdit ? 'Editar departamento' : 'Nuevo departamento'}
           </h2>
           <button
@@ -81,13 +81,13 @@ export default function DepartmentModal({ department = null, companyId, onClose,
         {/* Form */}
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-[13px] rounded-lg px-3 py-2">
+            <div className="bg-red-50 border border-red-200 text-red-700 text-[15px] rounded-lg px-3 py-2">
               {error}
             </div>
           )}
 
           <div>
-            <label className="block text-[11px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+            <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
               Nombre *
             </label>
             <input
@@ -117,7 +117,7 @@ export default function DepartmentModal({ department = null, companyId, onClose,
                   }`}
                 />
               </button>
-              <span className="text-[13px] text-[#555]">Visible en el dashboard</span>
+              <span className="text-[15px] text-[#555]">Visible en el dashboard</span>
             </div>
           )}
 
@@ -125,14 +125,14 @@ export default function DepartmentModal({ department = null, companyId, onClose,
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl text-[13px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
+              className="px-4 py-2 rounded-xl text-[15px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="px-4 py-2 rounded-xl text-[13px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors disabled:opacity-50"
+              className="px-4 py-2 rounded-xl text-[15px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors disabled:opacity-50"
             >
               {saving ? 'Guardando…' : isEdit ? 'Guardar cambios' : 'Crear departamento'}
             </button>

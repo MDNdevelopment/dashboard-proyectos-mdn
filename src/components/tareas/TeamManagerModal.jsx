@@ -84,7 +84,7 @@ export default function TeamManagerModal({ teams, teamMembers, users, onClose, o
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-[#ece9df]">
-          <h2 className="text-[16px] font-bold text-[#111]">Gestión de Teams</h2>
+          <h2 className="text-[18px] font-bold text-[#111]">Gestión de Teams</h2>
           <button
             type="button"
             onClick={onClose}
@@ -104,14 +104,14 @@ export default function TeamManagerModal({ teams, teamMembers, users, onClose, o
               <button
                 key={t.id}
                 onClick={() => { setActiveTeamId(t.id); setSearch('') }}
-                className={`flex items-center gap-2 w-full px-3 py-2 rounded-lg text-[13px] font-medium text-left transition-colors ${
+                className={`flex items-center gap-2 w-full px-3 py-2 rounded-lg text-[15px] font-medium text-left transition-colors ${
                   t.id === activeTeamId
                     ? 'bg-[#FFB800] text-[#111]'
                     : 'text-[#444] hover:bg-[#f5f3eb]'
                 }`}
               >
                 <span className="truncate">{t.name}</span>
-                <span className="ml-auto text-[11px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-black/10">
+                <span className="ml-auto text-[13px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-black/10">
                   {teamMembers.filter(m => m.team_id === t.id).length}
                 </span>
               </button>
@@ -122,16 +122,16 @@ export default function TeamManagerModal({ teams, teamMembers, users, onClose, o
               <form onSubmit={createTeam} className="mt-1">
                 <input
                   autoFocus
-                  className="input-base text-[12px] mb-1.5"
+                  className="input-base text-[14px] mb-1.5"
                   value={newTeamName}
                   onChange={e => setNewTeamName(e.target.value)}
                   placeholder="Nombre del team..."
                 />
                 <div className="flex gap-1">
-                  <button type="submit" disabled={saving} className="flex-1 px-2 py-1 rounded-lg bg-[#111] text-white text-[11px] font-bold disabled:opacity-50">
+                  <button type="submit" disabled={saving} className="flex-1 px-2 py-1 rounded-lg bg-[#111] text-white text-[13px] font-bold disabled:opacity-50">
                     Crear
                   </button>
-                  <button type="button" onClick={() => { setCreating(false); setNewTeamName('') }} className="px-2 py-1 rounded-lg border border-[#e0ddd4] text-[11px] text-[#555] hover:bg-[#f5f3eb]">
+                  <button type="button" onClick={() => { setCreating(false); setNewTeamName('') }} className="px-2 py-1 rounded-lg border border-[#e0ddd4] text-[13px] text-[#555] hover:bg-[#f5f3eb]">
                     ✕
                   </button>
                 </div>
@@ -139,7 +139,7 @@ export default function TeamManagerModal({ teams, teamMembers, users, onClose, o
             ) : (
               <button
                 onClick={() => setCreating(true)}
-                className="flex items-center gap-1.5 w-full px-3 py-2 rounded-lg text-[12px] font-semibold text-[#888] hover:text-[#111] hover:bg-[#f5f3eb] transition-colors border border-dashed border-[#e0ddd4] mt-1"
+                className="flex items-center gap-1.5 w-full px-3 py-2 rounded-lg text-[14px] font-semibold text-[#888] hover:text-[#111] hover:bg-[#f5f3eb] transition-colors border border-dashed border-[#e0ddd4] mt-1"
               >
                 <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 1v10M1 6h10" strokeLinecap="round"/></svg>
                 Nuevo team
@@ -153,20 +153,20 @@ export default function TeamManagerModal({ teams, teamMembers, users, onClose, o
               <>
                 <div className="flex items-center justify-between mb-3">
                   <div>
-                    <h3 className="text-[15px] font-bold text-[#111]">{activeTeam.name}</h3>
-                    <p className="text-[12px] text-[#888]">{memberIds.length} miembro{memberIds.length !== 1 ? 's' : ''}</p>
+                    <h3 className="text-[17px] font-bold text-[#111]">{activeTeam.name}</h3>
+                    <p className="text-[14px] text-[#888]">{memberIds.length} miembro{memberIds.length !== 1 ? 's' : ''}</p>
                   </div>
                   <button
                     onClick={deleteTeam}
                     disabled={saving}
-                    className="text-[12px] font-semibold text-red-400 hover:text-red-600 transition-colors"
+                    className="text-[14px] font-semibold text-red-400 hover:text-red-600 transition-colors"
                   >
                     Eliminar team
                   </button>
                 </div>
 
                 {error && (
-                  <div className="bg-red-50 border border-red-200 text-red-700 text-[12px] rounded-lg px-3 py-2 mb-3">
+                  <div className="bg-red-50 border border-red-200 text-red-700 text-[14px] rounded-lg px-3 py-2 mb-3">
                     {error}
                   </div>
                 )}
@@ -181,14 +181,14 @@ export default function TeamManagerModal({ teams, teamMembers, users, onClose, o
                     value={search}
                     onChange={e => setSearch(e.target.value)}
                     placeholder="Buscar empleado..."
-                    className="w-full bg-[#faf9f5] border border-[#e0ddd4] rounded-lg pl-8 pr-3 py-1.5 text-[12px] text-[#111] placeholder-[#bbb] outline-none focus:border-[#bbb] transition-colors"
+                    className="w-full bg-[#faf9f5] border border-[#e0ddd4] rounded-lg pl-8 pr-3 py-1.5 text-[14px] text-[#111] placeholder-[#bbb] outline-none focus:border-[#bbb] transition-colors"
                   />
                 </div>
 
                 {/* User list */}
                 <div className="flex-1 overflow-y-auto space-y-0.5">
                   {filteredUsers.length === 0 ? (
-                    <p className="text-[13px] text-[#bbb] text-center py-8">Sin resultados</p>
+                    <p className="text-[15px] text-[#bbb] text-center py-8">Sin resultados</p>
                   ) : (
                     filteredUsers.map(u => {
                       const isMember = memberIds.includes(u.user_id)
@@ -204,10 +204,10 @@ export default function TeamManagerModal({ teams, teamMembers, users, onClose, o
                         >
                           <Avatar user={u} size={32} />
                           <div className="flex-1 min-w-0">
-                            <p className="text-[13px] font-medium text-[#111] truncate">
+                            <p className="text-[15px] font-medium text-[#111] truncate">
                               {u.first_name} {u.last_name}
                             </p>
-                            <p className="text-[11px] font-mono text-[#888]">
+                            <p className="text-[13px] font-mono text-[#888]">
                               {[u.position?.position_name, `Nivel ${u.access_level ?? '—'}`].filter(Boolean).join(' · ')}
                             </p>
                           </div>
@@ -228,8 +228,8 @@ export default function TeamManagerModal({ teams, teamMembers, users, onClose, o
               </>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-center">
-                <p className="text-[14px] font-medium text-[#888] mb-1">No hay teams creados</p>
-                <p className="text-[12px] text-[#bbb]">Crea el primer team con el botón de la izquierda</p>
+                <p className="text-[16px] font-medium text-[#888] mb-1">No hay teams creados</p>
+                <p className="text-[14px] text-[#bbb]">Crea el primer team con el botón de la izquierda</p>
               </div>
             )}
           </div>

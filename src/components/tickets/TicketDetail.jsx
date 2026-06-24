@@ -55,11 +55,11 @@ export default function TicketDetail({ ticket, onClose, onUpdated }) {
         {/* Header */}
         <div className="px-6 pt-6 pb-4 border-b border-[#ece9df] flex items-start justify-between gap-4">
           <div className="flex-1">
-            <h2 className="text-[17px] font-bold text-[#111] leading-snug mb-2">{ticket.title}</h2>
+            <h2 className="text-[19px] font-bold text-[#111] leading-snug mb-2">{ticket.title}</h2>
             <div className="flex items-center gap-2 flex-wrap">
               <TicketStatusBadge type="status" value={ticket.status} />
               <TicketStatusBadge type="priority" value={ticket.priority} />
-              <span className="text-[11px] font-mono text-[#888] bg-[#f5f3eb] px-2 py-0.5 rounded-md">
+              <span className="text-[13px] font-mono text-[#888] bg-[#f5f3eb] px-2 py-0.5 rounded-md">
                 {CATEGORY[ticket.category]?.label ?? ticket.category}
               </span>
             </div>
@@ -77,17 +77,17 @@ export default function TicketDetail({ ticket, onClose, onUpdated }) {
         {/* Body */}
         <div className="px-6 py-5 overflow-y-auto flex-1">
           {/* Meta */}
-          <div className="grid grid-cols-2 gap-3 mb-5 text-[12px]">
+          <div className="grid grid-cols-2 gap-3 mb-5 text-[14px]">
             <div>
-              <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[10px] mb-0.5">Solicitante</p>
+              <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-0.5">Solicitante</p>
               <p className="text-[#333] font-medium">{requesterName}</p>
             </div>
             <div>
-              <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[10px] mb-0.5">Asignado a</p>
+              <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-0.5">Asignado a</p>
               <p className="text-[#333] font-medium">{assigneeName ?? 'Sin asignar'}</p>
             </div>
             <div>
-              <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[10px] mb-0.5">Creado</p>
+              <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-0.5">Creado</p>
               <p className="text-[#333]">{createdAt}</p>
             </div>
             {(() => {
@@ -95,8 +95,8 @@ export default function TicketDetail({ ticket, onClose, onUpdated }) {
               const sla = slaKey ? SLA_STATUS[slaKey] : null
               return sla ? (
                 <div>
-                  <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[10px] mb-0.5">SLA</p>
-                  <span className={`inline-block text-[11px] font-mono font-bold px-2 py-0.5 rounded-md ${sla.color}`}>
+                  <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-0.5">SLA</p>
+                  <span className={`inline-block text-[13px] font-mono font-bold px-2 py-0.5 rounded-md ${sla.color}`}>
                     {sla.label}
                   </span>
                 </div>
@@ -104,7 +104,7 @@ export default function TicketDetail({ ticket, onClose, onUpdated }) {
             })()}
             {ticket.resolved_at && (
               <div>
-                <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[10px] mb-0.5">Resuelto</p>
+                <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-0.5">Resuelto</p>
                 <p className="text-[#333]">
                   {new Date(ticket.resolved_at).toLocaleString('es-VE', {
                     day: 'numeric', month: 'long', year: 'numeric',
@@ -117,8 +117,8 @@ export default function TicketDetail({ ticket, onClose, onUpdated }) {
 
           {ticket.description && (
             <div className="mb-5">
-              <p className="text-[11px] font-mono font-bold tracking-widest uppercase text-[#888] mb-1.5">Descripcion</p>
-              <p className="text-[13px] text-[#444] whitespace-pre-wrap leading-relaxed">{ticket.description}</p>
+              <p className="text-[13px] font-mono font-bold tracking-widest uppercase text-[#888] mb-1.5">Descripcion</p>
+              <p className="text-[15px] text-[#444] whitespace-pre-wrap leading-relaxed">{ticket.description}</p>
             </div>
           )}
 
@@ -127,7 +127,7 @@ export default function TicketDetail({ ticket, onClose, onUpdated }) {
             <button
               onClick={takeTicket}
               disabled={acting}
-              className="w-full mb-4 py-2.5 rounded-xl bg-[#FFB800] text-[#111] text-[13px] font-bold hover:bg-[#e6a600] transition-colors disabled:opacity-50"
+              className="w-full mb-4 py-2.5 rounded-xl bg-[#FFB800] text-[#111] text-[15px] font-bold hover:bg-[#e6a600] transition-colors disabled:opacity-50"
             >
               {acting ? 'Procesando...' : 'Tomar ticket'}
             </button>
@@ -136,7 +136,7 @@ export default function TicketDetail({ ticket, onClose, onUpdated }) {
             <button
               onClick={resolveTicket}
               disabled={acting}
-              className="w-full mb-4 py-2.5 rounded-xl bg-[#16a34a] text-white text-[13px] font-bold hover:bg-[#15803d] transition-colors disabled:opacity-50"
+              className="w-full mb-4 py-2.5 rounded-xl bg-[#16a34a] text-white text-[15px] font-bold hover:bg-[#15803d] transition-colors disabled:opacity-50"
             >
               {acting ? 'Procesando...' : 'Marcar como resuelto'}
             </button>

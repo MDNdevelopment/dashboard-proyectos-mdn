@@ -30,7 +30,7 @@ export default function TimeRangeSelector({ startDate, endDate, onChange }) {
             <button
               key={p.days}
               onClick={() => applyPreset(p.days)}
-              className={`px-3 py-1.5 rounded-lg text-[12px] font-mono font-bold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-[14px] font-mono font-bold transition-all ${
                 active
                   ? 'bg-[#FFB800] text-[#111]'
                   : 'bg-white border border-[#e0ddd4] text-[#555] hover:border-[#bbb]'
@@ -47,16 +47,16 @@ export default function TimeRangeSelector({ startDate, endDate, onChange }) {
           value={startDate}
           max={endDate || today}
           onChange={e => onChange(e.target.value, endDate)}
-          className="input-base text-[12px] py-1.5"
+          className="input-base text-[14px] py-1.5"
         />
-        <span className="text-[12px] text-[#888] font-mono">—</span>
+        <span className="text-[14px] text-[#888] font-mono">—</span>
         <input
           type="date"
           value={endDate}
           min={startDate}
           max={today}
           onChange={e => onChange(startDate, e.target.value)}
-          className="input-base text-[12px] py-1.5"
+          className="input-base text-[14px] py-1.5"
         />
       </div>
     </div>

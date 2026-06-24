@@ -100,7 +100,7 @@ export default function QuestionsView({ companyId }) {
       {/* Barra superior */}
       <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         <div className="flex items-center gap-3">
-          <p className="text-[13px] text-[#888]">
+          <p className="text-[15px] text-[#888]">
             {filteredQuestions.length} pregunta{filteredQuestions.length !== 1 ? 's' : ''}
             {filterPosition ? ' (filtradas)' : ''}
           </p>
@@ -109,7 +109,7 @@ export default function QuestionsView({ companyId }) {
             <select
               value={filterPosition}
               onChange={e => setFilterPosition(e.target.value)}
-              className="input-base !py-1.5 !text-[12px] w-auto"
+              className="input-base !py-1.5 !text-[14px] w-auto"
             >
               <option value="">Todos los cargos</option>
               {positions.map(p => (
@@ -123,7 +123,7 @@ export default function QuestionsView({ companyId }) {
         <button
           type="button"
           onClick={() => setModal(undefined)}
-          className="px-4 py-2 rounded-xl text-[13px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors"
+          className="px-4 py-2 rounded-xl text-[15px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors"
         >
           + Nueva pregunta
         </button>
@@ -132,8 +132,8 @@ export default function QuestionsView({ companyId }) {
       {/* Estado vacío */}
       {filteredQuestions.length === 0 ? (
         <div className="bg-white rounded-xl border border-[#e0ddd4] p-10 text-center">
-          <p className="text-[15px] font-semibold text-[#888] mb-1">Sin preguntas</p>
-          <p className="text-[13px] text-[#bbb]">
+          <p className="text-[17px] font-semibold text-[#888] mb-1">Sin preguntas</p>
+          <p className="text-[15px] text-[#bbb]">
             {filterPosition
               ? 'No hay preguntas para este cargo. Cambia el filtro o crea una nueva.'
               : 'Crea la primera pregunta para comenzar.'}
@@ -152,7 +152,7 @@ export default function QuestionsView({ companyId }) {
               >
                 {/* Texto de la pregunta */}
                 <div className="flex-1 min-w-0">
-                  <p className="text-[14px] text-[#111] leading-snug mb-2">{q.text}</p>
+                  <p className="text-[16px] text-[#111] leading-snug mb-2">{q.text}</p>
 
                   {/* Chips de cargos */}
                   {posIds.length > 0 && (
@@ -160,7 +160,7 @@ export default function QuestionsView({ companyId }) {
                       {posIds.map(pid => (
                         <span
                           key={pid}
-                          className="text-[11px] font-medium text-[#555] bg-[#f5f3eb] border border-[#e8e5db] px-2 py-0.5 rounded-md"
+                          className="text-[13px] font-medium text-[#555] bg-[#f5f3eb] border border-[#e8e5db] px-2 py-0.5 rounded-md"
                         >
                           {positionName(pid)}
                         </span>
@@ -174,7 +174,7 @@ export default function QuestionsView({ companyId }) {
                       {tags.map(tag => (
                         <span
                           key={tag}
-                          className="text-[11px] font-medium text-[#92600a] bg-[#fff8e6] border border-[#fde68a] px-2 py-0.5 rounded-md"
+                          className="text-[13px] font-medium text-[#92600a] bg-[#fff8e6] border border-[#fde68a] px-2 py-0.5 rounded-md"
                         >
                           {tag}
                         </span>
@@ -183,7 +183,7 @@ export default function QuestionsView({ companyId }) {
                   )}
 
                   {posIds.length === 0 && tags.length === 0 && (
-                    <p className="text-[11px] text-[#bbb] italic">Sin cargos ni tags asignados</p>
+                    <p className="text-[13px] text-[#bbb] italic">Sin cargos ni tags asignados</p>
                   )}
                 </div>
 

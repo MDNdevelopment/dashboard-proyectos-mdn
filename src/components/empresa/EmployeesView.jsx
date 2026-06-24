@@ -81,7 +81,7 @@ export default function EmployeesView({ companyId }) {
     <>
       {/* Barra superior */}
       <div className="flex items-center gap-3 mb-4">
-        <p className="text-[13px] text-[#888] flex-shrink-0">
+        <p className="text-[15px] text-[#888] flex-shrink-0">
           {employees.length} empleado{employees.length !== 1 ? 's' : ''}
         </p>
         <input
@@ -95,7 +95,7 @@ export default function EmployeesView({ companyId }) {
           <button
             type="button"
             onClick={() => setCreateOpen(true)}
-            className="px-3 py-1.5 rounded-lg text-[12px] font-bold bg-[#FFB800] text-[#111] hover:bg-[#e6a600] transition-colors"
+            className="px-3 py-1.5 rounded-lg text-[14px] font-bold bg-[#FFB800] text-[#111] hover:bg-[#e6a600] transition-colors"
           >
             + Nuevo empleado
           </button>
@@ -105,10 +105,10 @@ export default function EmployeesView({ companyId }) {
       {/* Estado vacío */}
       {filtered.length === 0 ? (
         <div className="bg-white rounded-xl border border-[#e0ddd4] p-10 text-center">
-          <p className="text-[15px] font-semibold text-[#888] mb-1">
+          <p className="text-[17px] font-semibold text-[#888] mb-1">
             {search ? 'Sin resultados' : 'Sin empleados'}
           </p>
-          <p className="text-[13px] text-[#bbb]">
+          <p className="text-[15px] text-[#bbb]">
             {search
               ? 'Intenta con otro nombre o email.'
               : 'Aún no hay empleados registrados en esta empresa.'}
@@ -127,20 +127,20 @@ export default function EmployeesView({ companyId }) {
               {/* Info principal */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[14px] font-semibold text-[#111]">
+                  <span className="text-[16px] font-semibold text-[#111]">
                     {emp.first_name} {emp.last_name}
                   </span>
                   {emp.admin && (
-                    <span className="text-[10px] font-mono font-bold tracking-wide uppercase bg-[#FFB800] text-[#111] px-1.5 py-0.5 rounded">
+                    <span className="text-[12px] font-mono font-bold tracking-wide uppercase bg-[#FFB800] text-[#111] px-1.5 py-0.5 rounded">
                       Admin
                     </span>
                   )}
-                  <span className="text-[11px] font-mono text-[#999] bg-[#f5f3eb] px-2 py-0.5 rounded-full">
+                  <span className="text-[13px] font-mono text-[#999] bg-[#f5f3eb] px-2 py-0.5 rounded-full">
                     Nivel {emp.access_level}
                   </span>
                 </div>
-                <p className="text-[12px] text-[#888] mt-0.5 truncate">{emp.email}</p>
-                <p className="text-[12px] text-[#666] mt-0.5">
+                <p className="text-[14px] text-[#888] mt-0.5 truncate">{emp.email}</p>
+                <p className="text-[14px] text-[#666] mt-0.5">
                   {emp.position?.position_name ?? '—'}
                   {emp.department?.department_name ? (
                     <span className="text-[#bbb]"> · {emp.department.department_name}</span>
@@ -153,14 +153,14 @@ export default function EmployeesView({ companyId }) {
                 <button
                   type="button"
                   onClick={() => setVacEmployee(emp)}
-                  className="px-3 py-1.5 rounded-lg text-[12px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
+                  className="px-3 py-1.5 rounded-lg text-[14px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
                 >
                   Vacaciones
                 </button>
                 <button
                   type="button"
                   onClick={() => setEditModal(emp)}
-                  className="px-3 py-1.5 rounded-lg text-[12px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors"
+                  className="px-3 py-1.5 rounded-lg text-[14px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors"
                 >
                   Editar
                 </button>

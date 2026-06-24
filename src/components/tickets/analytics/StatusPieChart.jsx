@@ -18,9 +18,9 @@ export default function StatusPieChart({ data }) {
 
   return (
     <div className="bg-white rounded-2xl border border-[#e0ddd4] px-5 py-4">
-      <p className="text-[11px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] mb-4">Estado</p>
+      <p className="text-[13px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] mb-4">Estado</p>
       {data.length === 0 ? (
-        <p className="text-[13px] text-[#aaa] text-center py-8">Sin datos</p>
+        <p className="text-[15px] text-[#aaa] text-center py-8">Sin datos</p>
       ) : (
         <ResponsiveContainer width="100%" height={200}>
           <PieChart>

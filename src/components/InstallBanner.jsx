@@ -64,9 +64,9 @@ export default function InstallBanner() {
         </div>
 
         <div className="flex-1 min-w-0">
-          <p className="text-[13px] font-semibold leading-tight">Agrega MDN a tu pantalla</p>
+          <p className="text-[15px] font-semibold leading-tight">Agrega MDN a tu pantalla</p>
           {platform === 'ios' ? (
-            <p className="text-[11px] text-white/60 mt-0.5 leading-tight">
+            <p className="text-[13px] text-white/60 mt-0.5 leading-tight">
               Toca{' '}
               <svg className="inline w-3 h-3 mb-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
@@ -76,14 +76,14 @@ export default function InstallBanner() {
               {' '}y luego "Añadir a inicio"
             </p>
           ) : (
-            <p className="text-[11px] text-white/60 mt-0.5 leading-tight">Instálala como una app</p>
+            <p className="text-[13px] text-white/60 mt-0.5 leading-tight">Instálala como una app</p>
           )}
         </div>
 
         {platform === 'android' && (
           <button
             onClick={install}
-            className="bg-[#FFB800] text-[#0d0d0d] text-[12px] font-bold px-3 py-1.5 rounded-xl shrink-0"
+            className="bg-[#FFB800] text-[#0d0d0d] text-[14px] font-bold px-3 py-1.5 rounded-xl shrink-0"
           >
             Instalar
           </button>

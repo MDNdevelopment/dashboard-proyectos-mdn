@@ -10,19 +10,6 @@ export const COL_META = {
 }
 
 // ─── Date helpers ────────────────────────────────────────────────────────────
-/**
- * ISO week number for a given Date object.
- */
-export function isoWeek(d) {
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
-  const dayNum = (date.getUTCDay() + 6) % 7
-  date.setUTCDate(date.getUTCDate() - dayNum + 3)
-  const ft = new Date(Date.UTC(date.getUTCFullYear(), 0, 4))
-  const fdn = (ft.getUTCDay() + 6) % 7
-  ft.setUTCDate(ft.getUTCDate() - fdn + 3)
-  return 1 + Math.round((date - ft) / (7 * 24 * 3600 * 1000))
-}
-
 /** Parse "YYYY-MM-DD" string to local Date (midnight). Returns null for falsy input. */
 export function parseD(s) {
   if (!s) return null
@@ -42,10 +29,63 @@ export function daysBetween(a, b) {
   return Math.round((b - a) / (24 * 3600 * 1000))
 }
 
-/** ISO week number of a task's request_date. */
-export function taskWeek(task) {
+/** Numeric month index: year*12 + month (0-based). Allows simple range comparisons. */
+export function monthIndex(d) {
+  return d.getFullYear() * 12 + d.getMonth()
+}
+
+/** Month index for the current month. */
+export function currentMonthIndex() {
+  return monthIndex(new Date())
+}
+
+/**
+ * Human-readable month label in Spanish, e.g. "Junio 2026".
+ * @param {number} idx  monthIndex value
+ */
+export function fmtMonth(idx) {
+  const year = Math.floor(idx / 12)
+  const month = idx % 12
+  const label = new Date(year, month, 1).toLocaleDateString('es-VE', { month: 'long', year: 'numeric' })
+  return label.charAt(0).toUpperCase() + label.slice(1)
+}
+
+/** Month index of a task's request_date (start). Returns null if missing. */
+export function taskStartMonth(task) {
   const d = parseD(task.request_date)
-  return d ? isoWeek(d) : null
+  return d ? monthIndex(d) : null
+}
+
+/**
+ * Month index of a task's end. For closed tasks uses closed_date (falls back to
+ * start month if closed_date is missing). For open tasks returns null ("ongoing").
+ */
+export function taskEndMonth(task) {
+  if (!isClosed(task)) return null
+  const d = parseD(task.closed_date)
+  if (d) return monthIndex(d)
+  // fallback: treat the start month as both start and end
+  return taskStartMonth(task)
+}
+
+/**
+ * Returns true if the task was active during the given month index.
+ *
+ * Overlap rule:
+ *   - Task has not started yet (start > monthIdx) → false.
+ *   - Task is open ("ongoing"): visible from start month up to the current month.
+ *   - Task is closed: visible from start month up to (and including) closed month.
+ *   - Intermediate months between start and end are always included.
+ */
+export function taskInMonth(task, monthIdx) {
+  const start = taskStartMonth(task)
+  if (start === null || start > monthIdx) return false
+  const end = taskEndMonth(task)
+  if (end === null) {
+    // open/ongoing: visible up to current month
+    return monthIdx <= currentMonthIndex()
+  }
+  return monthIdx <= end
 }
 
 /** Format a "YYYY-MM-DD" string to a short locale string (e.g. "10 jun"). */
@@ -65,14 +105,31 @@ export function isLate(task) {
   return fe !== null && fe < today()
 }
 
+/**
+ * A task is "dragged" (arrastrada) when it is open and was started in a previous
+ * month — i.e. it has been carrying over without being closed.
+ */
 export function isDragged(task) {
   if (isClosed(task)) return false
-  const fs = parseD(task.request_date)
-  return fs !== null && daysBetween(fs, today()) > 7
+  const start = taskStartMonth(task)
+  return start !== null && start < currentMonthIndex()
 }
 
 export function isBlocked(task) {
   return task.status === 'Bloqueado'
+}
+
+// ─── Semáforo por tarea ──────────────────────────────────────────────────────
+/**
+ * Returns a per-task traffic-light color: 'red' | 'yellow' | 'green'.
+ *   red    = Bloqueado OR fecha de entrega vencida (isLate)
+ *   yellow = Por revisar | Pendiente (and not red)
+ *   green  = En proceso | Terminado ("no se discute")
+ */
+export function taskLight(task) {
+  if (isBlocked(task) || isLate(task)) return 'red'
+  if (task.status === 'Por revisar' || task.status === 'Pendiente') return 'yellow'
+  return 'green'
 }
 
 // ─── Semáforo ────────────────────────────────────────────────────────────────
@@ -90,14 +147,16 @@ export function lightOf(pct, total) {
 
 // ─── Stats per team ──────────────────────────────────────────────────────────
 /**
- * Compute week metrics for a given team's tasks.
+ * Compute monthly metrics for a given team's tasks.
+ * total/cerradas/pct are scoped to monthIdx; bloqueados/retrasados/apoyo are
+ * computed over all the team's tasks (live operational state, not month-scoped).
  * @param {string} teamId
  * @param {Array}  allTasks   full tasks array
- * @param {number} weekNum    ISO week number to scope to
+ * @param {number} monthIdx   monthIndex value to scope to
  */
-export function teamWeekStats(teamId, allTasks, weekNum) {
+export function teamMonthStats(teamId, allTasks, monthIdx) {
   const all = allTasks.filter(t => t.team_id === teamId)
-  const tasks = all.filter(t => taskWeek(t) === weekNum)
+  const tasks = all.filter(t => taskInMonth(t, monthIdx))
   const total = tasks.length
   const closed = tasks.filter(isClosed).length
   const pct = total ? Math.round((closed / total) * 100) : 0

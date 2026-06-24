@@ -6,7 +6,7 @@ function StatusBadge({ status }) {
   const meta = COL_META[status] ?? { color: '#ccc', textColor: '#111' }
   return (
     <span
-      className="inline-block px-2 py-0.5 rounded-full text-[11px] font-bold"
+      className="inline-block px-2 py-0.5 rounded-full text-[13px] font-bold"
       style={{ background: meta.color + '22', color: meta.color, border: `1px solid ${meta.color}44` }}
     >
       {status}
@@ -51,7 +51,7 @@ export default function BaseView({ tasks, teams, team, usersMap, onOpenTask }) {
   if (!team) {
     return (
       <div className="bg-white rounded-xl border border-[#e0ddd4] p-10 text-center">
-        <p className="text-[14px] font-medium text-[#888]">Selecciona un team para ver su base de tareas</p>
+        <p className="text-[16px] font-medium text-[#888]">Selecciona un team para ver su base de tareas</p>
       </div>
     )
   }
@@ -59,71 +59,75 @@ export default function BaseView({ tasks, teams, team, usersMap, onOpenTask }) {
   return (
     <div className="space-y-4">
       {/* Filter bar */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative">
-          <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#999] pointer-events-none" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="6.5" cy="6.5" r="5"/><path d="M10.5 10.5L14 14" strokeLinecap="round"/>
-          </svg>
-          <input
-            value={q}
-            onChange={e => setQ(e.target.value)}
-            placeholder="Buscar tarea o cliente..."
-            className="pl-8 pr-3 py-2 text-[12.5px] bg-white border border-[#e0ddd4] rounded-lg outline-none focus:border-[#bbb] transition-colors w-52"
-          />
+      <div className="space-y-1.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+          <div className="relative">
+            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#999] pointer-events-none" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="6.5" cy="6.5" r="5"/><path d="M10.5 10.5L14 14" strokeLinecap="round"/>
+            </svg>
+            <input
+              value={q}
+              onChange={e => setQ(e.target.value)}
+              placeholder="Buscar tarea o cliente..."
+              className="w-full pl-8 pr-3 py-2 text-[14.5px] bg-white border border-[#e0ddd4] rounded-lg outline-none focus:border-[#bbb] transition-colors"
+            />
+          </div>
+          <select value={fStatus} onChange={e => setFStatus(e.target.value)} className="input-base text-[14.5px] py-2">
+            <option value="">Estatus: todos</option>
+            {ESTADOS.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select value={fClient} onChange={e => setFClient(e.target.value)} className="input-base text-[14.5px] py-2">
+            <option value="">Cliente: todos</option>
+            {clients.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select value={fSupport} onChange={e => setFSupport(e.target.value)} className="input-base text-[14.5px] py-2">
+            <option value="">Apoyo dir.: todos</option>
+            <option value="with">Con apoyo</option>
+            <option value="without">Sin apoyo</option>
+          </select>
+          <select value={fAlert} onChange={e => setFAlert(e.target.value)} className="input-base text-[14.5px] py-2">
+            <option value="">Alerta: todas</option>
+            <option value="late">Retrasadas</option>
+            <option value="drag">Arrastradas (mes anterior)</option>
+            <option value="ok">Al día</option>
+          </select>
         </div>
-        <select value={fStatus} onChange={e => setFStatus(e.target.value)} className="input-base text-[12.5px] py-2 w-auto">
-          <option value="">Estatus: todos</option>
-          {ESTADOS.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <select value={fClient} onChange={e => setFClient(e.target.value)} className="input-base text-[12.5px] py-2 w-auto">
-          <option value="">Cliente: todos</option>
-          {clients.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select value={fSupport} onChange={e => setFSupport(e.target.value)} className="input-base text-[12.5px] py-2 w-auto">
-          <option value="">Apoyo dir.: todos</option>
-          <option value="with">Con apoyo</option>
-          <option value="without">Sin apoyo</option>
-        </select>
-        <select value={fAlert} onChange={e => setFAlert(e.target.value)} className="input-base text-[12.5px] py-2 w-auto">
-          <option value="">Alerta: todas</option>
-          <option value="late">Retrasadas</option>
-          <option value="drag">Arrastradas &gt;7 días</option>
-          <option value="ok">Al día</option>
-        </select>
-        {hasFilters && (
-          <button onClick={clearFilters} className="text-[12px] font-semibold text-[#888] hover:text-[#111] transition-colors">
-            Limpiar filtros
-          </button>
-        )}
-        <span className="ml-auto text-[12px] text-[#888]">
-          {hasFilters ? `${filtered.length} de ${teamTasks.length}` : teamTasks.length} tarea{teamTasks.length !== 1 ? 's' : ''}
-        </span>
+        <div className="flex items-center justify-between">
+          <span className="text-[14px] text-[#888]">
+            {hasFilters ? `${filtered.length} de ${teamTasks.length}` : teamTasks.length} tarea{teamTasks.length !== 1 ? 's' : ''}
+          </span>
+          {hasFilters && (
+            <button onClick={clearFilters} className="text-[14px] font-semibold text-[#888] hover:text-[#111] transition-colors">
+              Limpiar filtros
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Table */}
       {teamTasks.length === 0 ? (
         <div className="bg-white rounded-xl border border-[#e0ddd4] p-10 text-center">
-          <p className="text-[14px] font-medium text-[#888] mb-1">Sin tareas</p>
-          <p className="text-[12px] text-[#bbb]">Crea la primera tarea con el botón "Nueva tarea"</p>
+          <p className="text-[16px] font-medium text-[#888] mb-1">Sin tareas</p>
+          <p className="text-[14px] text-[#bbb]">Crea la primera tarea con el botón "Nueva tarea"</p>
         </div>
       ) : filtered.length === 0 ? (
         <div className="bg-white rounded-xl border border-[#e0ddd4] p-8 text-center">
-          <p className="text-[13px] text-[#888]">No hay tareas con esos filtros</p>
-          <button onClick={clearFilters} className="mt-2 text-[12px] font-semibold text-[#FFB800] hover:underline">Limpiar filtros</button>
+          <p className="text-[15px] text-[#888]">No hay tareas con esos filtros</p>
+          <button onClick={clearFilters} className="mt-2 text-[14px] font-semibold text-[#FFB800] hover:underline">Limpiar filtros</button>
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-[#e0ddd4] overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-[13px]">
+            <table className="w-full text-[15px]">
               <thead>
                 <tr className="border-b border-[#ece9df] text-left bg-[#faf9f5]">
-                  <th className="px-4 py-3 text-[10.5px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">Cliente</th>
-                  <th className="px-4 py-3 text-[10.5px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] max-w-[220px]">Tarea</th>
-                  <th className="px-4 py-3 text-[10.5px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">Estatus</th>
-                  <th className="px-4 py-3 text-[10.5px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">Responsable</th>
-                  <th className="px-4 py-3 text-[10.5px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">Apoyo</th>
-                  <th className="px-4 py-3 text-[10.5px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">Solicitud</th>
-                  <th className="px-4 py-3 text-[10.5px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">Entrega</th>
+                  <th className="px-4 py-3 text-[12.5px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">Cliente</th>
+                  <th className="px-4 py-3 text-[12.5px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] max-w-[220px]">Tarea</th>
+                  <th className="px-4 py-3 text-[12.5px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">Estatus</th>
+                  <th className="px-4 py-3 text-[12.5px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">Responsable</th>
+                  <th className="px-4 py-3 text-[12.5px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">Apoyo</th>
+                  <th className="px-4 py-3 text-[12.5px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">Solicitud</th>
+                  <th className="px-4 py-3 text-[12.5px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">Entrega</th>
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
@@ -145,33 +149,33 @@ export default function BaseView({ tasks, teams, team, usersMap, onOpenTask }) {
                       </td>
                       <td className="px-4 py-3 text-[#333] max-w-[220px]">
                         <span className="line-clamp-2">{t.description}</span>
-                        {drag && !late && <span className="block text-[11px] text-[#F0871F] mt-0.5">Arrastrada</span>}
+                        {drag && !late && <span className="block text-[13px] text-[#F0871F] mt-0.5">Arrastrada</span>}
                       </td>
                       <td className="px-4 py-3"><StatusBadge status={t.status} /></td>
                       <td className="px-4 py-3">
                         {resp ? (
                           <div className="flex items-center gap-1.5">
                             <Avatar user={resp.user} size={20} />
-                            <span className="text-[12px] text-[#333]">{resp.name}</span>
+                            <span className="text-[14px] text-[#333]">{resp.name}</span>
                           </div>
                         ) : <span className="text-[#bbb]">—</span>}
                       </td>
                       <td className="px-4 py-3">
                         {support ? (
                           <div className="flex items-center gap-1.5">
-                            <span className="text-[11px]">🤝</span>
-                            <span className="text-[12px] text-[#555]">{support.name}</span>
+                            <span className="text-[13px]">🤝</span>
+                            <span className="text-[14px] text-[#555]">{support.name}</span>
                           </div>
                         ) : <span className="text-[#bbb]">—</span>}
                       </td>
-                      <td className="px-4 py-3 text-[12px] font-mono text-[#666]">{fmtShort(t.request_date)}</td>
-                      <td className="px-4 py-3 text-[12px] font-mono text-[#666]">
+                      <td className="px-4 py-3 text-[14px] font-mono text-[#666]">{fmtShort(t.request_date)}</td>
+                      <td className="px-4 py-3 text-[14px] font-mono text-[#666]">
                         {late ? <span className="text-red-500">{fmtShort(t.due_date)}</span> : fmtShort(t.due_date)}
                       </td>
                       <td className="px-4 py-3">
                         <button
                           onClick={e => { e.stopPropagation(); onOpenTask(t) }}
-                          className="text-[11px] font-semibold text-[#888] hover:text-[#111] transition-colors"
+                          className="text-[13px] font-semibold text-[#888] hover:text-[#111] transition-colors"
                           aria-label="Editar tarea"
                         >
                           <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

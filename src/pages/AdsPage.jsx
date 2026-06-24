@@ -74,10 +74,10 @@ export default function AdsPage() {
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-[24px] font-bold text-[#111] leading-tight">
+              <h1 className="text-[26px] font-bold text-[#111] leading-tight">
                 Campañas & Tácticas
               </h1>
-              <p className="text-[13px] text-[#888] mt-0.5">
+              <p className="text-[15px] text-[#888] mt-0.5">
                 {canManage
                   ? "Gestión de campañas y tácticas publicitarias"
                   : "Vista de campañas y tácticas"}
@@ -86,7 +86,7 @@ export default function AdsPage() {
             {canManage && (
               <button
                 onClick={() => setShowCreateForm(true)}
-                className="flex items-center gap-2 bg-[#111] text-white text-[13px] font-bold px-4 py-2.5 rounded-xl hover:bg-[#222] transition-colors"
+                className="flex items-center gap-2 bg-[#111] text-white text-[15px] font-bold px-4 py-2.5 rounded-xl hover:bg-[#222] transition-colors"
               >
                 <svg
                   width="11"

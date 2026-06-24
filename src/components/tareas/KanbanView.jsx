@@ -12,13 +12,13 @@ function KanbanCard({ task, usersMap, onOpen, onChangeStatus }) {
       className={`bg-white border rounded-xl p-3 cursor-pointer hover:shadow-md transition-all group ${late ? 'border-red-200' : 'border-[#e0ddd4]'}`}
       onClick={() => onOpen(task)}
     >
-      <p className="text-[12.5px] font-bold text-[#111] leading-tight mb-1">
+      <p className="text-[14.5px] font-bold text-[#111] leading-tight mb-1">
         {late && <span className="text-red-400 mr-1">⚠</span>}
         {task.client || <span className="text-[#bbb] font-normal">Sin cliente</span>}
       </p>
-      <p className="text-[12px] text-[#555] line-clamp-2 mb-2">{task.description}</p>
+      <p className="text-[14px] text-[#555] line-clamp-2 mb-2">{task.description}</p>
       {support && (
-        <p className="text-[11px] text-[#888] mb-2">
+        <p className="text-[13px] text-[#888] mb-2">
           🤝 {support.first_name} {support.last_name}
         </p>
       )}
@@ -26,11 +26,11 @@ function KanbanCard({ task, usersMap, onOpen, onChangeStatus }) {
         {assignee ? (
           <div className="flex items-center gap-1.5">
             <Avatar user={assignee} size={18} />
-            <span className="text-[11px] text-[#666]">{assignee.first_name} {assignee.last_name[0]}.</span>
+            <span className="text-[13px] text-[#666]">{assignee.first_name} {assignee.last_name[0]}.</span>
           </div>
         ) : <span />}
         {task.due_date && (
-          <span className={`text-[11px] font-mono ${late ? 'text-red-500 font-bold' : 'text-[#999]'}`}>
+          <span className={`text-[13px] font-mono ${late ? 'text-red-500 font-bold' : 'text-[#999]'}`}>
             {late && '⚠ '}{fmtShort(task.due_date)}
           </span>
         )}
@@ -38,7 +38,7 @@ function KanbanCard({ task, usersMap, onOpen, onChangeStatus }) {
 
       <div className="mt-2 pt-2 border-t border-[#f0ede3]">
         <select
-          className="w-full text-[11.5px] font-semibold border-none bg-transparent outline-none cursor-pointer"
+          className="w-full text-[13.5px] font-semibold border-none bg-transparent outline-none cursor-pointer"
           value={task.status}
           onClick={e => e.stopPropagation()}
           onChange={e => onChangeStatus(task, e.target.value)}
@@ -55,7 +55,7 @@ export default function KanbanView({ team, tasks, usersMap, onOpenTask, onUpdate
   if (!team) {
     return (
       <div className="bg-white rounded-xl border border-[#e0ddd4] p-10 text-center">
-        <p className="text-[14px] font-medium text-[#888]">Selecciona un team para ver el Kanban</p>
+        <p className="text-[16px] font-medium text-[#888]">Selecciona un team para ver el Kanban</p>
       </div>
     )
   }
@@ -85,15 +85,15 @@ export default function KanbanView({ team, tasks, usersMap, onOpenTask, onUpdate
             <div key={status} className="w-64 flex-shrink-0">
               <div className="flex items-center gap-2 mb-3 px-1">
                 <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: col.color }} />
-                <span className="text-[12.5px] font-bold text-[#111]">{status}</span>
-                <span className="ml-auto text-[11px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-[#f0ede3] text-[#555]">
+                <span className="text-[14.5px] font-bold text-[#111]">{status}</span>
+                <span className="ml-auto text-[13px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-[#f0ede3] text-[#555]">
                   {cards.length}
                 </span>
               </div>
               <div className="space-y-2 min-h-[80px]">
                 {cards.length === 0 ? (
                   <div className="border-2 border-dashed border-[#e0ddd4] rounded-xl p-4 text-center">
-                    <p className="text-[11.5px] text-[#ccc]">Vacío</p>
+                    <p className="text-[13.5px] text-[#ccc]">Vacío</p>
                   </div>
                 ) : (
                   cards.map(t => (

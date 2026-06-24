@@ -63,7 +63,7 @@ export default function EmployeeProfileView({ employeeId }) {
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 text-red-700 text-[13px] rounded-xl px-4 py-3">
+      <div className="bg-red-50 border border-red-200 text-red-700 text-[15px] rounded-xl px-4 py-3">
         {error}
       </div>
     )
@@ -85,7 +85,7 @@ export default function EmployeeProfileView({ employeeId }) {
       <button
         type="button"
         onClick={() => navigate('/evaluaciones')}
-        className="flex items-center gap-1.5 text-[13px] font-semibold text-[#555] hover:text-[#111] transition-colors"
+        className="flex items-center gap-1.5 text-[15px] font-semibold text-[#555] hover:text-[#111] transition-colors"
       >
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.2">
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 2L4 7l5 5" />
@@ -97,22 +97,22 @@ export default function EmployeeProfileView({ employeeId }) {
       <div className="bg-white rounded-xl border border-[#e0ddd4] px-5 py-4 flex items-center gap-4">
         <Avatar user={employee} size={52} />
         <div className="flex-1 min-w-0">
-          <h2 className="text-[18px] font-bold text-[#111]">
+          <h2 className="text-[20px] font-bold text-[#111]">
             {employee.first_name} {employee.last_name}
           </h2>
-          <p className="text-[13px] text-[#666] mt-0.5">
+          <p className="text-[15px] text-[#666] mt-0.5">
             {employee.position?.position_name ?? '—'}
             {employee.department?.department_name ? (
               <span className="text-[#bbb]"> · {employee.department.department_name}</span>
             ) : null}
           </p>
-          <p className="text-[12px] text-[#aaa] mt-0.5">{employee.email}</p>
+          <p className="text-[14px] text-[#aaa] mt-0.5">{employee.email}</p>
         </div>
         <div className="text-right flex-shrink-0">
-          <p className="text-[11px] font-mono font-bold uppercase tracking-[0.1em] text-[#bbb]">
+          <p className="text-[13px] font-mono font-bold uppercase tracking-[0.1em] text-[#bbb]">
             Evaluaciones
           </p>
-          <p className="text-[28px] font-bold text-[#111] leading-none mt-0.5">
+          <p className="text-[30px] font-bold text-[#111] leading-none mt-0.5">
             {sessions.length}
           </p>
         </div>
@@ -120,8 +120,8 @@ export default function EmployeeProfileView({ employeeId }) {
 
       {sessions.length === 0 ? (
         <div className="bg-white rounded-xl border border-[#e0ddd4] p-10 text-center">
-          <p className="text-[15px] font-semibold text-[#888] mb-1">Sin evaluaciones</p>
-          <p className="text-[13px] text-[#bbb]">
+          <p className="text-[17px] font-semibold text-[#888] mb-1">Sin evaluaciones</p>
+          <p className="text-[15px] text-[#bbb]">
             Este empleado aún no tiene evaluaciones registradas.
           </p>
         </div>
@@ -129,7 +129,7 @@ export default function EmployeeProfileView({ employeeId }) {
         <>
           {/* Gráfica de evolución */}
           <div className="bg-white rounded-2xl border border-[#e0ddd4] px-5 py-4">
-            <p className="text-[11px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] mb-4">
+            <p className="text-[13px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] mb-4">
               Evolución de score
             </p>
             <ResponsiveContainer width="100%" height={200}>
@@ -170,7 +170,7 @@ export default function EmployeeProfileView({ employeeId }) {
 
           {/* Historial de evaluaciones */}
           <div className="space-y-3">
-            <h3 className="text-[11px] font-mono font-bold tracking-[0.14em] uppercase text-[#888]">
+            <h3 className="text-[13px] font-mono font-bold tracking-[0.14em] uppercase text-[#888]">
               Historial
             </h3>
             {sessions.map(session => {
@@ -181,14 +181,14 @@ export default function EmployeeProfileView({ employeeId }) {
                   className="bg-white rounded-xl border border-[#e0ddd4] px-5 py-4"
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-[12px] font-mono text-[#888]">
+                    <span className="text-[14px] font-mono text-[#888]">
                       {fmtDateFull(session.period)}
                     </span>
                     <div className="flex items-baseline gap-1">
-                      <span className="text-[22px] font-bold text-[#111]">
+                      <span className="text-[24px] font-bold text-[#111]">
                         {session.total_score?.toFixed(1)}
                       </span>
-                      <span className="text-[12px] text-[#bbb] font-mono">/5</span>
+                      <span className="text-[14px] text-[#bbb] font-mono">/5</span>
                     </div>
                   </div>
 
@@ -207,14 +207,14 @@ export default function EmployeeProfileView({ employeeId }) {
                               />
                             ))}
                           </span>
-                          <span className="text-[11px] font-mono text-[#aaa]">{r.response}/5</span>
+                          <span className="text-[13px] font-mono text-[#aaa]">{r.response}/5</span>
                         </div>
                       ))}
                     </div>
                   )}
 
                   {commentText && (
-                    <p className="text-[12px] text-[#555] italic border-t border-[#f0ede3] pt-2 mt-2">
+                    <p className="text-[14px] text-[#555] italic border-t border-[#f0ede3] pt-2 mt-2">
                       &ldquo;{commentText}&rdquo;
                     </p>
                   )}
