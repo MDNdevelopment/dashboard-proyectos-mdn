@@ -6,9 +6,9 @@ export default function CategoryBarChart({ data }) {
 
   return (
     <div className="bg-white rounded-2xl border border-[#e0ddd4] px-5 py-4">
-      <p className="text-[11px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] mb-4">Por categoria</p>
+      <p className="text-[13px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] mb-4">Por categoria</p>
       {data.length === 0 ? (
-        <p className="text-[13px] text-[#aaa] text-center py-8">Sin datos</p>
+        <p className="text-[15px] text-[#aaa] text-center py-8">Sin datos</p>
       ) : (
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={named} layout="vertical" margin={{ top: 0, right: 16, left: 8, bottom: 0 }}>

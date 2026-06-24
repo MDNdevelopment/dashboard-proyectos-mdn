@@ -34,8 +34,8 @@ export default function TicketAnalyticsPage() {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
-          <p className="text-[16px] font-bold text-[#111] mb-1">Acceso restringido</p>
-          <p className="text-[13px] text-[#888]">No tienes acceso a esta seccion.</p>
+          <p className="text-[18px] font-bold text-[#111] mb-1">Acceso restringido</p>
+          <p className="text-[15px] text-[#888]">No tienes acceso a esta seccion.</p>
         </div>
       </div>
     )
@@ -44,7 +44,7 @@ export default function TicketAnalyticsPage() {
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
       <div className="flex items-center justify-between flex-wrap gap-4 mb-6">
-        <h1 className="text-[20px] font-bold text-[#111]">Analiticas de soporte</h1>
+        <h1 className="text-[22px] font-bold text-[#111]">Analiticas de soporte</h1>
         <TimeRangeSelector
           startDate={range.start}
           endDate={range.end}
@@ -53,7 +53,7 @@ export default function TicketAnalyticsPage() {
       </div>
 
       {error && (
-        <div className="mb-4 px-4 py-3 rounded-xl bg-[#fce4ec] text-[#c62828] text-[13px] font-medium">
+        <div className="mb-4 px-4 py-3 rounded-xl bg-[#fce4ec] text-[#c62828] text-[15px] font-medium">
           Error al cargar datos: {error}
         </div>
       )}

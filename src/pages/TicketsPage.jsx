@@ -44,14 +44,14 @@ export default function TicketsPage() {
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-[24px] font-bold text-[#111] leading-tight">Tickets de soporte</h1>
-              <p className="text-[13px] text-[#888] mt-0.5">
+              <h1 className="text-[26px] font-bold text-[#111] leading-tight">Tickets de soporte</h1>
+              <p className="text-[15px] text-[#888] mt-0.5">
                 {isIT ? 'Gestion de solicitudes IT' : 'Tus solicitudes de soporte tecnico'}
               </p>
             </div>
             <button
               onClick={() => setShowCreateForm(true)}
-              className="flex items-center gap-2 bg-[#111] text-white text-[13px] font-bold px-4 py-2.5 rounded-xl hover:bg-[#222] transition-colors"
+              className="flex items-center gap-2 bg-[#111] text-white text-[15px] font-bold px-4 py-2.5 rounded-xl hover:bg-[#222] transition-colors"
             >
               <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.8">
                 <path d="M6 1v10M1 6h10" strokeLinecap="round"/>

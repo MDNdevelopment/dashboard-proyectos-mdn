@@ -47,14 +47,14 @@ export default function AdsStats({ campaigns }) {
           key={card.label}
           className="bg-white border border-[#e0ddd4] rounded-2xl p-4"
         >
-          <p className="text-[10px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] mb-1.5">
+          <p className="text-[12px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] mb-1.5">
             {card.label}
           </p>
-          <p className="text-[26px] font-bold leading-none" style={{ color: card.accent }}>
+          <p className="text-[28px] font-bold leading-none" style={{ color: card.accent }}>
             {card.value}
           </p>
           {card.sub && (
-            <p className="text-[11px] text-[#999] mt-1">{card.sub}</p>
+            <p className="text-[13px] text-[#999] mt-1">{card.sub}</p>
           )}
           {card.progress != null && (
             <div className="mt-2 h-1.5 bg-[#f0ede3] rounded-full overflow-hidden">

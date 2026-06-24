@@ -26,11 +26,11 @@ export default function LoginPage() {
       <div className="bg-white rounded-2xl border border-[#e0ddd4] p-8 w-full max-w-[360px]">
         <div className="flex flex-col items-center mb-7">
           <MDNLogo size={48} />
-          <p className="text-[13px] font-medium text-[#888] mt-3">MDN Publicidad</p>
+          <p className="text-[15px] font-medium text-[#888] mt-3">MDN Publicidad</p>
         </div>
 
-        <h1 className="text-[18px] font-bold text-[#111] mb-1">Iniciar sesión</h1>
-        <p className="text-[13px] text-[#888] mb-6">Ingresa tus credenciales para continuar</p>
+        <h1 className="text-[20px] font-bold text-[#111] mb-1">Iniciar sesión</h1>
+        <p className="text-[15px] text-[#888] mb-6">Ingresa tus credenciales para continuar</p>
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <input
@@ -53,13 +53,13 @@ export default function LoginPage() {
           />
 
           {error && (
-            <p className="text-[12px] text-red-500 font-medium">{error}</p>
+            <p className="text-[14px] text-red-500 font-medium">{error}</p>
           )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-[#FFB800] text-[#111] text-[13px] font-bold py-2.5 rounded-xl hover:bg-[#e6a600] transition-colors disabled:opacity-60 mt-1"
+            className="w-full bg-[#FFB800] text-[#111] text-[15px] font-bold py-2.5 rounded-xl hover:bg-[#e6a600] transition-colors disabled:opacity-60 mt-1"
           >
             {loading ? 'Ingresando...' : 'Ingresar'}
           </button>
@@ -68,7 +68,7 @@ export default function LoginPage() {
         <div className="mt-5 text-center">
           <Link
             to="/forgot-password"
-            className="text-[12px] text-[#888] hover:text-[#111] transition-colors"
+            className="text-[14px] text-[#888] hover:text-[#111] transition-colors"
           >
             ¿Olvidaste tu contraseña?
           </Link>

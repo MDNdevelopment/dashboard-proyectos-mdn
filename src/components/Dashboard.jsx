@@ -52,10 +52,10 @@ function Dashboard({ projects, loading, activeFilter, onNewProject, onEditProjec
         {/* Header */}
         <div className="flex items-end justify-between mb-7 gap-4">
           <div>
-            <p className="text-[11px] font-mono font-semibold text-[#888] tracking-[0.14em] uppercase mb-1.5">
+            <p className="text-[13px] font-mono font-semibold text-[#888] tracking-[0.14em] uppercase mb-1.5">
               MDN Publicidad
             </p>
-            <h1 className="text-[24px] font-semibold text-[#111] tracking-[-0.025em] leading-none">
+            <h1 className="text-[26px] font-semibold text-[#111] tracking-[-0.025em] leading-none">
               {title}
             </h1>
           </div>
@@ -63,7 +63,7 @@ function Dashboard({ projects, loading, activeFilter, onNewProject, onEditProjec
             {!activeFilter.startsWith('dept:') && (
               <button
                 onClick={onExport}
-                className="flex items-center gap-2 bg-white border border-[#e0ddd4] text-[#111] text-[13px] font-semibold px-4 py-2.5 rounded-xl hover:bg-[#f5f3eb] transition-colors shadow-sm"
+                className="flex items-center gap-2 bg-white border border-[#e0ddd4] text-[#111] text-[15px] font-semibold px-4 py-2.5 rounded-xl hover:bg-[#f5f3eb] transition-colors shadow-sm"
               >
                 <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M7 1v8M4 6l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
@@ -74,7 +74,7 @@ function Dashboard({ projects, loading, activeFilter, onNewProject, onEditProjec
             )}
             <button
               onClick={onNewProject}
-              className="hidden lg:flex items-center gap-2 bg-[#0d0d0d] text-white text-[13px] font-semibold px-4 py-2.5 rounded-xl hover:bg-[#222] transition-colors shadow-sm"
+              className="hidden lg:flex items-center gap-2 bg-[#0d0d0d] text-white text-[15px] font-semibold px-4 py-2.5 rounded-xl hover:bg-[#222] transition-colors shadow-sm"
             >
               <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.8">
                 <path d="M6 1v10M1 6h10" strokeLinecap="round"/>
@@ -89,13 +89,13 @@ function Dashboard({ projects, loading, activeFilter, onNewProject, onEditProjec
           {metrics.map(m => (
             <div key={m.label} className="bg-white rounded-2xl border border-[#e8e5db] p-4 shadow-sm">
               <p
-                className={`leading-none mb-2 ${m.mono ? 'font-mono text-[26px] font-semibold' : 'font-mono text-[28px] font-semibold'}`}
+                className={`leading-none mb-2 ${m.mono ? 'font-mono text-[28px] font-semibold' : 'font-mono text-[30px] font-semibold'}`}
                 style={{ color: m.color }}
               >
                 {m.value}
               </p>
-              <p className="text-[12px] font-medium text-[#666]">{m.label}</p>
-              {m.sub && <p className="text-[11px] font-mono text-[#777] mt-1">{m.sub}</p>}
+              <p className="text-[14px] font-medium text-[#666]">{m.label}</p>
+              {m.sub && <p className="text-[13px] font-mono text-[#777] mt-1">{m.sub}</p>}
             </div>
           ))}
         </div>
@@ -110,7 +110,7 @@ function Dashboard({ projects, loading, activeFilter, onNewProject, onEditProjec
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Buscar proyecto, equipo..."
-            className="w-full bg-white border border-[#e0ddd4] rounded-xl pl-9 pr-4 py-2.5 text-[13px] text-[#111] placeholder-[#bbb] outline-none focus:border-[#bbb] transition-colors shadow-sm font-sans"
+            className="w-full bg-white border border-[#e0ddd4] rounded-xl pl-9 pr-4 py-2.5 text-[15px] text-[#111] placeholder-[#bbb] outline-none focus:border-[#bbb] transition-colors shadow-sm font-sans"
           />
         </div>
 
@@ -127,11 +127,11 @@ function Dashboard({ projects, loading, activeFilter, onNewProject, onEditProjec
                 <path d="M9 12h6M9 8h4" strokeLinecap="round"/>
               </svg>
             </div>
-            <p className="text-[14px] font-medium text-[#999] mb-4">
+            <p className="text-[16px] font-medium text-[#999] mb-4">
               {search ? 'Sin resultados para esa búsqueda.' : 'No hay proyectos aquí aún.'}
             </p>
             {!search && (
-              <button onClick={onNewProject} className="bg-[#0d0d0d] text-white text-[13px] font-semibold px-5 py-2.5 rounded-xl hover:bg-[#222] transition-colors">
+              <button onClick={onNewProject} className="bg-[#0d0d0d] text-white text-[15px] font-semibold px-5 py-2.5 rounded-xl hover:bg-[#222] transition-colors">
                 Crear primer proyecto
               </button>
             )}

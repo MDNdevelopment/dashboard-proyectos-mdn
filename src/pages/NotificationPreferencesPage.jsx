@@ -45,8 +45,8 @@ export default function NotificationPreferencesPage() {
       <main className="flex-1 overflow-y-auto main-bg h-screen">
         <div className="max-w-5xl mx-auto px-6 py-8">
           <div className="bg-white border border-[#e0ddd4] rounded-2xl p-8 text-center">
-            <p className="text-[15px] font-semibold text-[#111]">Acceso restringido</p>
-            <p className="text-[13px] text-[#888] mt-1">Solo administradores IT pueden ver esta página.</p>
+            <p className="text-[17px] font-semibold text-[#111]">Acceso restringido</p>
+            <p className="text-[15px] text-[#888] mt-1">Solo administradores IT pueden ver esta página.</p>
           </div>
         </div>
       </main>
@@ -60,8 +60,8 @@ export default function NotificationPreferencesPage() {
       <div className="max-w-5xl mx-auto px-6 py-8">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-[24px] font-bold text-[#111] leading-tight">Notificaciones de tickets</h1>
-          <p className="text-[13px] text-[#888] mt-0.5">Elige quién recibe emails cuando se crea un nuevo ticket de soporte</p>
+          <h1 className="text-[26px] font-bold text-[#111] leading-tight">Notificaciones de tickets</h1>
+          <p className="text-[15px] text-[#888] mt-0.5">Elige quién recibe emails cuando se crea un nuevo ticket de soporte</p>
         </div>
 
         {allOff && (
@@ -71,7 +71,7 @@ export default function NotificationPreferencesPage() {
               <path d="M8 7v3" strokeLinecap="round"/>
               <circle cx="8" cy="11.5" r="0.5" fill="#b45309" stroke="none"/>
             </svg>
-            <p className="text-[13px] font-medium text-[#b45309]">
+            <p className="text-[15px] font-medium text-[#b45309]">
               Nadie recibirá notificaciones de tickets
             </p>
           </div>
@@ -83,7 +83,7 @@ export default function NotificationPreferencesPage() {
           </div>
         ) : error ? (
           <div className="bg-white border border-[#e0ddd4] rounded-2xl p-6 text-center">
-            <p className="text-[13px] text-[#888]">{error}</p>
+            <p className="text-[15px] text-[#888]">{error}</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -93,10 +93,10 @@ export default function NotificationPreferencesPage() {
                 className="bg-white border border-[#e0ddd4] rounded-2xl px-5 py-4 flex items-center gap-4"
               >
                 <div className="flex-1 min-w-0">
-                  <p className="text-[14px] font-semibold text-[#111] leading-tight">
+                  <p className="text-[16px] font-semibold text-[#111] leading-tight">
                     {user.first_name} {user.last_name}
                   </p>
-                  <p className="text-[12px] font-mono text-[#888] mt-0.5 truncate">{user.email}</p>
+                  <p className="text-[14px] font-mono text-[#888] mt-0.5 truncate">{user.email}</p>
                 </div>
                 <button
                   role="switch"

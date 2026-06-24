@@ -1,16 +1,16 @@
 export default function StaffPerformanceTable({ data }) {
   return (
     <div className="bg-white rounded-2xl border border-[#e0ddd4] px-5 py-4">
-      <p className="text-[11px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] mb-4">Rendimiento del equipo IT</p>
+      <p className="text-[13px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] mb-4">Rendimiento del equipo IT</p>
       {data.length === 0 ? (
-        <p className="text-[13px] text-[#aaa] text-center py-6">Sin datos</p>
+        <p className="text-[15px] text-[#aaa] text-center py-6">Sin datos</p>
       ) : (
-        <table className="w-full text-[13px]">
+        <table className="w-full text-[15px]">
           <thead>
             <tr className="border-b border-[#f0ede3]">
-              <th className="text-left text-[10px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] pb-2">Agente</th>
-              <th className="text-right text-[10px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] pb-2">Resueltos</th>
-              <th className="text-right text-[10px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] pb-2">Tiempo prom</th>
+              <th className="text-left text-[12px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] pb-2">Agente</th>
+              <th className="text-right text-[12px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] pb-2">Resueltos</th>
+              <th className="text-right text-[12px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] pb-2">Tiempo prom</th>
             </tr>
           </thead>
           <tbody>

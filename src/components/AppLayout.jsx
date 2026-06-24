@@ -4,6 +4,7 @@ import { supabase } from '../supabase'
 import Sidebar from './Sidebar'
 import ProjectModal from './ProjectModal'
 import MDNLogo from './MDNLogo'
+import InstallBanner from './InstallBanner'
 import { exportProjectsToMarkdown, downloadMarkdown } from '../utils/exportProjectsToMarkdown'
 
 const normalize = (row) => ({ ...row, createdAt: row.created_at })
@@ -119,16 +120,16 @@ export default function AppLayout() {
 
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Mobile top bar — visible on all routes */}
-        <div className="lg:hidden flex items-center justify-between px-5 py-3.5 bg-white border-b border-[#e8e5db] sticky top-0 z-30">
-          <button onClick={() => setSidebarOpen(o => !o)} className="text-[#777] hover:text-[#111] transition-colors">
+        <div className="lg:hidden flex items-center px-5 py-3.5 bg-white border-b border-[#e8e5db] sticky top-0 z-30">
+          <button onClick={() => setSidebarOpen(o => !o)} className="text-[#777] hover:text-[#111] transition-colors flex-shrink-0">
             <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
               <path d="M3 5h14M3 10h14M3 15h14" strokeLinecap="round"/>
             </svg>
           </button>
-          <MDNLogo size={32} />
-          <button onClick={() => setModalProject(null)} className="bg-[#0d0d0d] text-white text-[12px] font-semibold px-3 py-1.5 rounded-lg">
-            + Nuevo
-          </button>
+          <div className="flex-1 flex justify-center">
+            <MDNLogo size={32} />
+          </div>
+          <div className="w-[18px] flex-shrink-0" />
         </div>
 
         <Outlet context={{
@@ -144,6 +145,8 @@ export default function AppLayout() {
           onExport: exportProjects,
         }} />
       </div>
+
+      <InstallBanner />
 
       {modalProject !== undefined && (
         <ProjectModal

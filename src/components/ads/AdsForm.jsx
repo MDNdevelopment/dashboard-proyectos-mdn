@@ -73,13 +73,13 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
     }
   }
 
-  const labelClass = 'block text-[11px] font-mono font-bold tracking-widest uppercase text-[#888] mb-1.5'
+  const labelClass = 'block text-[13px] font-mono font-bold tracking-widest uppercase text-[#888] mb-1.5'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-black/30">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
         <div className="px-6 pt-6 pb-5 border-b border-[#ece9df] flex items-center justify-between">
-          <h2 className="text-[17px] font-bold text-[#111]">
+          <h2 className="text-[19px] font-bold text-[#111]">
             {isEdit ? 'Editar campaña' : 'Nueva campaña'}
           </h2>
           <button onClick={onClose} className="text-[#999] hover:text-[#111] transition-colors p-1">
@@ -197,20 +197,20 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
             </div>
           </div>
 
-          {error && <p className="text-[12px] text-red-600 mt-3">{error}</p>}
+          {error && <p className="text-[14px] text-red-600 mt-3">{error}</p>}
 
           <div className="flex gap-3 pt-4 mt-2 border-t border-[#ece9df]">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl border border-[#e0ddd4] text-[13px] font-semibold text-[#555] hover:bg-[#f5f3eb] transition-colors"
+              className="flex-1 py-2.5 rounded-xl border border-[#e0ddd4] text-[15px] font-semibold text-[#555] hover:bg-[#f5f3eb] transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={submitting || !fields.name.trim() || !fields.client.trim() || !fields.start_date || !fields.end_date}
-              className="flex-1 py-2.5 rounded-xl bg-[#111] text-white text-[13px] font-bold hover:bg-[#222] transition-colors disabled:opacity-50"
+              className="flex-1 py-2.5 rounded-xl bg-[#111] text-white text-[15px] font-bold hover:bg-[#222] transition-colors disabled:opacity-50"
             >
               {submitting ? (isEdit ? 'Guardando...' : 'Creando...') : (isEdit ? 'Guardar cambios' : 'Crear campaña')}
             </button>

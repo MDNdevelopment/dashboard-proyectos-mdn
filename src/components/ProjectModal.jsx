@@ -115,10 +115,10 @@ export default function ProjectModal({ project, onClose, onSave }) {
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-[#eeebe0] flex-shrink-0">
           <div>
-            <h2 className="text-[16px] font-semibold text-[#111] tracking-[-0.01em]">
+            <h2 className="text-[18px] font-semibold text-[#111] tracking-[-0.01em]">
               {isEdit ? 'Editar proyecto' : 'Nuevo proyecto'}
             </h2>
-            <p className="text-[12px] text-[#999] mt-0.5">
+            <p className="text-[14px] text-[#999] mt-0.5">
               {isEdit ? 'Modifica datos, fases o tareas' : 'Define el proyecto y sus actividades'}
             </p>
           </div>
@@ -153,7 +153,7 @@ export default function ProjectModal({ project, onClose, onSave }) {
                 const sel = form.departments.includes(d)
                 return (
                   <button key={d} type="button" onClick={() => toggleDept(d)}
-                    className={`px-3.5 py-1.5 rounded-lg text-[12px] font-semibold border transition-all ${
+                    className={`px-3.5 py-1.5 rounded-lg text-[14px] font-semibold border transition-all ${
                       sel ? 'bg-[#FFB800] text-[#111] border-[#FFB800]'
                           : 'bg-white text-[#666] border-[#e0ddd4] hover:border-[#bbb] hover:text-[#333]'
                     }`}>
@@ -190,7 +190,7 @@ export default function ProjectModal({ project, onClose, onSave }) {
               <div className="flex flex-wrap gap-2">
                 {STATUSES.map(s => (
                   <button key={s} type="button" onClick={() => set('status', s)}
-                    className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold border transition-all flex items-center gap-1.5 ${
+                    className={`px-3 py-1.5 rounded-lg text-[14px] font-semibold border transition-all flex items-center gap-1.5 ${
                       form.status === s
                         ? 'text-white border-transparent'
                         : 'bg-white text-[#666] border-[#e0ddd4] hover:border-[#bbb]'
@@ -220,11 +220,11 @@ export default function ProjectModal({ project, onClose, onSave }) {
           {/* Phases */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <span className="text-[10px] font-mono font-semibold tracking-[0.14em] uppercase text-[#777]">
+              <span className="text-[12px] font-mono font-semibold tracking-[0.14em] uppercase text-[#777]">
                 Fases y tareas
               </span>
               <button type="button" onClick={addPhase}
-                className="text-[12px] font-semibold text-[#555] hover:text-[#111] border border-[#e0ddd4] hover:border-[#bbb] px-3 py-1 rounded-lg transition-all flex items-center gap-1.5">
+                className="text-[14px] font-semibold text-[#555] hover:text-[#111] border border-[#e0ddd4] hover:border-[#bbb] px-3 py-1 rounded-lg transition-all flex items-center gap-1.5">
                 <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <path d="M6 1v10M1 6h10" strokeLinecap="round"/>
                 </svg>
@@ -240,7 +240,7 @@ export default function ProjectModal({ project, onClose, onSave }) {
                       value={phase.name}
                       onChange={e => setPhase(phase.id, e.target.value)}
                       placeholder={`Fase ${idx + 1} — ej: Diseño, Desarrollo, Testing…`}
-                      className="flex-1 border border-[#e0ddd4] rounded-lg px-3 py-2 text-[13px] font-semibold text-[#333] placeholder-[#bbb] outline-none focus:border-[#bbb] bg-white font-sans"
+                      className="flex-1 border border-[#e0ddd4] rounded-lg px-3 py-2 text-[15px] font-semibold text-[#333] placeholder-[#bbb] outline-none focus:border-[#bbb] bg-white font-sans"
                     />
                     {form.phases.length > 1 && (
                       <button type="button" onClick={() => delPhase(phase.id)}
@@ -252,34 +252,30 @@ export default function ProjectModal({ project, onClose, onSave }) {
                     )}
                   </div>
 
-                  <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={({ active, over }) => {
-                      if (!over || active.id === over.id) return
-                      const tasks = phase.tasks
-                      const from = tasks.findIndex(t => t.id === active.id)
-                      const to = tasks.findIndex(t => t.id === over.id)
-                      moveTask(phase.id, from, to)
-                    }}
-                  >
-                    <SortableContext items={phase.tasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
-                      <div className="space-y-2 mb-2">
-                        {phase.tasks.map(task => (
-                          <SortableTask
-                            key={task.id}
-                            task={task}
-                            canDelete={phase.tasks.length > 1}
-                            onChangeName={name => setTask(phase.id, task.id, name)}
-                            onDelete={() => delTask(phase.id, task.id)}
-                          />
-                        ))}
+                  <div className="space-y-2 mb-2">
+                    {phase.tasks.map(task => (
+                      <div key={task.id} className="flex items-center gap-2">
+                        <span className="w-1 h-1 rounded-full bg-[#ddd] flex-shrink-0" />
+                        <input
+                          value={task.name}
+                          onChange={e => setTask(phase.id, task.id, e.target.value)}
+                          placeholder="Nombre de la tarea"
+                          className="flex-1 border border-[#e0ddd4] rounded-lg px-3 py-1.5 text-[15px] text-[#444] placeholder-[#bbb] outline-none focus:border-[#bbb] bg-white font-sans"
+                        />
+                        {phase.tasks.length > 1 && (
+                          <button type="button" onClick={() => delTask(phase.id, task.id)}
+                            className="text-[#ccc] hover:text-[#ef4444] transition-colors w-5 h-5 flex items-center justify-center flex-shrink-0">
+                            <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                          </button>
+                        )}
                       </div>
                     </SortableContext>
                   </DndContext>
 
                   <button type="button" onClick={() => addTask(phase.id)}
-                    className="text-[12px] font-semibold text-[#aaa] hover:text-[#555] transition-colors flex items-center gap-1 mt-1">
+                    className="text-[14px] font-semibold text-[#aaa] hover:text-[#555] transition-colors flex items-center gap-1 mt-1">
                     <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.5">
                       <path d="M6 1v10M1 6h10" strokeLinecap="round"/>
                     </svg>
@@ -291,7 +287,7 @@ export default function ProjectModal({ project, onClose, onSave }) {
           </div>
 
           {error && (
-            <p className="text-[12px] font-medium text-[#dc2626] bg-[#fef2f2] border border-[#fecaca] px-3.5 py-2.5 rounded-lg">
+            <p className="text-[14px] font-medium text-[#dc2626] bg-[#fef2f2] border border-[#fecaca] px-3.5 py-2.5 rounded-lg">
               {error}
             </p>
           )}
@@ -300,11 +296,11 @@ export default function ProjectModal({ project, onClose, onSave }) {
         {/* Footer */}
         <div className="flex gap-3 px-6 py-4 border-t border-[#eeebe0] flex-shrink-0">
           <button type="button" onClick={onClose}
-            className="flex-1 px-4 py-2.5 border border-[#e0ddd4] text-[#666] rounded-xl text-[13px] font-semibold hover:bg-[#f5f3eb] transition-colors">
+            className="flex-1 px-4 py-2.5 border border-[#e0ddd4] text-[#666] rounded-xl text-[15px] font-semibold hover:bg-[#f5f3eb] transition-colors">
             Cancelar
           </button>
           <button type="button" disabled={loading} onClick={submit}
-            className="flex-1 px-4 py-2.5 bg-[#0d0d0d] text-white rounded-xl text-[13px] font-bold hover:bg-[#222] transition-colors disabled:opacity-50">
+            className="flex-1 px-4 py-2.5 bg-[#0d0d0d] text-white rounded-xl text-[15px] font-bold hover:bg-[#222] transition-colors disabled:opacity-50">
             {loading
               ? <span className="flex items-center justify-center gap-2">
                   <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -394,10 +390,10 @@ function MemberPicker({ users, selected, selectedUsers, onToggle }) {
       {/* Selected chips */}
       <div className="flex flex-wrap gap-1.5 mb-2 min-h-[28px]">
         {selectedUsers.length === 0 ? (
-          <span className="text-[12px] text-[#bbb] self-center">Sin miembros asignados</span>
+          <span className="text-[14px] text-[#bbb] self-center">Sin miembros asignados</span>
         ) : (
           selectedUsers.map(u => (
-            <span key={u.user_id} className="inline-flex items-center gap-1.5 pl-1 pr-2 py-0.5 rounded-full bg-[#f5f3eb] border border-[#e0ddd4] text-[12px] font-medium text-[#333]">
+            <span key={u.user_id} className="inline-flex items-center gap-1.5 pl-1 pr-2 py-0.5 rounded-full bg-[#f5f3eb] border border-[#e0ddd4] text-[14px] font-medium text-[#333]">
               <Avatar user={u} size={20} />
               {u.first_name} {u.last_name}
               <button
@@ -420,7 +416,7 @@ function MemberPicker({ users, selected, selectedUsers, onToggle }) {
         ref={triggerRef}
         type="button"
         onClick={openPicker}
-        className="text-[12px] font-semibold text-[#555] hover:text-[#111] border border-[#e0ddd4] hover:border-[#bbb] px-3 py-1 rounded-lg transition-all flex items-center gap-1.5"
+        className="text-[14px] font-semibold text-[#555] hover:text-[#111] border border-[#e0ddd4] hover:border-[#bbb] px-3 py-1 rounded-lg transition-all flex items-center gap-1.5"
       >
         <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.5">
           <path d="M6 1v10M1 6h10" strokeLinecap="round"/>
@@ -448,7 +444,7 @@ function MemberPicker({ users, selected, selectedUsers, onToggle }) {
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Buscar miembro..."
-                className="w-full bg-[#faf9f5] border border-[#e0ddd4] rounded-lg pl-8 pr-3 py-1.5 text-[12px] text-[#111] placeholder-[#bbb] outline-none focus:border-[#bbb] transition-colors font-sans"
+                className="w-full bg-[#faf9f5] border border-[#e0ddd4] rounded-lg pl-8 pr-3 py-1.5 text-[14px] text-[#111] placeholder-[#bbb] outline-none focus:border-[#bbb] transition-colors font-sans"
               />
             </div>
           </div>
@@ -456,7 +452,7 @@ function MemberPicker({ users, selected, selectedUsers, onToggle }) {
           {/* User list */}
           <div className="max-h-56 overflow-y-auto py-1">
             {filtered.length === 0 ? (
-              <p className="text-[12px] text-[#bbb] text-center py-4">Sin resultados</p>
+              <p className="text-[14px] text-[#bbb] text-center py-4">Sin resultados</p>
             ) : (
               filtered.map(u => {
                 const isSel = selected.includes(u.user_id)
@@ -468,7 +464,7 @@ function MemberPicker({ users, selected, selectedUsers, onToggle }) {
                     className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-[#f5f3eb] transition-colors text-left"
                   >
                     <Avatar user={u} size={28} />
-                    <span className="flex-1 text-[13px] font-medium text-[#222]">
+                    <span className="flex-1 text-[15px] font-medium text-[#222]">
                       {u.first_name} {u.last_name}
                     </span>
                     {isSel && (
@@ -536,7 +532,7 @@ function SortableTask({ task, canDelete, onChangeName, onDelete }) {
 function Field({ label, children }) {
   return (
     <div>
-      <label className="block text-[10px] font-mono font-semibold tracking-[0.14em] uppercase text-[#777] mb-2">
+      <label className="block text-[12px] font-mono font-semibold tracking-[0.14em] uppercase text-[#777] mb-2">
         {label}
       </label>
       {children}
