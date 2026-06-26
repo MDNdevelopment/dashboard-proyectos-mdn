@@ -3,9 +3,11 @@ import { supabase } from '../../supabase'
 import { useAuth } from '../../context/AuthContext'
 import { ESTADOS } from './constants'
 import UserPickerSingle from './UserPickerSingle'
+import { teamMemberUsers } from '../../utils/lineFilters'
 
 const EMPTY = {
   team_id: '',
+  client_id: '',
   client: '',
   description: '',
   source: '',
@@ -17,13 +19,14 @@ const EMPTY = {
   status: 'En proceso',
 }
 
-export default function TaskModal({ task = null, teams = [], users = [], defaultTeamId = null, onClose, onCreated, onUpdated }) {
+export default function TaskModal({ task = null, teams = [], clients = [], users = [], defaultTeamId = null, onClose, onCreated, onUpdated }) {
   const { userProfile } = useAuth()
   const isEdit = task != null
   const [form, setForm] = useState(() => {
     if (isEdit) {
       return {
         team_id: task.team_id ?? '',
+        client_id: task.client_id ?? '',
         client: task.client ?? '',
         description: task.description ?? '',
         source: task.source ?? '',
@@ -60,6 +63,7 @@ export default function TaskModal({ task = null, teams = [], users = [], default
     const payload = {
       company_id: userProfile?.company_id ?? '',
       team_id: form.team_id,
+      client_id: form.client_id || null,
       client: form.client || null,
       description: form.description.trim(),
       source: form.source || null,
@@ -132,7 +136,23 @@ export default function TaskModal({ task = null, teams = [], users = [], default
 
           <div>
             <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Team *</label>
-            <select className="input-base" value={form.team_id} onChange={e => set('team_id', e.target.value)} required>
+            <select
+              className="input-base"
+              value={form.team_id}
+              onChange={e => {
+                const teamId = e.target.value
+                const newMembers = teams.find(t => t.id === teamId)?.member_user_ids ?? []
+                // Al cambiar de línea, resetear cliente y responsable si ya no pertenecen al team
+                setForm(f => ({
+                  ...f,
+                  team_id: teamId,
+                  client_id: '',
+                  client: '',
+                  assignee_id: newMembers.includes(f.assignee_id) ? f.assignee_id : null,
+                }))
+              }}
+              required
+            >
               <option value="">Seleccionar team...</option>
               {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
@@ -140,12 +160,40 @@ export default function TaskModal({ task = null, teams = [], users = [], default
 
           <div>
             <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Cliente</label>
-            <input
-              className="input-base"
-              value={form.client}
-              onChange={e => set('client', e.target.value)}
-              placeholder="Ej. Banco Exterior"
-            />
+            {(() => {
+              const lineClients = clients.filter(c => c.line_id === form.team_id)
+              // Tarea heredada: tiene nombre de texto pero sin client_id (pre-migración)
+              const hasLegacyName = form.client && !form.client_id
+              const clientNotInLine = form.client_id && !lineClients.some(c => c.id === form.client_id)
+              return (
+                <>
+                  <select
+                    className="input-base"
+                    value={form.client_id}
+                    onChange={e => {
+                      const chosen = lineClients.find(c => c.id === e.target.value)
+                      setForm(f => ({ ...f, client_id: e.target.value, client: chosen?.name ?? '' }))
+                    }}
+                  >
+                    <option value="">Sin cliente</option>
+                    {lineClients.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  {!form.team_id && (
+                    <p className="text-[12.5px] text-[#bbb] mt-1">Selecciona un team para ver los clientes disponibles.</p>
+                  )}
+                  {form.team_id && lineClients.length === 0 && (
+                    <p className="text-[12.5px] text-[#bbb] mt-1">No hay clientes en esta línea. Agrégalos en <strong>Empresa → Clientes</strong>.</p>
+                  )}
+                  {(hasLegacyName || clientNotInLine) && (
+                    <p className="text-[12.5px] text-[#F0871F] mt-1">
+                      Cliente previo: <strong>{form.client}</strong>. Selecciona uno de la lista para actualizar el vínculo.
+                    </p>
+                  )}
+                </>
+              )
+            })()}
           </div>
 
           <div>
@@ -172,12 +220,26 @@ export default function TaskModal({ task = null, teams = [], users = [], default
 
           <div>
             <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Responsable</label>
-            <UserPickerSingle
-              users={users}
-              selectedId={form.assignee_id}
-              onChange={id => set('assignee_id', id)}
-              placeholder="Asignar responsable..."
-            />
+            {(() => {
+              const selectedTeam = teams.find(t => t.id === form.team_id)
+              const memberIds = selectedTeam?.member_user_ids ?? []
+              const assigneeOptions = teamMemberUsers(users, selectedTeam, form.assignee_id)
+              return (
+                <>
+                  <UserPickerSingle
+                    users={assigneeOptions}
+                    selectedId={form.assignee_id}
+                    onChange={id => set('assignee_id', id)}
+                    placeholder="Asignar responsable..."
+                  />
+                  {form.team_id && memberIds.length === 0 && (
+                    <p className="text-[12.5px] text-[#bbb] mt-1">
+                      No hay miembros en esta línea. Agrégalos en <strong>Empresa → Líneas</strong>.
+                    </p>
+                  )}
+                </>
+              )
+            })()}
           </div>
 
           <div>

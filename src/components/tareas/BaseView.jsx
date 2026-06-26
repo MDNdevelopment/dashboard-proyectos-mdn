@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { isLate, isDragged, isClosed, fmtShort, ESTADOS, COL_META } from './constants'
 import { Avatar } from './UserPickerSingle'
+import { teamMemberUsers } from '../../utils/lineFilters'
 
 function StatusBadge({ status }) {
   const meta = COL_META[status] ?? { color: '#ccc', textColor: '#111' }
@@ -14,20 +16,33 @@ function StatusBadge({ status }) {
   )
 }
 
-export default function BaseView({ tasks, teams, team, usersMap, onOpenTask }) {
-  const [q, setQ] = useState('')
-  const [fStatus, setFStatus] = useState('')
-  const [fClient, setFClient] = useState('')
-  const [fSupport, setFSupport] = useState('')  // '' | 'with' | 'without'
-  const [fAlert, setFAlert] = useState('')      // '' | 'late' | 'drag' | 'ok'
+export default function BaseView({ tasks, teams, team, usersMap, clientsById = new Map(), onOpenTask }) {
+  const [searchParams] = useSearchParams()
 
-  const teamTasks = team ? tasks.filter(t => t.team_id === team.id) : []
+  // Inicializar filtros desde URL params (solo en el primer render)
+  const [q, setQ] = useState('')
+  const [fStatus, setFStatus] = useState(() => searchParams.get('status') ?? '')
+  const [fClient, setFClient] = useState('')
+  const [fSupport, setFSupport] = useState('')   // '' | 'with' | 'without'
+  const [fAlert, setFAlert] = useState(() => searchParams.get('fAlert') ?? '')  // '' | 'late' | 'drag' | 'ok'
+  const [fAssignee, setFAssignee] = useState(() => searchParams.get('assignee') ?? '') // user_id | ''
+
+  // Solo tareas del team seleccionado
+  const baseTasks = team ? tasks.filter(t => t.team_id === team.id) : []
+
   const clients = useMemo(
-    () => [...new Set(teamTasks.map(t => t.client).filter(Boolean))].sort(),
-    [teamTasks]
+    () => [...new Set(baseTasks.map(t => t.client).filter(Boolean))].sort(),
+    [baseTasks],
   )
 
-  const filtered = teamTasks.filter(t => {
+  // Responsable: solo miembros del team seleccionado
+  const usersList = useMemo(() => {
+    const allUsers = Array.from(usersMap.values())
+    return teamMemberUsers(allUsers, team)
+      .sort((a, b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`))
+  }, [team, usersMap])
+
+  const filtered = baseTasks.filter(t => {
     const sq = q.toLowerCase()
     if (sq && !((t.client ?? '').toLowerCase().includes(sq) || (t.description ?? '').toLowerCase().includes(sq))) return false
     if (fStatus && t.status !== fStatus) return false
@@ -37,11 +52,12 @@ export default function BaseView({ tasks, teams, team, usersMap, onOpenTask }) {
     if (fAlert === 'late' && !isLate(t)) return false
     if (fAlert === 'drag' && !isDragged(t)) return false
     if (fAlert === 'ok' && (isLate(t) || isDragged(t))) return false
+    if (fAssignee && t.assignee_id !== fAssignee) return false
     return true
   }).sort((a, b) => (b.request_date ?? '').localeCompare(a.request_date ?? ''))
 
-  const hasFilters = q || fStatus || fClient || fSupport || fAlert
-  function clearFilters() { setQ(''); setFStatus(''); setFClient(''); setFSupport(''); setFAlert('') }
+  const hasFilters = q || fStatus || fClient || fSupport || fAlert || fAssignee
+  function clearFilters() { setQ(''); setFStatus(''); setFClient(''); setFSupport(''); setFAlert(''); setFAssignee('') }
 
   function userDisplay(id) {
     const u = usersMap.get(id)
@@ -60,8 +76,8 @@ export default function BaseView({ tasks, teams, team, usersMap, onOpenTask }) {
     <div className="space-y-4">
       {/* Filter bar */}
       <div className="space-y-1.5">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-          <div className="relative">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+          <div className="relative col-span-2 sm:col-span-1">
             <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#999] pointer-events-none" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="6.5" cy="6.5" r="5"/><path d="M10.5 10.5L14 14" strokeLinecap="round"/>
             </svg>
@@ -72,6 +88,14 @@ export default function BaseView({ tasks, teams, team, usersMap, onOpenTask }) {
               className="w-full pl-8 pr-3 py-2 text-[14.5px] bg-white border border-[#e0ddd4] rounded-lg outline-none focus:border-[#bbb] transition-colors"
             />
           </div>
+          <select value={fAssignee} onChange={e => setFAssignee(e.target.value)} className="input-base text-[14.5px] py-2">
+            <option value="">Responsable: todos</option>
+            {usersList.map(u => (
+              <option key={u.user_id} value={u.user_id}>
+                {u.first_name} {u.last_name}
+              </option>
+            ))}
+          </select>
           <select value={fStatus} onChange={e => setFStatus(e.target.value)} className="input-base text-[14.5px] py-2">
             <option value="">Estatus: todos</option>
             {ESTADOS.map(s => <option key={s} value={s}>{s}</option>)}
@@ -94,7 +118,7 @@ export default function BaseView({ tasks, teams, team, usersMap, onOpenTask }) {
         </div>
         <div className="flex items-center justify-between">
           <span className="text-[14px] text-[#888]">
-            {hasFilters ? `${filtered.length} de ${teamTasks.length}` : teamTasks.length} tarea{teamTasks.length !== 1 ? 's' : ''}
+            {hasFilters ? `${filtered.length} de ${baseTasks.length}` : baseTasks.length} tarea{baseTasks.length !== 1 ? 's' : ''}
           </span>
           {hasFilters && (
             <button onClick={clearFilters} className="text-[14px] font-semibold text-[#888] hover:text-[#111] transition-colors">
@@ -105,7 +129,7 @@ export default function BaseView({ tasks, teams, team, usersMap, onOpenTask }) {
       </div>
 
       {/* Table */}
-      {teamTasks.length === 0 ? (
+      {baseTasks.length === 0 ? (
         <div className="bg-white rounded-xl border border-[#e0ddd4] p-10 text-center">
           <p className="text-[16px] font-medium text-[#888] mb-1">Sin tareas</p>
           <p className="text-[14px] text-[#bbb]">Crea la primera tarea con el botón "Nueva tarea"</p>
@@ -143,9 +167,25 @@ export default function BaseView({ tasks, teams, team, usersMap, onOpenTask }) {
                       className={`border-b border-[#f5f3eb] last:border-0 hover:bg-[#faf9f5] cursor-pointer transition-colors ${late ? 'bg-red-50/50' : ''}`}
                       onClick={() => onOpenTask(t)}
                     >
-                      <td className="px-4 py-3 font-medium text-[#111] max-w-[140px] truncate">
-                        {late && <span className="text-red-500 mr-1">⚠</span>}
-                        {t.client || <span className="text-[#bbb]">—</span>}
+                      <td className="px-4 py-3 font-medium text-[#111] max-w-[140px]">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {late && <span className="text-red-500 flex-shrink-0">⚠</span>}
+                          {(() => {
+                            const logo = t.client_id ? clientsById.get(t.client_id)?.logo_url : null
+                            const name = t.client
+                            if (!name) return <span className="text-[#bbb]">—</span>
+                            return (
+                              <>
+                                {logo ? (
+                                  <img src={logo} alt={name} className="w-7 h-7 rounded-full object-cover flex-shrink-0 border border-[#e0ddd4]" />
+                                ) : (
+                                  <span className="w-7 h-7 rounded-full bg-[#f0ede3] flex items-center justify-center flex-shrink-0 text-[12px] font-bold text-[#aaa] uppercase">{name[0]}</span>
+                                )}
+                                <span className="truncate">{name}</span>
+                              </>
+                            )
+                          })()}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-[#333] max-w-[220px]">
                         <span className="line-clamp-2">{t.description}</span>
