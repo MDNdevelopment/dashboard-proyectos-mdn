@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { useAuth } from '../context/AuthContext'
 import PanoramaView from '../components/tareas/PanoramaView'
@@ -7,7 +8,7 @@ import BaseView from '../components/tareas/BaseView'
 import KanbanView from '../components/tareas/KanbanView'
 import StandupView from '../components/tareas/StandupView'
 import TaskModal from '../components/tareas/TaskModal'
-import TeamManagerModal from '../components/tareas/TeamManagerModal'
+import { loadLines, loadClients } from '../components/metricas/metricsApi'
 import { currentMonthIndex, fmtMonth } from '../components/tareas/constants'
 
 const VIEWS = [
@@ -40,18 +41,21 @@ const VIEWS = [
 
 export default function TareasPage() {
   const { userProfile } = useAuth()
+  const [searchParams] = useSearchParams()
   const [teams, setTeams] = useState([])
-  const [teamMembers, setTeamMembers] = useState([])
   const [tasks, setTasks] = useState([])
+  const [clients, setClients] = useState([])
+  const [clientsById, setClientsById] = useState(new Map())
   const [usersMap, setUsersMap] = useState(new Map())
   const [allUsers, setAllUsers] = useState([])
   const [loading, setLoading] = useState(true)
-  const [activeView, setActiveView] = useState('panorama')
+  const [activeView, setActiveView] = useState(
+    () => searchParams.get('view') === 'base' ? 'base' : 'panorama',
+  )
   const [activeTeamId, setActiveTeamId] = useState(null)
   const [monthIdx, setMonthIdx] = useState(currentMonthIndex())
   // null = closed, undefined = new task, object = edit existing
   const [taskModal, setTaskModal] = useState(null)
-  const [showTeamManager, setShowTeamManager] = useState(false)
 
   const activeTeam = teams.find(t => t.id === activeTeamId) ?? null
 
@@ -60,17 +64,20 @@ export default function TareasPage() {
     setLoading(true)
     const companyId = userProfile.company_id
 
-    const [teamsRes, membersRes, tasksRes, usersRes] = await Promise.all([
-      supabase.from('teams').select('*').eq('company_id', companyId).order('created_at'),
-      supabase.from('team_members').select('*'),
+    const [linesRes, tasksRes, usersRes, clientsRes] = await Promise.all([
+      loadLines(companyId),
       supabase.from('tasks').select('*').eq('company_id', companyId).order('created_at', { ascending: false }),
       supabase.from('users').select('user_id, first_name, last_name, avatar_url, access_level, position:positions(position_name)').eq('company_id', companyId).order('first_name'),
+      loadClients(companyId),
     ])
 
-    const fetchedTeams = teamsRes.data ?? []
+    const fetchedTeams = linesRes.data ?? []
     setTeams(fetchedTeams)
-    setTeamMembers(membersRes.data ?? [])
     setTasks(tasksRes.data ?? [])
+
+    const fetchedClients = clientsRes.data ?? []
+    setClients(fetchedClients)
+    setClientsById(new Map(fetchedClients.map(c => [c.id, c])))
 
     const users = usersRes.data ?? []
     setAllUsers(users)
@@ -102,8 +109,8 @@ export default function TareasPage() {
           return prev
         })
       })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, () => loadAll())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'team_members' }, () => loadAll())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'metric_lines' }, () => loadAll())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'metric_clients' }, () => loadAll())
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
@@ -140,18 +147,6 @@ export default function TareasPage() {
               <p className="text-[15px] text-[#888] mt-0.5">QC · Cierre · Stand-up mensual</p>
             </div>
             <div className="flex items-center gap-2 w-full sm:w-auto">
-              <button
-                onClick={() => setShowTeamManager(true)}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl border border-[#e0ddd4] text-[15px] font-semibold text-[#555] hover:bg-[#f5f3eb] hover:text-[#111] transition-colors"
-              >
-                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
-                  <circle cx="6" cy="5.5" r="2.5"/>
-                  <path d="M1 14c0-3 2.2-5 5-5" strokeLinecap="round"/>
-                  <circle cx="12" cy="8.5" r="2"/>
-                  <path d="M9 14c0-2 1.3-3.5 3-3.5s3 1.5 3 3.5" strokeLinecap="round"/>
-                </svg>
-                Gestionar teams
-              </button>
               <button
                 onClick={openNewTask}
                 className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-[#111] text-white text-[15px] font-bold px-4 py-2.5 rounded-xl hover:bg-[#222] transition-colors"
@@ -240,14 +235,8 @@ export default function TareasPage() {
 
           {!loading && teams.length === 0 && (
             <div className="bg-white rounded-xl border border-[#e0ddd4] p-10 text-center mb-4">
-              <p className="text-[17px] font-semibold text-[#888] mb-1">No hay teams creados</p>
-              <p className="text-[15px] text-[#bbb] mb-4">Crea el primer team para empezar a gestionar tareas</p>
-              <button
-                onClick={() => setShowTeamManager(true)}
-                className="px-4 py-2 bg-[#111] text-white text-[15px] font-bold rounded-xl hover:bg-[#222] transition-colors"
-              >
-                Crear primer team
-              </button>
+              <p className="text-[17px] font-semibold text-[#888] mb-1">No hay líneas creadas</p>
+              <p className="text-[15px] text-[#bbb]">Crea las líneas desde <strong>Empresa → Líneas</strong> para empezar a gestionar tareas</p>
             </div>
           )}
 
@@ -261,13 +250,13 @@ export default function TareasPage() {
                 <PanoramaView teams={teams} tasks={tasks} monthIdx={monthIdx} onSelectTeam={selectTeam} />
               )}
               {activeView === 'team' && (
-                <TeamView team={activeTeam} tasks={tasks} usersMap={usersMap} monthIdx={monthIdx} onOpenTask={openEditTask} />
+                <TeamView team={activeTeam} tasks={tasks} usersMap={usersMap} monthIdx={monthIdx} clientsById={clientsById} onOpenTask={openEditTask} />
               )}
               {activeView === 'base' && (
-                <BaseView tasks={tasks} teams={teams} team={activeTeam} usersMap={usersMap} onOpenTask={openEditTask} />
+                <BaseView tasks={tasks} teams={teams} team={activeTeam} usersMap={usersMap} clientsById={clientsById} onOpenTask={openEditTask} />
               )}
               {activeView === 'kanban' && (
-                <KanbanView team={activeTeam} tasks={tasks} usersMap={usersMap} onOpenTask={openEditTask} onUpdated={handleUpdated} />
+                <KanbanView team={activeTeam} tasks={tasks} usersMap={usersMap} clientsById={clientsById} onOpenTask={openEditTask} onUpdated={handleUpdated} />
               )}
               {activeView === 'standup' && (
                 <StandupView team={activeTeam} tasks={tasks} teams={teams} usersMap={usersMap} monthIdx={monthIdx} onOpenTask={openEditTask} />
@@ -281,6 +270,7 @@ export default function TareasPage() {
         <TaskModal
           task={taskModal === undefined ? null : taskModal}
           teams={teams}
+          clients={clients}
           users={allUsers}
           defaultTeamId={activeTeamId}
           onClose={closeTaskModal}
@@ -289,15 +279,6 @@ export default function TareasPage() {
         />
       )}
 
-      {showTeamManager && (
-        <TeamManagerModal
-          teams={teams}
-          teamMembers={teamMembers}
-          users={allUsers}
-          onClose={() => setShowTeamManager(false)}
-          onTeamsChanged={loadAll}
-        />
-      )}
     </>
   )
 }

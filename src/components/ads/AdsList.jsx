@@ -35,7 +35,7 @@ function exportCSV(campaigns, usersMap) {
   URL.revokeObjectURL(url)
 }
 
-export default function AdsList({ campaigns, loading, canManage, usersMap, onSelect, onUpdated, onDeleted, onEdit }) {
+export default function AdsList({ campaigns, loading, canManage, usersMap, clientsById, onSelect, onUpdated, onDeleted, onEdit }) {
   const [search, setSearch]               = useState('')
   const [filterStatus, setFilterStatus]   = useState('all')
   const [filterPriority, setFilterPriority] = useState('all')
@@ -241,6 +241,7 @@ export default function AdsList({ campaigns, loading, canManage, usersMap, onSel
                   index={i}
                   canManage={canManage}
                   usersMap={usersMap}
+                  clientsById={clientsById}
                   onSelect={onSelect}
                   onStatusCycle={handleStatusCycle}
                   onEdit={onEdit}

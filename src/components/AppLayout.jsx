@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useSearchParams } from 'react-router-dom'
 import { supabase } from '../supabase'
 import Sidebar from './Sidebar'
 import ProjectModal from './ProjectModal'
@@ -10,6 +10,7 @@ import { exportProjectsToMarkdown, downloadMarkdown } from '../utils/exportProje
 const normalize = (row) => ({ ...row, createdAt: row.created_at })
 
 export default function AppLayout() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
   const [connected, setConnected] = useState(false)
@@ -88,6 +89,20 @@ export default function AppLayout() {
       await supabase.from('projects').delete().eq('id', id)
     }
   }
+
+  // Abrir el modal de un proyecto específico desde ?projectId=uuid (deeplink desde Mi Perfil v2)
+  useEffect(() => {
+    const projectId = searchParams.get('projectId')
+    if (!projectId || projects.length === 0) return
+    const project = projects.find(p => p.id === projectId)
+    if (project) setModalProject(project)
+    // Limpiar el param del URL después de procesar
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      next.delete('projectId')
+      return next
+    }, { replace: true })
+  }, [searchParams, projects])
 
   const exportProjects = async () => {
     const { data: users } = await supabase

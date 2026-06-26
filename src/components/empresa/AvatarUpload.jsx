@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import ReactCrop from 'react-image-crop'
 import 'react-image-crop/dist/ReactCrop.css'
 import { Avatar } from '../tareas/UserPickerSingle'
@@ -17,7 +18,7 @@ import { cropToBlob, uploadToCloudinary } from '../../utils/uploadToCloudinary'
  *                 abrirlo programáticamente con triggerRef.current.click() desde una acción de usuario.
  *                 Útil cuando el trigger visual no es el avatar sino un botón externo (ej. Sidebar).
  */
-export default function AvatarUpload({ user, onUploaded, size = 72, label = 'Cambiar foto', triggerRef }) {
+export default function AvatarUpload({ user, onUploaded, size = 72, label = 'Cambiar foto', triggerRef, publicId, circular = true, uploadPreset }) {
   const inputRef = useRef(null)
   const imgRef = useRef(null)
 
@@ -27,7 +28,7 @@ export default function AvatarUpload({ user, onUploaded, size = 72, label = 'Cam
   })
 
   const [imgSrc, setImgSrc] = useState(null)      // dataURL de la imagen seleccionada
-  const [crop, setCrop] = useState({ unit: '%', width: 80, aspect: 1 })
+  const [crop, setCrop] = useState(circular ? { unit: '%', width: 80, aspect: 1 } : { unit: '%', width: 80 })
   const [completedCrop, setCompletedCrop] = useState(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState(null)
@@ -38,18 +39,52 @@ export default function AvatarUpload({ user, onUploaded, size = 72, label = 'Cam
     setError(null)
     const reader = new FileReader()
     reader.onload = ev => {
-      setImgSrc(ev.target.result)
-      setCrop({ unit: '%', width: 80, aspect: 1 })
-      setCompletedCrop(null)
+      const dataUrl = ev.target.result
+      if (!circular) {
+        setImgSrc(dataUrl)
+        setCrop({ unit: '%', width: 90 })
+        setCompletedCrop(null)
+        return
+      }
+      // Para recorte circular: primero centrar la imagen en un canvas cuadrado con fondo blanco
+      // para que logos/fotos rectangulares quepan bien dentro del círculo
+      const img = new Image()
+      img.onload = () => {
+        const side = Math.max(img.naturalWidth, img.naturalHeight)
+        const canvas = document.createElement('canvas')
+        canvas.width = side
+        canvas.height = side
+        const ctx = canvas.getContext('2d')
+        ctx.fillStyle = '#ffffff'
+        ctx.fillRect(0, 0, side, side)
+        ctx.drawImage(img, Math.round((side - img.naturalWidth) / 2), Math.round((side - img.naturalHeight) / 2))
+        setImgSrc(canvas.toDataURL('image/png'))
+        setCrop({ unit: '%', width: 80, aspect: 1 })
+        setCompletedCrop(null)
+      }
+      img.src = dataUrl
     }
     reader.readAsDataURL(file)
-    // Limpiar el input para poder seleccionar el mismo archivo otra vez
     e.target.value = ''
   }
 
   const onImageLoad = useCallback(e => {
+    const { width: w, height: h } = e.currentTarget
     imgRef.current = e.currentTarget
-  }, [])
+
+    // Pre-seleccionar un recorte inicial centrado para que el botón esté habilitado desde el inicio
+    let initial
+    if (circular) {
+      const side = Math.round(Math.min(w, h) * 0.8)
+      initial = { unit: 'px', width: side, height: side, x: Math.round((w - side) / 2), y: Math.round((h - side) / 2) }
+    } else {
+      const iw = Math.round(w * 0.9)
+      const ih = Math.round(h * 0.9)
+      initial = { unit: 'px', width: iw, height: ih, x: Math.round((w - iw) / 2), y: Math.round((h - ih) / 2) }
+    }
+    setCrop(initial)
+    setCompletedCrop(initial)
+  }, [circular])
 
   async function handleUpload() {
     if (!completedCrop || !imgRef.current) return
@@ -57,7 +92,7 @@ export default function AvatarUpload({ user, onUploaded, size = 72, label = 'Cam
     setError(null)
     try {
       const blob = await cropToBlob(imgRef.current, completedCrop)
-      const url = await uploadToCloudinary(blob)
+      const url = await uploadToCloudinary(blob, publicId ?? user?.user_id, uploadPreset)
       setImgSrc(null)
       onUploaded(url)
     } catch (err) {
@@ -83,9 +118,25 @@ export default function AvatarUpload({ user, onUploaded, size = 72, label = 'Cam
           className="relative group focus:outline-none"
           aria-label={label || 'Cambiar foto'}
         >
-          <Avatar user={user} size={size} />
+          {circular ? (
+            <Avatar user={user} size={size} />
+          ) : (
+            <div
+              className="flex items-center justify-center rounded-xl border border-[#e0ddd4] bg-[#f8f7f2] overflow-hidden"
+              style={{ width: size * 2.2, height: size }}
+            >
+              {user?.avatar_url
+                ? <img
+                    src={user.avatar_url}
+                    alt="logo"
+                    style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', padding: '6px' }}
+                  />
+                : <span className="text-[13px] font-mono text-[#aaa]">Logo</span>
+              }
+            </div>
+          )}
           {/* Overlay al hover */}
-          <span className="absolute inset-0 rounded-full bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+          <span className={`absolute inset-0 ${circular ? 'rounded-full' : 'rounded-xl'} bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center`}>
             <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="white" strokeWidth="1.8">
               <path d="M3 17h14M10 3l3 3-7 7H3v-3l7-7z" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
@@ -107,11 +158,11 @@ export default function AvatarUpload({ user, onUploaded, size = 72, label = 'Cam
         data-testid="avatar-file-input"
       />
 
-      {/* Modal de recorte */}
-      {imgSrc && (
+      {/* Modal de recorte — portal para evitar que el overflow del sidebar lo recorte */}
+      {imgSrc && createPortal(
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-[3px]"
-          onClick={e => { if (e.target === e.currentTarget) handleCancel() }}
+          onMouseDown={e => { if (e.target === e.currentTarget) handleCancel() }}
         >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
             {/* Header */}
@@ -135,8 +186,8 @@ export default function AvatarUpload({ user, onUploaded, size = 72, label = 'Cam
                 crop={crop}
                 onChange={c => setCrop(c)}
                 onComplete={c => setCompletedCrop(c)}
-                aspect={1}
-                circularCrop
+                aspect={circular ? 1 : undefined}
+                circularCrop={circular}
                 minWidth={40}
                 minHeight={40}
               >
@@ -145,12 +196,14 @@ export default function AvatarUpload({ user, onUploaded, size = 72, label = 'Cam
                   src={imgSrc}
                   onLoad={onImageLoad}
                   alt="Preview para recortar"
-                  className="max-h-64 w-auto object-contain"
+                  className="max-h-64 max-w-full"
                 />
               </ReactCrop>
 
               <p className="text-[13px] font-mono text-[#888] text-center">
-                La imagen se recortará a un círculo (máx. 512×512 px, ~WebP 85%).
+                {circular
+                  ? 'La imagen se recortará a un círculo (máx. 512×512 px, ~WebP 85%).'
+                  : 'Selecciona el área a recortar (máx. 512 px, ~WebP 85%).'}
               </p>
 
               {error && (
@@ -179,7 +232,8 @@ export default function AvatarUpload({ user, onUploaded, size = 72, label = 'Cam
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   )

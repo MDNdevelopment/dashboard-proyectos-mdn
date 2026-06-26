@@ -2,20 +2,32 @@ import { supabase } from '../../supabase'
 import { isLate, fmtShort, ESTADOS, COL_META } from './constants'
 import { Avatar } from './UserPickerSingle'
 
-function KanbanCard({ task, usersMap, onOpen, onChangeStatus }) {
+function KanbanCard({ task, usersMap, clientsById, onOpen, onChangeStatus }) {
   const late = isLate(task)
   const assignee = task.assignee_id ? usersMap.get(task.assignee_id) : null
   const support = task.support_id ? usersMap.get(task.support_id) : null
+  const logo = task.client_id ? clientsById?.get(task.client_id)?.logo_url : null
 
   return (
     <div
       className={`bg-white border rounded-xl p-3 cursor-pointer hover:shadow-md transition-all group ${late ? 'border-red-200' : 'border-[#e0ddd4]'}`}
       onClick={() => onOpen(task)}
     >
-      <p className="text-[14.5px] font-bold text-[#111] leading-tight mb-1">
-        {late && <span className="text-red-400 mr-1">⚠</span>}
-        {task.client || <span className="text-[#bbb] font-normal">Sin cliente</span>}
-      </p>
+      <div className="flex items-center gap-1.5 mb-1">
+        {late && <span className="text-red-400 flex-shrink-0">⚠</span>}
+        {task.client ? (
+          <>
+            {logo ? (
+              <img src={logo} alt={task.client} className="w-4 h-4 rounded-full object-cover flex-shrink-0 border border-[#e0ddd4]" />
+            ) : (
+              <span className="w-4 h-4 rounded-full bg-[#f0ede3] flex items-center justify-center flex-shrink-0 text-[9px] font-bold text-[#aaa] uppercase">{task.client[0]}</span>
+            )}
+            <p className="text-[14.5px] font-bold text-[#111] leading-tight truncate">{task.client}</p>
+          </>
+        ) : (
+          <p className="text-[14.5px] font-bold text-[#111] leading-tight"><span className="text-[#bbb] font-normal">Sin cliente</span></p>
+        )}
+      </div>
       <p className="text-[14px] text-[#555] line-clamp-2 mb-2">{task.description}</p>
       {support && (
         <p className="text-[13px] text-[#888] mb-2">
@@ -51,7 +63,7 @@ function KanbanCard({ task, usersMap, onOpen, onChangeStatus }) {
   )
 }
 
-export default function KanbanView({ team, tasks, usersMap, onOpenTask, onUpdated }) {
+export default function KanbanView({ team, tasks, usersMap, clientsById = new Map(), onOpenTask, onUpdated }) {
   if (!team) {
     return (
       <div className="bg-white rounded-xl border border-[#e0ddd4] p-10 text-center">
@@ -101,6 +113,7 @@ export default function KanbanView({ team, tasks, usersMap, onOpenTask, onUpdate
                       key={t.id}
                       task={t}
                       usersMap={usersMap}
+                      clientsById={clientsById}
                       onOpen={onOpenTask}
                       onChangeStatus={handleChangeStatus}
                     />

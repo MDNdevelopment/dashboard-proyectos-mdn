@@ -25,6 +25,7 @@ export default function AdsCard({
   index,
   canManage,
   usersMap,
+  clientsById,
   onSelect,
   onStatusCycle,
   onEdit,
@@ -100,7 +101,24 @@ export default function AdsCard({
 
       {/* Client */}
       <td className="px-3 py-2.5 text-[14px] text-[#444] whitespace-nowrap">
-        {campaign.client}
+        {campaign.client ? (
+          <div className="flex items-center gap-1.5">
+            {(() => {
+              const logo = campaign.client_id ? clientsById?.get(campaign.client_id)?.logo_url : null
+              const name = campaign.client
+              return logo ? (
+                <img src={logo} alt={name} className="w-5 h-5 rounded-full object-cover flex-shrink-0 border border-[#e0ddd4]" />
+              ) : (
+                <span className="w-5 h-5 rounded-full bg-[#f0ede3] flex items-center justify-center flex-shrink-0 text-[10px] font-bold text-[#aaa] uppercase">
+                  {name[0]}
+                </span>
+              )
+            })()}
+            <span>{campaign.client}</span>
+          </div>
+        ) : (
+          <span className="text-[#bbb]">—</span>
+        )}
       </td>
 
       {/* Assignee */}

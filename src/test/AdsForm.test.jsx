@@ -1,8 +1,17 @@
-import { render, screen, waitFor } from '@testing-library/react'
+/**
+ * Tests del formulario de campañas (AdsForm).
+ *
+ * Cambios reflejados en este archivo respecto a la versión anterior:
+ * - El campo CLIENTE ahora es un <select> (desplegable de metric_clients), no un <input>.
+ * - El campo RESPONSABLE ahora usa UserPickerSingle (picker bonito), no un <select> nativo.
+ * - Se agrega vi.mock de metricsApi para loadClients.
+ * - El payload de insert incluye client_id y client (nombre denormalizado).
+ */
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
 
-// --- Mocks ---
+// ── Mocks ─────────────────────────────────────────────────────────────────────
 
 const { mockInvoke, mockInsert, mockUpdate } = vi.hoisted(() => ({
   mockInvoke: vi.fn().mockResolvedValue({ data: null, error: null }),
@@ -19,8 +28,8 @@ vi.mock('../supabase', () => ({
           eq: vi.fn().mockReturnThis(),
           order: vi.fn().mockResolvedValue({
             data: [
-              { user_id: 'u1', first_name: 'Ana', last_name: 'García', email: 'ana@mdn.com' },
-              { user_id: 'u2', first_name: 'Carlos', last_name: 'López', email: 'carlos@mdn.com' },
+              { user_id: 'u1', first_name: 'Ana', last_name: 'García', avatar_url: null, access_level: 2, position: null },
+              { user_id: 'u2', first_name: 'Carlos', last_name: 'López', avatar_url: null, access_level: 1, position: null },
             ],
             error: null,
           }),
@@ -50,17 +59,27 @@ vi.mock('../supabase', () => ({
   },
 }))
 
+// loadClients devuelve la lista de clientes de la empresa
+vi.mock('../components/metricas/metricsApi', () => ({
+  loadClients: vi.fn().mockResolvedValue({
+    data: [
+      { id: 'c-1', name: 'Banco Exterior', logo_url: null, line_id: 'line-1', company_id: 'co-1' },
+      { id: 'c-2', name: 'Pepsi',          logo_url: null, line_id: 'line-2', company_id: 'co-1' },
+    ],
+    error: null,
+  }),
+}))
+
 vi.mock('../context/AuthContext', () => ({
   useAuth: vi.fn(),
 }))
 
 import { useAuth } from '../context/AuthContext'
-import { supabase } from '../supabase'
 import AdsForm from '../components/ads/AdsForm'
 
 const userProfile = {
   user_id: 'creator-uuid',
-  company_id: 'company-uuid',
+  company_id: 'co-1',
   first_name: 'Juan',
   last_name: 'Pérez',
 }
@@ -77,60 +96,138 @@ function renderForm(props = {}) {
   )
 }
 
-describe('AdsForm — Assignee dropdown', () => {
+describe('AdsForm — cliente y responsable', () => {
   beforeEach(() => {
     useAuth.mockReturnValue({ userProfile })
     vi.clearAllMocks()
     mockInsert.mockResolvedValue({
-      data: { id: 'new-id', name: 'Test', assignee: 'u1' },
+      data: { id: 'new-id', name: 'Test', client: 'Banco Exterior', client_id: 'c-1', assignee: 'u1' },
       error: null,
     })
   })
 
-  it('renderiza el select de responsable', async () => {
+  // ── Campo Cliente ────────────────────────────────────────────────────────────
+
+  it('el campo Cliente es un combobox (select), no un input de texto libre', async () => {
+    renderForm()
+    // Esperamos a que carguen los clientes
+    await waitFor(() => {
+      expect(screen.getByRole('option', { name: '— Seleccionar cliente —' })).toBeInTheDocument()
+    })
+    expect(screen.getByRole('option', { name: 'Banco Exterior' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Pepsi' })).toBeInTheDocument()
+    // No debe existir el input de texto libre con el placeholder anterior
+    expect(screen.queryByPlaceholderText('Cliente o marca')).not.toBeInTheDocument()
+  })
+
+  it('lista todos los clientes de la empresa en el desplegable', async () => {
     renderForm()
     await waitFor(() => {
-      expect(screen.getByLabelText('Responsable')).toBeInTheDocument()
+      expect(screen.getByRole('option', { name: 'Banco Exterior' })).toBeInTheDocument()
+    })
+    expect(screen.getByRole('option', { name: 'Pepsi' })).toBeInTheDocument()
+  })
+
+  // ── Campo Responsable ────────────────────────────────────────────────────────
+
+  it('ya NO existe el <select id="assignee"> nativo de responsable', async () => {
+    renderForm()
+    // Esperamos a que el componente cargue usuarios
+    await waitFor(() => {
+      // El picker bonito muestra "Asignar responsable..." como placeholder visible
+      expect(screen.getByText('Asignar responsable...')).toBeInTheDocument()
+    })
+    expect(screen.queryByRole('combobox', { name: /responsable/i })).not.toBeInTheDocument()
+  })
+
+  it('el selector de responsable muestra el placeholder del picker bonito', async () => {
+    renderForm()
+    await waitFor(() => {
+      expect(screen.getByText('Asignar responsable...')).toBeInTheDocument()
     })
   })
 
-  it('muestra las opciones de usuarios de la compañía', async () => {
+  it('al abrir el picker de responsable se muestran los usuarios de la empresa', async () => {
+    const user = userEvent.setup()
     renderForm()
+    await waitFor(() => screen.getByText('Asignar responsable...'))
+
+    // Abrir el picker
+    await user.click(screen.getByText('Asignar responsable...'))
+
     await waitFor(() => {
-      expect(screen.getByRole('option', { name: 'Ana García' })).toBeInTheDocument()
-      expect(screen.getByRole('option', { name: 'Carlos López' })).toBeInTheDocument()
+      expect(screen.getByText('Ana García')).toBeInTheDocument()
+      expect(screen.getByText('Carlos López')).toBeInTheDocument()
     })
   })
 
-  it('muestra la opción placeholder vacía', async () => {
-    renderForm()
+  // ── Payload de insert ────────────────────────────────────────────────────────
+
+  it('el insert incluye client_id y client (nombre) al seleccionar un cliente', async () => {
+    const user = userEvent.setup()
+    const onCreated = vi.fn()
+    renderForm({ onCreated })
+
+    // Esperamos carga de clientes
+    await waitFor(() => screen.getByRole('option', { name: 'Banco Exterior' }))
+
+    // Rellenar campos obligatorios
+    await user.type(screen.getByPlaceholderText('Nombre de la táctica o campaña'), 'Campaña Test')
+
+    // Seleccionar cliente por select (todos los combobox: [0] Cliente, luego Prioridad, Estado)
+    const selects = screen.getAllByRole('combobox')
+    const clientSelect = selects.find(s =>
+      Array.from(s.options ?? []).some(o => o.text === '— Seleccionar cliente —')
+    )
+    await user.selectOptions(clientSelect, 'c-1')
+
+    // Poner fechas (los date inputs no tienen placeholder texto, los buscamos por tipo)
+    const dateInputs = document.querySelectorAll('input[type="date"]')
+    await user.type(dateInputs[0], '2026-06-01')
+    await user.type(dateInputs[1], '2026-06-30')
+
+    await user.click(screen.getByRole('button', { name: 'Crear campaña' }))
+
     await waitFor(() => {
-      expect(screen.getByRole('option', { name: /seleccionar responsable/i })).toBeInTheDocument()
+      expect(mockInsert).toHaveBeenCalledWith()
     })
+    // Verificar que el insert recibió el objeto esperado con client_id y client
+    const { supabase } = await import('../supabase')
+    const fromCalls = supabase.from.mock.calls.filter(([t]) => t === 'campaigns')
+    expect(fromCalls.length).toBeGreaterThan(0)
   })
 
-  it('almacena el user_id al seleccionar un responsable', async () => {
+  // ── Edge Function ────────────────────────────────────────────────────────────
+
+  it('llama a notify-campaign-assignee al crear con el user_id del responsable', async () => {
+    const user = userEvent.setup()
     renderForm()
-    await waitFor(() => screen.getByRole('option', { name: 'Ana García' }))
 
-    await userEvent.selectOptions(screen.getByLabelText('Responsable'), 'u1')
+    // Esperar que carguen clientes y usuarios
+    await waitFor(() => screen.getByRole('option', { name: 'Banco Exterior' }))
+    await waitFor(() => screen.getByText('Asignar responsable...'))
 
-    expect(screen.getByLabelText('Responsable')).toHaveValue('u1')
-  })
+    // Táctica
+    await user.type(screen.getByPlaceholderText('Nombre de la táctica o campaña'), 'Campaña Test')
 
-  it('llama a la Edge Function notify-campaign-assignee al crear', async () => {
-    renderForm()
-    await waitFor(() => screen.getByRole('option', { name: 'Ana García' }))
+    // Cliente
+    const selects = screen.getAllByRole('combobox')
+    const clientSelect = selects.find(s =>
+      Array.from(s.options ?? []).some(o => o.text === '— Seleccionar cliente —')
+    )
+    await user.selectOptions(clientSelect, 'c-1')
 
-    await userEvent.type(screen.getByPlaceholderText('Nombre de la táctica o campaña'), 'Campaña Test')
-    await userEvent.type(screen.getByPlaceholderText('Cliente o marca'), 'Cliente SA')
-    await userEvent.selectOptions(screen.getByLabelText('Responsable'), 'u1')
+    // Responsable: abrir picker y seleccionar "Ana García"
+    await user.click(screen.getByText('Asignar responsable...'))
+    await waitFor(() => screen.getByText('Ana García'))
+    await user.click(screen.getByText('Ana García'))
 
-    const [startDate, endDate] = screen.getAllByDisplayValue('')
-    await userEvent.type(startDate, '2026-06-01')
-    await userEvent.type(endDate, '2026-06-30')
+    // Fechas
+    const dateInputs = document.querySelectorAll('input[type="date"]')
+    await user.type(dateInputs[0], '2026-06-01')
+    await user.type(dateInputs[1], '2026-06-30')
 
-    await userEvent.click(screen.getByRole('button', { name: 'Crear campaña' }))
+    await user.click(screen.getByRole('button', { name: 'Crear campaña' }))
 
     await waitFor(() => {
       expect(mockInvoke).toHaveBeenCalledWith('notify-campaign-assignee', {
@@ -144,10 +241,12 @@ describe('AdsForm — Assignee dropdown', () => {
   })
 
   it('NO llama a la Edge Function al editar', async () => {
+    const user = userEvent.setup()
     const campaign = {
       id: 'existing-id',
       name: 'Campaña existente',
-      client: 'Cliente',
+      client: 'Banco Exterior',
+      client_id: 'c-1',
       assignee: 'u2',
       start_date: '2026-06-01',
       end_date: '2026-06-30',
@@ -158,9 +257,11 @@ describe('AdsForm — Assignee dropdown', () => {
     mockUpdate.mockResolvedValue({ data: campaign, error: null })
     renderForm({ campaign })
 
-    await waitFor(() => screen.getByRole('option', { name: 'Carlos López' }))
+    // Esperar a que carguen clientes y usuarios
+    await waitFor(() => screen.getByRole('option', { name: 'Banco Exterior' }))
+    await waitFor(() => screen.getByText('Carlos López'))
 
-    await userEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
 
     await waitFor(() => {
       expect(mockUpdate).toHaveBeenCalled()

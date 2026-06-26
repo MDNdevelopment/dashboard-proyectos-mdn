@@ -29,6 +29,7 @@ const ADS_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" str
 const TASKS_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="1.5" y="2" width="13" height="12" rx="1.5"/><path d="M5 6h6M5 9h4" strokeLinecap="round"/><path d="M5 12h2" strokeLinecap="round"/></svg>
 const COMPANY_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="1" y="4" width="14" height="10" rx="1.5"/><path d="M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1" strokeLinecap="round"/><path d="M1 8h14" strokeLinecap="round"/></svg>
 const EVAL_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="8" cy="5.5" r="2.5"/><path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6" strokeLinecap="round"/><path d="M10.5 8.5l1 1 2-2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+const METRICS_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><polyline points="1 12 5 7 8 10 11 5 15 8" strokeLinecap="round" strokeLinejoin="round"/><path d="M1 14h14" strokeLinecap="round"/></svg>
 
 function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
   const { signOut, userProfile, refreshProfile } = useAuth()
@@ -93,16 +94,22 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
   const empresaDeptActive = location.pathname === '/empresa/departamentos'
   const empresaEmpActive = location.pathname === '/empresa/empleados'
   const empresaPregActive = location.pathname === '/empresa/preguntas'
+  const empresaCliActive  = location.pathname === '/empresa/clientes'
+  const empresaLinActive  = location.pathname === '/empresa/lineas'
   const [empresaOpen, setEmpresaOpen] = useState(isEmpresaRoute)
 
   const canEval = userProfile?.access_level >= 2 || userProfile?.admin === true
+  const isMetricasRoute = location.pathname.startsWith('/metricas')
+  const metricasDashActive = location.pathname === '/metricas'
+  const [metricasOpen, setMetricasOpen] = useState(isMetricasRoute)
   const isEvalRoute = location.pathname.startsWith('/evaluaciones')
   const evalActive = location.pathname === '/evaluaciones'
   const evalResumenActive = location.pathname === '/evaluaciones/resumen'
+  const evalPerfilActive = location.pathname === '/evaluaciones/perfil'
   const [evalOpen, setEvalOpen] = useState(isEvalRoute)
 
   return (
-    <aside className="w-[230px] flex-shrink-0 bg-white border-r border-[#e0ddd4] flex flex-col h-full">
+    <aside className="w-[260px] flex-shrink-0 bg-white border-r border-[#e0ddd4] flex flex-col h-full">
 
       {/* Brand */}
       <div className="px-5 pt-6 pb-5 border-b border-[#ece9df]">
@@ -199,7 +206,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
             </div>
           )}
 
-          {/* Tickets de soporte — menú desplegable */}
+          {/* Soporte técnico — menú desplegable */}
           <button
             onClick={() => setTicketsOpen(o => !o)}
             className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all text-left ${
@@ -213,7 +220,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
             <span className={`flex-shrink-0 ${isTicketsRoute ? 'text-[#111]' : 'text-[#666]'}`}>
               {TICKET_ICON}
             </span>
-            <span className="flex-1">Tickets de soporte</span>
+            <span className="flex-1">Soporte Técnico</span>
             <svg
               width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8"
               className={`flex-shrink-0 transition-transform duration-200 ${ticketsOpen ? 'rotate-180' : ''}`}
@@ -431,61 +438,158 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
                   </Link>
                 </>
               )}
+              {/* Clientes — visible a managers y admins */}
+              {canEval && (
+                <>
+                  <Link
+                    to="/empresa/clientes"
+                    className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
+                      empresaCliActive
+                        ? 'bg-[#FFB800] text-[#111]'
+                        : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+                    }`}
+                  >
+                    <span className={`flex-shrink-0 ${empresaCliActive ? 'text-[#111]' : 'text-[#666]'}`}>
+                      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M2 13c0-3 1.8-5 5-5s5 2 5 5"/><circle cx="7" cy="5" r="3"/><path d="M11.5 8.5c1.5.5 2.5 2 2.5 4" strokeLinecap="round"/><circle cx="11.5" cy="3.5" r="2"/></svg>
+                    </span>
+                    <span className="flex-1">Clientes</span>
+                  </Link>
+                  <Link
+                    to="/empresa/lineas"
+                    className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
+                      empresaLinActive
+                        ? 'bg-[#FFB800] text-[#111]'
+                        : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+                    }`}
+                  >
+                    <span className={`flex-shrink-0 ${empresaLinActive ? 'text-[#111]' : 'text-[#666]'}`}>
+                      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="1" y="5" width="5" height="6" rx="1.5"/><rect x="10" y="5" width="5" height="6" rx="1.5"/><path d="M6 8h4" strokeLinecap="round"/></svg>
+                    </span>
+                    <span className="flex-1">Líneas</span>
+                  </Link>
+                </>
+              )}
             </div>
           )}
 
-          {/* Evaluaciones — visible a access_level >= 2 || admin */}
+          {/* Evaluaciones — visible a todos los usuarios logueados */}
+          <>
+            <button
+              onClick={() => setEvalOpen(o => !o)}
+              className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all text-left ${
+                isEvalRoute && !evalOpen
+                  ? 'bg-[#FFB800] text-[#111]'
+                  : isEvalRoute
+                    ? 'text-[#111] bg-[#f5f3eb]'
+                    : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+              }`}
+            >
+              <span className={`flex-shrink-0 ${isEvalRoute ? 'text-[#111]' : 'text-[#666]'}`}>
+                {EVAL_ICON}
+              </span>
+              <span className="flex-1">Evaluaciones</span>
+              <svg
+                width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8"
+                className={`flex-shrink-0 transition-transform duration-200 ${evalOpen ? 'rotate-180' : ''}`}
+              >
+                <path d="M2 3.5l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+
+            {evalOpen && (
+              <div className="ml-3 pl-3 border-l-2 border-[#ece9df] space-y-0.5 mt-0.5">
+                {/* Mi Perfil — visible a todos */}
+                <Link
+                  to="/evaluaciones/perfil"
+                  className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
+                    evalPerfilActive
+                      ? 'bg-[#FFB800] text-[#111]'
+                      : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+                  }`}
+                >
+                  <span className={`flex-shrink-0 ${evalPerfilActive ? 'text-[#111]' : 'text-[#666]'}`}>
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
+                      <circle cx="8" cy="5.5" r="2.5"/>
+                      <path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6" strokeLinecap="round"/>
+                    </svg>
+                  </span>
+                  <span className="flex-1">Mi Perfil</span>
+                </Link>
+
+                {/* Empleados y Resumen — solo para managers/admins */}
+                {canEval && (
+                  <>
+                    <Link
+                      to="/evaluaciones"
+                      className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
+                        evalActive
+                          ? 'bg-[#FFB800] text-[#111]'
+                          : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+                      }`}
+                    >
+                      <span className={`flex-shrink-0 ${evalActive ? 'text-[#111]' : 'text-[#666]'}`}>
+                        {EVAL_ICON}
+                      </span>
+                      <span className="flex-1">Empleados</span>
+                    </Link>
+                    <Link
+                      to="/evaluaciones/resumen"
+                      className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
+                        evalResumenActive
+                          ? 'bg-[#FFB800] text-[#111]'
+                          : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+                      }`}
+                    >
+                      <span className={`flex-shrink-0 ${evalResumenActive ? 'text-[#111]' : 'text-[#666]'}`}>
+                        {CHART_ICON}
+                      </span>
+                      <span className="flex-1">Resumen</span>
+                    </Link>
+                  </>
+                )}
+              </div>
+            )}
+          </>
+
+          {/* Métricas — visible a managers/admins */}
           {canEval && (
             <>
               <button
-                onClick={() => setEvalOpen(o => !o)}
+                onClick={() => setMetricasOpen(o => !o)}
                 className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all text-left ${
-                  isEvalRoute && !evalOpen
+                  isMetricasRoute && !metricasOpen
                     ? 'bg-[#FFB800] text-[#111]'
-                    : isEvalRoute
+                    : isMetricasRoute
                       ? 'text-[#111] bg-[#f5f3eb]'
                       : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
                 }`}
               >
-                <span className={`flex-shrink-0 ${isEvalRoute ? 'text-[#111]' : 'text-[#666]'}`}>
-                  {EVAL_ICON}
+                <span className={`flex-shrink-0 ${isMetricasRoute ? 'text-[#111]' : 'text-[#666]'}`}>
+                  {METRICS_ICON}
                 </span>
-                <span className="flex-1">Evaluaciones</span>
+                <span className="flex-1">Métricas</span>
                 <svg
                   width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8"
-                  className={`flex-shrink-0 transition-transform duration-200 ${evalOpen ? 'rotate-180' : ''}`}
+                  className={`flex-shrink-0 transition-transform duration-200 ${metricasOpen ? 'rotate-180' : ''}`}
                 >
                   <path d="M2 3.5l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
               </button>
 
-              {evalOpen && (
+              {metricasOpen && (
                 <div className="ml-3 pl-3 border-l-2 border-[#ece9df] space-y-0.5 mt-0.5">
                   <Link
-                    to="/evaluaciones"
+                    to="/metricas"
                     className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
-                      evalActive
+                      metricasDashActive
                         ? 'bg-[#FFB800] text-[#111]'
                         : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
                     }`}
                   >
-                    <span className={`flex-shrink-0 ${evalActive ? 'text-[#111]' : 'text-[#666]'}`}>
-                      {EVAL_ICON}
+                    <span className={`flex-shrink-0 ${metricasDashActive ? 'text-[#111]' : 'text-[#666]'}`}>
+                      {METRICS_ICON}
                     </span>
-                    <span className="flex-1">Empleados</span>
-                  </Link>
-                  <Link
-                    to="/evaluaciones/resumen"
-                    className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
-                      evalResumenActive
-                        ? 'bg-[#FFB800] text-[#111]'
-                        : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
-                    }`}
-                  >
-                    <span className={`flex-shrink-0 ${evalResumenActive ? 'text-[#111]' : 'text-[#666]'}`}>
-                      {CHART_ICON}
-                    </span>
-                    <span className="flex-1">Resumen</span>
+                    <span className="flex-1">Dashboard General</span>
                   </Link>
                 </div>
               )}
