@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react'
 import { Outlet, useSearchParams } from 'react-router-dom'
 import { supabase } from '../supabase'
+import { useAuth } from '../context/AuthContext'
 import Sidebar from './Sidebar'
 import ProjectModal from './ProjectModal'
 import MDNLogo from './MDNLogo'
 import InstallBanner from './InstallBanner'
+import NotificationBell from './notifications/NotificationBell'
 import { exportProjectsToMarkdown, downloadMarkdown } from '../utils/exportProjectsToMarkdown'
 
 const normalize = (row) => ({ ...row, createdAt: row.created_at })
 
 export default function AppLayout() {
+  const { userProfile } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
@@ -19,43 +22,36 @@ export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   useEffect(() => {
-    let channel
-
-    const init = async () => {
-      const { data, error } = await supabase
-        .from('projects')
-        .select('*')
-        .order('created_at', { ascending: false })
-
-      if (error) {
-        setLoading(false)
-        setConnected(false)
-        return
-      }
-
-      setProjects(data.map(normalize))
-      setLoading(false)
-      setConnected(true)
-
-      channel = supabase
-        .channel('projects-changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, (payload) => {
-          setProjects(prev => {
-            if (payload.eventType === 'INSERT') return prev.some(p => p.id === payload.new.id) ? prev : [normalize(payload.new), ...prev]
-            if (payload.eventType === 'UPDATE') return prev.map(p => p.id === payload.new.id ? normalize(payload.new) : p)
-            if (payload.eventType === 'DELETE') return prev.filter(p => p.id !== payload.old.id)
-            return prev
-          })
+    // Channel is created synchronously so the cleanup always has a reference to it,
+    // even if the data fetch hasn't resolved yet (avoids StrictMode race condition).
+    const channel = supabase
+      .channel('projects-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, (payload) => {
+        setProjects(prev => {
+          if (payload.eventType === 'INSERT') return prev.some(p => p.id === payload.new.id) ? prev : [normalize(payload.new), ...prev]
+          if (payload.eventType === 'UPDATE') return prev.map(p => p.id === payload.new.id ? normalize(payload.new) : p)
+          if (payload.eventType === 'DELETE') return prev.filter(p => p.id !== payload.old.id)
+          return prev
         })
-        .subscribe()
-    }
+      })
+      .subscribe()
 
-    init()
-    return () => { if (channel) supabase.removeChannel(channel) }
+    supabase
+      .from('projects')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (error) { setLoading(false); setConnected(false); return }
+        setProjects(data.map(normalize))
+        setLoading(false)
+        setConnected(true)
+      })
+
+    return () => { supabase.removeChannel(channel) }
   }, [])
 
   const createProject = async (data) => {
-    await supabase.from('projects').insert(data)
+    await supabase.from('projects').insert({ ...data, company_id: userProfile?.company_id ?? '' })
   }
 
   const duplicateProject = async (project) => {
@@ -73,6 +69,7 @@ export default function AppLayout() {
         departments: project.departments ?? [],
         phases: regenIds(project.phases),
         status: 'Pendiente',
+        company_id: userProfile?.company_id ?? '',
       })
       .select()
       .single()
@@ -144,7 +141,7 @@ export default function AppLayout() {
           <div className="flex-1 flex justify-center">
             <MDNLogo size={32} />
           </div>
-          <div className="w-[18px] flex-shrink-0" />
+          <NotificationBell />
         </div>
 
         <Outlet context={{

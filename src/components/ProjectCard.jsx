@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { getProjectProgress } from '../utils/projectProgress'
+import { fmtDate } from '../utils/formatDate'
 
 const STATUS = {
   'Pendiente':  { text: '#92400e', bg: '#fef9ee', border: '#fde68a', line: '#f59e0b', label: 'Pendiente'  },
@@ -209,17 +210,27 @@ export default function ProjectCard({ project, expanded, onToggleExpand, onEdit,
       </div>
 
       {/* Footer */}
-      <div className="px-5 py-3 border-t border-[#f0ede3] flex items-center justify-between">
-        <button
-          onClick={onToggleExpand}
-          className="flex items-center gap-1.5 text-[14px] font-medium text-[#888] hover:text-[#333] transition-colors"
-        >
-          <svg className={`w-3.5 h-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/>
-          </svg>
-          {expanded ? 'Ocultar' : `Ver ${project.phases?.length ?? 0} fase${project.phases?.length !== 1 ? 's' : ''}`}
-        </button>
+      <div className="px-5 py-3 border-t border-[#f0ede3] flex items-center justify-between gap-3">
 
+        {/* Izquierda: expandir + fecha de creación */}
+        <div className="flex items-center gap-3 min-w-0">
+          <button
+            onClick={onToggleExpand}
+            className="flex items-center gap-1.5 text-[14px] font-medium text-[#888] hover:text-[#333] transition-colors whitespace-nowrap"
+          >
+            <svg className={`w-3.5 h-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/>
+            </svg>
+            {expanded ? 'Ocultar' : `Ver ${project.phases?.length ?? 0} fase${project.phases?.length !== 1 ? 's' : ''}`}
+          </button>
+          {(project.createdAt || project.created_at) && (
+            <span className="text-[12px] font-mono text-[#aaa] whitespace-nowrap">
+              {fmtDate(project.createdAt ?? project.created_at)}
+            </span>
+          )}
+        </div>
+
+        {/* Derecha: acciones */}
         <div className="flex items-center gap-1">
           <button
             onClick={onDuplicate}

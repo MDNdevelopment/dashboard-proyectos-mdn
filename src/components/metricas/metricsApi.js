@@ -49,10 +49,21 @@ export async function loadClients(companyId, lineId = null) {
 }
 
 export async function createClient(companyId, fields) {
-  const { name, line_id = null, website = null, payment_day = null, social_links = [], logo_url = null } = fields
+  const {
+    name,
+    line_id = null,
+    website = null,
+    payment_day = null,
+    monthly_fee = null,
+    social_links = [],
+    logo_url = null,
+    contacts = [],
+    anniversary_date = null,
+    mdn_since = null,
+  } = fields
   return supabase
     .from("metric_clients")
-    .insert({ company_id: companyId, name, line_id, website, payment_day, social_links, logo_url })
+    .insert({ company_id: companyId, name, line_id, website, payment_day, monthly_fee, social_links, logo_url, contacts, anniversary_date, mdn_since })
     .select()
     .single();
 }

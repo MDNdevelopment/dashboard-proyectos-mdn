@@ -8,6 +8,7 @@ import {
 } from '../metricas/metricsApi'
 import { assignMemberToLine, removeMemberFromLine } from '../../utils/lineMembers'
 import LineModal from './LineModal'
+import LineMetasModal from './LineMetasModal'
 import ConfirmDeleteDialog from '../common/ConfirmDeleteDialog'
 
 /**
@@ -23,6 +24,7 @@ export default function LinesView({ companyId }) {
   const [users, setUsers]     = useState([])
   const [loading, setLoading] = useState(true)
   const [lineModal, setLineModal]       = useState(undefined)   // undefined=cerrado, null=crear, obj=editar
+  const [metasModal, setMetasModal]     = useState(null)        // null=cerrado, obj=línea a editar metas
   const [confirmDelete, setConfirmDelete] = useState(null)       // { id, name }
   const [deleting, setDeleting]         = useState(false)
   const [savingLine, setSavingLine]     = useState(null)         // lineId que está guardando miembros
@@ -186,6 +188,17 @@ export default function LinesView({ companyId }) {
                   </div>
                   <div className="flex items-center gap-1">
                     <button
+                      onClick={() => setMetasModal(line)}
+                      className="p-1.5 rounded-lg text-[#aaa] hover:text-[#555] hover:bg-white/60 transition-colors"
+                      title="Configurar metas"
+                      aria-label="Configurar metas"
+                    >
+                      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
+                        <circle cx="8" cy="8" r="2.5"/>
+                        <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.42 1.42M11.53 11.53l1.42 1.42M3.05 12.95l1.42-1.42M11.53 4.47l1.42-1.42" strokeLinecap="round"/>
+                      </svg>
+                    </button>
+                    <button
                       onClick={() => setLineModal(line)}
                       className="p-1.5 rounded-lg text-[#aaa] hover:text-[#555] hover:bg-white/60 transition-colors"
                       title="Editar línea"
@@ -298,6 +311,18 @@ export default function LinesView({ companyId }) {
           sortOrder={lines.length}
           onClose={() => setLineModal(undefined)}
           onSaved={handleLineSaved}
+        />
+      )}
+
+      {/* Modal metas de línea */}
+      {metasModal && (
+        <LineMetasModal
+          line={metasModal}
+          onClose={() => setMetasModal(null)}
+          onSaved={row => {
+            handleLineSaved(row)
+            setMetasModal(null)
+          }}
         />
       )}
 

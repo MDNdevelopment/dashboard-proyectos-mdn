@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../supabase'
 import MDNLogo from './MDNLogo'
 import AvatarUpload from './empresa/AvatarUpload'
+import NotificationBell from './notifications/NotificationBell'
 
 const DEPARTMENTS = ['Redes', 'Diseño', 'Audiovisual', 'Tecnología']
 
@@ -630,6 +631,9 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
               </p>
             )}
           </div>
+
+          {/* Notification bell */}
+          <NotificationBell />
 
           {/* 3-dot trigger */}
           <button

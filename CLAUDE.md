@@ -4,9 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Project management dashboard for **MDN Publicidad**, a Venezuelan advertising agency. Built with React + Vite, styled with Tailwind CSS, using Supabase (PostgreSQL) as the backend. Deployed on Netlify.
+Internal management suite for **MDN Publicidad**, a Venezuelan advertising agency. Covers 8 modules: Proyectos, Tareas, Métricas, Empresa, Evaluaciones, Tickets, Ads, and Auth. Built with React + Vite, styled with Tailwind CSS, using Supabase (PostgreSQL) as the backend. Deployed on Netlify.
 
 The UI is entirely in Spanish.
+
+## System Architecture
+
+**Read `ARQUITECTURA.md` (root) before designing any feature that touches more than one module.**
+It is the single source of truth for: module map (purpose, files, tables, routes, permissions),
+full data model and table relationships, how modules interconnect today, and key conventions.
+
+Keep `ARQUITECTURA.md` up to date: any commit that adds a module or changes routes, tables, or
+inter-module relationships must also update the relevant sections of `ARQUITECTURA.md`.
 
 ## Commands
 
@@ -29,9 +38,11 @@ These are accessed via `import.meta.env` in `src/supabase.js`.
 
 ## Architecture
 
-**React app with React Router.** All projects state lives in `AppLayout.jsx` and flows down via `Outlet` context. There is no state management library.
+**React app with React Router (v6).** Full module map, data model, and inter-module connections are
+in `ARQUITECTURA.md`. Below are the key patterns for the Proyectos module (the original core) and
+the conventions that apply system-wide.
 
-### Data Flow
+### Proyectos module — data flow
 
 - `AppLayout.jsx` — State owner for projects. Subscribes to the Supabase `projects` table via `postgres_changes` realtime channel (cross-user live updates). Provides CRUD operations (`createProject`, `updateProject`, `deleteProject`) via outlet context to children.
 - `App.jsx` — Thin wrapper; consumes outlet context and renders `<Dashboard />`.
@@ -40,7 +51,7 @@ These are accessed via `import.meta.env` in `src/supabase.js`.
 - `ProjectCard.jsx` — Individual project display with expandable phases/tasks. Task status changes cascade to auto-derive project status. Uses portal-based dropdowns (`createPortal`) for status selectors.
 - `ProjectModal.jsx` — Unified create/edit modal (create when `project` is `null`, edit when it's an object). The modal convention in AppLayout is: `undefined` = closed, `null` = create, object = edit.
 
-### Data Model (Supabase `projects` table)
+### Proyectos data model (Supabase `projects` table)
 
 Each row contains:
 
@@ -67,7 +78,15 @@ RLS: all authenticated users can read and write any project (no per-user or per-
 - Every new feature must include tests that pass before the work is considered complete. Do not return success on a feature without writing and running passing tests.
 - Never modify a test just to make it pass. When a test fails, investigate the root cause in the implementation code. If the failure cannot be resolved, ask the developer for guidance before proceeding.
 - Before executing any destructive database operation (DROP, DELETE, TRUNCATE, or destructive
-  migrations), ask for explicit confirmation 3 times before proceeding.
+  migrations), ask for explicit confirmation once before proceeding.
+- **Keep `ARQUITECTURA.md` updated:** any commit that adds a module or changes routes, tables, or
+  inter-module relationships must update the relevant sections of `ARQUITECTURA.md` in the same
+  commit. Treat it as part of "feature complete", the same as tests.
+- **Propose interconnections when designing any module:** before implementing, read `ARQUITECTURA.md`
+  and identify where the new module can read or derive data from existing tables instead of manual
+  capture, or where it can feed other modules. Suggest this explicitly — for example, deriving
+  Métricas indicators from the `tasks` table by line/client/month instead of manual inputs. This
+  rule applies whenever a module is being designed, not only in plan mode.
 
 ## Deployment
 

@@ -24,6 +24,30 @@ export function calcProductividad(report) {
 }
 
 /**
+ * Evalúa el crecimiento de seguidores de un cliente individual.
+ *
+ * @param {object} item        - Un elemento de crecimiento.items del mes actual.
+ * @param {object|null} prevReport - Reporte del mes anterior o null.
+ * @returns {{ crecimiento: number|null, cumple: boolean|null }}
+ *   - crecimiento: delta (actuales − base), o null si faltan datos.
+ *   - cumple: true/false si se pudo calcular, null si faltan datos.
+ */
+export function crecimientoCliente(item, prevReport = null) {
+  let base = null;
+  if (prevReport) {
+    const prevItem = (prevReport.crecimiento?.items ?? [])
+      .find(i => i.clienteId === item.clienteId);
+    if (prevItem?.seguidoresActuales != null) base = prevItem.seguidoresActuales;
+  }
+  if (base == null && item.seguidoresBase != null) base = item.seguidoresBase;
+  if (item.seguidoresActuales == null || base == null) {
+    return { crecimiento: null, cumple: null };
+  }
+  const crec = Number(item.seguidoresActuales) - Number(base);
+  return { crecimiento: crec, cumple: crec >= Number(item.meta ?? 0) };
+}
+
+/**
  * Crecimiento de seguidores — peso 15.
  *
  * @param {object} report      - El reporte actual (tiene crecimiento.items).
@@ -42,22 +66,8 @@ export function calcCrecimiento(report, prevReport = null) {
 
   let cumplieron = 0;
   items.forEach(it => {
-    // Intentar obtener seguidores del mes anterior
-    let base = null;
-    if (prevReport) {
-      const prevItem = (prevReport.crecimiento?.items ?? [])
-        .find(i => i.clienteId === it.clienteId);
-      if (prevItem?.seguidoresActuales != null) {
-        base = prevItem.seguidoresActuales;
-      }
-    }
-    // Fallback: base manual
-    if (base == null && it.seguidoresBase != null) {
-      base = it.seguidoresBase;
-    }
-    if (it.seguidoresActuales == null || base == null) return;
-    const crec = it.seguidoresActuales - base;
-    if (crec >= Number(it.meta ?? 0)) cumplieron++;
+    const { cumple } = crecimientoCliente(it, prevReport);
+    if (cumple === true) cumplieron++;
   });
 
   return (cumplieron / items.length) * 15;
@@ -117,10 +127,10 @@ export function calcTotal(report, prevReport = null) {
   };
 }
 
-/** Suma todos los puntajes parciales → score total 0–100. */
+/** Suma todos los puntajes parciales → score total 0–100 (tope en 100). */
 export function sumScore(scores) {
-  return (
+  const raw =
     scores.reuniones + scores.productividad + scores.crecimiento +
-    scores.solicitudes + scores.pautas + scores.piezas + scores.feedback
-  );
+    scores.solicitudes + scores.pautas + scores.piezas + scores.feedback;
+  return Math.min(100, raw);
 }

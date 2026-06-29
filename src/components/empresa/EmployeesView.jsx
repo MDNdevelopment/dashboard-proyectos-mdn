@@ -135,9 +135,6 @@ export default function EmployeesView({ companyId }) {
                       Admin
                     </span>
                   )}
-                  <span className="text-[13px] font-mono text-[#999] bg-[#f5f3eb] px-2 py-0.5 rounded-full">
-                    Nivel {emp.access_level}
-                  </span>
                 </div>
                 <p className="text-[14px] text-[#888] mt-0.5 truncate">{emp.email}</p>
                 <p className="text-[14px] text-[#666] mt-0.5">

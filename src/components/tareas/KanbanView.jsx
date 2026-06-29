@@ -1,10 +1,10 @@
-import { supabase } from '../../supabase'
 import { isLate, fmtShort, ESTADOS, COL_META } from './constants'
 import { Avatar } from './UserPickerSingle'
+import { updateTaskStatus } from './taskStatus'
 
 function KanbanCard({ task, usersMap, clientsById, onOpen, onChangeStatus }) {
   const late = isLate(task)
-  const assignee = task.assignee_id ? usersMap.get(task.assignee_id) : null
+  const assignees = (task.assignee_ids ?? (task.assignee_id ? [task.assignee_id] : [])).map(id => usersMap.get(id)).filter(Boolean)
   const support = task.support_id ? usersMap.get(task.support_id) : null
   const logo = task.client_id ? clientsById?.get(task.client_id)?.logo_url : null
 
@@ -35,10 +35,17 @@ function KanbanCard({ task, usersMap, clientsById, onOpen, onChangeStatus }) {
         </p>
       )}
       <div className="flex items-center justify-between gap-2">
-        {assignee ? (
-          <div className="flex items-center gap-1.5">
-            <Avatar user={assignee} size={18} />
-            <span className="text-[13px] text-[#666]">{assignee.first_name} {assignee.last_name[0]}.</span>
+        {assignees.length > 0 ? (
+          <div className="flex items-center gap-1">
+            {assignees.slice(0, 3).map(a => (
+              <Avatar key={a.user_id} user={a} size={18} />
+            ))}
+            {assignees.length > 3 && (
+              <span className="text-[11px] font-mono text-[#888]">+{assignees.length - 3}</span>
+            )}
+            {assignees.length === 1 && (
+              <span className="text-[13px] text-[#666] ml-0.5">{assignees[0].first_name} {assignees[0].last_name[0]}.</span>
+            )}
           </div>
         ) : <span />}
         {task.due_date && (
@@ -75,15 +82,7 @@ export default function KanbanView({ team, tasks, usersMap, clientsById = new Ma
   const teamTasks = tasks.filter(t => t.team_id === team.id)
 
   async function handleChangeStatus(task, newStatus) {
-    const extra = newStatus === 'Terminado'
-      ? { closed_date: new Date().toISOString().slice(0, 10) }
-      : { closed_date: null }
-    const { data, error } = await supabase
-      .from('tasks')
-      .update({ status: newStatus, ...extra })
-      .eq('id', task.id)
-      .select()
-      .single()
+    const { data, error } = await updateTaskStatus(task.id, newStatus)
     if (!error && data) onUpdated(data)
   }
 

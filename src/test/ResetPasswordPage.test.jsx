@@ -11,10 +11,11 @@ vi.mock('react-router-dom', async (importOriginal) => {
   return { ...actual, useNavigate: () => mockNavigate }
 })
 
-const { mockOnAuthStateChange, mockUpdateUser, mockSignOut } = vi.hoisted(() => ({
+const { mockOnAuthStateChange, mockUpdateUser, mockSignOut, mockGetSession } = vi.hoisted(() => ({
   mockOnAuthStateChange: vi.fn(),
   mockUpdateUser: vi.fn(),
   mockSignOut: vi.fn(),
+  mockGetSession: vi.fn(),
 }))
 
 vi.mock('../supabase', () => ({
@@ -23,9 +24,14 @@ vi.mock('../supabase', () => ({
       onAuthStateChange: mockOnAuthStateChange,
       updateUser: mockUpdateUser,
       signOut: mockSignOut,
+      getSession: mockGetSession,
     },
   },
 }))
+
+// parseRecoveryParams reads window.location.href.
+// In JSDOM the URL is http://localhost:3000/ (no error params) → normal flow.
+// To test the expired-link state we override window.location before rendering.
 
 import ResetPasswordPage from '../pages/ResetPasswordPage'
 
@@ -33,11 +39,17 @@ function renderPage() {
   render(<MemoryRouter><ResetPasswordPage /></MemoryRouter>)
 }
 
+// Helper: fire PASSWORD_RECOVERY event immediately on subscription
 function withRecovery() {
   mockOnAuthStateChange.mockImplementation((callback) => {
     callback('PASSWORD_RECOVERY', null)
     return { data: { subscription: { unsubscribe: vi.fn() } } }
   })
+}
+
+// Helper: simulate getSession returning an active recovery session
+function withSessionReady() {
+  mockGetSession.mockResolvedValue({ data: { session: { user: { id: '1' } } } })
 }
 
 describe('ResetPasswordPage', () => {
@@ -46,13 +58,17 @@ describe('ResetPasswordPage', () => {
     mockUpdateUser.mockReset()
     mockSignOut.mockResolvedValue({})
     mockOnAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } })
+    // Default: no active session (waits for PASSWORD_RECOVERY event)
+    mockGetSession.mockResolvedValue({ data: { session: null } })
   })
 
-  it('muestra "Verificando enlace..." antes del evento PASSWORD_RECOVERY', () => {
+  // ── Estado de espera ────────────────────────────────────────────────────
+  it('muestra "Verificando enlace..." antes de resolver la sesión', () => {
     renderPage()
     expect(screen.getByText('Verificando enlace...')).toBeInTheDocument()
   })
 
+  // ── Activación por evento PASSWORD_RECOVERY ─────────────────────────────
   it('muestra el formulario después del evento PASSWORD_RECOVERY', async () => {
     withRecovery()
     renderPage()
@@ -62,6 +78,16 @@ describe('ResetPasswordPage', () => {
     })
   })
 
+  // ── Activación rápida via getSession (sin esperar evento) ───────────────
+  it('muestra el formulario si getSession ya tiene sesión activa', async () => {
+    withSessionReady()
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Nueva contraseña')).toBeInTheDocument()
+    })
+  })
+
+  // ── Validaciones ────────────────────────────────────────────────────────
   it('muestra error cuando las contraseñas no coinciden', async () => {
     withRecovery()
     renderPage()
@@ -73,6 +99,18 @@ describe('ResetPasswordPage', () => {
     expect(mockUpdateUser).not.toHaveBeenCalled()
   })
 
+  it('muestra error cuando la contraseña es demasiado corta', async () => {
+    withRecovery()
+    renderPage()
+    await waitFor(() => screen.getByPlaceholderText('Nueva contraseña'))
+    await userEvent.type(screen.getByPlaceholderText('Nueva contraseña'), 'short')
+    await userEvent.type(screen.getByPlaceholderText('Confirmar contraseña'), 'short')
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar contraseña' }))
+    expect(screen.getByText(/al menos 8 caracteres/)).toBeInTheDocument()
+    expect(mockUpdateUser).not.toHaveBeenCalled()
+  })
+
+  // ── Errores de API ──────────────────────────────────────────────────────
   it('muestra error cuando la API falla', async () => {
     withRecovery()
     mockUpdateUser.mockResolvedValue({ error: new Error('Failed') })
@@ -86,6 +124,7 @@ describe('ResetPasswordPage', () => {
     })
   })
 
+  // ── Éxito ───────────────────────────────────────────────────────────────
   it('muestra mensaje de éxito tras cambiar la contraseña correctamente', async () => {
     withRecovery()
     mockUpdateUser.mockResolvedValue({ error: null })
@@ -110,6 +149,27 @@ describe('ResetPasswordPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Guardar contraseña' }))
     await waitFor(() => {
       expect(mockSignOut).toHaveBeenCalled()
+    })
+  })
+
+  // ── Enlace expirado ─────────────────────────────────────────────────────
+  it('muestra estado de enlace expirado cuando la URL tiene error otp_expired', () => {
+    // Temporarily override window.location.href to simulate an expired link URL
+    const original = window.location.href
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...window.location, href: 'http://localhost:3000/reset-password?error=access_denied&error_code=otp_expired' },
+    })
+
+    renderPage()
+
+    expect(screen.getByText('Enlace expirado')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Solicitar nuevo enlace' })).toBeInTheDocument()
+
+    // Restore
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...window.location, href: original },
     })
   })
 })

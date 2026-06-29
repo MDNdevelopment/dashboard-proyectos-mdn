@@ -106,7 +106,7 @@ describe('TaskModal — scope de Responsable al team seleccionado', () => {
     const legacyTask = {
       id: 'task-1', company_id: 'co-1',
       team_id: 'line-1',
-      // Carlos es de line-2, pero estaba asignado antes de la migración
+      // Carlos es de line-2, pero estaba asignado antes de la migración (campo legacy)
       assignee_id: 'u-carlos', support_id: null,
       client_id: null, client: null,
       description: 'Tarea antigua', status: 'En proceso',
@@ -115,10 +115,11 @@ describe('TaskModal — scope de Responsable al team seleccionado', () => {
     }
     renderModal({ task: legacyTask })
 
-    // Carlos debe aparecer como opción en el picker (legacy union)
-    const pickerBtn = screen.getByText('Carlos Pérez')
-    await user.click(pickerBtn)
-    // El picker incluye a Carlos (ya seleccionado) + los miembros de line-1
+    // Con UserPickerMulti, Carlos aparece como chip en el trigger (solo primer nombre)
+    expect(screen.getByText('Carlos')).toBeInTheDocument()
+
+    // Al abrir el picker, Carlos debe aparecer en el dropdown con nombre completo
+    await user.click(screen.getByRole('button', { name: 'Seleccionar responsables' }))
     await waitFor(() => {
       expect(screen.getAllByText('Carlos Pérez').length).toBeGreaterThanOrEqual(1)
     })

@@ -14,7 +14,7 @@ const RED = "#E14848";
 const YELLOW = "#FFB800";
 
 function TaskItem({ task, why, color, usersMap, onOpen }) {
-  const assignee = task.assignee_id ? usersMap.get(task.assignee_id) : null;
+  const assignees = (task.assignee_ids ?? (task.assignee_id ? [task.assignee_id] : [])).map(id => usersMap.get(id)).filter(Boolean);
   return (
     <div
       className="flex items-start gap-3 p-3 bg-[#faf9f5] rounded-xl border border-[#e0ddd4] hover:border-[#ccc] hover:bg-[#f5f3eb] cursor-pointer transition-colors"
@@ -34,10 +34,14 @@ function TaskItem({ task, why, color, usersMap, onOpen }) {
           >
             {why}
           </span>
-          {assignee && (
+          {assignees.length > 0 && (
             <span className="flex items-center gap-1 text-[13px] text-[#888]">
-              <Avatar user={assignee} size={14} />
-              {assignee.first_name}
+              {assignees.slice(0, 2).map(a => (
+                <Avatar key={a.user_id} user={a} size={14} />
+              ))}
+              {assignees.length === 1
+                ? assignees[0].first_name
+                : `${assignees[0].first_name} +${assignees.length - 1}`}
             </span>
           )}
         </div>

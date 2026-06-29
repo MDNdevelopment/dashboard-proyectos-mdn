@@ -3,6 +3,7 @@ import { supabase } from '../../supabase'
 import { useAuth } from '../../context/AuthContext'
 import { ESTADOS } from './constants'
 import UserPickerSingle from './UserPickerSingle'
+import UserPickerMulti from './UserPickerMulti'
 import { teamMemberUsers } from '../../utils/lineFilters'
 
 const EMPTY = {
@@ -11,7 +12,7 @@ const EMPTY = {
   client: '',
   description: '',
   source: '',
-  assignee_id: null,
+  assignee_ids: [],
   support_id: null,
   request_date: '',
   due_date: '',
@@ -22,6 +23,10 @@ const EMPTY = {
 export default function TaskModal({ task = null, teams = [], clients = [], users = [], defaultTeamId = null, onClose, onCreated, onUpdated }) {
   const { userProfile } = useAuth()
   const isEdit = task != null
+
+  // Level-1 users (not privileged) are always an assignee; they can add others but not remove themselves.
+  const privileged = userProfile?.access_level >= 2 || userProfile?.admin === true
+
   const [form, setForm] = useState(() => {
     if (isEdit) {
       return {
@@ -30,7 +35,8 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
         client: task.client ?? '',
         description: task.description ?? '',
         source: task.source ?? '',
-        assignee_id: task.assignee_id ?? null,
+        // Compat: tareas viejas tienen assignee_id (texto) pero no assignee_ids
+        assignee_ids: task.assignee_ids ?? (task.assignee_id ? [task.assignee_id] : []),
         support_id: task.support_id ?? null,
         request_date: task.request_date ?? '',
         due_date: task.due_date ?? '',
@@ -38,7 +44,12 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
         status: task.status ?? 'En proceso',
       }
     }
-    return { ...EMPTY, team_id: defaultTeamId ?? (teams[0]?.id ?? '') }
+    // For new tasks, level-1 users are always an assignee (locked).
+    return {
+      ...EMPTY,
+      team_id: defaultTeamId ?? (teams[0]?.id ?? ''),
+      assignee_ids: privileged ? [] : (userProfile?.user_id ? [userProfile.user_id] : []),
+    }
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -67,7 +78,7 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
       client: form.client || null,
       description: form.description.trim(),
       source: form.source || null,
-      assignee_id: form.assignee_id || null,
+      assignee_ids: form.assignee_ids,
       support_id: form.support_id || null,
       created_by: isEdit ? task.created_by : (userProfile?.user_id ?? null),
       request_date: form.request_date || null,
@@ -105,10 +116,12 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
     onClose()
   }
 
+  // IDs bloqueados: nivel-1 no puede quitarse a sí mismo
+  const lockedAssigneeIds = privileged ? [] : (userProfile?.user_id ? [userProfile.user_id] : [])
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25 backdrop-blur-[3px]"
-      onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-[#ece9df]">
@@ -142,13 +155,16 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
               onChange={e => {
                 const teamId = e.target.value
                 const newMembers = teams.find(t => t.id === teamId)?.member_user_ids ?? []
-                // Al cambiar de línea, resetear cliente y responsable si ya no pertenecen al team
+                // Al cambiar de línea, resetear cliente y filtrar responsables al nuevo team.
+                // Los ids bloqueados (nivel 1) se conservan aunque no estén en el nuevo team.
                 setForm(f => ({
                   ...f,
                   team_id: teamId,
                   client_id: '',
                   client: '',
-                  assignee_id: newMembers.includes(f.assignee_id) ? f.assignee_id : null,
+                  assignee_ids: f.assignee_ids.filter(id =>
+                    newMembers.includes(id) || lockedAssigneeIds.includes(id)
+                  ),
                 }))
               }}
               required
@@ -219,17 +235,24 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
           </div>
 
           <div>
-            <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Responsable</label>
+            <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Responsable{form.assignee_ids.length !== 1 ? 's' : ''}</label>
             {(() => {
               const selectedTeam = teams.find(t => t.id === form.team_id)
               const memberIds = selectedTeam?.member_user_ids ?? []
-              const assigneeOptions = teamMemberUsers(users, selectedTeam, form.assignee_id)
+              const teamMembers = teamMemberUsers(users, selectedTeam)
+              // Incluir usuarios ya asignados aunque no sean miembros del team actual
+              // (compat con tareas heredadas o reasignaciones históricas)
+              const alreadySelected = users.filter(u =>
+                form.assignee_ids.includes(u.user_id) && !teamMembers.some(m => m.user_id === u.user_id)
+              )
+              const assigneeOptions = [...teamMembers, ...alreadySelected]
               return (
                 <>
-                  <UserPickerSingle
+                  <UserPickerMulti
                     users={assigneeOptions}
-                    selectedId={form.assignee_id}
-                    onChange={id => set('assignee_id', id)}
+                    selectedIds={form.assignee_ids}
+                    onChange={ids => set('assignee_ids', ids)}
+                    lockedIds={lockedAssigneeIds}
                     placeholder="Asignar responsable..."
                   />
                   {form.team_id && memberIds.length === 0 && (
@@ -294,7 +317,7 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
           )}
 
           <div className="flex items-center justify-between pt-2">
-            {isEdit ? (
+            {isEdit && privileged ? (
               <button type="button" onClick={handleDelete} className="text-[15px] font-semibold text-red-500 hover:text-red-700 transition-colors">
                 Eliminar
               </button>

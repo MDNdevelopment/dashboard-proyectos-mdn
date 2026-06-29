@@ -1,22 +1,105 @@
-import { useState, useMemo } from 'react'
+import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
 import { isLate, isDragged, isClosed, fmtShort, ESTADOS, COL_META } from './constants'
 import { Avatar } from './UserPickerSingle'
 import { teamMemberUsers } from '../../utils/lineFilters'
+import { updateTaskStatus } from './taskStatus'
 
-function StatusBadge({ status }) {
-  const meta = COL_META[status] ?? { color: '#ccc', textColor: '#111' }
+// --- Status dropdown (portal-based to escape overflow:hidden table containers) ---
+
+function useStatusDropdown() {
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState({ top: 0, left: 0 })
+  const btnRef = useRef(null)
+  const menuRef = useRef(null)
+
+  function toggle(e) {
+    e?.stopPropagation()
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect()
+      const menuH = ESTADOS.length * 36 + 12
+      const menuW = 152
+      setPos({
+        top: window.innerHeight - r.bottom < menuH + 8 ? r.top - menuH - 4 : r.bottom + 4,
+        left: Math.max(8, Math.min(r.left, window.innerWidth - menuW - 8)),
+      })
+    }
+    setOpen(o => !o)
+  }
+
+  useEffect(() => {
+    if (!open) return
+    function handleOutside(e) {
+      if (!menuRef.current?.contains(e.target) && !btnRef.current?.contains(e.target)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleOutside)
+    return () => document.removeEventListener('mousedown', handleOutside)
+  }, [open])
+
+  return { open, pos, toggle, btnRef, menuRef, close: () => setOpen(false) }
+}
+
+function StatusBadge({ task, onUpdated }) {
+  const { open, pos, toggle, btnRef, menuRef, close } = useStatusDropdown()
+  const meta = COL_META[task.status] ?? { color: '#ccc' }
+
+  async function handleSelect(e, newStatus) {
+    e.stopPropagation()
+    close()
+    if (newStatus === task.status) return
+    const { data, error } = await updateTaskStatus(task.id, newStatus)
+    if (!error && data) onUpdated(data)
+  }
+
   return (
-    <span
-      className="inline-block px-2 py-0.5 rounded-full text-[13px] font-bold"
-      style={{ background: meta.color + '22', color: meta.color, border: `1px solid ${meta.color}44` }}
-    >
-      {status}
-    </span>
+    <>
+      <button
+        ref={btnRef}
+        onClick={toggle}
+        title="Cambiar estado"
+        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[13px] font-bold cursor-pointer hover:opacity-75 transition-opacity"
+        style={{ background: meta.color + '22', color: meta.color, border: `1px solid ${meta.color}44` }}
+      >
+        {task.status}
+        <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M2 3.5l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+
+      {open && createPortal(
+        <div
+          ref={menuRef}
+          style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999 }}
+          className="bg-white border border-[#e8e5db] rounded-xl shadow-lg min-w-[152px] py-1.5 overflow-hidden"
+        >
+          {ESTADOS.map(s => {
+            const m = COL_META[s] ?? { color: '#ccc' }
+            const active = s === task.status
+            return (
+              <button
+                key={s}
+                onClick={e => handleSelect(e, s)}
+                className="w-full text-left px-3 py-2 text-[13.5px] flex items-center gap-2 hover:bg-[#f5f3eb] transition-colors"
+              >
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: m.color }} />
+                <span style={{ color: active ? '#111' : '#555', fontWeight: active ? '700' : '500' }}>{s}</span>
+                {active && <span className="ml-auto text-[11px] text-[#aaa]">✓</span>}
+              </button>
+            )
+          })}
+        </div>,
+        document.body,
+      )}
+    </>
   )
 }
 
-export default function BaseView({ tasks, teams, team, usersMap, clientsById = new Map(), onOpenTask }) {
+// --- Main component ---
+
+export default function BaseView({ tasks, teams, team, usersMap, clientsById = new Map(), onOpenTask, onUpdated }) {
   const [searchParams] = useSearchParams()
 
   // Inicializar filtros desde URL params (solo en el primer render)
@@ -30,17 +113,14 @@ export default function BaseView({ tasks, teams, team, usersMap, clientsById = n
   // Solo tareas del team seleccionado
   const baseTasks = team ? tasks.filter(t => t.team_id === team.id) : []
 
-  const clients = useMemo(
-    () => [...new Set(baseTasks.map(t => t.client).filter(Boolean))].sort(),
-    [baseTasks],
-  )
+  const clientList = [...new Set(baseTasks.map(t => t.client).filter(Boolean))].sort()
 
   // Responsable: solo miembros del team seleccionado
-  const usersList = useMemo(() => {
+  const usersList = (() => {
     const allUsers = Array.from(usersMap.values())
     return teamMemberUsers(allUsers, team)
       .sort((a, b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`))
-  }, [team, usersMap])
+  })()
 
   const filtered = baseTasks.filter(t => {
     const sq = q.toLowerCase()
@@ -52,7 +132,7 @@ export default function BaseView({ tasks, teams, team, usersMap, clientsById = n
     if (fAlert === 'late' && !isLate(t)) return false
     if (fAlert === 'drag' && !isDragged(t)) return false
     if (fAlert === 'ok' && (isLate(t) || isDragged(t))) return false
-    if (fAssignee && t.assignee_id !== fAssignee) return false
+    if (fAssignee && !(t.assignee_ids ?? (t.assignee_id ? [t.assignee_id] : [])).includes(fAssignee)) return false
     return true
   }).sort((a, b) => (b.request_date ?? '').localeCompare(a.request_date ?? ''))
 
@@ -102,7 +182,7 @@ export default function BaseView({ tasks, teams, team, usersMap, clientsById = n
           </select>
           <select value={fClient} onChange={e => setFClient(e.target.value)} className="input-base text-[14.5px] py-2">
             <option value="">Cliente: todos</option>
-            {clients.map(c => <option key={c} value={c}>{c}</option>)}
+            {clientList.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
           <select value={fSupport} onChange={e => setFSupport(e.target.value)} className="input-base text-[14.5px] py-2">
             <option value="">Apoyo dir.: todos</option>
@@ -157,7 +237,7 @@ export default function BaseView({ tasks, teams, team, usersMap, clientsById = n
               </thead>
               <tbody>
                 {filtered.map(t => {
-                  const resp = userDisplay(t.assignee_id)
+                  const resps = (t.assignee_ids ?? (t.assignee_id ? [t.assignee_id] : [])).map(id => usersMap.get(id)).filter(Boolean)
                   const support = userDisplay(t.support_id)
                   const late = isLate(t)
                   const drag = isDragged(t)
@@ -191,12 +271,21 @@ export default function BaseView({ tasks, teams, team, usersMap, clientsById = n
                         <span className="line-clamp-2">{t.description}</span>
                         {drag && !late && <span className="block text-[13px] text-[#F0871F] mt-0.5">Arrastrada</span>}
                       </td>
-                      <td className="px-4 py-3"><StatusBadge status={t.status} /></td>
                       <td className="px-4 py-3">
-                        {resp ? (
-                          <div className="flex items-center gap-1.5">
-                            <Avatar user={resp.user} size={20} />
-                            <span className="text-[14px] text-[#333]">{resp.name}</span>
+                        <StatusBadge task={t} onUpdated={onUpdated} />
+                      </td>
+                      <td className="px-4 py-3">
+                        {resps.length > 0 ? (
+                          <div className="flex items-center">
+                            {resps.map((u, i) => (
+                              <div
+                                key={u.user_id}
+                                title={`${u.first_name} ${u.last_name}`}
+                                className={`rounded-full ring-2 ring-white flex-shrink-0${i > 0 ? ' -ml-2' : ''}`}
+                              >
+                                <Avatar user={u} size={30} />
+                              </div>
+                            ))}
                           </div>
                         ) : <span className="text-[#bbb]">—</span>}
                       </td>

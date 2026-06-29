@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   calcReuniones, calcProductividad, calcCrecimiento,
   calcSolicitudes, calcPautas, calcPiezas, calcFeedback,
-  calcTotal, sumScore,
+  calcTotal, sumScore, crecimientoCliente,
 } from "../utils/metricsScore";
 import { INDICATORS } from "../components/metricas/constants";
 
@@ -77,6 +77,65 @@ describe("calcProductividad", () => {
     });
     // (15/30)*15 = 7.5
     expect(calcProductividad(r)).toBe(7.5);
+  });
+});
+
+// ─── crecimientoCliente ───────────────────────────────────────────────────────
+describe("crecimientoCliente", () => {
+  it("cumple cuando (actuales − base) >= meta, usando seguidoresBase", () => {
+    const item = { clienteId: "c1", seguidoresActuales: 1100, seguidoresBase: 1000, meta: 100 };
+    const res = crecimientoCliente(item, null);
+    expect(res.crecimiento).toBe(100);
+    expect(res.cumple).toBe(true);
+  });
+
+  it("no cumple cuando (actuales − base) < meta", () => {
+    const item = { clienteId: "c1", seguidoresActuales: 1050, seguidoresBase: 1000, meta: 100 };
+    const res = crecimientoCliente(item, null);
+    expect(res.crecimiento).toBe(50);
+    expect(res.cumple).toBe(false);
+  });
+
+  it("cumple exacto en el límite (crec === meta)", () => {
+    const item = { clienteId: "c1", seguidoresActuales: 1100, seguidoresBase: 1000, meta: 100 };
+    const res = crecimientoCliente(item, null);
+    expect(res.cumple).toBe(true);
+  });
+
+  it("retorna cumple: null cuando falta seguidoresActuales", () => {
+    const item = { clienteId: "c1", seguidoresActuales: null, seguidoresBase: 1000, meta: 100 };
+    const res = crecimientoCliente(item, null);
+    expect(res.crecimiento).toBeNull();
+    expect(res.cumple).toBeNull();
+  });
+
+  it("retorna cumple: null cuando falta base (sin seguidoresBase ni prevReport)", () => {
+    const item = { clienteId: "c1", seguidoresActuales: 1100, seguidoresBase: null, meta: 100 };
+    const res = crecimientoCliente(item, null);
+    expect(res.crecimiento).toBeNull();
+    expect(res.cumple).toBeNull();
+  });
+
+  it("toma la base del mes anterior (seguidoresActuales de prevReport) en lugar de seguidoresBase", () => {
+    const prevReport = {
+      crecimiento: { items: [{ clienteId: "c1", seguidoresActuales: 900 }] },
+    };
+    const item = { clienteId: "c1", seguidoresActuales: 1050, seguidoresBase: 1000, meta: 100 };
+    const res = crecimientoCliente(item, prevReport);
+    // base = 900 (mes anterior), no 1000 (manual); crec = 150 >= 100 → cumple
+    expect(res.crecimiento).toBe(150);
+    expect(res.cumple).toBe(true);
+  });
+
+  it("cae a seguidoresBase si el prevReport no tiene el cliente", () => {
+    const prevReport = {
+      crecimiento: { items: [{ clienteId: "c2", seguidoresActuales: 900 }] },
+    };
+    const item = { clienteId: "c1", seguidoresActuales: 1050, seguidoresBase: 1000, meta: 100 };
+    const res = crecimientoCliente(item, prevReport);
+    // prevReport no tiene c1 → base = 1000; crec = 50 < 100 → no cumple
+    expect(res.crecimiento).toBe(50);
+    expect(res.cumple).toBe(false);
   });
 });
 
@@ -226,6 +285,22 @@ describe("calcFeedback", () => {
 
 // ─── calcTotal + sumScore ─────────────────────────────────────────────────────
 describe("calcTotal + sumScore", () => {
+  it("clampea a 100 cuando los indicadores de ratio se exceden", () => {
+    // Reuniones: realizadas (30) > meta (15) → calcReuniones devuelve 40 (2×20)
+    const r = makeReport({
+      reuniones:     { realizadas: 30, meta: 15 },
+      productividad: { tareas: [{ nombre: "T", realizado: 20, meta: 10 }] }, // 2×15
+      solicitudes:   { solicitudes: 10, editadas: 10 },
+      piezas:        { piezas: 10, editadas: 10 },
+      feedback:      { items: [{ clienteId: "c1", score: 10 }] },
+      pautas:        { items: [{ clienteId: "c1", realizadas: 5, meta: 5 }] },
+      crecimiento:   { items: [{ clienteId: "c1", seguidoresActuales: 1100, seguidoresBase: 1000, meta: 100 }] },
+    });
+    const scores = calcTotal(r, null);
+    // sumScore sin clamp sería 40+30+15+15+10+15+10 = 135
+    expect(sumScore(scores)).toBe(100);
+  });
+
   it("todos los indicadores en su máximo suman 100", () => {
     const r = makeReport({
       reuniones:     { realizadas: 15, meta: 15 },

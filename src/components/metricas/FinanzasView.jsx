@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
 } from "recharts";
-import { loadReport, loadPrevReport, upsertReport } from "./metricsApi";
+import { loadReport, loadPrevReport, upsertReport, loadClients } from "./metricsApi";
 import { initMetricReport } from "../../utils/initMetricReport";
+import { syncReportClients } from "../../utils/syncReportClients";
 import { calcFinanzas, ensureFinanzas, fmtUSD } from "../../utils/metricsFinance";
 import { MONTHS } from "./constants";
 
@@ -20,6 +21,7 @@ const SECCIONES = [
 
 export default function FinanzasView({ line, companyId, year, month }) {
   const [report, setReport] = useState(null);
+  const [lineClients, setLineClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -29,18 +31,21 @@ export default function FinanzasView({ line, companyId, year, month }) {
     if (!line?.id || !companyId) return;
     setLoading(true);
     setError(null);
-    const [reportRes, prevRes] = await Promise.all([
+    const [reportRes, prevRes, clientsRes] = await Promise.all([
       loadReport(line.id, year, month),
       loadPrevReport(line.id, year, month),
+      loadClients(companyId, line.id),
     ]);
+    const clients = clientsRes.data ?? [];
+    setLineClients(clients);
     if (reportRes.data) {
       const d = reportRes.data.data;
       ensureFinanzas(d);
-      setReport(d);
+      setReport(syncReportClients(d, clients));
     } else {
-      const fresh = initMetricReport(prevRes.data?.data ?? null, []);
+      const fresh = initMetricReport(prevRes.data?.data ?? null, clients);
       ensureFinanzas(fresh);
-      setReport(fresh);
+      setReport(syncReportClients(fresh, clients));
     }
     setLoading(false);
   }, [line?.id, companyId, year, month]);
@@ -112,7 +117,7 @@ export default function FinanzasView({ line, companyId, year, month }) {
         <KpiCard label="Ingresos brutos"    value={fmtUSD(f.totIngresos)}    color="text-green-600" />
         <KpiCard label="Total egresos"      value={fmtUSD(f.totEgresos)}     color="text-red-500"   />
         <KpiCard
-          label={positivo ? "Ganancia neta" : "Pérdida neta"}
+          label="Diferencia"
           value={fmtUSD(f.diferencia)}
           color={positivo ? "text-green-600" : "text-red-500"}
         />
@@ -167,40 +172,63 @@ export default function FinanzasView({ line, companyId, year, month }) {
             <p className="text-[13px] text-[#bbb]">Sin entradas aún.</p>
           ) : (
             <div className="space-y-2">
-              {(report.finanzas[sec.key] ?? []).map((item, idx) => (
-                <div key={item.id ?? idx} className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    className="input-base flex-1 text-[14px]"
-                    placeholder="Descripción"
-                    value={item.descripcion ?? ""}
-                    onChange={e => updateItem(sec.key, idx, "descripcion", e.target.value)}
-                  />
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    className="input-base w-28 text-[14px]"
-                    placeholder="0.00"
-                    value={item.monto ?? ""}
-                    onChange={e => updateItem(sec.key, idx, "monto", e.target.value)}
-                  />
-                  <button
-                    onClick={() => removeItem(sec.key, idx)}
-                    className="text-[#ccc] hover:text-red-400 transition-colors flex-shrink-0"
-                    title="Eliminar"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
-                      <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round"/>
-                    </svg>
-                  </button>
-                </div>
-              ))}
+              {(report.finanzas[sec.key] ?? []).map((item, idx) => {
+                const isClientRow = sec.key === "ingresos" && item.clienteId != null;
+                return (
+                  <div key={item.id ?? idx} className="flex items-center gap-2">
+                    {isClientRow ? (
+                      /* Fila ligada a cliente: nombre solo-lectura */
+                      <span className="flex-1 min-w-0 text-[14px] text-[#333] px-2.5 py-2 bg-[#faf9f5] border border-[#e8e5db] rounded-lg truncate">
+                        {item.descripcion}
+                      </span>
+                    ) : (
+                      <input
+                        type="text"
+                        className="input-base flex-1 min-w-0 text-[14px]"
+                        placeholder="Justificación"
+                        value={item.descripcion ?? ""}
+                        onChange={e => updateItem(sec.key, idx, "descripcion", e.target.value)}
+                      />
+                    )}
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      className="input-base !w-28 flex-none text-[14px]"
+                      placeholder="0.00"
+                      value={item.monto ?? ""}
+                      onChange={e => updateItem(sec.key, idx, "monto", e.target.value)}
+                    />
+                    {!isClientRow && (
+                      <button
+                        onClick={() => removeItem(sec.key, idx)}
+                        className="text-[#ccc] hover:text-red-400 transition-colors flex-shrink-0"
+                        title="Eliminar"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
+                          <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round"/>
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
           <button
-            onClick={() => addItem(sec.key)}
+            onClick={() => {
+              if (sec.key === "ingresos") {
+                // Ingresos manuales: sin clienteId
+                setReport(prev => {
+                  const next = structuredClone(prev);
+                  next.finanzas.ingresos.push({ id: uid(), clienteId: null, descripcion: "", monto: 0 });
+                  return next;
+                });
+              } else {
+                addItem(sec.key);
+              }
+            }}
             className="text-[13px] text-[#888] hover:text-[#111] font-medium flex items-center gap-1"
           >
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">

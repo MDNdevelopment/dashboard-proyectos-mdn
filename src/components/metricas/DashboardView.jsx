@@ -2,9 +2,9 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, Legend, CartesianGrid,
+  ResponsiveContainer, Legend, CartesianGrid, LabelList,
 } from "recharts";
-import { loadYearReports } from "./metricsApi";
+import { loadYearReports, loadClients } from "./metricsApi";
 import { calcTotal, sumScore } from "../../utils/metricsScore";
 import { calcFinanzas, fmtUSD } from "../../utils/metricsFinance";
 import { aggregateMetricsDashboard } from "../../utils/aggregateMetricsDashboard";
@@ -17,6 +17,7 @@ export default function DashboardView({ companyId, lines }) {
   const navigate = useNavigate();
   const [year, setYear] = useState(CURRENT_YEAR);
   const [reports, setReports] = useState([]);
+  const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -24,9 +25,13 @@ export default function DashboardView({ companyId, lines }) {
     if (!companyId) return;
     setLoading(true);
     setError(null);
-    const { data, error: err } = await loadYearReports(companyId, year);
-    if (err) { setError(err.message); setLoading(false); return; }
-    setReports(data ?? []);
+    const [reportsRes, clientsRes] = await Promise.all([
+      loadYearReports(companyId, year),
+      loadClients(companyId),
+    ]);
+    if (reportsRes.error) { setError(reportsRes.error.message); setLoading(false); return; }
+    setReports(reportsRes.data ?? []);
+    setClients(clientsRes.data ?? []);
     setLoading(false);
   }, [companyId, year]);
 
@@ -149,7 +154,14 @@ export default function DashboardView({ companyId, lines }) {
                   strokeWidth={2}
                   dot={{ r: 3, fill: line.color }}
                   connectNulls={false}
-                />
+                >
+                  <LabelList
+                    dataKey={line.name}
+                    position="top"
+                    style={{ fontSize: 9, fill: line.color, fontFamily: "DM Mono, monospace" }}
+                    formatter={v => v != null ? v.toFixed(0) : ""}
+                  />
+                </Line>
               ))}
             </LineChart>
           </ResponsiveContainer>
@@ -216,11 +228,16 @@ export default function DashboardView({ companyId, lines }) {
               {lines.map(line => {
                 const f = finTotalesPorLinea[line.id] ?? { ingresos: 0, egresos: 0, diferencia: 0 };
                 const positive = f.diferencia >= 0;
+                const cuentas = clients.filter(c => c.line_id === line.id).length;
+                const empleados = line.member_user_ids?.length ?? 0;
                 return (
                   <div key={line.id} className="rounded-xl border border-[#e0ddd4] p-3 text-center">
-                    <div className="flex items-center justify-center gap-1.5 mb-2">
+                    <div className="flex items-center justify-center gap-1.5 mb-0.5">
                       <span className="w-2 h-2 rounded-full" style={{ background: line.color }} />
                       <span className="text-[13px] font-semibold text-[#444]">{line.name}</span>
+                    </div>
+                    <div className="text-[11px] font-mono text-[#bbb] mb-2">
+                      {cuentas} {cuentas !== 1 ? "cuentas" : "cuenta"} · {empleados} {empleados !== 1 ? "empleados" : "empleado"}
                     </div>
                     <div className="text-[12px] text-[#aaa] font-mono">Ingresos</div>
                     <div className="text-[14px] font-bold text-green-600">{fmtUSD(f.ingresos)}</div>

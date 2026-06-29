@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { createClient, updateClient } from '../metricas/metricsApi'
-import { SOCIAL_NETWORKS } from '../metricas/constants'
+import { SOCIAL_NETWORKS, MONTHS } from '../metricas/constants'
 import AvatarUpload from './AvatarUpload'
 
 /**
@@ -17,12 +17,16 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
   const isEdit = client != null
 
   const [form, setForm] = useState(() => ({
-    name:         client?.name        ?? '',
-    logo_url:     client?.logo_url    ?? '',
-    line_id:      client?.line_id     ?? '',
-    payment_day:  client?.payment_day ?? '',
-    website:      client?.website     ?? '',
-    social_links: client?.social_links ?? [],
+    name:             client?.name             ?? '',
+    logo_url:         client?.logo_url         ?? '',
+    line_id:          client?.line_id          ?? '',
+    payment_day:      client?.payment_day      ?? '',
+    monthly_fee:      client?.monthly_fee      ?? '',
+    website:          client?.website          ?? '',
+    social_links:     client?.social_links     ?? [],
+    contacts:         client?.contacts         ?? [],
+    anniversary_date: client?.anniversary_date ?? '',
+    mdn_since:        client?.mdn_since        ?? '',
   }))
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState(null)
@@ -54,6 +58,22 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
     set('social_links', form.social_links.filter((_, i) => i !== index))
   }
 
+  // ── Personas de la empresa ─────────────────────────────────────────────────────
+  function addContact() {
+    set('contacts', [...form.contacts, { name: '', role: '', birth_day: '', birth_month: '' }])
+  }
+
+  function updateContact(index, field, value) {
+    const updated = form.contacts.map((item, i) =>
+      i === index ? { ...item, [field]: value } : item
+    )
+    set('contacts', updated)
+  }
+
+  function removeContact(index) {
+    set('contacts', form.contacts.filter((_, i) => i !== index))
+  }
+
   // ── Submit ────────────────────────────────────────────────────────────────────
   async function handleSubmit(e) {
     e.preventDefault()
@@ -64,17 +84,22 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
     if (payment_day !== null && (payment_day < 1 || payment_day > 31)) {
       setError('El día de pago debe estar entre 1 y 31.'); return
     }
+    const monthly_fee = form.monthly_fee !== '' ? Number(form.monthly_fee) : null
 
     setSaving(true)
     setError(null)
 
     const payload = {
       name,
-      logo_url:     form.logo_url || null,
-      line_id:      form.line_id || null,
-      website:      form.website.trim() || null,
+      logo_url:         form.logo_url || null,
+      line_id:          form.line_id || null,
+      website:          form.website.trim() || null,
       payment_day,
-      social_links: form.social_links.filter(s => s.link.trim()),
+      monthly_fee,
+      social_links:     form.social_links.filter(s => s.link.trim()),
+      contacts:         form.contacts.filter(c => c.name.trim()),
+      anniversary_date: form.anniversary_date || null,
+      mdn_since:        form.mdn_since || null,
     }
 
     let data, err
@@ -165,7 +190,7 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
             </select>
           </div>
 
-          {/* Día de pago + Sitio web — fila */}
+          {/* Día de pago + Mensualidad — fila */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
@@ -183,16 +208,143 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
             </div>
             <div>
               <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
-                Sitio web
+                Mensualidad (USD)
               </label>
               <input
-                type="url"
+                type="number"
+                min={0}
+                step="0.01"
                 className="input-base"
-                value={form.website}
-                onChange={e => set('website', e.target.value)}
-                placeholder="https://..."
+                value={form.monthly_fee}
+                onChange={e => set('monthly_fee', e.target.value)}
+                placeholder="0.00"
               />
             </div>
+          </div>
+
+          {/* Sitio web */}
+          <div>
+            <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+              Sitio web
+            </label>
+            <input
+              type="url"
+              className="input-base"
+              value={form.website}
+              onChange={e => set('website', e.target.value)}
+              placeholder="https://..."
+            />
+          </div>
+
+          {/* Aniversario + Cliente desde MDN */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+                Aniversario empresa
+              </label>
+              <input
+                type="date"
+                className="input-base"
+                value={form.anniversary_date}
+                onChange={e => set('anniversary_date', e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+                Cliente MDN desde
+              </label>
+              <input
+                type="date"
+                className="input-base"
+                value={form.mdn_since}
+                onChange={e => set('mdn_since', e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Personas de la empresa */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">
+                Personas de la empresa
+              </label>
+              <button
+                type="button"
+                onClick={addContact}
+                className="flex items-center gap-1 text-[13px] font-semibold text-[#FAB51A] hover:text-[#d49800] transition-colors"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M6 1v10M1 6h10" strokeLinecap="round"/>
+                </svg>
+                Agregar
+              </button>
+            </div>
+
+            {form.contacts.length === 0 ? (
+              <p className="text-[13.5px] text-[#bbb] py-2">Sin personas agregadas.</p>
+            ) : (
+              <div className="space-y-2">
+                {form.contacts.map((contact, i) => (
+                  <div key={i} className="bg-[#faf9f5] rounded-xl p-3 space-y-2 border border-[#ece9df]">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        className="input-base flex-1 text-[13.5px]"
+                        value={contact.name}
+                        onChange={e => updateContact(i, 'name', e.target.value)}
+                        placeholder="Nombre completo..."
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeContact(i)}
+                        className="flex-shrink-0 text-[#ccc] hover:text-red-400 transition-colors p-1"
+                        aria-label="Quitar persona"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M2 2l9 9M11 2L2 11" strokeLinecap="round"/>
+                        </svg>
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <p className="text-[11.5px] font-mono text-[#aaa] uppercase tracking-wide mb-1">Cargo</p>
+                        <input
+                          type="text"
+                          className="input-base text-[13px]"
+                          value={contact.role}
+                          onChange={e => updateContact(i, 'role', e.target.value)}
+                          placeholder="Ej. Gerente de marca"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-[11.5px] font-mono text-[#aaa] uppercase tracking-wide mb-1">Cumpleaños</p>
+                        <div className="flex gap-1.5">
+                          <input
+                            type="number"
+                            min={1}
+                            max={31}
+                            className="input-base text-[13px] !w-16 flex-shrink-0"
+                            value={contact.birth_day}
+                            onChange={e => updateContact(i, 'birth_day', e.target.value)}
+                            placeholder="Día"
+                          />
+                          <select
+                            className="input-base text-[13px] flex-1 min-w-0"
+                            value={contact.birth_month}
+                            onChange={e => updateContact(i, 'birth_month', e.target.value)}
+                          >
+                            <option value="">Mes</option>
+                            {MONTHS.map((m, idx) => (
+                              <option key={idx + 1} value={idx + 1}>{m}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Redes sociales */}

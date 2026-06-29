@@ -49,9 +49,23 @@ export default function TareasPage() {
   const [usersMap, setUsersMap] = useState(new Map())
   const [allUsers, setAllUsers] = useState([])
   const [loading, setLoading] = useState(true)
+
+  // Privileged users (access_level >= 2 or admin) see all views and all tasks.
+  // Level-1 users only see Base and Kanban (their own tasks, enforced by RLS).
+  const privileged = userProfile?.access_level >= 2 || userProfile?.admin === true
+  const visibleViews = privileged ? VIEWS : VIEWS.filter(v => v.key === 'base' || v.key === 'kanban')
+
   const [activeView, setActiveView] = useState(
     () => searchParams.get('view') === 'base' ? 'base' : 'panorama',
   )
+
+  // When userProfile loads, redirect level-1 users away from restricted views.
+  useEffect(() => {
+    if (userProfile && !privileged && activeView !== 'base' && activeView !== 'kanban') {
+      setActiveView('base')
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userProfile])
   const [activeTeamId, setActiveTeamId] = useState(null)
   const [monthIdx, setMonthIdx] = useState(currentMonthIndex())
   // null = closed, undefined = new task, object = edit existing
@@ -180,7 +194,7 @@ export default function TareasPage() {
             )}
             <div className="flex flex-col sm:flex-row sm:items-center gap-2">
               <div className="flex bg-white border border-[#e0ddd4] rounded-xl p-1 w-full sm:w-fit">
-                {VIEWS.map(v => (
+                {visibleViews.map(v => (
                   <button
                     key={v.key}
                     onClick={() => setActiveView(v.key)}
@@ -253,7 +267,7 @@ export default function TareasPage() {
                 <TeamView team={activeTeam} tasks={tasks} usersMap={usersMap} monthIdx={monthIdx} clientsById={clientsById} onOpenTask={openEditTask} />
               )}
               {activeView === 'base' && (
-                <BaseView tasks={tasks} teams={teams} team={activeTeam} usersMap={usersMap} clientsById={clientsById} onOpenTask={openEditTask} />
+                <BaseView tasks={tasks} teams={teams} team={activeTeam} usersMap={usersMap} clientsById={clientsById} onOpenTask={openEditTask} onUpdated={handleUpdated} />
               )}
               {activeView === 'kanban' && (
                 <KanbanView team={activeTeam} tasks={tasks} usersMap={usersMap} clientsById={clientsById} onOpenTask={openEditTask} onUpdated={handleUpdated} />

@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { loadReport, loadPrevReport, loadClients, upsertReport } from "./metricsApi";
 import { initMetricReport } from "../../utils/initMetricReport";
-import { calcTotal, sumScore } from "../../utils/metricsScore";
+import { syncReportClients } from "../../utils/syncReportClients";
+import { calcTotal, sumScore, crecimientoCliente } from "../../utils/metricsScore";
 import { MONTHS, INDICATORS } from "./constants";
 
 export default function OperacionesView({ line, companyId, year, month }) {
@@ -27,11 +28,15 @@ export default function OperacionesView({ line, companyId, year, month }) {
     setClients(lineClients);
 
     if (reportRes.data) {
-      setReport(reportRes.data.data);
+      // Sincronizar items con los clientes actuales de la línea
+      const synced = syncReportClients(reportRes.data.data, lineClients);
+      setReport(synced);
     } else {
-      // Inicializar con carry-forward
-      const fresh = initMetricReport(prevRes.data?.data ?? null, lineClients);
-      setReport(fresh);
+      // Inicializar con carry-forward y metas de la línea
+      const lineMetas = line?.metas ?? {};
+      const fresh = initMetricReport(prevRes.data?.data ?? null, lineClients, lineMetas);
+      const synced = syncReportClients(fresh, lineClients);
+      setReport(synced);
     }
     setLoading(false);
   }, [line?.id, companyId, year, month]);
@@ -221,34 +226,54 @@ export default function OperacionesView({ line, companyId, year, month }) {
           {report.crecimiento.items.length === 0 ? (
             <p className="text-[14px] text-[#bbb]">Sin clientes. Configurá la cartera en la pestaña Configuración.</p>
           ) : (
-            report.crecimiento.items.map((item, idx) => (
-              <div key={item.clienteId} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center">
-                <span className="text-[14px] text-[#555] truncate">{clientName(item.clienteId)}</span>
-                <div className="flex items-center gap-1">
-                  <span className="text-[11px] text-[#aaa] whitespace-nowrap">Base manual</span>
-                  <input type="number" className="input-base w-24 text-[13px]"
-                    placeholder="—"
-                    value={item.seguidoresBase ?? ""}
-                    onChange={e => setItemField("crecimiento", idx, "seguidoresBase", e.target.value === "" ? null : e.target.value)}
-                  />
+            report.crecimiento.items.map((item, idx) => {
+              const { crecimiento: delta, cumple } = crecimientoCliente(item);
+              return (
+                <div key={item.clienteId} className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 items-center">
+                  <span className="text-[14px] text-[#555] truncate">{clientName(item.clienteId)}</span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[11px] text-[#aaa] whitespace-nowrap">Base manual</span>
+                    <input type="number" className="input-base !w-24 flex-none text-[13px]"
+                      placeholder="—"
+                      value={item.seguidoresBase ?? ""}
+                      onChange={e => setItemField("crecimiento", idx, "seguidoresBase", e.target.value === "" ? null : e.target.value)}
+                    />
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[11px] text-[#aaa] whitespace-nowrap">Actuales</span>
+                    <input type="number" className="input-base !w-24 flex-none text-[13px]"
+                      placeholder="—"
+                      value={item.seguidoresActuales ?? ""}
+                      onChange={e => setItemField("crecimiento", idx, "seguidoresActuales", e.target.value === "" ? null : e.target.value)}
+                    />
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[11px] text-[#aaa] whitespace-nowrap">Meta de crecimiento</span>
+                    <input type="number" min="0" className="input-base !w-20 flex-none text-[13px]"
+                      value={item.meta ?? 0}
+                      onChange={e => setItemField("crecimiento", idx, "meta", e.target.value)}
+                    />
+                  </div>
+                  {/* Indicador de cumplimiento */}
+                  {cumple === null ? (
+                    <span
+                      className="text-[12px] text-[#bbb] font-mono w-24 text-center"
+                      title="Faltan datos de base o seguidores actuales"
+                    >—</span>
+                  ) : cumple ? (
+                    <span
+                      className="text-[12px] font-semibold text-green-700 bg-green-50 rounded-full px-2.5 py-0.5 whitespace-nowrap"
+                      title={delta !== null ? `+${delta} seguidores` : ""}
+                    >✓ Cumple</span>
+                  ) : (
+                    <span
+                      className="text-[12px] font-semibold text-[#a06a00] bg-[#fff6e0] rounded-full px-2.5 py-0.5 whitespace-nowrap"
+                      title={delta !== null ? `+${delta} seguidores` : ""}
+                    >Pendiente</span>
+                  )}
                 </div>
-                <div className="flex items-center gap-1">
-                  <span className="text-[11px] text-[#aaa] whitespace-nowrap">Actuales</span>
-                  <input type="number" className="input-base w-24 text-[13px]"
-                    placeholder="—"
-                    value={item.seguidoresActuales ?? ""}
-                    onChange={e => setItemField("crecimiento", idx, "seguidoresActuales", e.target.value === "" ? null : e.target.value)}
-                  />
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="text-[11px] text-[#aaa]">Meta</span>
-                  <input type="number" min="0" className="input-base w-20 text-[13px]"
-                    value={item.meta ?? 0}
-                    onChange={e => setItemField("crecimiento", idx, "meta", e.target.value)}
-                  />
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </Section>

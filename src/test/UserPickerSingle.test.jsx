@@ -35,13 +35,15 @@ describe('UserPickerSingle — sin filtro de nivel', () => {
     expect(screen.getByText('Elena Ruiz')).toBeInTheDocument()
   })
 
-  it('muestra el cargo y nivel de cada usuario en el desplegable', () => {
+  it('muestra el cargo de cada usuario en el desplegable (sin nivel)', () => {
     renderPicker()
     fireEvent.click(screen.getByRole('button'))
-    expect(screen.getByText('Diseñadora · Nivel 1')).toBeInTheDocument()
-    expect(screen.getByText('Redactor · Nivel 2')).toBeInTheDocument()
-    expect(screen.getByText('Gerente · Nivel 3')).toBeInTheDocument()
-    expect(screen.getByText('Director · Nivel 4')).toBeInTheDocument()
+    expect(screen.getByText('Diseñadora')).toBeInTheDocument()
+    expect(screen.getByText('Redactor')).toBeInTheDocument()
+    expect(screen.getByText('Gerente')).toBeInTheDocument()
+    expect(screen.getByText('Director')).toBeInTheDocument()
+    // El nivel ya no se muestra en la UI
+    expect(screen.queryByText(/Nivel \d/)).not.toBeInTheDocument()
   })
 
   it('no muestra subtexto para usuario sin cargo ni nivel', () => {
@@ -71,20 +73,22 @@ describe('UserPickerSingle — con minLevel={3}', () => {
     expect(screen.getByText('Diego Pérez')).toBeInTheDocument()
   })
 
-  it('muestra el cargo y nivel de los usuarios filtrados', () => {
+  it('muestra el cargo de los usuarios filtrados (sin nivel)', () => {
     renderPicker({ minLevel: 3 })
     fireEvent.click(screen.getByRole('button'))
-    expect(screen.getByText('Gerente · Nivel 3')).toBeInTheDocument()
-    expect(screen.getByText('Director · Nivel 4')).toBeInTheDocument()
+    expect(screen.getByText('Gerente')).toBeInTheDocument()
+    expect(screen.getByText('Director')).toBeInTheDocument()
+    expect(screen.queryByText(/Nivel \d/)).not.toBeInTheDocument()
   })
 })
 
 describe('UserPickerSingle — empleado seleccionado', () => {
-  it('muestra cargo y nivel del empleado seleccionado en el trigger', () => {
+  it('muestra cargo del empleado seleccionado en el trigger (sin nivel)', () => {
     renderPicker({ selectedId: 'u3' })
     // El trigger (campo cerrado) debe mostrar el nombre y subtexto
     expect(screen.getByText('Carla Martín')).toBeInTheDocument()
-    expect(screen.getByText('Gerente · Nivel 3')).toBeInTheDocument()
+    expect(screen.getByText('Gerente')).toBeInTheDocument()
+    expect(screen.queryByText(/Nivel \d/)).not.toBeInTheDocument()
   })
 
   it('muestra solo el nombre si el usuario seleccionado no tiene cargo ni nivel', () => {
