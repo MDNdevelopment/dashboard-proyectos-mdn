@@ -3,13 +3,16 @@ import { supabase } from '../../supabase'
 import { useAuth } from '../../context/AuthContext'
 import { ESTADOS } from './constants'
 import UserPickerSingle from './UserPickerSingle'
+import UserPickerMulti from './UserPickerMulti'
+import { teamMemberUsers } from '../../utils/lineFilters'
 
 const EMPTY = {
   team_id: '',
+  client_id: '',
   client: '',
   description: '',
   source: '',
-  assignee_id: null,
+  assignee_ids: [],
   support_id: null,
   request_date: '',
   due_date: '',
@@ -17,17 +20,23 @@ const EMPTY = {
   status: 'En proceso',
 }
 
-export default function TaskModal({ task = null, teams = [], users = [], defaultTeamId = null, onClose, onCreated, onUpdated }) {
+export default function TaskModal({ task = null, teams = [], clients = [], users = [], defaultTeamId = null, onClose, onCreated, onUpdated }) {
   const { userProfile } = useAuth()
   const isEdit = task != null
+
+  // Level-1 users (not privileged) are always an assignee; they can add others but not remove themselves.
+  const privileged = userProfile?.access_level >= 2 || userProfile?.admin === true
+
   const [form, setForm] = useState(() => {
     if (isEdit) {
       return {
         team_id: task.team_id ?? '',
+        client_id: task.client_id ?? '',
         client: task.client ?? '',
         description: task.description ?? '',
         source: task.source ?? '',
-        assignee_id: task.assignee_id ?? null,
+        // Compat: tareas viejas tienen assignee_id (texto) pero no assignee_ids
+        assignee_ids: task.assignee_ids ?? (task.assignee_id ? [task.assignee_id] : []),
         support_id: task.support_id ?? null,
         request_date: task.request_date ?? '',
         due_date: task.due_date ?? '',
@@ -35,7 +44,12 @@ export default function TaskModal({ task = null, teams = [], users = [], default
         status: task.status ?? 'En proceso',
       }
     }
-    return { ...EMPTY, team_id: defaultTeamId ?? (teams[0]?.id ?? '') }
+    // For new tasks, level-1 users are always an assignee (locked).
+    return {
+      ...EMPTY,
+      team_id: defaultTeamId ?? (teams[0]?.id ?? ''),
+      assignee_ids: privileged ? [] : (userProfile?.user_id ? [userProfile.user_id] : []),
+    }
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -60,10 +74,11 @@ export default function TaskModal({ task = null, teams = [], users = [], default
     const payload = {
       company_id: userProfile?.company_id ?? '',
       team_id: form.team_id,
+      client_id: form.client_id || null,
       client: form.client || null,
       description: form.description.trim(),
       source: form.source || null,
-      assignee_id: form.assignee_id || null,
+      assignee_ids: form.assignee_ids,
       support_id: form.support_id || null,
       created_by: isEdit ? task.created_by : (userProfile?.user_id ?? null),
       request_date: form.request_date || null,
@@ -101,10 +116,12 @@ export default function TaskModal({ task = null, teams = [], users = [], default
     onClose()
   }
 
+  // IDs bloqueados: nivel-1 no puede quitarse a sí mismo
+  const lockedAssigneeIds = privileged ? [] : (userProfile?.user_id ? [userProfile.user_id] : [])
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25 backdrop-blur-[3px]"
-      onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-[#ece9df]">
@@ -132,7 +149,26 @@ export default function TaskModal({ task = null, teams = [], users = [], default
 
           <div>
             <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Team *</label>
-            <select className="input-base" value={form.team_id} onChange={e => set('team_id', e.target.value)} required>
+            <select
+              className="input-base"
+              value={form.team_id}
+              onChange={e => {
+                const teamId = e.target.value
+                const newMembers = teams.find(t => t.id === teamId)?.member_user_ids ?? []
+                // Al cambiar de línea, resetear cliente y filtrar responsables al nuevo team.
+                // Los ids bloqueados (nivel 1) se conservan aunque no estén en el nuevo team.
+                setForm(f => ({
+                  ...f,
+                  team_id: teamId,
+                  client_id: '',
+                  client: '',
+                  assignee_ids: f.assignee_ids.filter(id =>
+                    newMembers.includes(id) || lockedAssigneeIds.includes(id)
+                  ),
+                }))
+              }}
+              required
+            >
               <option value="">Seleccionar team...</option>
               {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
@@ -140,12 +176,40 @@ export default function TaskModal({ task = null, teams = [], users = [], default
 
           <div>
             <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Cliente</label>
-            <input
-              className="input-base"
-              value={form.client}
-              onChange={e => set('client', e.target.value)}
-              placeholder="Ej. Banco Exterior"
-            />
+            {(() => {
+              const lineClients = clients.filter(c => c.line_id === form.team_id)
+              // Tarea heredada: tiene nombre de texto pero sin client_id (pre-migración)
+              const hasLegacyName = form.client && !form.client_id
+              const clientNotInLine = form.client_id && !lineClients.some(c => c.id === form.client_id)
+              return (
+                <>
+                  <select
+                    className="input-base"
+                    value={form.client_id}
+                    onChange={e => {
+                      const chosen = lineClients.find(c => c.id === e.target.value)
+                      setForm(f => ({ ...f, client_id: e.target.value, client: chosen?.name ?? '' }))
+                    }}
+                  >
+                    <option value="">Sin cliente</option>
+                    {lineClients.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  {!form.team_id && (
+                    <p className="text-[12.5px] text-[#bbb] mt-1">Selecciona un team para ver los clientes disponibles.</p>
+                  )}
+                  {form.team_id && lineClients.length === 0 && (
+                    <p className="text-[12.5px] text-[#bbb] mt-1">No hay clientes en esta línea. Agrégalos en <strong>Empresa → Clientes</strong>.</p>
+                  )}
+                  {(hasLegacyName || clientNotInLine) && (
+                    <p className="text-[12.5px] text-[#F0871F] mt-1">
+                      Cliente previo: <strong>{form.client}</strong>. Selecciona uno de la lista para actualizar el vínculo.
+                    </p>
+                  )}
+                </>
+              )
+            })()}
           </div>
 
           <div>
@@ -171,13 +235,34 @@ export default function TaskModal({ task = null, teams = [], users = [], default
           </div>
 
           <div>
-            <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Responsable</label>
-            <UserPickerSingle
-              users={users}
-              selectedId={form.assignee_id}
-              onChange={id => set('assignee_id', id)}
-              placeholder="Asignar responsable..."
-            />
+            <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Responsable{form.assignee_ids.length !== 1 ? 's' : ''}</label>
+            {(() => {
+              const selectedTeam = teams.find(t => t.id === form.team_id)
+              const memberIds = selectedTeam?.member_user_ids ?? []
+              const teamMembers = teamMemberUsers(users, selectedTeam)
+              // Incluir usuarios ya asignados aunque no sean miembros del team actual
+              // (compat con tareas heredadas o reasignaciones históricas)
+              const alreadySelected = users.filter(u =>
+                form.assignee_ids.includes(u.user_id) && !teamMembers.some(m => m.user_id === u.user_id)
+              )
+              const assigneeOptions = [...teamMembers, ...alreadySelected]
+              return (
+                <>
+                  <UserPickerMulti
+                    users={assigneeOptions}
+                    selectedIds={form.assignee_ids}
+                    onChange={ids => set('assignee_ids', ids)}
+                    lockedIds={lockedAssigneeIds}
+                    placeholder="Asignar responsable..."
+                  />
+                  {form.team_id && memberIds.length === 0 && (
+                    <p className="text-[12.5px] text-[#bbb] mt-1">
+                      No hay miembros en esta línea. Agrégalos en <strong>Empresa → Líneas</strong>.
+                    </p>
+                  )}
+                </>
+              )
+            })()}
           </div>
 
           <div>
@@ -232,7 +317,7 @@ export default function TaskModal({ task = null, teams = [], users = [], default
           )}
 
           <div className="flex items-center justify-between pt-2">
-            {isEdit ? (
+            {isEdit && privileged ? (
               <button type="button" onClick={handleDelete} className="text-[15px] font-semibold text-red-500 hover:text-red-700 transition-colors">
                 Eliminar
               </button>

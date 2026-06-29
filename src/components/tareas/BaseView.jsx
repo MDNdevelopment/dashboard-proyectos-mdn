@@ -1,33 +1,128 @@
-import { useState, useMemo } from 'react'
+import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
+import { useSearchParams } from 'react-router-dom'
 import { isLate, isDragged, isClosed, fmtShort, ESTADOS, COL_META } from './constants'
 import { Avatar } from './UserPickerSingle'
+import { teamMemberUsers } from '../../utils/lineFilters'
+import { updateTaskStatus } from './taskStatus'
 
-function StatusBadge({ status }) {
-  const meta = COL_META[status] ?? { color: '#ccc', textColor: '#111' }
+// --- Status dropdown (portal-based to escape overflow:hidden table containers) ---
+
+function useStatusDropdown() {
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState({ top: 0, left: 0 })
+  const btnRef = useRef(null)
+  const menuRef = useRef(null)
+
+  function toggle(e) {
+    e?.stopPropagation()
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect()
+      const menuH = ESTADOS.length * 36 + 12
+      const menuW = 152
+      setPos({
+        top: window.innerHeight - r.bottom < menuH + 8 ? r.top - menuH - 4 : r.bottom + 4,
+        left: Math.max(8, Math.min(r.left, window.innerWidth - menuW - 8)),
+      })
+    }
+    setOpen(o => !o)
+  }
+
+  useEffect(() => {
+    if (!open) return
+    function handleOutside(e) {
+      if (!menuRef.current?.contains(e.target) && !btnRef.current?.contains(e.target)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleOutside)
+    return () => document.removeEventListener('mousedown', handleOutside)
+  }, [open])
+
+  return { open, pos, toggle, btnRef, menuRef, close: () => setOpen(false) }
+}
+
+function StatusBadge({ task, onUpdated }) {
+  const { open, pos, toggle, btnRef, menuRef, close } = useStatusDropdown()
+  const meta = COL_META[task.status] ?? { color: '#ccc' }
+
+  async function handleSelect(e, newStatus) {
+    e.stopPropagation()
+    close()
+    if (newStatus === task.status) return
+    const { data, error } = await updateTaskStatus(task.id, newStatus)
+    if (!error && data) onUpdated(data)
+  }
+
   return (
-    <span
-      className="inline-block px-2 py-0.5 rounded-full text-[13px] font-bold"
-      style={{ background: meta.color + '22', color: meta.color, border: `1px solid ${meta.color}44` }}
-    >
-      {status}
-    </span>
+    <>
+      <button
+        ref={btnRef}
+        onClick={toggle}
+        title="Cambiar estado"
+        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[13px] font-bold cursor-pointer hover:opacity-75 transition-opacity"
+        style={{ background: meta.color + '22', color: meta.color, border: `1px solid ${meta.color}44` }}
+      >
+        {task.status}
+        <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M2 3.5l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+
+      {open && createPortal(
+        <div
+          ref={menuRef}
+          style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999 }}
+          className="bg-white border border-[#e8e5db] rounded-xl shadow-lg min-w-[152px] py-1.5 overflow-hidden"
+        >
+          {ESTADOS.map(s => {
+            const m = COL_META[s] ?? { color: '#ccc' }
+            const active = s === task.status
+            return (
+              <button
+                key={s}
+                onClick={e => handleSelect(e, s)}
+                className="w-full text-left px-3 py-2 text-[13.5px] flex items-center gap-2 hover:bg-[#f5f3eb] transition-colors"
+              >
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: m.color }} />
+                <span style={{ color: active ? '#111' : '#555', fontWeight: active ? '700' : '500' }}>{s}</span>
+                {active && <span className="ml-auto text-[11px] text-[#aaa]">✓</span>}
+              </button>
+            )
+          })}
+        </div>,
+        document.body,
+      )}
+    </>
   )
 }
 
-export default function BaseView({ tasks, teams, team, usersMap, onOpenTask }) {
+// --- Main component ---
+
+export default function BaseView({ tasks, teams, team, usersMap, clientsById = new Map(), onOpenTask, onUpdated }) {
+  const [searchParams] = useSearchParams()
+
+  // Inicializar filtros desde URL params (solo en el primer render)
   const [q, setQ] = useState('')
-  const [fStatus, setFStatus] = useState('')
+  const [fStatus, setFStatus] = useState(() => searchParams.get('status') ?? '')
   const [fClient, setFClient] = useState('')
-  const [fSupport, setFSupport] = useState('')  // '' | 'with' | 'without'
-  const [fAlert, setFAlert] = useState('')      // '' | 'late' | 'drag' | 'ok'
+  const [fSupport, setFSupport] = useState('')   // '' | 'with' | 'without'
+  const [fAlert, setFAlert] = useState(() => searchParams.get('fAlert') ?? '')  // '' | 'late' | 'drag' | 'ok'
+  const [fAssignee, setFAssignee] = useState(() => searchParams.get('assignee') ?? '') // user_id | ''
 
-  const teamTasks = team ? tasks.filter(t => t.team_id === team.id) : []
-  const clients = useMemo(
-    () => [...new Set(teamTasks.map(t => t.client).filter(Boolean))].sort(),
-    [teamTasks]
-  )
+  // Solo tareas del team seleccionado
+  const baseTasks = team ? tasks.filter(t => t.team_id === team.id) : []
 
-  const filtered = teamTasks.filter(t => {
+  const clientList = [...new Set(baseTasks.map(t => t.client).filter(Boolean))].sort()
+
+  // Responsable: solo miembros del team seleccionado
+  const usersList = (() => {
+    const allUsers = Array.from(usersMap.values())
+    return teamMemberUsers(allUsers, team)
+      .sort((a, b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`))
+  })()
+
+  const filtered = baseTasks.filter(t => {
     const sq = q.toLowerCase()
     if (sq && !((t.client ?? '').toLowerCase().includes(sq) || (t.description ?? '').toLowerCase().includes(sq))) return false
     if (fStatus && t.status !== fStatus) return false
@@ -37,11 +132,12 @@ export default function BaseView({ tasks, teams, team, usersMap, onOpenTask }) {
     if (fAlert === 'late' && !isLate(t)) return false
     if (fAlert === 'drag' && !isDragged(t)) return false
     if (fAlert === 'ok' && (isLate(t) || isDragged(t))) return false
+    if (fAssignee && !(t.assignee_ids ?? (t.assignee_id ? [t.assignee_id] : [])).includes(fAssignee)) return false
     return true
   }).sort((a, b) => (b.request_date ?? '').localeCompare(a.request_date ?? ''))
 
-  const hasFilters = q || fStatus || fClient || fSupport || fAlert
-  function clearFilters() { setQ(''); setFStatus(''); setFClient(''); setFSupport(''); setFAlert('') }
+  const hasFilters = q || fStatus || fClient || fSupport || fAlert || fAssignee
+  function clearFilters() { setQ(''); setFStatus(''); setFClient(''); setFSupport(''); setFAlert(''); setFAssignee('') }
 
   function userDisplay(id) {
     const u = usersMap.get(id)
@@ -60,8 +156,8 @@ export default function BaseView({ tasks, teams, team, usersMap, onOpenTask }) {
     <div className="space-y-4">
       {/* Filter bar */}
       <div className="space-y-1.5">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-          <div className="relative">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+          <div className="relative col-span-2 sm:col-span-1">
             <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#999] pointer-events-none" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="6.5" cy="6.5" r="5"/><path d="M10.5 10.5L14 14" strokeLinecap="round"/>
             </svg>
@@ -72,13 +168,21 @@ export default function BaseView({ tasks, teams, team, usersMap, onOpenTask }) {
               className="w-full pl-8 pr-3 py-2 text-[14.5px] bg-white border border-[#e0ddd4] rounded-lg outline-none focus:border-[#bbb] transition-colors"
             />
           </div>
+          <select value={fAssignee} onChange={e => setFAssignee(e.target.value)} className="input-base text-[14.5px] py-2">
+            <option value="">Responsable: todos</option>
+            {usersList.map(u => (
+              <option key={u.user_id} value={u.user_id}>
+                {u.first_name} {u.last_name}
+              </option>
+            ))}
+          </select>
           <select value={fStatus} onChange={e => setFStatus(e.target.value)} className="input-base text-[14.5px] py-2">
             <option value="">Estatus: todos</option>
             {ESTADOS.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
           <select value={fClient} onChange={e => setFClient(e.target.value)} className="input-base text-[14.5px] py-2">
             <option value="">Cliente: todos</option>
-            {clients.map(c => <option key={c} value={c}>{c}</option>)}
+            {clientList.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
           <select value={fSupport} onChange={e => setFSupport(e.target.value)} className="input-base text-[14.5px] py-2">
             <option value="">Apoyo dir.: todos</option>
@@ -94,7 +198,7 @@ export default function BaseView({ tasks, teams, team, usersMap, onOpenTask }) {
         </div>
         <div className="flex items-center justify-between">
           <span className="text-[14px] text-[#888]">
-            {hasFilters ? `${filtered.length} de ${teamTasks.length}` : teamTasks.length} tarea{teamTasks.length !== 1 ? 's' : ''}
+            {hasFilters ? `${filtered.length} de ${baseTasks.length}` : baseTasks.length} tarea{baseTasks.length !== 1 ? 's' : ''}
           </span>
           {hasFilters && (
             <button onClick={clearFilters} className="text-[14px] font-semibold text-[#888] hover:text-[#111] transition-colors">
@@ -105,7 +209,7 @@ export default function BaseView({ tasks, teams, team, usersMap, onOpenTask }) {
       </div>
 
       {/* Table */}
-      {teamTasks.length === 0 ? (
+      {baseTasks.length === 0 ? (
         <div className="bg-white rounded-xl border border-[#e0ddd4] p-10 text-center">
           <p className="text-[16px] font-medium text-[#888] mb-1">Sin tareas</p>
           <p className="text-[14px] text-[#bbb]">Crea la primera tarea con el botón "Nueva tarea"</p>
@@ -133,7 +237,7 @@ export default function BaseView({ tasks, teams, team, usersMap, onOpenTask }) {
               </thead>
               <tbody>
                 {filtered.map(t => {
-                  const resp = userDisplay(t.assignee_id)
+                  const resps = (t.assignee_ids ?? (t.assignee_id ? [t.assignee_id] : [])).map(id => usersMap.get(id)).filter(Boolean)
                   const support = userDisplay(t.support_id)
                   const late = isLate(t)
                   const drag = isDragged(t)
@@ -143,20 +247,45 @@ export default function BaseView({ tasks, teams, team, usersMap, onOpenTask }) {
                       className={`border-b border-[#f5f3eb] last:border-0 hover:bg-[#faf9f5] cursor-pointer transition-colors ${late ? 'bg-red-50/50' : ''}`}
                       onClick={() => onOpenTask(t)}
                     >
-                      <td className="px-4 py-3 font-medium text-[#111] max-w-[140px] truncate">
-                        {late && <span className="text-red-500 mr-1">⚠</span>}
-                        {t.client || <span className="text-[#bbb]">—</span>}
+                      <td className="px-4 py-3 font-medium text-[#111] max-w-[140px]">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {late && <span className="text-red-500 flex-shrink-0">⚠</span>}
+                          {(() => {
+                            const logo = t.client_id ? clientsById.get(t.client_id)?.logo_url : null
+                            const name = t.client
+                            if (!name) return <span className="text-[#bbb]">—</span>
+                            return (
+                              <>
+                                {logo ? (
+                                  <img src={logo} alt={name} className="w-7 h-7 rounded-full object-cover flex-shrink-0 border border-[#e0ddd4]" />
+                                ) : (
+                                  <span className="w-7 h-7 rounded-full bg-[#f0ede3] flex items-center justify-center flex-shrink-0 text-[12px] font-bold text-[#aaa] uppercase">{name[0]}</span>
+                                )}
+                                <span className="truncate">{name}</span>
+                              </>
+                            )
+                          })()}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-[#333] max-w-[220px]">
                         <span className="line-clamp-2">{t.description}</span>
                         {drag && !late && <span className="block text-[13px] text-[#F0871F] mt-0.5">Arrastrada</span>}
                       </td>
-                      <td className="px-4 py-3"><StatusBadge status={t.status} /></td>
                       <td className="px-4 py-3">
-                        {resp ? (
-                          <div className="flex items-center gap-1.5">
-                            <Avatar user={resp.user} size={20} />
-                            <span className="text-[14px] text-[#333]">{resp.name}</span>
+                        <StatusBadge task={t} onUpdated={onUpdated} />
+                      </td>
+                      <td className="px-4 py-3">
+                        {resps.length > 0 ? (
+                          <div className="flex items-center">
+                            {resps.map((u, i) => (
+                              <div
+                                key={u.user_id}
+                                title={`${u.first_name} ${u.last_name}`}
+                                className={`rounded-full ring-2 ring-white flex-shrink-0${i > 0 ? ' -ml-2' : ''}`}
+                              >
+                                <Avatar user={u} size={30} />
+                              </div>
+                            ))}
                           </div>
                         ) : <span className="text-[#bbb]">—</span>}
                       </td>

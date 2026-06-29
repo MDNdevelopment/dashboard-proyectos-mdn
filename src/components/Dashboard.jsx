@@ -1,6 +1,9 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import ProjectCard from './ProjectCard'
 import { getGlobalProgress } from '../utils/projectProgress'
+import { filterProjects } from '../utils/filterProjects'
+
+const PAGE_SIZE = 30
 
 const FILTER_LABELS = {
   all: 'Todos los proyectos',
@@ -9,26 +12,134 @@ const FILTER_LABELS = {
   'Completado': 'Completados',
 }
 
+// ── Date-range picker (compact dropdown) ──────────────────────────────────────
+
+function fmt(iso) {
+  if (!iso) return ''
+  const [y, m, d] = iso.split('-')
+  return `${d}/${m}/${y}`
+}
+
+function DateRangePicker({ dateFrom, dateTo, onChange }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handleOutside(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleOutside)
+    return () => document.removeEventListener('mousedown', handleOutside)
+  }, [open])
+
+  const hasRange = dateFrom || dateTo
+  const label = hasRange
+    ? [fmt(dateFrom), fmt(dateTo)].filter(Boolean).join(' → ')
+    : 'Fecha'
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl border text-[15px] font-medium transition-colors shadow-sm whitespace-nowrap ${
+          hasRange
+            ? 'bg-[#111] text-white border-[#111]'
+            : 'bg-white border-[#e0ddd4] text-[#555] hover:border-[#bbb]'
+        }`}
+      >
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <rect x="1.5" y="2.5" width="13" height="12" rx="1.5"/>
+          <path d="M5 1v3M11 1v3M1.5 7h13" strokeLinecap="round"/>
+        </svg>
+        <span>{label}</span>
+        {hasRange && (
+          <span
+            role="button"
+            onClick={e => { e.stopPropagation(); onChange('', '') }}
+            className="ml-1 text-white/70 hover:text-white leading-none text-[16px]"
+            aria-label="Limpiar fechas"
+          >×</span>
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 mt-1.5 z-50 bg-white border border-[#e0ddd4] rounded-2xl shadow-xl p-4 min-w-[240px]">
+          <p className="text-[12px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-3">Rango de creación</p>
+          <div className="space-y-2.5">
+            <div>
+              <label className="block text-[12px] text-[#aaa] mb-1">Desde</label>
+              <input
+                type="date"
+                value={dateFrom}
+                max={dateTo || undefined}
+                onChange={e => onChange(e.target.value, dateTo)}
+                className="input-base text-[14px] py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-[12px] text-[#aaa] mb-1">Hasta</label>
+              <input
+                type="date"
+                value={dateTo}
+                min={dateFrom || undefined}
+                onChange={e => onChange(dateFrom, e.target.value)}
+                className="input-base text-[14px] py-2"
+              />
+            </div>
+          </div>
+          {hasRange && (
+            <button
+              type="button"
+              onClick={() => { onChange('', ''); setOpen(false) }}
+              className="mt-3 w-full text-[13.5px] font-semibold text-[#888] hover:text-[#111] transition-colors"
+            >
+              Limpiar rango
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+
 function Dashboard({ projects, loading, activeFilter, onNewProject, onEditProject, onUpdateProject, onDeleteProject, onDuplicateProject, onMenuToggle, onExport }) {
   const [search, setSearch] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [expandedMap, setExpandedMap] = useState({})
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  const sentinelRef = useRef(null)
+
   const toggleExpanded = id => setExpandedMap(prev => ({ ...prev, [id]: !prev[id] }))
 
-  const filtered = projects.filter(p => {
-    const depts = p.departments ?? (p.department ? [p.department] : [])
-    if (activeFilter.startsWith('dept:')) {
-      if (!depts.includes(activeFilter.replace('dept:', ''))) return false
-    } else if (activeFilter !== 'all') {
-      if (p.status !== activeFilter) return false
-    }
-    if (search) {
-      const q = search.toLowerCase()
-      return p.name?.toLowerCase().includes(q) ||
-        p.team?.toLowerCase().includes(q) ||
-        depts.some(d => d.toLowerCase().includes(q))
-    }
-    return true
-  })
+  const filtered = filterProjects(projects, { search, activeFilter, dateFrom, dateTo })
+
+  // Reset visible window when filters change
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE)
+  }, [search, activeFilter, dateFrom, dateTo])
+
+  // IntersectionObserver sentinel — loads the next batch when scrolled to bottom.
+  // Guard against environments that don't support IntersectionObserver (e.g. test runners).
+  useEffect(() => {
+    if (!sentinelRef.current || typeof IntersectionObserver === 'undefined') return
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting) {
+          setVisibleCount(c => Math.min(c + PAGE_SIZE, filtered.length))
+        }
+      },
+      { rootMargin: '200px' },
+    )
+    observer.observe(sentinelRef.current)
+    return () => observer.disconnect()
+  }, [filtered.length])
+
+  const visible = filtered.slice(0, visibleCount)
 
   const { percent: avgProgress, doneTasks, totalTasks } = getGlobalProgress(projects)
 
@@ -43,6 +154,8 @@ function Dashboard({ projects, loading, activeFilter, onNewProject, onEditProjec
     { label: 'Completados',      value: projects.filter(p => p.status === 'Completado').length,    color: '#16a34a', mono: false },
     { label: 'Avance global',    value: `${avgProgress}%`,  sub: `${doneTasks} / ${totalTasks} tareas`, color: '#111', mono: true },
   ]
+
+  const hasFilters = search || dateFrom || dateTo
 
   return (
     <div className="main-bg min-h-screen">
@@ -74,12 +187,12 @@ function Dashboard({ projects, loading, activeFilter, onNewProject, onEditProjec
             )}
             <button
               onClick={onNewProject}
-              className="hidden lg:flex items-center gap-2 bg-[#0d0d0d] text-white text-[15px] font-semibold px-4 py-2.5 rounded-xl hover:bg-[#222] transition-colors shadow-sm"
+              className="flex items-center gap-2 bg-[#0d0d0d] text-white font-semibold rounded-xl hover:bg-[#222] transition-colors shadow-sm px-3 py-2.5 lg:px-4 lg:text-[15px]"
             >
               <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.8">
                 <path d="M6 1v10M1 6h10" strokeLinecap="round"/>
               </svg>
-              Nuevo proyecto
+              <span className="hidden lg:inline">Nuevo proyecto</span>
             </button>
           </div>
         </div>
@@ -100,17 +213,25 @@ function Dashboard({ projects, loading, activeFilter, onNewProject, onEditProjec
           ))}
         </div>
 
-        {/* Search */}
-        <div className="relative mb-6 max-w-xs">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-[#999] pointer-events-none" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="6.5" cy="6.5" r="5"/>
-            <path d="M10.5 10.5L14 14" strokeLinecap="round"/>
-          </svg>
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Buscar proyecto, equipo..."
-            className="w-full bg-white border border-[#e0ddd4] rounded-xl pl-9 pr-4 py-2.5 text-[15px] text-[#111] placeholder-[#bbb] outline-none focus:border-[#bbb] transition-colors shadow-sm font-sans"
+        {/* Search + date filter */}
+        <div className="flex items-center gap-2 mb-6">
+          <div className="relative flex-1 max-w-xs">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-[#999] pointer-events-none" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="6.5" cy="6.5" r="5"/>
+              <path d="M10.5 10.5L14 14" strokeLinecap="round"/>
+            </svg>
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Buscar proyecto, equipo..."
+              className="w-full bg-white border border-[#e0ddd4] rounded-xl pl-9 pr-4 py-2.5 text-[15px] text-[#111] placeholder-[#bbb] outline-none focus:border-[#bbb] transition-colors shadow-sm font-sans"
+            />
+          </div>
+
+          <DateRangePicker
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            onChange={(from, to) => { setDateFrom(from); setDateTo(to) }}
           />
         </div>
 
@@ -128,29 +249,40 @@ function Dashboard({ projects, loading, activeFilter, onNewProject, onEditProjec
               </svg>
             </div>
             <p className="text-[16px] font-medium text-[#999] mb-4">
-              {search ? 'Sin resultados para esa búsqueda.' : 'No hay proyectos aquí aún.'}
+              {hasFilters ? 'Sin resultados para esa búsqueda.' : 'No hay proyectos aquí aún.'}
             </p>
-            {!search && (
+            {!hasFilters && (
               <button onClick={onNewProject} className="bg-[#0d0d0d] text-white text-[15px] font-semibold px-5 py-2.5 rounded-xl hover:bg-[#222] transition-colors">
                 Crear primer proyecto
               </button>
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 items-start">
-            {filtered.map(project => (
-              <ProjectCard
-                key={project.id}
-                project={project}
-                expanded={!!expandedMap[project.id]}
-                onToggleExpand={() => toggleExpanded(project.id)}
-                onEdit={() => onEditProject(project)}
-                onUpdate={u => onUpdateProject(project.id, u)}
-                onDelete={() => onDeleteProject(project.id)}
-                onDuplicate={() => onDuplicateProject(project)}
-              />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 items-start">
+              {visible.map(project => (
+                <ProjectCard
+                  key={project.id}
+                  project={project}
+                  expanded={!!expandedMap[project.id]}
+                  onToggleExpand={() => toggleExpanded(project.id)}
+                  onEdit={() => onEditProject(project)}
+                  onUpdate={u => onUpdateProject(project.id, u)}
+                  onDelete={() => onDeleteProject(project.id)}
+                  onDuplicate={() => onDuplicateProject(project)}
+                />
+              ))}
+            </div>
+
+            {/* Infinite scroll sentinel */}
+            <div ref={sentinelRef} />
+
+            {visibleCount < filtered.length && (
+              <p className="text-center text-[14px] text-[#999] mt-6 font-mono">
+                Mostrando {visibleCount} de {filtered.length} proyectos
+              </p>
+            )}
+          </>
         )}
       </div>
     </div>

@@ -17,6 +17,7 @@ import {
   taskLight,
   lightOf,
   teamMonthStats,
+  validateTeamName,
 } from '../components/tareas/constants'
 
 // ─── parseD ──────────────────────────────────────────────────────────────────
@@ -363,5 +364,36 @@ describe('teamMonthStats', () => {
     // In June: tasks 1,2,3 qualify; task-5 (July start) does not
     const s = teamMonthStats(TEAM_ID, tasks, JUN)
     expect(s.total).toBe(3)  // same as the first test — task-5 excluded from June
+  })
+})
+
+// ─── validateTeamName ─────────────────────────────────────────────────────────
+describe('validateTeamName', () => {
+  it('returns the trimmed name when valid and different from current', () => {
+    expect(validateTeamName('  Diseño  ', 'Marketing')).toBe('Diseño')
+  })
+
+  it('returns the name as-is when no currentName is provided (create mode)', () => {
+    expect(validateTeamName('Tecnología')).toBe('Tecnología')
+  })
+
+  it('returns null for empty string', () => {
+    expect(validateTeamName('', 'Marketing')).toBeNull()
+  })
+
+  it('returns null for whitespace-only string', () => {
+    expect(validateTeamName('   ', 'Marketing')).toBeNull()
+  })
+
+  it('returns null when trimmed name equals currentName (no change)', () => {
+    expect(validateTeamName('  Marketing  ', 'Marketing')).toBeNull()
+  })
+
+  it('returns null for null input', () => {
+    expect(validateTeamName(null, 'Marketing')).toBeNull()
+  })
+
+  it('returns null for undefined input', () => {
+    expect(validateTeamName(undefined, 'Marketing')).toBeNull()
   })
 })

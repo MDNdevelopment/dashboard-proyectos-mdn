@@ -1,0 +1,134 @@
+<!--
+  Plantilla de email: Recuperación de contraseña — MDN Publicidad
+  ================================================================
+  CÓMO USARLA:
+  1. Ve a tu proyecto en https://supabase.com/dashboard
+  2. Authentication → Email Templates → "Reset Password"
+  3. Copia el contenido de este archivo y pégalo en el campo "Body"
+  4. Asegúrate de que el campo "Subject" sea: Restablecer contraseña — MDN Gestión
+  5. Guarda los cambios (Save)
+
+  Notas:
+  - {{ .ConfirmationURL }} es la variable de Supabase con el enlace real de reset.
+  - No modifiques las llaves dobles {{ }} — son parte del motor de plantillas de Supabase.
+  - El enlace dirige a https://mdngestion.netlify.app/reset-password (configurado en
+    Authentication → URL Configuration → Redirect URLs).
+-->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <title>Restablecer contraseña — MDN Gestión</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f2f0e8;font-family:'DM Sans',Arial,Helvetica,sans-serif;">
+
+  <!-- Wrapper -->
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"
+         style="background-color:#f2f0e8;padding:40px 16px;">
+    <tr>
+      <td align="center">
+
+        <!-- Card -->
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0"
+               style="background-color:#ffffff;border-radius:20px;border:1px solid #e0ddd4;
+                      max-width:480px;width:100%;overflow:hidden;">
+
+          <!-- Header / Logo strip -->
+          <tr>
+            <td align="center" style="padding:36px 40px 28px 40px;border-bottom:1px solid #f0ede6;">
+              <img
+                src="https://res.cloudinary.com/mdnclientes/image/upload/v1779727686/MDN-LOGO-PNG-2_1_f8o5gk.webp"
+                alt="MDN Publicidad"
+                width="52"
+                height="52"
+                style="display:block;margin:0 auto 10px auto;object-fit:contain;"
+              />
+              <p style="margin:0;font-size:13px;font-weight:600;color:#999999;
+                         letter-spacing:0.05em;text-transform:uppercase;">
+                MDN Publicidad
+              </p>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:32px 40px 12px 40px;">
+              <h1 style="margin:0 0 8px 0;font-size:22px;font-weight:700;color:#111111;
+                          line-height:1.3;">
+                Restablecer tu contraseña
+              </h1>
+              <p style="margin:0 0 24px 0;font-size:15px;color:#666666;line-height:1.6;">
+                Recibimos una solicitud para restablecer la contraseña de tu cuenta en
+                <strong style="color:#111111;">MDN Gestión</strong>.
+                Haz clic en el botón de abajo para crear una nueva contraseña.
+              </p>
+
+              <!-- CTA Button -->
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                  <td align="center" style="padding:4px 0 28px 0;">
+                    <a href="{{ .ConfirmationURL }}"
+                       style="display:inline-block;background-color:#FFB800;color:#111111;
+                              font-size:15px;font-weight:700;text-decoration:none;
+                              padding:14px 36px;border-radius:12px;letter-spacing:0.01em;">
+                      Crear nueva contraseña
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Expiry note -->
+              <p style="margin:0 0 24px 0;font-size:13px;color:#999999;line-height:1.5;
+                         background-color:#f9f8f5;border-radius:10px;padding:12px 16px;
+                         border-left:3px solid #FFB800;">
+                ⏱ Este enlace es válido por <strong>1 hora</strong>.
+                Después de ese tiempo tendrás que solicitar uno nuevo.
+              </p>
+
+              <!-- Divider -->
+              <hr style="border:none;border-top:1px solid #eeebe4;margin:0 0 24px 0;" />
+
+              <!-- Not you? -->
+              <p style="margin:0 0 20px 0;font-size:13px;color:#999999;line-height:1.5;">
+                Si no solicitaste restablecer tu contraseña, puedes ignorar este correo.
+                Tu contraseña actual seguirá siendo la misma.
+              </p>
+
+              <!-- Fallback link -->
+              <p style="margin:0 0 8px 0;font-size:12px;color:#bbbbbb;line-height:1.5;">
+                Si el botón no funciona, copia y pega este enlace en tu navegador:
+              </p>
+              <p style="margin:0;font-size:12px;color:#FFB800;word-break:break-all;line-height:1.5;">
+                <a href="{{ .ConfirmationURL }}"
+                   style="color:#FFB800;text-decoration:underline;">
+                  {{ .ConfirmationURL }}
+                </a>
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td align="center"
+                style="padding:20px 40px 32px 40px;border-top:1px solid #f0ede6;margin-top:8px;">
+              <p style="margin:0;font-size:12px;color:#bbbbbb;line-height:1.5;">
+                MDN Publicidad &nbsp;·&nbsp; Sistema interno de gestión
+              </p>
+              <p style="margin:4px 0 0 0;font-size:12px;color:#cccccc;">
+                Este es un correo automático, por favor no respondas.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+        <!-- /Card -->
+
+      </td>
+    </tr>
+  </table>
+  <!-- /Wrapper -->
+
+</body>
+</html>

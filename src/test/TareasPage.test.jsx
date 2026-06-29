@@ -14,8 +14,7 @@ vi.mock('../supabase', () => {
   })
 
   mockFrom.mockImplementation(table => {
-    if (table === 'teams') return makeQuery(MOCK_TEAMS)
-    if (table === 'team_members') return makeQuery(MOCK_MEMBERS)
+    if (table === 'metric_lines') return makeQuery(MOCK_TEAMS)
     if (table === 'tasks') return makeQuery(MOCK_TASKS)
     if (table === 'users') return makeQuery(MOCK_USERS)
     return makeQuery([])
@@ -39,9 +38,6 @@ vi.mock('../context/AuthContext', () => ({
 const MOCK_TEAMS = [
   { id: 'team-1', name: 'Georgina', company_id: 'co-1', created_at: '2026-01-01T00:00:00Z' },
   { id: 'team-2', name: 'Bianca',   company_id: 'co-1', created_at: '2026-01-02T00:00:00Z' },
-]
-const MOCK_MEMBERS = [
-  { id: 'm1', team_id: 'team-1', user_id: 'u1', created_at: '2026-01-01T00:00:00Z' },
 ]
 const MOCK_TASKS = [
   {
@@ -113,8 +109,4 @@ describe('TareasPage', () => {
     expect(screen.getByRole('button', { name: /nueva tarea/i })).toBeInTheDocument()
   })
 
-  it('renders the Gestionar teams button', async () => {
-    renderPage()
-    expect(screen.getByRole('button', { name: /gestionar teams/i })).toBeInTheDocument()
-  })
 })

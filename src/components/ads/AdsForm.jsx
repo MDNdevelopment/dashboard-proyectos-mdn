@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../supabase'
 import { useAuth } from '../../context/AuthContext'
 import { STATUSES, PRIORITIES } from './constants'
+import UserPickerSingle from '../tareas/UserPickerSingle'
+import { loadClients } from '../metricas/metricsApi'
 
 export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
   const { userProfile } = useAuth()
@@ -12,6 +14,7 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
     end_date:   campaign?.end_date   ?? '',
     name:       campaign?.name       ?? '',
     client:     campaign?.client     ?? '',
+    client_id:  campaign?.client_id  ?? '',
     assignee:   campaign?.assignee   ?? '',
     priority:   campaign?.priority   ?? 'Media',
     status:     campaign?.status     ?? 'Pendiente',
@@ -19,26 +22,46 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
   })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
+
   const [users, setUsers] = useState([])
   const [loadingUsers, setLoadingUsers] = useState(true)
 
+  const [clients, setClients] = useState([])
+  const [loadingClients, setLoadingClients] = useState(true)
+
+  // Cargar usuarios con avatar/nivel (necesario para UserPickerSingle)
   useEffect(() => {
     if (!userProfile?.company_id) { setLoadingUsers(false); return }
     supabase
       .from('users')
-      .select('user_id, first_name, last_name, email')
+      .select('user_id, first_name, last_name, avatar_url, access_level, position:positions(position_name)')
       .eq('company_id', userProfile.company_id)
       .order('first_name')
       .then(({ data }) => { setUsers(data ?? []); setLoadingUsers(false) })
+  }, [userProfile?.company_id])
+
+  // Cargar todos los clientes de la empresa (sin filtro de línea)
+  useEffect(() => {
+    if (!userProfile?.company_id) { setLoadingClients(false); return }
+    loadClients(userProfile.company_id).then(({ data }) => {
+      setClients(data ?? [])
+      setLoadingClients(false)
+    })
   }, [userProfile?.company_id])
 
   function set(key, val) {
     setFields(prev => ({ ...prev, [key]: val }))
   }
 
+  function handleClientChange(e) {
+    const id = e.target.value
+    const c = clients.find(x => x.id === id)
+    setFields(prev => ({ ...prev, client_id: id, client: c?.name ?? '' }))
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
-    if (!fields.name.trim() || !fields.client.trim() || !fields.start_date || !fields.end_date) return
+    if (!fields.name.trim() || !fields.client_id || !fields.start_date || !fields.end_date) return
     setSubmitting(true)
     setError(null)
 
@@ -74,6 +97,9 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
   }
 
   const labelClass = 'block text-[13px] font-mono font-bold tracking-widest uppercase text-[#888] mb-1.5'
+
+  // ¿La campaña heredada tenía un cliente escrito a mano sin client_id?
+  const legacyClientName = isEdit && !campaign.client_id && campaign.client ? campaign.client : null
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-black/30">
@@ -128,36 +154,52 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
               />
             </div>
 
-            {/* Cliente */}
+            {/* Cliente — desplegable desde metric_clients */}
             <div>
               <label className={labelClass}>Cliente / Marca</label>
-              <input
-                type="text"
-                className="input-base w-full"
-                placeholder="Cliente o marca"
-                value={fields.client}
-                onChange={e => set('client', e.target.value)}
-                required
-              />
+              {loadingClients ? (
+                <div className="input-base w-full text-[#bbb] text-[14.5px]">Cargando clientes…</div>
+              ) : clients.length === 0 ? (
+                <div className="input-base w-full text-[#bbb] text-[14.5px]">
+                  No hay clientes.{' '}
+                  <span className="text-[#888]">Créalos en Empresa → Clientes</span>
+                </div>
+              ) : (
+                <>
+                  <select
+                    className="input-base w-full"
+                    value={fields.client_id}
+                    onChange={handleClientChange}
+                    required
+                  >
+                    <option value="">— Seleccionar cliente —</option>
+                    {clients.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  {/* Hint: campaña heredada con nombre pero sin client_id */}
+                  {legacyClientName && !fields.client_id && (
+                    <p className="mt-1 text-[12.5px] text-[#F0871F]">
+                      Cliente previo: <span className="font-semibold">{legacyClientName}</span> — elige uno de la lista para actualizar el vínculo.
+                    </p>
+                  )}
+                </>
+              )}
             </div>
 
-            {/* Responsable */}
+            {/* Responsable — UserPickerSingle */}
             <div>
-              <label htmlFor="assignee" className={labelClass}>Responsable</label>
-              <select
-                id="assignee"
-                className="input-base w-full"
-                value={fields.assignee}
-                onChange={e => set('assignee', e.target.value)}
-                disabled={loadingUsers}
-              >
-                <option value="">— Seleccionar responsable —</option>
-                {users.map(u => (
-                  <option key={u.user_id} value={u.user_id}>
-                    {u.first_name} {u.last_name}
-                  </option>
-                ))}
-              </select>
+              <label className={labelClass}>Responsable</label>
+              {loadingUsers ? (
+                <div className="input-base w-full text-[#bbb] text-[14.5px]">Cargando…</div>
+              ) : (
+                <UserPickerSingle
+                  users={users}
+                  selectedId={fields.assignee || null}
+                  onChange={id => set('assignee', id ?? '')}
+                  placeholder="Asignar responsable..."
+                />
+              )}
             </div>
 
             {/* Prioridad */}
@@ -209,7 +251,7 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
             </button>
             <button
               type="submit"
-              disabled={submitting || !fields.name.trim() || !fields.client.trim() || !fields.start_date || !fields.end_date}
+              disabled={submitting || !fields.name.trim() || !fields.client_id || !fields.start_date || !fields.end_date}
               className="flex-1 py-2.5 rounded-xl bg-[#111] text-white text-[15px] font-bold hover:bg-[#222] transition-colors disabled:opacity-50"
             >
               {submitting ? (isEdit ? 'Guardando...' : 'Creando...') : (isEdit ? 'Guardar cambios' : 'Crear campaña')}

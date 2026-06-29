@@ -5,6 +5,7 @@ import AdsStats from "../components/ads/AdsStats";
 import AdsList from "../components/ads/AdsList";
 import AdsForm from "../components/ads/AdsForm";
 import AdsDetail from "../components/ads/AdsDetail";
+import { loadClients } from "../components/metricas/metricsApi";
 
 export default function AdsPage() {
   const { userProfile } = useAuth();
@@ -14,6 +15,7 @@ export default function AdsPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState(null);
   const [usersMap, setUsersMap] = useState(new Map());
+  const [clientsById, setClientsById] = useState(new Map());
 
   const canManage =
     userProfile?.access_level >= 3 || userProfile?.admin === true;
@@ -34,6 +36,13 @@ export default function AdsPage() {
           setUsersMap(new Map(data.map(u => [u.user_id, `${u.first_name} ${u.last_name}`])));
         }
       });
+  }, [userProfile?.company_id]);
+
+  useEffect(() => {
+    if (!userProfile?.company_id) return;
+    loadClients(userProfile.company_id).then(({ data }) => {
+      if (data) setClientsById(new Map(data.map(c => [c.id, c])));
+    });
   }, [userProfile?.company_id]);
 
   async function fetchCampaigns() {
@@ -110,6 +119,7 @@ export default function AdsPage() {
             loading={loading}
             canManage={canManage}
             usersMap={usersMap}
+            clientsById={clientsById}
             onSelect={setSelectedCampaign}
             onUpdated={handleUpdated}
             onDeleted={handleDeleted}

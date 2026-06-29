@@ -145,6 +145,22 @@ export function lightOf(pct, total) {
   return           { label: 'Rojo',      color: '#E14848', cls: 'red' }
 }
 
+// ─── Team name validation ────────────────────────────────────────────────────
+/**
+ * Validates and normalises a team name for create or rename operations.
+ * Returns the trimmed name if valid, or null if it should be rejected.
+ * Rejected when: empty/whitespace-only, or identical to currentName (no change).
+ * @param {string} name         The candidate name (may have surrounding spaces)
+ * @param {string} [currentName] The existing name to check for sameness (omit when creating)
+ * @returns {string|null}
+ */
+export function validateTeamName(name, currentName) {
+  const trimmed = (name ?? '').trim()
+  if (!trimmed) return null
+  if (currentName !== undefined && trimmed === currentName.trim()) return null
+  return trimmed
+}
+
 // ─── Stats per team ──────────────────────────────────────────────────────────
 /**
  * Compute monthly metrics for a given team's tasks.

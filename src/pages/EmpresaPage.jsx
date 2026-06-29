@@ -4,18 +4,24 @@ import { useAuth } from '../context/AuthContext'
 import DepartmentsView from '../components/empresa/DepartmentsView'
 import EmployeesView from '../components/empresa/EmployeesView'
 import QuestionsView from '../components/empresa/QuestionsView'
+import ClientsView from '../components/empresa/ClientsView'
+import LinesView from '../components/empresa/LinesView'
 
 const ALL_TABS = [
-  { key: 'general',       label: 'Inicio',         path: '/empresa',               adminOnly: false },
-  { key: 'departamentos', label: 'Departamentos',   path: '/empresa/departamentos', adminOnly: true },
-  { key: 'empleados',     label: 'Empleados',       path: '/empresa/empleados',     adminOnly: true },
-  { key: 'preguntas',     label: 'Preguntas',       path: '/empresa/preguntas',     adminOnly: true },
+  { key: 'general',       label: 'Inicio',         path: '/empresa',               adminOnly: false, managerPlus: false },
+  { key: 'departamentos', label: 'Departamentos',   path: '/empresa/departamentos', adminOnly: true,  managerPlus: false },
+  { key: 'empleados',     label: 'Empleados',       path: '/empresa/empleados',     adminOnly: true,  managerPlus: false },
+  { key: 'preguntas',     label: 'Preguntas',       path: '/empresa/preguntas',     adminOnly: true,  managerPlus: false },
+  { key: 'clientes',      label: 'Clientes',        path: '/empresa/clientes',      adminOnly: false, managerPlus: true  },
+  { key: 'lineas',        label: 'Líneas',          path: '/empresa/lineas',        adminOnly: false, managerPlus: true  },
 ]
 
 function pathToKey(pathname) {
   if (pathname.startsWith('/empresa/departamentos')) return 'departamentos'
   if (pathname.startsWith('/empresa/empleados'))     return 'empleados'
   if (pathname.startsWith('/empresa/preguntas'))     return 'preguntas'
+  if (pathname.startsWith('/empresa/clientes'))      return 'clientes'
+  if (pathname.startsWith('/empresa/lineas'))        return 'lineas'
   return 'general'
 }
 
@@ -24,17 +30,22 @@ export default function EmpresaPage() {
   const location = useLocation()
   const navigate = useNavigate()
 
-  const isAdmin = userProfile?.admin === true
-  const tabs = ALL_TABS.filter(t => !t.adminOnly || isAdmin)
+  const isAdmin          = userProfile?.admin === true
+  const canManageClients = userProfile?.access_level >= 2 || userProfile?.admin === true
+  const tabs = ALL_TABS.filter(t =>
+    (!t.adminOnly   || isAdmin) &&
+    (!t.managerPlus || canManageClients)
+  )
   const activeKey = pathToKey(location.pathname)
 
-  // Si un no-admin llega a una ruta de gestión, redirigir a /empresa
+  // Redirigir si el usuario no tiene acceso a la ruta activa
   useEffect(() => {
+    if (userProfile == null) return
     const tab = ALL_TABS.find(t => t.key === activeKey)
-    if (tab?.adminOnly && !isAdmin && userProfile != null) {
-      navigate('/empresa', { replace: true })
-    }
-  }, [activeKey, isAdmin, navigate, userProfile])
+    if (!tab) return
+    if (tab.adminOnly   && !isAdmin)          { navigate('/empresa', { replace: true }); return }
+    if (tab.managerPlus && !canManageClients) { navigate('/empresa', { replace: true }); return }
+  }, [activeKey, isAdmin, canManageClients, navigate, userProfile])
 
   return (
     <main className="flex-1 overflow-y-auto main-bg h-screen">
@@ -85,6 +96,14 @@ export default function EmpresaPage() {
 
         {activeKey === 'preguntas' && isAdmin && (
           <QuestionsView companyId={userProfile.company_id} />
+        )}
+
+        {activeKey === 'clientes' && canManageClients && (
+          <ClientsView companyId={userProfile.company_id} />
+        )}
+
+        {activeKey === 'lineas' && canManageClients && (
+          <LinesView companyId={userProfile.company_id} />
         )}
 
       </div>

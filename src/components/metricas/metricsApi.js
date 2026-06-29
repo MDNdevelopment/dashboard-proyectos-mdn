@@ -1,0 +1,233 @@
+/**
+ * Capa de acceso a datos para el módulo Métricas.
+ * Todas las funciones hacen queries a Supabase y retornan { data, error }.
+ */
+import { supabase } from "../../supabase";
+import { SEED_LINES, SEED_CLIENTES } from "./constants";
+
+// ─── Líneas ───────────────────────────────────────────────────────────────────
+
+export async function loadLines(companyId) {
+  return supabase
+    .from("metric_lines")
+    .select("*")
+    .eq("company_id", companyId)
+    .order("sort_order");
+}
+
+export async function createLine(companyId, { name, color, sort_order }) {
+  return supabase
+    .from("metric_lines")
+    .insert({ company_id: companyId, name, color, sort_order })
+    .select()
+    .single();
+}
+
+export async function updateLine(lineId, updates) {
+  return supabase
+    .from("metric_lines")
+    .update(updates)
+    .eq("id", lineId)
+    .select()
+    .single();
+}
+
+export async function deleteLine(lineId) {
+  return supabase.from("metric_lines").delete().eq("id", lineId);
+}
+
+// ─── Clientes ─────────────────────────────────────────────────────────────────
+
+export async function loadClients(companyId, lineId = null) {
+  let q = supabase
+    .from("metric_clients")
+    .select("*")
+    .eq("company_id", companyId)
+    .order("created_at");
+  if (lineId) q = q.eq("line_id", lineId);
+  return q;
+}
+
+export async function createClient(companyId, fields) {
+  const {
+    name,
+    line_id = null,
+    website = null,
+    payment_day = null,
+    monthly_fee = null,
+    social_links = [],
+    logo_url = null,
+    contacts = [],
+    anniversary_date = null,
+    mdn_since = null,
+  } = fields
+  return supabase
+    .from("metric_clients")
+    .insert({ company_id: companyId, name, line_id, website, payment_day, monthly_fee, social_links, logo_url, contacts, anniversary_date, mdn_since })
+    .select()
+    .single();
+}
+
+export async function updateClient(clientId, updates) {
+  return supabase
+    .from("metric_clients")
+    .update(updates)
+    .eq("id", clientId)
+    .select()
+    .single();
+}
+
+export async function loadCompanyUsers(companyId) {
+  return supabase
+    .from("users")
+    .select("user_id, first_name, last_name, avatar_url")
+    .eq("company_id", companyId)
+    .order("first_name");
+}
+
+export async function deleteClient(clientId) {
+  return supabase.from("metric_clients").delete().eq("id", clientId);
+}
+
+// ─── Reportes ─────────────────────────────────────────────────────────────────
+
+export async function loadReport(lineId, year, month) {
+  return supabase
+    .from("metric_reports")
+    .select("*")
+    .eq("line_id", lineId)
+    .eq("year", year)
+    .eq("month", month)
+    .maybeSingle();
+}
+
+export async function loadPrevReport(lineId, year, month) {
+  // Busca el reporte del mes anterior (solo 1 mes atrás)
+  let m = month - 1;
+  let y = year;
+  if (m < 1) { m = 12; y--; }
+  return supabase
+    .from("metric_reports")
+    .select("*")
+    .eq("line_id", lineId)
+    .eq("year", y)
+    .eq("month", m)
+    .maybeSingle();
+}
+
+/**
+ * Carga todos los reportes de todas las líneas para un año dado.
+ * Para el Dashboard General.
+ */
+export async function loadYearReports(companyId, year) {
+  return supabase
+    .from("metric_reports")
+    .select("*, line:metric_lines!inner(id, name, color, sort_order)")
+    .eq("company_id", companyId)
+    .eq("year", year);
+}
+
+/**
+ * Upsert de un reporte. Crea la fila si no existe; actualiza si ya existe.
+ * `data` es el objeto jsonb del reporte.
+ */
+export async function upsertReport(companyId, lineId, year, month, data) {
+  return supabase
+    .from("metric_reports")
+    .upsert(
+      { company_id: companyId, line_id: lineId, year, month, data, updated_at: new Date().toISOString() },
+      { onConflict: "line_id,year,month" }
+    )
+    .select()
+    .single();
+}
+
+// ─── Seed ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Si no existen líneas para la empresa, crea las 4 líneas y sus clientes iniciales.
+ * Idempotente: solo actúa si la tabla está vacía para este company_id.
+ * @returns {Array|null} - Array de líneas creadas, o null si ya existían.
+ */
+export async function seedMetricsIfEmpty(companyId) {
+  const { data: existing, error: checkErr } = await loadLines(companyId);
+  if (checkErr) return null;
+  if (existing && existing.length > 0) return null; // ya sembrado
+
+  // Insertar líneas
+  const { data: lines, error: lineErr } = await supabase
+    .from("metric_lines")
+    .insert(
+      SEED_LINES.map(l => ({ company_id: companyId, name: l.name, color: l.color, sort_order: l.sort_order }))
+    )
+    .select();
+  if (lineErr || !lines) return null;
+
+  // Insertar clientes para cada línea
+  const allClients = [];
+  lines.forEach(line => {
+    const names = SEED_CLIENTES[line.name] ?? [];
+    names.forEach(name => {
+      allClients.push({ company_id: companyId, line_id: line.id, name });
+    });
+  });
+  if (allClients.length > 0) {
+    await supabase.from("metric_clients").insert(allClients);
+  }
+
+  return lines;
+}
+
+// ─── Import / Export ──────────────────────────────────────────────────────────
+
+/**
+ * Exporta todas las líneas, clientes y reportes de la empresa como JSON.
+ */
+export async function exportMetrics(companyId) {
+  const [linesRes, clientsRes, reportsRes] = await Promise.all([
+    supabase.from("metric_lines").select("*").eq("company_id", companyId).order("sort_order"),
+    supabase.from("metric_clients").select("*").eq("company_id", companyId),
+    supabase.from("metric_reports").select("*").eq("company_id", companyId),
+  ]);
+  if (linesRes.error || clientsRes.error || reportsRes.error) return null;
+  return {
+    exportedAt: new Date().toISOString(),
+    companyId,
+    lines: linesRes.data,
+    clients: clientsRes.data,
+    reports: reportsRes.data,
+  };
+}
+
+/**
+ * Importa desde un objeto JSON exportado por exportMetrics().
+ * Estrategia: upsert de clientes y reportes por ID; líneas ya existentes se mantienen.
+ * NOTA: se importan los datos de la misma companyId — no se sobreescriben las líneas.
+ */
+export async function importMetrics(companyId, payload) {
+  // Verificar formato mínimo
+  if (!payload?.lines || !payload?.clients || !payload?.reports) {
+    return { error: "Formato de archivo inválido." };
+  }
+
+  // Upsert clientes
+  if (payload.clients.length > 0) {
+    const { error: ce } = await supabase
+      .from("metric_clients")
+      .upsert(payload.clients.map(c => ({ ...c, company_id: companyId })), { onConflict: "id" });
+    if (ce) return { error: `Error importando clientes: ${ce.message}` };
+  }
+
+  // Upsert reportes
+  if (payload.reports.length > 0) {
+    const { error: re } = await supabase
+      .from("metric_reports")
+      .upsert(
+        payload.reports.map(r => ({ ...r, company_id: companyId, updated_at: new Date().toISOString() })),
+        { onConflict: "line_id,year,month" }
+      );
+    if (re) return { error: `Error importando reportes: ${re.message}` };
+  }
+
+  return { success: true };
+}

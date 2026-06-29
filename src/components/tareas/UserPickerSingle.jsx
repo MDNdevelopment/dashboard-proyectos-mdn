@@ -67,7 +67,7 @@ export default function UserPickerSingle({ users = [], selectedId, onChange, pla
   }, [open])
 
   function userMeta(u) {
-    return [u.position?.position_name, u.access_level != null && `Nivel ${u.access_level}`].filter(Boolean).join(' · ')
+    return u.position?.position_name ?? ''
   }
 
   const filtered = users.filter(u => {

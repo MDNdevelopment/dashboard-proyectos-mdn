@@ -99,9 +99,9 @@ describe('Sidebar — sección Evaluaciones', () => {
     expect(screen.getByRole('button', { name: /evaluaciones/i })).toBeInTheDocument()
   })
 
-  it('no es visible para access_level 1 sin admin', () => {
+  it('es visible para access_level 1 sin admin (muestra Mi Perfil)', () => {
     renderSidebar({ department_id: 1, access_level: 1, admin: false })
-    expect(screen.queryByRole('button', { name: /evaluaciones/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /evaluaciones/i })).toBeInTheDocument()
   })
 })
 

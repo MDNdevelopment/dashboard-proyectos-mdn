@@ -16,6 +16,7 @@ import AdsPage from './pages/AdsPage.jsx'
 import TareasPage from './pages/TareasPage.jsx'
 import EmpresaPage from './pages/EmpresaPage.jsx'
 import EvaluacionesPage from './pages/EvaluacionesPage.jsx'
+import MetricasPage from './pages/MetricasPage.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -35,9 +36,15 @@ createRoot(document.getElementById('root')).render(
             <Route path="/empresa/departamentos" element={<EmpresaPage />} />
             <Route path="/empresa/empleados" element={<EmpresaPage />} />
             <Route path="/empresa/preguntas" element={<EmpresaPage />} />
+            <Route path="/empresa/clientes" element={<EmpresaPage />} />
+            <Route path="/empresa/lineas" element={<EmpresaPage />} />
             <Route path="/evaluaciones" element={<EvaluacionesPage />} />
             <Route path="/evaluaciones/resumen" element={<EvaluacionesPage />} />
+            <Route path="/evaluaciones/perfil" element={<EvaluacionesPage />} />
             <Route path="/evaluaciones/empleado/:id" element={<EvaluacionesPage />} />
+            <Route path="/evaluaciones/perfil-v2" element={<EvaluacionesPage />} />
+            <Route path="/metricas" element={<MetricasPage />} />
+            <Route path="/metricas/linea/:lineId" element={<MetricasPage />} />
             <Route path="/*" element={<App />} />
           </Route>
         </Routes>

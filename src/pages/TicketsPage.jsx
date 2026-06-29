@@ -1,40 +1,42 @@
-import { useState, useEffect } from 'react'
-import { supabase } from '../supabase'
-import { useAuth } from '../context/AuthContext'
-import TicketList from '../components/tickets/TicketList'
-import TicketForm from '../components/tickets/TicketForm'
-import TicketDetail from '../components/tickets/TicketDetail'
+import { useState, useEffect } from "react";
+import { supabase } from "../supabase";
+import { useAuth } from "../context/AuthContext";
+import TicketList from "../components/tickets/TicketList";
+import TicketForm from "../components/tickets/TicketForm";
+import TicketDetail from "../components/tickets/TicketDetail";
 
 export default function TicketsPage() {
-  const { userProfile } = useAuth()
-  const [tickets, setTickets] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [selectedTicket, setSelectedTicket] = useState(null)
-  const [showCreateForm, setShowCreateForm] = useState(false)
+  const { userProfile } = useAuth();
+  const [tickets, setTickets] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedTicket, setSelectedTicket] = useState(null);
+  const [showCreateForm, setShowCreateForm] = useState(false);
 
-  const isIT = userProfile?.department_id === 0
+  const isIT = userProfile?.department_id === 0;
 
   useEffect(() => {
-    fetchTickets()
-  }, [])
+    fetchTickets();
+  }, []);
 
   async function fetchTickets() {
-    setLoading(true)
+    setLoading(true);
     const { data } = await supabase
-      .from('support_tickets')
-      .select('*, requester:users!requester_id(first_name, last_name), assignee:users!assigned_to(first_name, last_name)')
-      .order('created_at', { ascending: false })
-    setTickets(data ?? [])
-    setLoading(false)
+      .from("support_tickets")
+      .select(
+        "*, requester:users!requester_id(first_name, last_name), assignee:users!assigned_to(first_name, last_name)",
+      )
+      .order("created_at", { ascending: false });
+    setTickets(data ?? []);
+    setLoading(false);
   }
 
   function handleCreated(ticket) {
-    setTickets(prev => [ticket, ...prev])
+    setTickets((prev) => [ticket, ...prev]);
   }
 
   function handleUpdated(updated) {
-    setTickets(prev => prev.map(t => t.id === updated.id ? updated : t))
-    setSelectedTicket(updated)
+    setTickets((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+    setSelectedTicket(updated);
   }
 
   return (
@@ -44,17 +46,28 @@ export default function TicketsPage() {
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-[26px] font-bold text-[#111] leading-tight">Tickets de soporte</h1>
+              <h1 className="text-[26px] font-bold text-[#111] leading-tight">
+                Soporte Técnico
+              </h1>
               <p className="text-[15px] text-[#888] mt-0.5">
-                {isIT ? 'Gestion de solicitudes IT' : 'Tus solicitudes de soporte tecnico'}
+                {isIT
+                  ? "Gestion de solicitudes IT"
+                  : "Tus solicitudes de soporte tecnico"}
               </p>
             </div>
             <button
               onClick={() => setShowCreateForm(true)}
               className="flex items-center gap-2 bg-[#111] text-white text-[15px] font-bold px-4 py-2.5 rounded-xl hover:bg-[#222] transition-colors"
             >
-              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.8">
-                <path d="M6 1v10M1 6h10" strokeLinecap="round"/>
+              <svg
+                width="11"
+                height="11"
+                viewBox="0 0 12 12"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.8"
+              >
+                <path d="M6 1v10M1 6h10" strokeLinecap="round" />
               </svg>
               Nuevo ticket
             </button>
@@ -84,5 +97,5 @@ export default function TicketsPage() {
         />
       )}
     </>
-  )
+  );
 }

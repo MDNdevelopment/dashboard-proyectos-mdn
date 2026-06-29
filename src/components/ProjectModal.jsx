@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from '../supabase'
+import { fmtDate } from '../utils/formatDate'
 import { useAuth } from '../context/AuthContext'
 import {
   DndContext,
@@ -121,6 +122,11 @@ export default function ProjectModal({ project, onClose, onSave }) {
             <p className="text-[14px] text-[#999] mt-0.5">
               {isEdit ? 'Modifica datos, fases o tareas' : 'Define el proyecto y sus actividades'}
             </p>
+            {isEdit && (project.createdAt || project.created_at) && (
+              <p className="text-[12px] font-mono text-[#bbb] mt-1">
+                Creado el {fmtDate(project.createdAt ?? project.created_at)}
+              </p>
+            )}
           </div>
           <button
             onClick={onClose}
