@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { format, parseISO } from 'date-fns'
 import { supabase } from '../../supabase'
 import ConfirmDeleteDialog from '../common/ConfirmDeleteDialog'
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 
 const STATUS_MAP = {
   pending:   { label: 'Pendiente',  cls: 'bg-yellow-100 text-yellow-800' },
@@ -36,12 +37,15 @@ export default function VacationsDialog({ employee, onClose }) {
   // Status en proceso
   const [updatingId, setUpdatingId] = useState(null)
 
+  const initialVac = useRef(newVac)
+  const { requestClose } = useUnsavedChanges({ value: newVac, baseline: initialVac.current, onClose })
+
   // Escape para cerrar
   useEffect(() => {
-    const fn = e => { if (e.key === 'Escape') onClose() }
+    const fn = e => { if (e.key === 'Escape') requestClose() }
     document.addEventListener('keydown', fn)
     return () => document.removeEventListener('keydown', fn)
-  }, [onClose])
+  }, [requestClose])
 
   // Carga inicial de vacaciones
   useEffect(() => {
@@ -112,7 +116,7 @@ export default function VacationsDialog({ employee, onClose }) {
     <>
       <div
         className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25 backdrop-blur-[3px]"
-        onClick={e => { if (e.target === e.currentTarget) onClose() }}
+        onClick={e => { if (e.target === e.currentTarget) requestClose() }}
       >
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col">
           {/* Header */}
@@ -133,7 +137,7 @@ export default function VacationsDialog({ employee, onClose }) {
               </button>
               <button
                 type="button"
-                onClick={onClose}
+                onClick={requestClose}
                 className="w-7 h-7 flex items-center justify-center rounded-lg text-[#999] hover:text-[#111] hover:bg-[#f0ede3] transition-colors"
                 aria-label="Cerrar"
               >

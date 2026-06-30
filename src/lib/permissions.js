@@ -24,6 +24,18 @@
  * @param {object}   configByModule — { [moduleKey]: { rules: [...] } }
  * @returns {boolean}
  */
+/**
+ * Alias de canAccessModule para claves de capacidad granulares.
+ * Usa la misma firma — el evaluador funciona igual para 'empresa',
+ * 'empresa.clientes' o 'empresa.lineas.manage'.
+ *
+ * @param {string} key - Clave de capacidad (módulo, tab o acción)
+ * @param {object} userProfile
+ * @param {object} configByModule - { [key]: { rules: [...] } }
+ * @returns {boolean}
+ */
+export const can = canAccessModule
+
 export function canAccessModule(moduleKey, userProfile, configByModule) {
   if (!userProfile) return false
   if (userProfile.admin === true) return true

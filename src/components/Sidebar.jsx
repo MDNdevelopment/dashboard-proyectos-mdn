@@ -103,7 +103,6 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
   const [empresaOpen, setEmpresaOpen] = useState(isEmpresaRoute)
 
   const canEval = userProfile?.access_level >= 2 || userProfile?.admin === true
-  const canMetrics = userProfile?.access_level >= 3 || userProfile?.admin === true
   const isMetricasRoute = location.pathname.startsWith('/reportes')
   const metricasDashActive = location.pathname === '/reportes'
   const [metricasOpen, setMetricasOpen] = useState(isMetricasRoute)

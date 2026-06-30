@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { supabase } from '../../supabase'
 import { useAuth } from '../../context/AuthContext'
 import { PRIORITIES, CATEGORIES, PRIORITY, CATEGORY } from './constants'
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 
 export default function TicketForm({ onClose, onCreated }) {
   const { userProfile } = useAuth()
@@ -9,6 +10,12 @@ export default function TicketForm({ onClose, onCreated }) {
   const [description, setDescription] = useState('')
   const [priority, setPriority] = useState('media')
   const [category, setCategory] = useState('otro')
+  const initialTicket = useRef({ title, description, priority, category })
+  const { requestClose } = useUnsavedChanges({
+    value: { title, description, priority, category },
+    baseline: initialTicket.current,
+    onClose,
+  })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
 
@@ -116,7 +123,7 @@ export default function TicketForm({ onClose, onCreated }) {
           <div className="flex gap-3 pt-2">
             <button
               type="button"
-              onClick={onClose}
+              onClick={requestClose}
               className="flex-1 py-2.5 rounded-xl border border-[#e0ddd4] text-[15px] font-semibold text-[#555] hover:bg-[#f5f3eb] transition-colors"
             >
               Cancelar

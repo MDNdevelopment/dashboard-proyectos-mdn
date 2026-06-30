@@ -8,7 +8,7 @@ import AdsDetail from "../components/ads/AdsDetail";
 import { loadClients } from "../components/metricas/metricsApi";
 
 export default function AdsPage() {
-  const { userProfile } = useAuth();
+  const { userProfile, can = () => true } = useAuth();
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedCampaign, setSelectedCampaign] = useState(null);
@@ -17,8 +17,8 @@ export default function AdsPage() {
   const [usersMap, setUsersMap] = useState(new Map());
   const [clientsById, setClientsById] = useState(new Map());
 
-  const canManage =
-    userProfile?.access_level >= 3 || userProfile?.admin === true;
+  // Control de acceso config-driven — sin reglas configuradas: abierto a todos.
+  const canManage = can("ads.manage");
 
   useEffect(() => {
     fetchCampaigns();

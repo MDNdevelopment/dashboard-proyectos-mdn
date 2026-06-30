@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../supabase'
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 
 /**
  * Dialog para crear un nuevo empleado vía la Netlify function create-employee.
@@ -40,12 +41,15 @@ export default function NewEmployeeDialog({ departments, positions, onClose, onC
     })
   }
 
+  const initialForm = useRef(form)
+  const { requestClose } = useUnsavedChanges({ value: form, baseline: initialForm.current, onClose })
+
   // Escape para cerrar
   useEffect(() => {
-    const fn = e => { if (e.key === 'Escape') onClose() }
+    const fn = e => { if (e.key === 'Escape') requestClose() }
     document.addEventListener('keydown', fn)
     return () => document.removeEventListener('keydown', fn)
-  }, [onClose])
+  }, [requestClose])
 
   const filteredPositions = positions.filter(p => String(p.department_id) === String(form.department_id))
 
@@ -99,7 +103,7 @@ export default function NewEmployeeDialog({ departments, positions, onClose, onC
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25 backdrop-blur-[3px]"
-      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+      onClick={e => { if (e.target === e.currentTarget) requestClose() }}
     >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-y-auto max-h-[90vh]">
         {/* Header */}
@@ -112,7 +116,7 @@ export default function NewEmployeeDialog({ departments, positions, onClose, onC
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             className="w-7 h-7 flex items-center justify-center rounded-lg text-[#999] hover:text-[#111] hover:bg-[#f0ede3] transition-colors"
             aria-label="Cerrar"
           >
@@ -252,7 +256,7 @@ export default function NewEmployeeDialog({ departments, positions, onClose, onC
           <div className="flex items-center justify-end gap-2 pt-1">
             <button
               type="button"
-              onClick={onClose}
+              onClick={requestClose}
               className="px-4 py-2 rounded-xl text-[15px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
             >
               Cancelar

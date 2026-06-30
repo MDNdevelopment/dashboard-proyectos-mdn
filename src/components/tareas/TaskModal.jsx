@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../supabase'
 import { useAuth } from '../../context/AuthContext'
 import { ESTADOS } from './constants'
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import UserPickerSingle from './UserPickerSingle'
 import UserPickerMulti from './UserPickerMulti'
 import { teamMemberUsers } from '../../utils/lineFilters'
@@ -51,14 +52,16 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
       assignee_ids: privileged ? [] : (userProfile?.user_id ? [userProfile.user_id] : []),
     }
   })
+  const initialForm = useRef(form)
+  const { requestClose } = useUnsavedChanges({ value: form, baseline: initialForm.current, onClose })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    const fn = e => { if (e.key === 'Escape') onClose() }
+    const fn = e => { if (e.key === 'Escape') requestClose() }
     document.addEventListener('keydown', fn)
     return () => document.removeEventListener('keydown', fn)
-  }, [onClose])
+  }, [requestClose])
 
   function set(field, value) {
     setForm(f => ({ ...f, [field]: value }))
@@ -122,6 +125,7 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25 backdrop-blur-[3px]"
+      onClick={e => { if (e.target === e.currentTarget) requestClose() }}
     >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-[#ece9df]">
@@ -130,7 +134,7 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
           </h2>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             className="w-7 h-7 flex items-center justify-center rounded-lg text-[#999] hover:text-[#111] hover:bg-[#f0ede3] transition-colors"
             aria-label="Cerrar"
           >
@@ -323,7 +327,7 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
               </button>
             ) : <span />}
             <div className="flex items-center gap-2">
-              <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl text-[15px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors">
+              <button type="button" onClick={requestClose} className="px-4 py-2 rounded-xl text-[15px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors">
                 Cancelar
               </button>
               <button type="submit" disabled={saving} className="px-4 py-2 rounded-xl text-[15px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors disabled:opacity-50">

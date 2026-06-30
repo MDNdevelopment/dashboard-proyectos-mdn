@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { supabase } from '../supabase'
 import { fmtDate } from '../utils/formatDate'
 import { useAuth } from '../context/AuthContext'
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges'
 import {
   DndContext,
   PointerSensor,
@@ -45,6 +46,8 @@ export default function ProjectModal({ project, onClose, onSave }) {
       }
     : { name: '', departments: [], team: '', requirements: '', status: 'Pendiente', phases: [mkPhase()], members: [] }
   )
+  const initialForm = useRef(form)
+  const { requestClose } = useUnsavedChanges({ value: form, baseline: initialForm.current, onClose })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [users, setUsers] = useState([])
@@ -61,10 +64,10 @@ export default function ProjectModal({ project, onClose, onSave }) {
 
   useEffect(() => { setTimeout(() => nameRef.current?.focus(), 80) }, [])
   useEffect(() => {
-    const h = e => { if (e.key === 'Escape') onClose() }
+    const h = e => { if (e.key === 'Escape') requestClose() }
     document.addEventListener('keydown', h)
     return () => document.removeEventListener('keydown', h)
-  }, [onClose])
+  }, [requestClose])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const toggleDept = d => set('departments', form.departments.includes(d) ? form.departments.filter(x => x !== d) : [...form.departments, d])
@@ -109,7 +112,7 @@ export default function ProjectModal({ project, onClose, onSave }) {
   return (
     <div
       className="fixed inset-0 bg-black/25 backdrop-blur-[3px] flex items-center justify-center z-50 p-4"
-      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+      onClick={e => { if (e.target === e.currentTarget) requestClose() }}
     >
       <div className="bg-white rounded-2xl border border-[#e8e5db] w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl">
 
@@ -129,7 +132,7 @@ export default function ProjectModal({ project, onClose, onSave }) {
             )}
           </div>
           <button
-            onClick={onClose}
+            onClick={requestClose}
             className="w-8 h-8 flex items-center justify-center rounded-lg text-[#bbb] hover:text-[#555] hover:bg-[#f5f3eb] transition-colors"
           >
             <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -305,7 +308,7 @@ export default function ProjectModal({ project, onClose, onSave }) {
 
         {/* Footer */}
         <div className="flex gap-3 px-6 py-4 border-t border-[#eeebe0] flex-shrink-0">
-          <button type="button" onClick={onClose}
+          <button type="button" onClick={requestClose}
             className="flex-1 px-4 py-2.5 border border-[#e0ddd4] text-[#666] rounded-xl text-[15px] font-semibold hover:bg-[#f5f3eb] transition-colors">
             Cancelar
           </button>

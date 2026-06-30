@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { canAccessModule } from './permissions'
+import { canAccessModule, can } from './permissions'
 
 const BASE_USER = {
   user_id: 'user-1',
@@ -221,5 +221,100 @@ describe('tipo de condición desconocido', () => {
   it('tipo no reconocido → condición falla', () => {
     const config = { ads: { rules: [{ all: [{ type: 'unknown', ids: ['anything'] }] }] } }
     expect(canAccessModule('ads', BASE_USER, config)).toBe(false)
+  })
+})
+
+// ──────────────────────────────────────────────
+// can() — alias de canAccessModule
+// ──────────────────────────────────────────────
+describe('can() alias', () => {
+  it('can() y canAccessModule son la misma función', () => {
+    expect(can).toBe(canAccessModule)
+  })
+})
+
+// ──────────────────────────────────────────────
+// Claves de capacidad granulares (tabs y acciones)
+// Escenario pedido por el usuario:
+//   nivel 1 → solo ve Inicio de Empresa
+//   nivel 2 → ve Inicio, Clientes y Líneas pero no modifica Líneas
+//   nivel 4 → ve y modifica todo
+// ──────────────────────────────────────────────
+describe('capacidades granulares — empresa (escenario del usuario)', () => {
+  const LEVEL4_USER = { ...BASE_USER, access_level: 4 }
+
+  // empresa.general → sin reglas = abierto a todos
+  const configEmpresa = {
+    'empresa.clientes':        { rules: [{ all: [{ type: 'min_level', value: 2 }] }] },
+    'empresa.lineas':          { rules: [{ all: [{ type: 'min_level', value: 2 }] }] },
+    'empresa.lineas.manage':   { rules: [{ all: [{ type: 'min_level', value: 4 }] }] },
+    'empresa.clientes.manage': { rules: [{ all: [{ type: 'min_level', value: 2 }] }] },
+  }
+
+  it('nivel 1 ve Inicio (sin reglas = abierto)', () => {
+    expect(canAccessModule('empresa.general', BASE_USER, configEmpresa)).toBe(true)
+  })
+
+  it('nivel 1 NO ve Clientes', () => {
+    expect(canAccessModule('empresa.clientes', BASE_USER, configEmpresa)).toBe(false)
+  })
+
+  it('nivel 1 NO ve Líneas', () => {
+    expect(canAccessModule('empresa.lineas', BASE_USER, configEmpresa)).toBe(false)
+  })
+
+  it('nivel 2 ve Clientes', () => {
+    expect(canAccessModule('empresa.clientes', LEVEL2_USER, configEmpresa)).toBe(true)
+  })
+
+  it('nivel 2 ve Líneas', () => {
+    expect(canAccessModule('empresa.lineas', LEVEL2_USER, configEmpresa)).toBe(true)
+  })
+
+  it('nivel 2 NO modifica Líneas', () => {
+    expect(canAccessModule('empresa.lineas.manage', LEVEL2_USER, configEmpresa)).toBe(false)
+  })
+
+  it('nivel 2 SÍ modifica Clientes', () => {
+    expect(canAccessModule('empresa.clientes.manage', LEVEL2_USER, configEmpresa)).toBe(true)
+  })
+
+  it('nivel 4 ve y modifica Líneas', () => {
+    expect(canAccessModule('empresa.lineas', LEVEL4_USER, configEmpresa)).toBe(true)
+    expect(canAccessModule('empresa.lineas.manage', LEVEL4_USER, configEmpresa)).toBe(true)
+  })
+
+  it('admin siempre puede, sin importar nivel ni reglas', () => {
+    expect(canAccessModule('empresa.lineas.manage', ADMIN_USER, configEmpresa)).toBe(true)
+  })
+})
+
+// ──────────────────────────────────────────────
+// Claves granulares para otros módulos
+// ──────────────────────────────────────────────
+describe('capacidades granulares — tareas (tabs por nivel)', () => {
+  const configTareas = {
+    'tareas.panorama': { rules: [{ all: [{ type: 'min_level', value: 2 }] }] },
+    'tareas.team':     { rules: [{ all: [{ type: 'min_level', value: 2 }] }] },
+    'tareas.standup':  { rules: [{ all: [{ type: 'min_level', value: 2 }] }] },
+    // base y kanban sin reglas → abiertos
+    'tareas.manage':   { rules: [{ all: [{ type: 'min_level', value: 2 }] }] },
+  }
+
+  it('nivel 1 no ve Panorama', () => {
+    expect(canAccessModule('tareas.panorama', BASE_USER, configTareas)).toBe(false)
+  })
+
+  it('nivel 1 sí ve Base (sin reglas)', () => {
+    expect(canAccessModule('tareas.base', BASE_USER, configTareas)).toBe(true)
+  })
+
+  it('nivel 1 no puede crear tareas', () => {
+    expect(canAccessModule('tareas.manage', BASE_USER, configTareas)).toBe(false)
+  })
+
+  it('nivel 2 ve Panorama y puede crear tareas', () => {
+    expect(canAccessModule('tareas.panorama', LEVEL2_USER, configTareas)).toBe(true)
+    expect(canAccessModule('tareas.manage', LEVEL2_USER, configTareas)).toBe(true)
   })
 })

@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../supabase'
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 
 /**
  * Modal crear/editar pregunta de evaluación.
@@ -23,15 +24,21 @@ export default function QuestionModal({
     (question?.question_tags ?? []).map(qt => qt.tag)
   )
   const [tagInput, setTagInput] = useState('')
+  const initialSnapshot = useRef({ text, selectedPositionIds, tags })
+  const { requestClose } = useUnsavedChanges({
+    value: { text, selectedPositionIds, tags },
+    baseline: initialSnapshot.current,
+    onClose,
+  })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
   // Cerrar con Escape
   useEffect(() => {
-    const fn = e => { if (e.key === 'Escape') onClose() }
+    const fn = e => { if (e.key === 'Escape') requestClose() }
     document.addEventListener('keydown', fn)
     return () => document.removeEventListener('keydown', fn)
-  }, [onClose])
+  }, [requestClose])
 
   // ── Cargos: toggle ──────────────────────────────────────────────────────────
   function togglePosition(posId) {
@@ -119,7 +126,7 @@ export default function QuestionModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25 backdrop-blur-[3px]"
-      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+      onClick={e => { if (e.target === e.currentTarget) requestClose() }}
     >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-y-auto max-h-[90vh]">
         {/* Header */}
@@ -129,7 +136,7 @@ export default function QuestionModal({
           </h2>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             className="w-7 h-7 flex items-center justify-center rounded-lg text-[#999] hover:text-[#111] hover:bg-[#f0ede3] transition-colors"
             aria-label="Cerrar"
           >
@@ -285,7 +292,7 @@ export default function QuestionModal({
           <div className="flex items-center justify-end gap-2 pt-1">
             <button
               type="button"
-              onClick={onClose}
+              onClick={requestClose}
               className="px-4 py-2 rounded-xl text-[15px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
             >
               Cancelar

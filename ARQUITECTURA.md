@@ -39,26 +39,73 @@ src/main.jsx          ← BrowserRouter + <Routes> (definición completa de ruta
 
 ### Modelo de permisos
 
-El acceso a módulos opera en **dos capas independientes**:
+El acceso opera en un **sistema de capacidades (capability keys)** único y config-driven, gestionable
+desde Empresa → Permisos por cualquier admin, respaldado por RLS en la base de datos.
 
-**Capa 1 — Acceso al módulo (config-driven):** controlado por la tabla `module_permissions`.
-Cada módulo puede tener reglas en formato DNF (grupos OR, condiciones AND dentro de cada grupo).
-El helper `can(moduleKey)` en `AuthContext` evalúa las reglas contra el perfil del usuario.
-La lógica pura está en `src/lib/permissions.js` → `canAccessModule()`. Defaults:
-- Sin reglas configuradas → módulo accesible para todos los autenticados.
-- `admin=true` siempre pasa, sin importar las reglas.
-- Configurable desde Empresa → Permisos (solo admins).
+#### Claves de capacidad
 
-**Capa 2 — Funciones dentro del módulo (hardcodeado por nivel):**
+La granularidad es `módulo`, `módulo.tab` y `módulo.acción`:
 
-| Campo | Valor | Acceso intra-módulo |
+| Clave | Tipo | Significado |
 |---|---|---|
-| `userProfile.access_level` | 1 | Empleado base — Tareas: solo sus propias tareas (RLS) |
-| `userProfile.access_level` | ≥ 2 | Manager (Empresa: Clientes/Líneas, Evaluaciones, Tareas: acceso total) |
-| `userProfile.access_level` | ≥ 3 | Ads (editar campañas) · **Reportes (ver y editar su propia línea)** |
-| `userProfile.access_level` | ≥ 4 | Reportes: ver y editar **todas** las líneas |
-| `userProfile.admin` | true | Admin total (Empresa: Departamentos/Empleados/Preguntas/Permisos) |
-| `userProfile.department_id` | 0 | Rol IT (sub-features de Tickets) |
+| `empresa` | módulo | Acceso al módulo Empresa |
+| `empresa.clientes` | ver-tab | Ver la pestaña Clientes |
+| `empresa.lineas.manage` | modificar | Crear/editar/eliminar Líneas |
+| `tareas.panorama` | ver-tab | Ver la vista Panorama en Tareas |
+| `tareas.manage` | modificar | Crear/editar/eliminar tareas |
+| `evaluaciones.manage` | modificar | Guardar evaluaciones |
+| `reportes.manage` | modificar | Editar/importar reportes |
+| `ads.manage` | modificar | Crear/editar/eliminar campañas |
+| `proyectos.manage` | modificar | Crear/editar/eliminar proyectos |
+| … | … | (ver `src/config/modules.js → capabilitiesForModule()`) |
+
+**Invariantes del evaluador** (`src/lib/permissions.js` → `canAccessModule()` / alias `can()`):
+- Sin reglas configuradas para esa clave → **abierto** (cualquier autenticado pasa).
+- `admin=true` → siempre pasa, sin importar las reglas.
+- Formato de reglas: DNF — array de grupos OR; cada grupo tiene `all: []` (AND de condiciones).
+- Tipos de condición: `min_level`, `department`, `position`, `user`.
+
+**Fuente única de verdad:** el mismo evaluador corre en JS (frontend) y en SQL:
+- JS: `can(capabilityKey)` en `AuthContext` — carga todas las filas de `module_permissions` al login.
+- SQL: `public.user_can(p_capability_key text) returns boolean` (`security definer`) — usada en RLS.
+
+**Defaults sembrados** (migración `20260706000002`):
+- `empresa.clientes`, `empresa.lineas` → `min_level 2`
+- `empresa.clientes.manage` → `min_level 2`
+- `empresa.lineas.manage` → `min_level 4`
+- `empresa.departamentos`, `empresa.empleados`, `empresa.preguntas`, `empresa.permisos` → `admin=true`
+- `tareas.panorama`, `tareas.team`, `tareas.standup`, `tareas.manage` → `min_level 2`
+- `evaluaciones.empleados`, `evaluaciones.resumen`, `evaluaciones.manage` → `min_level 2`
+- `ads.manage` → `min_level 3`
+- `reportes.manage` → `min_level 3`
+- Todo lo no sembrado queda **abierto** y es configurable en la UI.
+
+**RLS de escritura** (migración `20260706000001`):
+- `metric_lines` INSERT/UPDATE/DELETE → `user_can('empresa.lineas.manage')`
+- `metric_clients` INSERT/UPDATE/DELETE → `user_can('empresa.clientes.manage')`
+- `projects` INSERT/UPDATE/DELETE → `user_can('proyectos.manage')`
+- SELECT de `metric_lines`/`metric_clients` conserva `using(true)` (leídas por Tareas/Ads también).
+- `tasks` y `metric_reports` mantienen su RLS especializado por nivel/membresía (sin cambio).
+
+**Fallback en tests:** si `useAuth()` no devuelve `can`, las páginas usan `can = () => true`
+(abierto por defecto, consistente con "sin reglas = abierto"). Los tests de restricciones de nivel
+inyectan su propio `can` en el mock.
+
+**`department_id = 0`** sigue siendo el indicador del rol IT para sub-features de Tickets (no se
+gestiona por capability).
+
+#### Archivos clave del sistema de permisos
+
+| Archivo | Rol |
+|---|---|
+| `src/lib/permissions.js` | Evaluador puro (`canAccessModule` + alias `can`) |
+| `src/config/modules.js` | Registro central: `MODULES`, `capabilitiesForModule()` |
+| `src/context/AuthContext.jsx` | Carga `module_permissions`, expone `can()` |
+| `src/components/empresa/PermisosView.jsx` | UI de configuración (una card por capacidad) |
+| `src/components/RequireModule.jsx` | Guard de acceso al módulo completo |
+| `supabase/migrations/20260706000000_user_can_evaluator.sql` | Función SQL `user_can()` |
+| `supabase/migrations/20260706000001_rls_capabilities.sql` | Políticas de escritura config-driven |
+| `supabase/migrations/20260706000002_seed_capability_defaults.sql` | Defaults iniciales |
 
 ### Base de datos compartida
 
@@ -68,8 +115,8 @@ usuarios, tickets y campañas **preexisten en una base compartida** y no tienen 
 su esquema está documentado en `docs/MIGRATION_EVALUACION.md`.
 
 RLS en tablas de migración: patrón uniforme permisivo (`true`) para rol `authenticated`, **excepto
-`tasks`** (policies por nivel, §2.3) y **`metric_reports`** (policies por nivel y team, §2.4).
-`metric_lines` y `metric_clients` conservan RLS permisivo (son compartidas por Tareas/Empresa/Ads).
+`tasks`** (policies por nivel, §2.3), **`metric_reports`** (policies por nivel y team, §2.4), y
+**`projects`, `metric_lines`, `metric_clients`** (escrituras gated por `user_can()`, ver §Modelo de permisos).
 Realtime habilitado en todas.
 
 ---
@@ -83,7 +130,7 @@ Realtime habilitado en todas.
 | **Propósito** | Login, logout, recuperación y reseteo de contraseña. Carga el perfil del usuario (`userProfile`) y los permisos de módulo (`modulePermissions`) que gobiernan el acceso en toda la app. |
 | **Archivos principales** | `src/context/AuthContext.jsx` (provider + `useAuth` + `can()`) · `src/components/ProtectedRoute.jsx` · `src/components/RequireModule.jsx` · `src/lib/permissions.js` (`canAccessModule`) · `src/config/modules.js` (registro central) · `src/pages/LoginPage.jsx` · `src/pages/ForgotPasswordPage.jsx` · `src/pages/ResetPasswordPage.jsx` |
 | **Tablas** | `auth.users` (Supabase Auth) · `users` (perfil: `user_id, first_name, last_name, email, department_id→departments, position_id→positions, company_id, access_level, admin, avatar_url, receive_ticket_notifications`) · `module_permissions` (reglas de acceso por módulo) |
-| **Contexto Auth** | `userProfile` (perfil del usuario) · `modulePermissions` (mapa `{[module_key]: {rules:[]}}`) · `can(moduleKey)` → boolean — función estable (useCallback) que evalúa las reglas del módulo contra el perfil actual |
+| **Contexto Auth** | `userProfile` (perfil del usuario) · `modulePermissions` (mapa `{[capability_key]: {rules:[]}}`) · `can(capabilityKey)` → boolean — evalúa cualquier clave de capacidad (`empresa`, `empresa.clientes`, `empresa.lineas.manage`, etc.) contra el perfil actual |
 | **Rutas** | `/login` · `/forgot-password` · `/reset-password` |
 | **Permisos** | Público (sin sesión) |
 
@@ -124,7 +171,7 @@ Realtime habilitado en todas.
 | **jsonb `metric_lines.metas`** | `{ "reuniones": 15, "tareas": [{ "nombre": "Calendario", "meta": 10 }, ...] }` — Metas de la línea para periodos no guardados. Tienen **prioridad sobre el carry-forward** del mes anterior (pisan `reuniones.meta` y `productividad.tareas`). Los reportes ya guardados quedan congelados. `{}` usa los defaults del código. Se configura en Empresa › Líneas. |
 | **jsonb `metric_reports.data`** | `{ reuniones:{realizadas,meta}, productividad:{tareas:[{nombre,realizado,meta}]}, crecimiento:{items:[{clienteId,seguidoresActuales,seguidoresBase,meta}]}, solicitudes:{solicitudes,editadas}, pautas:{items:[{clienteId,realizadas,meta}]}, piezas:{piezas,editadas}, feedback:{items:[{clienteId,score}]}, finanzas:{ingresos:[],gastosOperativos:[],sueldos:[],otrosGastos:[]} }` |
 | **Rutas** | `/reportes` (Dashboard anual) · `/reportes/linea/:lineId` (reporte de línea) |
-| **Permisos** | Acceso al módulo: `access_level ≥ 3` o `admin`. Nivel 3: ve y edita **solo su propia línea** (filtrado en frontend + RLS en `metric_reports`). Nivel 4 y admin: ven y editan todas las líneas. Helper DB: `metrics_user_can_view()` (≥3/admin), `metrics_user_view_all()` (≥4/admin) — ambos `SECURITY DEFINER`. Filtrado de líneas: `visibleLinesForUser(lines, userProfile)` en `src/utils/lineMembers.js`. Migración activa: `20260704000000_metric_reports_team_rls.sql`. |
+| **Permisos** | Acceso al módulo: controlado por `can('reportes')` del módulo Permisos config-driven (`src/lib/permissions.js`). Sin reglas configuradas → acceso libre a autenticados; admins siempre pasan. La compuerta aplica en el Sidebar (`Sidebar.jsx`) y en `MetricasPage.jsx` (redirige a `/` si no tiene acceso). **Caveat RLS:** los helpers de BD `metrics_user_can_view()` (≥3 o admin) y `metrics_user_view_all()` (≥4 o admin) siguen hardcodeados por nivel — si se concede acceso vía Permisos a alguien por debajo de nivel 3, el frontend lo dejará entrar pero la BD devolverá datos vacíos (fase 2 pendiente). Nivel 3: ve y edita **solo su propia línea** (filtrado en frontend + RLS). Nivel 4 y admin: ven y editan todas las líneas. Filtrado de líneas: `visibleLinesForUser(lines, userProfile)` en `src/utils/lineMembers.js`. Migración activa: `20260704000000_metric_reports_team_rls.sql`. |
 | **Estado de captura** | Mayoritariamente manual (inputs en `OperacionesView`/`FinanzasView`). Automatismos: para periodos no guardados → `initMetricReport.js` aplica carry-forward del mes anterior y después sobreescribe con `metric_lines.metas` (la línea tiene prioridad); reconciliación de cartera actual en crecimiento/pautas/feedback e **ingresos** vía `syncReportClients.js`. **Finanzas → Ingresos** se auto-puebla desde `metric_clients.monthly_fee` (sembrar-y-editar: valores conservados por `clienteId`; clientes fuera de línea se descartan; filas manuales `clienteId==null` se conservan). Reportes ya guardados quedan congelados. **No lee de `tasks` ni de `projects`.** |
 
 ### 2.5 Empresa

@@ -15,7 +15,7 @@ import ConfirmDeleteDialog from '../common/ConfirmDeleteDialog'
  * La configuración de cada cliente (nombre, línea, día de pago, redes, web)
  * se gestiona desde ClientModal.
  */
-export default function ClientsView({ companyId }) {
+export default function ClientsView({ companyId, canManage = true }) {
   const [lines, setLines]         = useState([])
   const [clients, setClients]     = useState([])
   const [loading, setLoading]     = useState(true)
@@ -157,16 +157,18 @@ export default function ClientsView({ companyId }) {
           </button>
         </div>
 
-        {/* Botón nuevo cliente */}
-        <button
-          onClick={() => setModal(null)}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#FAB51A] text-[#111] font-bold text-[14.5px] hover:bg-[#e8a315] transition-colors flex-shrink-0"
-        >
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="2.2">
-            <path d="M6.5 1v11M1 6.5h11" strokeLinecap="round"/>
-          </svg>
-          Nuevo cliente
-        </button>
+        {/* Botón nuevo cliente — solo si tiene permiso de modificar */}
+        {canManage && (
+          <button
+            onClick={() => setModal(null)}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#FAB51A] text-[#111] font-bold text-[14.5px] hover:bg-[#e8a315] transition-colors flex-shrink-0"
+          >
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="2.2">
+              <path d="M6.5 1v11M1 6.5h11" strokeLinecap="round"/>
+            </svg>
+            Nuevo cliente
+          </button>
+        )}
       </div>
 
       {error && (
@@ -265,27 +267,31 @@ export default function ClientsView({ companyId }) {
                     </span>
                   )}
 
-                  {/* Botones */}
-                  <button
-                    onClick={() => setModal(client)}
-                    className="text-[#aaa] hover:text-[#555] transition-colors flex-shrink-0"
-                    title="Editar"
-                    aria-label="Editar"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
-                      <path d="M11 2l3 3-8 8H3v-3L11 2Z" strokeLinejoin="round"/>
-                    </svg>
-                  </button>
-                  <button
-                    onClick={() => setConfirmDelete({ id: client.id, name: client.name })}
-                    className="text-[#aaa] hover:text-red-400 transition-colors flex-shrink-0"
-                    title="Eliminar"
-                    aria-label="Eliminar"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
-                      <path d="M3 5h10M6 5V3h4v2M5 5l.5 8h5l.5-8" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  </button>
+                  {/* Botones de edición — solo si tiene permiso de modificar */}
+                  {canManage && (
+                    <>
+                      <button
+                        onClick={() => setModal(client)}
+                        className="text-[#aaa] hover:text-[#555] transition-colors flex-shrink-0"
+                        title="Editar"
+                        aria-label="Editar"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
+                          <path d="M11 2l3 3-8 8H3v-3L11 2Z" strokeLinejoin="round"/>
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => setConfirmDelete({ id: client.id, name: client.name })}
+                        className="text-[#aaa] hover:text-red-400 transition-colors flex-shrink-0"
+                        title="Eliminar"
+                        aria-label="Eliminar"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
+                          <path d="M3 5h10M6 5V3h4v2M5 5l.5 8h5l.5-8" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </button>
+                    </>
+                  )}
                 </div>
               )
             })}

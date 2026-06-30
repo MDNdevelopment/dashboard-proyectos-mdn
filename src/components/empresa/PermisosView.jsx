@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../supabase'
-import { MODULES } from '../../config/modules'
+import { MODULES, capabilitiesForModule } from '../../config/modules'
 
 // ──────────────────────────────────────────────
 // Tipos de condición disponibles
@@ -230,9 +230,13 @@ function GroupBlock({ group, groupIndex, onChange, onRemove, isOnly, departments
 }
 
 // ──────────────────────────────────────────────
-// Card por módulo
+// Sección de una capacidad (acceso, tab, o acción)
 // ──────────────────────────────────────────────
-function ModuleCard({ module, rules, onChange, onSave, saving, departments, users, positions }) {
+function CapabilitySection({
+  capKey, label, isManage,
+  rules, onChange, onSave, saving,
+  departments, users, positions,
+}) {
   const hasRules = rules.rules.length > 0
 
   function addGroup() {
@@ -246,22 +250,38 @@ function ModuleCard({ module, rules, onChange, onSave, saving, departments, user
   }
 
   return (
-    <div className="bg-white border border-[#e0ddd4] rounded-xl overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-[#f0ede3]">
-        <div>
-          <h3 className="text-[16px] font-bold text-[#111]">{module.label}</h3>
-          <p className="text-[13px] text-[#888] mt-0.5">{module.description}</p>
+    <div className="px-5 py-4 border-b border-[#f0ede3] last:border-b-0">
+      {/* Cabecera de capacidad */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          {isManage ? (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#f0e6ff] text-[11.5px] font-bold text-[#7c3aed] uppercase tracking-wide">
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M11 2l3 3-8 8H3v-3L11 2Z" strokeLinejoin="round"/>
+              </svg>
+              Modificar
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#e8f4ff] text-[11.5px] font-bold text-[#1d6fa8] uppercase tracking-wide">
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="8" cy="8" r="6.5"/>
+                <path d="M8 7v4M8 5v.5" strokeLinecap="round"/>
+              </svg>
+              Ver
+            </span>
+          )}
+          <span className="text-[14px] font-semibold text-[#222]">{label}</span>
+          <span className="text-[12px] font-mono text-[#ccc]">{capKey}</span>
         </div>
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
           {hasRules ? (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#fff3cd] text-[12px] font-semibold text-[#8a6300]">
-              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="7" width="10" height="8" rx="1.5"/><path d="M5 7V5a3 3 0 0 1 6 0v2" strokeLinecap="round"/><circle cx="8" cy="11" r="1" fill="currentColor" stroke="none"/></svg>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#fff3cd] text-[11.5px] font-semibold text-[#8a6300]">
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="7" width="10" height="8" rx="1.5"/><path d="M5 7V5a3 3 0 0 1 6 0v2" strokeLinecap="round"/><circle cx="8" cy="11" r="1" fill="currentColor" stroke="none"/></svg>
               {rules.rules.length} {rules.rules.length === 1 ? 'regla' : 'reglas'}
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#e8f5e9] text-[12px] font-semibold text-[#2e7d32]">
-              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="8" cy="8" r="6.5"/><path d="M5 8.5l2 2 4-4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#e8f5e9] text-[11.5px] font-semibold text-[#2e7d32]">
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="8" cy="8" r="6.5"/><path d="M5 8.5l2 2 4-4" strokeLinecap="round" strokeLinejoin="round"/></svg>
               Acceso libre
             </span>
           )}
@@ -269,18 +289,18 @@ function ModuleCard({ module, rules, onChange, onSave, saving, departments, user
             type="button"
             onClick={onSave}
             disabled={saving}
-            className="px-4 py-1.5 bg-[#111] text-white text-[13.5px] font-semibold rounded-lg hover:bg-[#333] transition-colors disabled:opacity-50"
+            className="px-3 py-1 bg-[#111] text-white text-[13px] font-semibold rounded-lg hover:bg-[#333] transition-colors disabled:opacity-50"
           >
-            {saving ? 'Guardando...' : 'Guardar'}
+            {saving ? 'Guardando…' : 'Guardar'}
           </button>
         </div>
       </div>
 
-      {/* Cuerpo — grupos OR */}
-      <div className="px-5 py-4 space-y-3">
+      {/* Grupos OR */}
+      <div className="space-y-3">
         {!hasRules && (
-          <p className="text-[14px] text-[#aaa] text-center py-3">
-            Sin restricciones — todos los usuarios autenticados pueden acceder.
+          <p className="text-[13.5px] text-[#aaa] py-1">
+            Sin restricciones — todos los usuarios autenticados tienen acceso.
           </p>
         )}
 
@@ -310,7 +330,7 @@ function ModuleCard({ module, rules, onChange, onSave, saving, departments, user
         <button
           type="button"
           onClick={addGroup}
-          className="flex items-center gap-2 text-[13.5px] font-medium text-[#555] border border-dashed border-[#d4d0c8] rounded-lg px-4 py-2.5 w-full hover:border-[#999] hover:text-[#111] transition-colors"
+          className="flex items-center gap-2 text-[13px] font-medium text-[#555] border border-dashed border-[#d4d0c8] rounded-lg px-4 py-2 w-full hover:border-[#999] hover:text-[#111] transition-colors"
         >
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M8 3v10M3 8h10" strokeLinecap="round"/>
@@ -323,22 +343,66 @@ function ModuleCard({ module, rules, onChange, onSave, saving, departments, user
 }
 
 // ──────────────────────────────────────────────
+// Card por módulo — agrupa sus capacidades
+// ──────────────────────────────────────────────
+function ModuleCard({ module, rules, onChangeCapability, onSave, savingKey, departments, users, positions }) {
+  const capabilities = capabilitiesForModule(module)
+
+  return (
+    <div className="bg-white border border-[#e0ddd4] rounded-xl overflow-hidden">
+      {/* Header del módulo */}
+      <div className="px-5 py-3.5 border-b border-[#e0ddd4] bg-[#fafaf7] flex items-center gap-3">
+        <div>
+          <h3 className="text-[15.5px] font-bold text-[#111]">{module.label}</h3>
+          <p className="text-[13px] text-[#888]">{module.description}</p>
+        </div>
+        <span className="ml-auto text-[12px] font-mono text-[#ccc]">
+          {capabilities.length} {capabilities.length === 1 ? 'capacidad' : 'capacidades'}
+        </span>
+      </div>
+
+      {/* Sección por capacidad */}
+      <div>
+        {capabilities.map(cap => (
+          <CapabilitySection
+            key={cap.key}
+            capKey={cap.key}
+            label={cap.label}
+            isManage={cap.isManage ?? false}
+            rules={rules[cap.key] ?? emptyRules()}
+            onChange={r => onChangeCapability(cap.key, r)}
+            onSave={() => onSave(cap.key)}
+            saving={savingKey === cap.key}
+            departments={departments}
+            users={users}
+            positions={positions}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ──────────────────────────────────────────────
 // Vista principal
 // ──────────────────────────────────────────────
 export default function PermisosView({ companyId }) {
-  const [rules, setRules]         = useState({})     // { [moduleKey]: {rules:[...]} }
-  const [savedRules, setSavedRules] = useState({})
+  const [rules, setRules]           = useState({})   // { [capabilityKey]: { rules:[...] } }
   const [departments, setDepartments] = useState([])
-  const [users, setUsers]           = useState([])
-  const [positions, setPositions]   = useState([])
-  const [loading, setLoading]       = useState(true)
-  const [savingKey, setSavingKey]   = useState(null)  // moduleKey que se está guardando
-  const [toast, setToast]           = useState(null)  // { type:'ok'|'err', msg }
+  const [users, setUsers]             = useState([])
+  const [positions, setPositions]     = useState([])
+  const [loading, setLoading]         = useState(true)
+  const [savingKey, setSavingKey]     = useState(null)  // capabilityKey que se está guardando
+  const [toast, setToast]             = useState(null)  // { type:'ok'|'err', msg }
 
-  // Inicializar reglas vacías para todos los módulos
+  // Inicializar reglas vacías para todas las capacidades de todos los módulos
   const initRules = useCallback((dbRows) => {
     const base = {}
-    MODULES.forEach(m => { base[m.key] = emptyRules() })
+    MODULES.forEach(mod => {
+      capabilitiesForModule(mod).forEach(cap => {
+        base[cap.key] = emptyRules()
+      })
+    })
     dbRows.forEach(row => { base[row.module_key] = row.rules })
     return base
   }, [])
@@ -353,9 +417,7 @@ export default function PermisosView({ companyId }) {
         supabase.from('users').select('user_id, first_name, last_name').eq('company_id', companyId).order('first_name'),
         supabase.from('positions').select('position_id, position_name').eq('company_id', companyId).order('position_name'),
       ])
-      const initialRules = initRules(mpRes.data ?? [])
-      setRules(initialRules)
-      setSavedRules(JSON.parse(JSON.stringify(initialRules)))
+      setRules(initRules(mpRes.data ?? []))
       setDepartments(deptRes.data ?? [])
       setUsers(usersRes.data ?? [])
       setPositions(posRes.data ?? [])
@@ -364,24 +426,23 @@ export default function PermisosView({ companyId }) {
     load()
   }, [companyId, initRules])
 
-  function updateModuleRules(moduleKey, newRules) {
-    setRules(prev => ({ ...prev, [moduleKey]: newRules }))
+  function updateCapabilityRules(capKey, newRules) {
+    setRules(prev => ({ ...prev, [capKey]: newRules }))
   }
 
-  async function saveModule(moduleKey) {
-    setSavingKey(moduleKey)
-    const payload = rules[moduleKey]
+  async function saveCapability(capKey) {
+    setSavingKey(capKey)
+    const payload = rules[capKey]
     const { error } = await supabase
       .from('module_permissions')
       .upsert(
-        { company_id: companyId, module_key: moduleKey, rules: payload },
+        { company_id: companyId, module_key: capKey, rules: payload },
         { onConflict: 'company_id,module_key' }
       )
     setSavingKey(null)
     if (error) {
-      showToast('err', `Error al guardar ${moduleKey}: ${error.message}`)
+      showToast('err', `Error al guardar: ${error.message}`)
     } else {
-      setSavedRules(prev => ({ ...prev, [moduleKey]: JSON.parse(JSON.stringify(payload)) }))
       showToast('ok', 'Permisos guardados correctamente.')
     }
   }
@@ -420,23 +481,26 @@ export default function PermisosView({ companyId }) {
         <div>
           <p className="text-[14px] font-semibold text-[#8a6300] mb-1">Cómo funcionan los permisos</p>
           <p className="text-[13.5px] text-[#a07800] leading-relaxed">
-            Por módulo puedes crear <strong>grupos de condiciones</strong>. El usuario obtiene acceso si cumple
-            <strong> cualquier grupo completo</strong> (lógica <strong>O</strong>). Dentro de cada grupo, todas
-            las condiciones deben cumplirse (lógica <strong>Y</strong>). Sin reglas, el módulo es accesible para
-            todos. Los administradores siempre tienen acceso sin importar las reglas.
+            Cada módulo tiene capacidades: <strong>acceso</strong> (entrar al módulo),{' '}
+            <strong>ver</strong> (ver una sección específica) y <strong>modificar</strong> (crear, editar o
+            eliminar). Por capacidad podés crear <strong>grupos de condiciones</strong>: el usuario accede si
+            cumple <strong>cualquier grupo completo</strong> (lógica <strong>O</strong>). Dentro de cada
+            grupo, todas las condiciones deben cumplirse (lógica <strong>Y</strong>). Sin reglas = acceso
+            libre. Los administradores siempre tienen acceso, sin importar las reglas. Los cambios de RLS
+            (base de datos) se aplican a las acciones de <em>Modificar</em>.
           </p>
         </div>
       </div>
 
-      {/* Tarjetas por módulo */}
+      {/* Cards por módulo */}
       {MODULES.map(mod => (
         <ModuleCard
           key={mod.key}
           module={mod}
-          rules={rules[mod.key] ?? emptyRules()}
-          onChange={r => updateModuleRules(mod.key, r)}
-          onSave={() => saveModule(mod.key)}
-          saving={savingKey === mod.key}
+          rules={rules}
+          onChangeCapability={updateCapabilityRules}
+          onSave={saveCapability}
+          savingKey={savingKey}
           departments={departments}
           users={users}
           positions={positions}

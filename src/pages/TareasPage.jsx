@@ -40,7 +40,7 @@ const VIEWS = [
 ]
 
 export default function TareasPage() {
-  const { userProfile } = useAuth()
+  const { userProfile, can = () => true } = useAuth()
   const [searchParams] = useSearchParams()
   const [teams, setTeams] = useState([])
   const [tasks, setTasks] = useState([])
@@ -50,22 +50,22 @@ export default function TareasPage() {
   const [allUsers, setAllUsers] = useState([])
   const [loading, setLoading] = useState(true)
 
-  // Privileged users (access_level >= 2 or admin) see all views and all tasks.
-  // Level-1 users only see Base and Kanban (their own tasks, enforced by RLS).
-  const privileged = userProfile?.access_level >= 2 || userProfile?.admin === true
-  const visibleViews = privileged ? VIEWS : VIEWS.filter(v => v.key === 'base' || v.key === 'kanban')
+  // Visibilidad de vistas: config-driven vía capacidades de permisos.
+  // Sin reglas configuradas → acceso libre (mismo default del sistema).
+  const visibleViews = VIEWS.filter(v => can(`tareas.${v.key}`))
+  const canManage = can('tareas.manage')
 
   const [activeView, setActiveView] = useState(
     () => searchParams.get('view') === 'base' ? 'base' : 'panorama',
   )
 
-  // When userProfile loads, redirect level-1 users away from restricted views.
+  // Cuando cargan los permisos, redirigir si la vista activa no está disponible.
   useEffect(() => {
-    if (userProfile && !privileged && activeView !== 'base' && activeView !== 'kanban') {
-      setActiveView('base')
+    if (userProfile && visibleViews.length > 0 && !visibleViews.find(v => v.key === activeView)) {
+      setActiveView(visibleViews[0].key)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userProfile])
+  }, [userProfile, activeView])
   const [activeTeamId, setActiveTeamId] = useState(null)
   const [monthIdx, setMonthIdx] = useState(currentMonthIndex())
   // null = closed, undefined = new task, object = edit existing
@@ -160,17 +160,19 @@ export default function TareasPage() {
               <h1 className="text-[26px] font-bold text-[#111] leading-tight">Gestión de Tareas</h1>
               <p className="text-[15px] text-[#888] mt-0.5">QC · Cierre · Stand-up mensual</p>
             </div>
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <button
-                onClick={openNewTask}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-[#111] text-white text-[15px] font-bold px-4 py-2.5 rounded-xl hover:bg-[#222] transition-colors"
-              >
-                <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.8">
-                  <path d="M6 1v10M1 6h10" strokeLinecap="round"/>
-                </svg>
-                Nueva tarea
-              </button>
-            </div>
+            {canManage && (
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  onClick={openNewTask}
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-[#111] text-white text-[15px] font-bold px-4 py-2.5 rounded-xl hover:bg-[#222] transition-colors"
+                >
+                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.8">
+                    <path d="M6 1v10M1 6h10" strokeLinecap="round"/>
+                  </svg>
+                  Nueva tarea
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col gap-3 mb-6">
