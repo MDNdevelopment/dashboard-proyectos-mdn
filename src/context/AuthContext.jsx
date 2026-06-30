@@ -1,5 +1,6 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { supabase } from '../supabase'
+import { canAccessModule } from '../lib/permissions'
 
 const AuthContext = createContext(null)
 
@@ -7,6 +8,7 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
   const [userProfile, setUserProfile] = useState(null)
+  const [modulePermissions, setModulePermissions] = useState({})
 
   async function fetchUserProfile(userId) {
     const { data } = await supabase
@@ -15,6 +17,20 @@ export function AuthProvider({ children }) {
       .eq('user_id', userId)
       .single()
     setUserProfile(data)
+    if (data?.company_id) await fetchModulePermissions(data.company_id)
+  }
+
+  async function fetchModulePermissions(companyId) {
+    if (!companyId) return
+    const { data } = await supabase
+      .from('module_permissions')
+      .select('module_key, rules')
+      .eq('company_id', companyId)
+    if (data) {
+      const map = {}
+      data.forEach(row => { map[row.module_key] = row.rules })
+      setModulePermissions(map)
+    }
   }
 
   useEffect(() => {
@@ -27,7 +43,7 @@ export function AuthProvider({ children }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
       if (session) fetchUserProfile(session.user.id)
-      else setUserProfile(null)
+      else { setUserProfile(null); setModulePermissions({}) }
     })
 
     return () => subscription.unsubscribe()
@@ -52,8 +68,21 @@ export function AuthProvider({ children }) {
     if (currentSession) await fetchUserProfile(currentSession.user.id)
   }
 
+  /**
+   * Verifica si el usuario actual puede acceder a un módulo.
+   * Admin siempre pasa; sin reglas configuradas → acceso libre.
+   */
+  const can = useCallback(
+    (moduleKey) => canAccessModule(moduleKey, userProfile, modulePermissions),
+    [userProfile, modulePermissions]
+  )
+
   return (
-    <AuthContext.Provider value={{ session, loading, userProfile, signIn, signOut, resetPassword, refreshProfile }}>
+    <AuthContext.Provider value={{
+      session, loading, userProfile, modulePermissions,
+      signIn, signOut, resetPassword, refreshProfile,
+      can,
+    }}>
       {children}
     </AuthContext.Provider>
   )

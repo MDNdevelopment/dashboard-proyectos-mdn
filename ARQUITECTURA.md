@@ -25,25 +25,40 @@ dashboard 8 módulos: Proyectos, Tareas, Métricas, Empresa, Evaluaciones, Ticke
 
 ```
 src/main.jsx          ← BrowserRouter + <Routes> (definición completa de rutas)
-  └─ <ProtectedRoute> ← redirige a /login si no hay sesión
-       └─ <AppLayout> ← Outlet + suscripción realtime a `projects`
-            └─ rutas hijas (ver mapa de módulos)
+  └─ <ProtectedRoute> ← redirige a /login si no hay sesión (solo verifica sesión)
+       └─ <RequireModule moduleKey="X"> ← redirige a / si can(key)=false
+            └─ <AppLayout> ← Outlet + suscripción realtime a `projects`
+                 └─ rutas hijas (ver mapa de módulos)
 ```
 
 - Cliente Supabase: `src/supabase.js`
 - Auth context + hook `useAuth`: `src/context/AuthContext.jsx`
 - Navegación central: `src/components/Sidebar.jsx`
+- Guard de módulo: `src/components/RequireModule.jsx`
+- Registro central de módulos: `src/config/modules.js`
 
 ### Modelo de permisos
 
-| Campo | Valor | Acceso |
+El acceso a módulos opera en **dos capas independientes**:
+
+**Capa 1 — Acceso al módulo (config-driven):** controlado por la tabla `module_permissions`.
+Cada módulo puede tener reglas en formato DNF (grupos OR, condiciones AND dentro de cada grupo).
+El helper `can(moduleKey)` en `AuthContext` evalúa las reglas contra el perfil del usuario.
+La lógica pura está en `src/lib/permissions.js` → `canAccessModule()`. Defaults:
+- Sin reglas configuradas → módulo accesible para todos los autenticados.
+- `admin=true` siempre pasa, sin importar las reglas.
+- Configurable desde Empresa → Permisos (solo admins).
+
+**Capa 2 — Funciones dentro del módulo (hardcodeado por nivel):**
+
+| Campo | Valor | Acceso intra-módulo |
 |---|---|---|
 | `userProfile.access_level` | 1 | Empleado base — Tareas: solo sus propias tareas (RLS) |
 | `userProfile.access_level` | ≥ 2 | Manager (Empresa: Clientes/Líneas, Evaluaciones, Tareas: acceso total) |
-| `userProfile.access_level` | ≥ 3 | Ads (editar campañas) · **Métricas (ver y editar su propia línea)** |
-| `userProfile.access_level` | ≥ 4 | Métricas: ver y editar **todas** las líneas |
-| `userProfile.admin` | true | Admin total (Empresa: Departamentos/Empleados/Preguntas) |
-| `userProfile.department_id` | 0 | Rol IT (módulo Tickets) |
+| `userProfile.access_level` | ≥ 3 | Ads (editar campañas) · **Reportes (ver y editar su propia línea)** |
+| `userProfile.access_level` | ≥ 4 | Reportes: ver y editar **todas** las líneas |
+| `userProfile.admin` | true | Admin total (Empresa: Departamentos/Empleados/Preguntas/Permisos) |
+| `userProfile.department_id` | 0 | Rol IT (sub-features de Tickets) |
 
 ### Base de datos compartida
 
@@ -65,9 +80,10 @@ Realtime habilitado en todas.
 
 | | |
 |---|---|
-| **Propósito** | Login, logout, recuperación y reseteo de contraseña. Carga el perfil del usuario (`userProfile`) que gobierna permisos en toda la app. |
-| **Archivos principales** | `src/context/AuthContext.jsx` (provider + `useAuth`) · `src/components/ProtectedRoute.jsx` · `src/pages/LoginPage.jsx` · `src/pages/ForgotPasswordPage.jsx` · `src/pages/ResetPasswordPage.jsx` |
-| **Tablas** | `auth.users` (Supabase Auth) · `users` (perfil: `user_id, first_name, last_name, email, department_id→departments, position_id→positions, company_id, access_level, admin, avatar_url, receive_ticket_notifications`) |
+| **Propósito** | Login, logout, recuperación y reseteo de contraseña. Carga el perfil del usuario (`userProfile`) y los permisos de módulo (`modulePermissions`) que gobiernan el acceso en toda la app. |
+| **Archivos principales** | `src/context/AuthContext.jsx` (provider + `useAuth` + `can()`) · `src/components/ProtectedRoute.jsx` · `src/components/RequireModule.jsx` · `src/lib/permissions.js` (`canAccessModule`) · `src/config/modules.js` (registro central) · `src/pages/LoginPage.jsx` · `src/pages/ForgotPasswordPage.jsx` · `src/pages/ResetPasswordPage.jsx` |
+| **Tablas** | `auth.users` (Supabase Auth) · `users` (perfil: `user_id, first_name, last_name, email, department_id→departments, position_id→positions, company_id, access_level, admin, avatar_url, receive_ticket_notifications`) · `module_permissions` (reglas de acceso por módulo) |
+| **Contexto Auth** | `userProfile` (perfil del usuario) · `modulePermissions` (mapa `{[module_key]: {rules:[]}}`) · `can(moduleKey)` → boolean — función estable (useCallback) que evalúa las reglas del módulo contra el perfil actual |
 | **Rutas** | `/login` · `/forgot-password` · `/reset-password` |
 | **Permisos** | Público (sin sesión) |
 
@@ -107,7 +123,7 @@ Realtime habilitado en todas.
 | **Tablas** | `metric_lines` (`id, company_id, name, color, sort_order, member_user_ids jsonb, metas jsonb`) · `metric_clients` (`id, company_id, line_id→metric_lines, name, website, payment_day, monthly_fee, social_links jsonb, logo_url, contacts jsonb, anniversary_date, mdn_since`) · `metric_reports` (`id, company_id, line_id→metric_lines, year, month, data jsonb` — UNIQUE por `line_id+year+month`) |
 | **jsonb `metric_lines.metas`** | `{ "reuniones": 15, "tareas": [{ "nombre": "Calendario", "meta": 10 }, ...] }` — Metas de la línea para periodos no guardados. Tienen **prioridad sobre el carry-forward** del mes anterior (pisan `reuniones.meta` y `productividad.tareas`). Los reportes ya guardados quedan congelados. `{}` usa los defaults del código. Se configura en Empresa › Líneas. |
 | **jsonb `metric_reports.data`** | `{ reuniones:{realizadas,meta}, productividad:{tareas:[{nombre,realizado,meta}]}, crecimiento:{items:[{clienteId,seguidoresActuales,seguidoresBase,meta}]}, solicitudes:{solicitudes,editadas}, pautas:{items:[{clienteId,realizadas,meta}]}, piezas:{piezas,editadas}, feedback:{items:[{clienteId,score}]}, finanzas:{ingresos:[],gastosOperativos:[],sueldos:[],otrosGastos:[]} }` |
-| **Rutas** | `/metricas` (Dashboard anual) · `/metricas/linea/:lineId` (reporte de línea) |
+| **Rutas** | `/reportes` (Dashboard anual) · `/reportes/linea/:lineId` (reporte de línea) |
 | **Permisos** | Acceso al módulo: `access_level ≥ 3` o `admin`. Nivel 3: ve y edita **solo su propia línea** (filtrado en frontend + RLS en `metric_reports`). Nivel 4 y admin: ven y editan todas las líneas. Helper DB: `metrics_user_can_view()` (≥3/admin), `metrics_user_view_all()` (≥4/admin) — ambos `SECURITY DEFINER`. Filtrado de líneas: `visibleLinesForUser(lines, userProfile)` en `src/utils/lineMembers.js`. Migración activa: `20260704000000_metric_reports_team_rls.sql`. |
 | **Estado de captura** | Mayoritariamente manual (inputs en `OperacionesView`/`FinanzasView`). Automatismos: para periodos no guardados → `initMetricReport.js` aplica carry-forward del mes anterior y después sobreescribe con `metric_lines.metas` (la línea tiene prioridad); reconciliación de cartera actual en crecimiento/pautas/feedback e **ingresos** vía `syncReportClients.js`. **Finanzas → Ingresos** se auto-puebla desde `metric_clients.monthly_fee` (sembrar-y-editar: valores conservados por `clienteId`; clientes fuera de línea se descartan; filas manuales `clienteId==null` se conservan). Reportes ya guardados quedan congelados. **No lee de `tasks` ni de `projects`.** |
 
@@ -115,12 +131,12 @@ Realtime habilitado en todas.
 
 | | |
 |---|---|
-| **Propósito** | Administración organizacional: departamentos, cargos, empleados, vacaciones, preguntas de evaluación, clientes y líneas operativas. |
-| **Archivos principales** | `src/pages/EmpresaPage.jsx` · `src/components/empresa/DepartmentsView.jsx` · `EmployeesView.jsx` · `EmployeeModal.jsx` · `NewEmployeeDialog.jsx` · `QuestionsView.jsx` · `ClientsView.jsx` · `ClientModal.jsx` · `LinesView.jsx` · `LineModal.jsx` · `LineMetasModal.jsx` · `AvatarUpload.jsx` · `VacationsDialog.jsx` · `src/utils/lineFilters.js` · `lineMembers.js` |
-| **Tablas** | `departments` · `positions` · `users` (empleados) · `vacations` · `questions` + `question_positions` + `question_tags` (banco de preguntas de evaluación) · `metric_clients` · `metric_lines` |
+| **Propósito** | Administración organizacional: departamentos, cargos, empleados, vacaciones, preguntas de evaluación, clientes, líneas operativas y **permisos de acceso por módulo**. |
+| **Archivos principales** | `src/pages/EmpresaPage.jsx` · `src/components/empresa/DepartmentsView.jsx` · `EmployeesView.jsx` · `EmployeeModal.jsx` · `NewEmployeeDialog.jsx` · `QuestionsView.jsx` · `ClientsView.jsx` · `ClientModal.jsx` · `LinesView.jsx` · `LineModal.jsx` · `LineMetasModal.jsx` · **`PermisosView.jsx`** · `AvatarUpload.jsx` · `VacationsDialog.jsx` · `src/utils/lineFilters.js` · `lineMembers.js` |
+| **Tablas** | `departments` · `positions` · `users` (empleados) · `vacations` · `questions` + `question_positions` + `question_tags` (banco de preguntas de evaluación) · `metric_clients` · `metric_lines` · **`module_permissions`** |
 | **Creación de empleado** | Netlify fn `netlify/functions/create-employee.js` (service role + invite Supabase Auth) |
-| **Rutas** | `/empresa` · `/empresa/departamentos` · `/empresa/empleados` · `/empresa/preguntas` · `/empresa/clientes` · `/empresa/lineas` |
-| **Permisos** | Departamentos/Empleados/Preguntas: solo `admin`. Clientes/Líneas: `access_level ≥ 2`. |
+| **Rutas** | `/empresa` · `/empresa/departamentos` · `/empresa/empleados` · `/empresa/preguntas` · `/empresa/clientes` · `/empresa/lineas` · **`/empresa/permisos`** |
+| **Permisos** | Departamentos/Empleados/Preguntas/**Permisos**: solo `admin`. Clientes/Líneas: `access_level ≥ 2`. |
 
 ### 2.6 Evaluaciones
 
@@ -189,6 +205,7 @@ Realtime habilitado en todas.
 | `metric_clients` | `20260625000000` (mod. hasta `20260702000003`) | Cartera de clientes. FK `line_id→metric_lines`. Columnas añadidas: `contacts jsonb` (personas con nombre, cargo, día+mes de cumpleaños — sin año), `anniversary_date date`, `mdn_since date`, `monthly_fee numeric(12,2)` (mensualidad en USD para auto-poblar ingresos de Finanzas). |
 | `metric_reports` | `20260625000000` | Un reporte jsonb por `(line_id, year, month)`. FK `line_id→metric_lines` CASCADE. |
 | `notifications` | `20260703000000` | Notificaciones in-app y de correo. RLS: lectura/actualización solo del destinatario (`auth.uid()::text = user_id`). Realtime habilitado. Índice único parcial sobre `dedupe_key` para idempotencia de las notificaciones de fecha. |
+| `module_permissions` | `20260705000000` | Reglas de acceso por módulo (DNF: grupos OR de condiciones AND). Una fila por `(company_id, module_key)`. Estructura `rules jsonb`: `{"rules":[{"all":[{"type":"department","ids":[...]},{"type":"min_level","value":N},...]},...]}`. Sin filas = módulo abierto. RLS: SELECT abierto a `authenticated`; INSERT/UPDATE/DELETE solo si `is_company_admin()` (función SECURITY DEFINER). |
 
 ### 3.2 Tablas externas (base compartida — no en migraciones)
 

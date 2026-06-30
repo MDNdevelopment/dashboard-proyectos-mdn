@@ -33,7 +33,9 @@ const EVAL_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" st
 const METRICS_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><polyline points="1 12 5 7 8 10 11 5 15 8" strokeLinecap="round" strokeLinejoin="round"/><path d="M1 14h14" strokeLinecap="round"/></svg>
 
 function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
-  const { signOut, userProfile, refreshProfile } = useAuth()
+  // can con fallback () => true: cuando el contexto no tiene can (tests / carga inicial)
+  // el comportamiento es "default abierto" — igual que no tener reglas configuradas.
+  const { signOut, userProfile, refreshProfile, can = () => true } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
   const avatarInputRef = useRef(null)
   const menuRef = useRef(null)
@@ -97,6 +99,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
   const empresaPregActive = location.pathname === '/empresa/preguntas'
   const empresaCliActive  = location.pathname === '/empresa/clientes'
   const empresaLinActive  = location.pathname === '/empresa/lineas'
+  const empresaPermActive = location.pathname === '/empresa/permisos'
   const [empresaOpen, setEmpresaOpen] = useState(isEmpresaRoute)
 
   const canEval = userProfile?.access_level >= 2 || userProfile?.admin === true
@@ -209,7 +212,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
           )}
 
           {/* Soporte técnico — menú desplegable */}
-          <button
+          {can('tickets') && <button
             onClick={() => setTicketsOpen(o => !o)}
             className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all text-left ${
               isTicketsRoute && !ticketsOpen
@@ -229,9 +232,9 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
             >
               <path d="M2 3.5l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-          </button>
+          </button>}
 
-          {ticketsOpen && (
+          {can('tickets') && ticketsOpen && (
             <div className="ml-3 pl-3 border-l-2 border-[#ece9df] space-y-0.5 mt-0.5">
               <Link
                 to="/tickets"
@@ -279,7 +282,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
             </div>
           )}
           {/* Campañas & Tácticas — menú desplegable */}
-          <button
+          {can('ads') && <button
             onClick={() => setAdsOpen(o => !o)}
             className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all text-left ${
               isAdsRoute && !adsOpen
@@ -299,9 +302,9 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
             >
               <path d="M2 3.5l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-          </button>
+          </button>}
 
-          {adsOpen && (
+          {can('ads') && adsOpen && (
             <div className="ml-3 pl-3 border-l-2 border-[#ece9df] space-y-0.5 mt-0.5">
               <Link
                 to="/ads"
@@ -319,7 +322,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
             </div>
           )}
           {/* Gestión de Tareas — menú desplegable */}
-          <button
+          {can('tareas') && <button
             onClick={() => setTareasOpen(o => !o)}
             className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all text-left ${
               isTareasRoute && !tareasOpen
@@ -339,9 +342,9 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
             >
               <path d="M2 3.5l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-          </button>
+          </button>}
 
-          {tareasOpen && (
+          {can('tareas') && tareasOpen && (
             <div className="ml-3 pl-3 border-l-2 border-[#ece9df] space-y-0.5 mt-0.5">
               <Link
                 to="/tareas"
@@ -359,8 +362,8 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
             </div>
           )}
 
-          {/* Empresa — visible a todos */}
-          <button
+          {/* Empresa */}
+          {can('empresa') && <button
             onClick={() => setEmpresaOpen(o => !o)}
             className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all text-left ${
               isEmpresaRoute && !empresaOpen
@@ -380,9 +383,9 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
             >
               <path d="M2 3.5l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-          </button>
+          </button>}
 
-          {empresaOpen && (
+          {can('empresa') && empresaOpen && (
             <div className="ml-3 pl-3 border-l-2 border-[#ece9df] space-y-0.5 mt-0.5">
               <Link
                 to="/empresa"
@@ -438,6 +441,19 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
                     </span>
                     <span className="flex-1">Preguntas</span>
                   </Link>
+                  <Link
+                    to="/empresa/permisos"
+                    className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
+                      empresaPermActive
+                        ? 'bg-[#FFB800] text-[#111]'
+                        : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+                    }`}
+                  >
+                    <span className={`flex-shrink-0 ${empresaPermActive ? 'text-[#111]' : 'text-[#666]'}`}>
+                      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="3" y="7" width="10" height="8" rx="1.5"/><path d="M5 7V5a3 3 0 0 1 6 0v2" strokeLinecap="round"/><circle cx="8" cy="11" r="1" fill="currentColor" stroke="none"/></svg>
+                    </span>
+                    <span className="flex-1">Permisos</span>
+                  </Link>
                 </>
               )}
               {/* Clientes — visible a managers y admins */}
@@ -474,8 +490,8 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
             </div>
           )}
 
-          {/* Evaluaciones — visible a todos los usuarios logueados */}
-          <>
+          {/* Evaluaciones */}
+          {can('evaluaciones') && <>
             <button
               onClick={() => setEvalOpen(o => !o)}
               className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all text-left ${
@@ -551,10 +567,10 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
                 )}
               </div>
             )}
-          </>
+          </>}
 
-          {/* Métricas — visible solo a nivel 3+/admin */}
-          {canMetrics && (
+          {/* Reportes — gate configurable vía Permisos (antes: solo nivel 3+/admin hardcodeado) */}
+          {can('reportes') && (
             <>
               <button
                 onClick={() => setMetricasOpen(o => !o)}

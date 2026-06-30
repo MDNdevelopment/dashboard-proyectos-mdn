@@ -6,6 +6,7 @@ import EmployeesView from '../components/empresa/EmployeesView'
 import QuestionsView from '../components/empresa/QuestionsView'
 import ClientsView from '../components/empresa/ClientsView'
 import LinesView from '../components/empresa/LinesView'
+import PermisosView from '../components/empresa/PermisosView'
 
 const ALL_TABS = [
   { key: 'general',       label: 'Inicio',         path: '/empresa',               adminOnly: false, managerPlus: false },
@@ -14,6 +15,7 @@ const ALL_TABS = [
   { key: 'preguntas',     label: 'Preguntas',       path: '/empresa/preguntas',     adminOnly: true,  managerPlus: false },
   { key: 'clientes',      label: 'Clientes',        path: '/empresa/clientes',      adminOnly: false, managerPlus: true  },
   { key: 'lineas',        label: 'Líneas',          path: '/empresa/lineas',        adminOnly: false, managerPlus: true  },
+  { key: 'permisos',      label: 'Permisos',        path: '/empresa/permisos',      adminOnly: true,  managerPlus: false },
 ]
 
 function pathToKey(pathname) {
@@ -22,6 +24,7 @@ function pathToKey(pathname) {
   if (pathname.startsWith('/empresa/preguntas'))     return 'preguntas'
   if (pathname.startsWith('/empresa/clientes'))      return 'clientes'
   if (pathname.startsWith('/empresa/lineas'))        return 'lineas'
+  if (pathname.startsWith('/empresa/permisos'))      return 'permisos'
   return 'general'
 }
 
@@ -60,7 +63,7 @@ export default function EmpresaPage() {
         </div>
 
         {/* Tab switcher */}
-        <div className="flex bg-white border border-[#e0ddd4] rounded-xl p-1 w-fit mb-6">
+        <div className="flex flex-wrap gap-1 bg-white border border-[#e0ddd4] rounded-xl p-1 w-fit mb-6">
           {tabs.map(tab => (
             <button
               key={tab.key}
@@ -104,6 +107,10 @@ export default function EmpresaPage() {
 
         {activeKey === 'lineas' && canManageClients && (
           <LinesView companyId={userProfile.company_id} />
+        )}
+
+        {activeKey === 'permisos' && isAdmin && (
+          <PermisosView companyId={userProfile.company_id} />
         )}
 
       </div>

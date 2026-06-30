@@ -6,6 +6,7 @@ import App from './App.jsx'
 import AppLayout from './components/AppLayout.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
+import RequireModule from './components/RequireModule.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx'
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx'
@@ -27,24 +28,39 @@ createRoot(document.getElementById('root')).render(
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-            <Route path="/tickets" element={<TicketsPage />} />
-            <Route path="/tickets/notificaciones" element={<NotificationPreferencesPage />} />
-            <Route path="/tickets/analytics" element={<TicketAnalyticsPage />} />
-            <Route path="/ads" element={<AdsPage />} />
-            <Route path="/tareas" element={<TareasPage />} />
-            <Route path="/empresa" element={<EmpresaPage />} />
-            <Route path="/empresa/departamentos" element={<EmpresaPage />} />
-            <Route path="/empresa/empleados" element={<EmpresaPage />} />
-            <Route path="/empresa/preguntas" element={<EmpresaPage />} />
-            <Route path="/empresa/clientes" element={<EmpresaPage />} />
-            <Route path="/empresa/lineas" element={<EmpresaPage />} />
-            <Route path="/evaluaciones" element={<EvaluacionesPage />} />
-            <Route path="/evaluaciones/resumen" element={<EvaluacionesPage />} />
-            <Route path="/evaluaciones/perfil" element={<EvaluacionesPage />} />
-            <Route path="/evaluaciones/empleado/:id" element={<EvaluacionesPage />} />
-            <Route path="/evaluaciones/perfil-v2" element={<EvaluacionesPage />} />
-            <Route path="/reportes" element={<MetricasPage />} />
-            <Route path="/reportes/linea/:lineId" element={<MetricasPage />} />
+
+            {/* Soporte Técnico */}
+            <Route path="/tickets" element={<RequireModule moduleKey="tickets"><TicketsPage /></RequireModule>} />
+            <Route path="/tickets/notificaciones" element={<RequireModule moduleKey="tickets"><NotificationPreferencesPage /></RequireModule>} />
+            <Route path="/tickets/analytics" element={<RequireModule moduleKey="tickets"><TicketAnalyticsPage /></RequireModule>} />
+
+            {/* Campañas */}
+            <Route path="/ads" element={<RequireModule moduleKey="ads"><AdsPage /></RequireModule>} />
+
+            {/* Tareas QC / Cierre */}
+            <Route path="/tareas" element={<RequireModule moduleKey="tareas"><TareasPage /></RequireModule>} />
+
+            {/* Empresa */}
+            <Route path="/empresa" element={<RequireModule moduleKey="empresa"><EmpresaPage /></RequireModule>} />
+            <Route path="/empresa/departamentos" element={<RequireModule moduleKey="empresa"><EmpresaPage /></RequireModule>} />
+            <Route path="/empresa/empleados" element={<RequireModule moduleKey="empresa"><EmpresaPage /></RequireModule>} />
+            <Route path="/empresa/preguntas" element={<RequireModule moduleKey="empresa"><EmpresaPage /></RequireModule>} />
+            <Route path="/empresa/clientes" element={<RequireModule moduleKey="empresa"><EmpresaPage /></RequireModule>} />
+            <Route path="/empresa/lineas" element={<RequireModule moduleKey="empresa"><EmpresaPage /></RequireModule>} />
+            <Route path="/empresa/permisos" element={<RequireModule moduleKey="empresa"><EmpresaPage /></RequireModule>} />
+
+            {/* Evaluaciones */}
+            <Route path="/evaluaciones" element={<RequireModule moduleKey="evaluaciones"><EvaluacionesPage /></RequireModule>} />
+            <Route path="/evaluaciones/resumen" element={<RequireModule moduleKey="evaluaciones"><EvaluacionesPage /></RequireModule>} />
+            <Route path="/evaluaciones/perfil" element={<RequireModule moduleKey="evaluaciones"><EvaluacionesPage /></RequireModule>} />
+            <Route path="/evaluaciones/empleado/:id" element={<RequireModule moduleKey="evaluaciones"><EvaluacionesPage /></RequireModule>} />
+            <Route path="/evaluaciones/perfil-v2" element={<RequireModule moduleKey="evaluaciones"><EvaluacionesPage /></RequireModule>} />
+
+            {/* Reportes */}
+            <Route path="/reportes" element={<RequireModule moduleKey="reportes"><MetricasPage /></RequireModule>} />
+            <Route path="/reportes/linea/:lineId" element={<RequireModule moduleKey="reportes"><MetricasPage /></RequireModule>} />
+
+            {/* Proyectos — catch-all */}
             <Route path="/*" element={<App />} />
           </Route>
         </Routes>
