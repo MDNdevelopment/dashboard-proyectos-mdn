@@ -100,8 +100,9 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
   const [empresaOpen, setEmpresaOpen] = useState(isEmpresaRoute)
 
   const canEval = userProfile?.access_level >= 2 || userProfile?.admin === true
-  const isMetricasRoute = location.pathname.startsWith('/metricas')
-  const metricasDashActive = location.pathname === '/metricas'
+  const canMetrics = userProfile?.access_level >= 3 || userProfile?.admin === true
+  const isMetricasRoute = location.pathname.startsWith('/reportes')
+  const metricasDashActive = location.pathname === '/reportes'
   const [metricasOpen, setMetricasOpen] = useState(isMetricasRoute)
   const isEvalRoute = location.pathname.startsWith('/evaluaciones')
   const evalActive = location.pathname === '/evaluaciones'
@@ -552,8 +553,8 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
             )}
           </>
 
-          {/* Métricas — visible a managers/admins */}
-          {canEval && (
+          {/* Métricas — visible solo a nivel 3+/admin */}
+          {canMetrics && (
             <>
               <button
                 onClick={() => setMetricasOpen(o => !o)}
@@ -568,7 +569,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
                 <span className={`flex-shrink-0 ${isMetricasRoute ? 'text-[#111]' : 'text-[#666]'}`}>
                   {METRICS_ICON}
                 </span>
-                <span className="flex-1">Métricas</span>
+                <span className="flex-1">Reportes</span>
                 <svg
                   width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8"
                   className={`flex-shrink-0 transition-transform duration-200 ${metricasOpen ? 'rotate-180' : ''}`}
@@ -580,7 +581,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
               {metricasOpen && (
                 <div className="ml-3 pl-3 border-l-2 border-[#ece9df] space-y-0.5 mt-0.5">
                   <Link
-                    to="/metricas"
+                    to="/reportes"
                     className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
                       metricasDashActive
                         ? 'bg-[#FFB800] text-[#111]'

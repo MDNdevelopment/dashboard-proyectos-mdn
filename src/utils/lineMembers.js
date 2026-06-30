@@ -47,6 +47,24 @@ export function assignMemberToLine(lines, lineId, userId) {
 }
 
 /**
+ * Filtra las líneas visibles para un usuario según su nivel de acceso.
+ * - Nivel 4+ o admin: ve todas las líneas.
+ * - Nivel 3: ve solo las líneas donde está listado en member_user_ids.
+ *
+ * @param {Array} lines - Todas las líneas cargadas de metric_lines
+ * @param {object|null} userProfile - Perfil del usuario (de useAuth)
+ * @returns {Array}
+ */
+export function visibleLinesForUser(lines, userProfile) {
+  if (!lines) return []
+  const viewAll = userProfile?.access_level >= 4 || userProfile?.admin === true
+  if (viewAll) return lines
+  const uid = userProfile?.user_id
+  if (!uid) return []
+  return lines.filter(l => (l.member_user_ids ?? []).includes(uid))
+}
+
+/**
  * Quita un empleado de una línea específica.
  * @param {Array} lines
  * @param {string} lineId
