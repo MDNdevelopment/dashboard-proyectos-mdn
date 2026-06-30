@@ -10,6 +10,8 @@ export default function ForgotPasswordPage() {
   const [loading, setLoading] = useState(false)
   const [countdown, setCountdown] = useState(0)
   const [submitCount, setSubmitCount] = useState(0)
+  const [resendError, setResendError] = useState(null)
+  const [resendSuccess, setResendSuccess] = useState(false)
 
   useEffect(() => {
     if (submitCount === 0) return
@@ -26,17 +28,33 @@ export default function ForgotPasswordPage() {
   async function handleSubmit(e) {
     e.preventDefault()
     setLoading(true)
-    await resetPassword(email)
-    setSent(true)
-    setSubmitCount(c => c + 1)
-    setLoading(false)
+    try {
+      await resetPassword(email)
+      setSent(true)
+      setSubmitCount(c => c + 1)
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function handleResend() {
     setLoading(true)
-    await resetPassword(email)
-    setSubmitCount(c => c + 1)
-    setLoading(false)
+    setResendError(null)
+    setResendSuccess(false)
+    try {
+      const { error } = await resetPassword(email)
+      if (error) {
+        setResendError('No se pudo reenviar el correo. Intenta de nuevo.')
+      } else {
+        setResendSuccess(true)
+        setSubmitCount(c => c + 1)
+        setTimeout(() => setResendSuccess(false), 4000)
+      }
+    } catch {
+      setResendError('Ocurrió un error al reenviar. Intenta de nuevo.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const mm = String(Math.floor(countdown / 60)).padStart(2, '0')
@@ -67,6 +85,16 @@ export default function ForgotPasswordPage() {
             >
               {loading ? 'Enviando...' : countdown > 0 ? `Reenviar enlace (${mm}:${ss})` : 'Reenviar enlace'}
             </button>
+            {resendSuccess && (
+              <p className="text-[13px] text-[#166534] text-center">
+                Correo reenviado correctamente
+              </p>
+            )}
+            {resendError && (
+              <p className="text-[13px] text-red-600 text-center">
+                {resendError}
+              </p>
+            )}
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-3">
