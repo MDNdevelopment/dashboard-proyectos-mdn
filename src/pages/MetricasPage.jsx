@@ -2,12 +2,13 @@ import { useEffect, useState, useCallback } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { loadLines, seedMetricsIfEmpty, exportMetrics, importMetrics } from "../components/metricas/metricsApi";
+import { visibleLinesForUser } from "../utils/lineMembers";
 import { supabase } from "../supabase";
 import DashboardView from "../components/metricas/DashboardView";
 import LineView from "../components/metricas/LineView";
 
 function pathToKey(pathname) {
-  if (pathname.startsWith("/metricas/linea/")) return "linea";
+  if (pathname.startsWith("/reportes/linea/")) return "linea";
   return "dashboard";
 }
 
@@ -17,7 +18,8 @@ export default function MetricasPage() {
   const navigate = useNavigate();
   const { lineId } = useParams();
 
-  const canEval = userProfile?.access_level >= 2 || userProfile?.admin === true;
+  // Solo nivel 3+ o admin pueden ver Métricas.
+  const canView = userProfile?.access_level >= 3 || userProfile?.admin === true;
   const activeKey = pathToKey(location.pathname);
 
   const [lines, setLines] = useState([]);
@@ -25,19 +27,20 @@ export default function MetricasPage() {
   const [seeding, setSeeding] = useState(false);
   const [toast, setToast] = useState(null);
 
-  // Redirige si no tiene acceso
+  // Redirige si no tiene acceso (nivel 3+ o admin requerido)
   useEffect(() => {
-    if (userProfile != null && !canEval) {
+    if (userProfile != null && !canView) {
       navigate("/", { replace: true });
     }
-  }, [canEval, userProfile, navigate]);
+  }, [canView, userProfile, navigate]);
 
   const fetchLines = useCallback(async () => {
     if (!userProfile?.company_id) return;
     const { data } = await loadLines(userProfile.company_id);
-    setLines(data ?? []);
+    // Nivel 4+ y admin ven todas las líneas; nivel 3 solo ve las suyas.
+    setLines(visibleLinesForUser(data ?? [], userProfile));
     setLoadingLines(false);
-  }, [userProfile?.company_id]);
+  }, [userProfile]);
 
   // Seed automático + carga de líneas
   useEffect(() => {
@@ -153,7 +156,7 @@ export default function MetricasPage() {
         ) : (
           <div className="flex flex-wrap gap-1 bg-white border border-[#e0ddd4] rounded-xl p-1 w-fit mb-6">
             <button
-              onClick={() => navigate("/metricas")}
+              onClick={() => navigate("/reportes")}
               className={`px-4 py-1.5 rounded-lg text-[14.5px] font-semibold transition-all ${
                 activeKey === "dashboard"
                   ? "bg-[#111] text-white"
@@ -165,7 +168,7 @@ export default function MetricasPage() {
             {lines.map(line => (
               <button
                 key={line.id}
-                onClick={() => navigate(`/metricas/linea/${line.id}`)}
+                onClick={() => navigate(`/reportes/linea/${line.id}`)}
                 className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[14.5px] font-semibold transition-all ${
                   activeKey === "linea" && lineId === line.id
                     ? "bg-[#111] text-white"

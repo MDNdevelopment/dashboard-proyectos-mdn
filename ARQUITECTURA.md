@@ -40,7 +40,8 @@ src/main.jsx          ← BrowserRouter + <Routes> (definición completa de ruta
 |---|---|---|
 | `userProfile.access_level` | 1 | Empleado base — Tareas: solo sus propias tareas (RLS) |
 | `userProfile.access_level` | ≥ 2 | Manager (Empresa: Clientes/Líneas, Evaluaciones, Tareas: acceso total) |
-| `userProfile.access_level` | ≥ 3 | Ads (editar campañas) |
+| `userProfile.access_level` | ≥ 3 | Ads (editar campañas) · **Métricas (ver y editar su propia línea)** |
+| `userProfile.access_level` | ≥ 4 | Métricas: ver y editar **todas** las líneas |
 | `userProfile.admin` | true | Admin total (Empresa: Departamentos/Empleados/Preguntas) |
 | `userProfile.department_id` | 0 | Rol IT (módulo Tickets) |
 
@@ -52,7 +53,9 @@ usuarios, tickets y campañas **preexisten en una base compartida** y no tienen 
 su esquema está documentado en `docs/MIGRATION_EVALUACION.md`.
 
 RLS en tablas de migración: patrón uniforme permisivo (`true`) para rol `authenticated`, **excepto
-`tasks`** que usa policies diferenciadas por nivel (ver §2.3). Realtime habilitado en todas.
+`tasks`** (policies por nivel, §2.3) y **`metric_reports`** (policies por nivel y team, §2.4).
+`metric_lines` y `metric_clients` conservan RLS permisivo (son compartidas por Tareas/Empresa/Ads).
+Realtime habilitado en todas.
 
 ---
 
@@ -105,7 +108,7 @@ RLS en tablas de migración: patrón uniforme permisivo (`true`) para rol `authe
 | **jsonb `metric_lines.metas`** | `{ "reuniones": 15, "tareas": [{ "nombre": "Calendario", "meta": 10 }, ...] }` — Metas de la línea para periodos no guardados. Tienen **prioridad sobre el carry-forward** del mes anterior (pisan `reuniones.meta` y `productividad.tareas`). Los reportes ya guardados quedan congelados. `{}` usa los defaults del código. Se configura en Empresa › Líneas. |
 | **jsonb `metric_reports.data`** | `{ reuniones:{realizadas,meta}, productividad:{tareas:[{nombre,realizado,meta}]}, crecimiento:{items:[{clienteId,seguidoresActuales,seguidoresBase,meta}]}, solicitudes:{solicitudes,editadas}, pautas:{items:[{clienteId,realizadas,meta}]}, piezas:{piezas,editadas}, feedback:{items:[{clienteId,score}]}, finanzas:{ingresos:[],gastosOperativos:[],sueldos:[],otrosGastos:[]} }` |
 | **Rutas** | `/metricas` (Dashboard anual) · `/metricas/linea/:lineId` (reporte de línea) |
-| **Permisos** | Cualquier usuario autenticado |
+| **Permisos** | Acceso al módulo: `access_level ≥ 3` o `admin`. Nivel 3: ve y edita **solo su propia línea** (filtrado en frontend + RLS en `metric_reports`). Nivel 4 y admin: ven y editan todas las líneas. Helper DB: `metrics_user_can_view()` (≥3/admin), `metrics_user_view_all()` (≥4/admin) — ambos `SECURITY DEFINER`. Filtrado de líneas: `visibleLinesForUser(lines, userProfile)` en `src/utils/lineMembers.js`. Migración activa: `20260704000000_metric_reports_team_rls.sql`. |
 | **Estado de captura** | Mayoritariamente manual (inputs en `OperacionesView`/`FinanzasView`). Automatismos: para periodos no guardados → `initMetricReport.js` aplica carry-forward del mes anterior y después sobreescribe con `metric_lines.metas` (la línea tiene prioridad); reconciliación de cartera actual en crecimiento/pautas/feedback e **ingresos** vía `syncReportClients.js`. **Finanzas → Ingresos** se auto-puebla desde `metric_clients.monthly_fee` (sembrar-y-editar: valores conservados por `clienteId`; clientes fuera de línea se descartan; filas manuales `clienteId==null` se conservan). Reportes ya guardados quedan congelados. **No lee de `tasks` ni de `projects`.** |
 
 ### 2.5 Empresa

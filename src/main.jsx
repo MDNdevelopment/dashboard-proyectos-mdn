@@ -43,8 +43,8 @@ createRoot(document.getElementById('root')).render(
             <Route path="/evaluaciones/perfil" element={<EvaluacionesPage />} />
             <Route path="/evaluaciones/empleado/:id" element={<EvaluacionesPage />} />
             <Route path="/evaluaciones/perfil-v2" element={<EvaluacionesPage />} />
-            <Route path="/metricas" element={<MetricasPage />} />
-            <Route path="/metricas/linea/:lineId" element={<MetricasPage />} />
+            <Route path="/reportes" element={<MetricasPage />} />
+            <Route path="/reportes/linea/:lineId" element={<MetricasPage />} />
             <Route path="/*" element={<App />} />
           </Route>
         </Routes>

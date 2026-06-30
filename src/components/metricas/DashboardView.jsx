@@ -178,7 +178,7 @@ export default function DashboardView({ companyId, lines }) {
             {ranking.map(({ line, score }, idx) => (
               <button
                 key={line.id}
-                onClick={() => navigate(`/metricas/linea/${line.id}`)}
+                onClick={() => navigate(`/reportes/linea/${line.id}`)}
                 className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-[#fafaf7] transition-colors text-left"
               >
                 <span className="text-[13px] font-mono text-[#bbb] w-5 flex-shrink-0">{idx + 1}</span>
