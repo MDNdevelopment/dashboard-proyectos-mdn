@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 import { loadReport, loadPrevReport, loadClients, upsertReport } from "./metricsApi";
 import { initMetricReport } from "../../utils/initMetricReport";
 import { syncReportClients } from "../../utils/syncReportClients";
@@ -6,6 +8,8 @@ import { calcTotal, sumScore, crecimientoCliente } from "../../utils/metricsScor
 import { MONTHS, INDICATORS } from "./constants";
 
 export default function OperacionesView({ line, companyId, year, month }) {
+  const navigate = useNavigate();
+  const { can = () => true } = useAuth();
   const [report, setReport] = useState(null);
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -55,6 +59,24 @@ export default function OperacionesView({ line, companyId, year, month }) {
 
   function clientName(clienteId) {
     return clients.find(c => c.id === clienteId)?.name ?? "[Cliente eliminado]";
+  }
+
+  // Renderiza el nombre del cliente como botón navegable a Tareas cuando hay permiso.
+  function ClientLink({ clienteId }) {
+    const name = clientName(clienteId);
+    if (can("tareas") && clienteId) {
+      return (
+        <button
+          type="button"
+          onClick={() => navigate(`/tareas?view=base&team=${line.id}&client=${clienteId}`)}
+          className="text-[14px] text-[#555] truncate hover:text-[#111] hover:underline text-left"
+          title={`Ver tareas de ${name}`}
+        >
+          {name}
+        </button>
+      );
+    }
+    return <span className="text-[14px] text-[#555] truncate">{name}</span>;
   }
 
   // Puntajes en tiempo real
@@ -231,7 +253,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
               const { crecimiento: delta, cumple } = crecimientoCliente(item);
               return (
                 <div key={item.clienteId} className="grid grid-cols-[minmax(100px,1fr)_auto_auto_auto_auto] gap-2 items-center">
-                  <span className="text-[14px] text-[#555] truncate">{clientName(item.clienteId)}</span>
+                  <ClientLink clienteId={item.clienteId} />
                   <div className="flex items-center gap-1">
                     <span className="text-[11px] text-[#aaa] whitespace-nowrap">Base manual</span>
                     <input type="number" className="input-base !w-24 flex-none text-[13px]"
@@ -317,7 +339,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
           ) : (
             report.pautas.items.map((item, idx) => (
               <div key={item.clienteId} className="grid grid-cols-[minmax(100px,1fr)_auto_auto] gap-2 items-center">
-                <span className="text-[14px] text-[#555] truncate">{clientName(item.clienteId)}</span>
+                <ClientLink clienteId={item.clienteId} />
                 <div className="flex items-center gap-1">
                   <span className="text-[11px] text-[#aaa]">Realizadas</span>
                   <input type="number" min="0" className="input-base w-20 text-[13px]"
@@ -375,7 +397,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
           ) : (
             report.feedback.items.map((item, idx) => (
               <div key={item.clienteId} className="grid grid-cols-[minmax(100px,1fr)_auto] gap-2 items-center">
-                <span className="text-[14px] text-[#555] truncate">{clientName(item.clienteId)}</span>
+                <ClientLink clienteId={item.clienteId} />
                 <div className="flex items-center gap-1">
                   <span className="text-[11px] text-[#aaa]">Score (0–10)</span>
                   <input

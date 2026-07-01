@@ -1,28 +1,38 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid,
 } from "recharts";
-import { loadYearReports } from "./metricsApi";
+import { loadYearReports, loadCompanyUsers } from "./metricsApi";
 import { calcTotal, sumScore } from "../../utils/metricsScore";
 import { MONTHS, INDICATORS } from "./constants";
 import ScoreDial from "./ScoreDial";
+import { useAuth } from "../../context/AuthContext";
 
 const CURRENT_YEAR = new Date().getFullYear();
 const CURRENT_MONTH = new Date().getMonth() + 1;
 
 export default function LineHubView({ line, companyId, year = CURRENT_YEAR }) {
+  const navigate = useNavigate();
+  const { can = () => true } = useAuth();
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [teamMembers, setTeamMembers] = useState([]);
 
   const load = useCallback(async () => {
     if (!companyId || !line?.id) return;
     setLoading(true);
-    const { data } = await loadYearReports(companyId, year);
-    setReports((data ?? []).filter(r => r.line_id === line.id));
+    const [{ data: reportsData }, { data: usersData }] = await Promise.all([
+      loadYearReports(companyId, year),
+      loadCompanyUsers(companyId),
+    ]);
+    setReports((reportsData ?? []).filter(r => r.line_id === line.id));
+    const memberIds = line.member_user_ids ?? [];
+    setTeamMembers((usersData ?? []).filter(u => memberIds.includes(u.user_id)));
     setLoading(false);
-  }, [companyId, line?.id, year]);
+  }, [companyId, line?.id, line?.member_user_ids, year]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -195,6 +205,66 @@ export default function LineHubView({ line, companyId, year = CURRENT_YEAR }) {
               ))}
             </BarChart>
           </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Equipo de la línea */}
+      {teamMembers.length > 0 && (
+        <div className="bg-white rounded-2xl border border-[#e0ddd4] px-5 py-4">
+          <p className="text-[13px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] mb-3">
+            Equipo de la línea · {teamMembers.length} {teamMembers.length !== 1 ? "miembros" : "miembro"}
+          </p>
+          <div className="flex flex-wrap gap-3">
+            {teamMembers.map(u => {
+              const name = `${u.first_name} ${u.last_name}`;
+              const initials = `${u.first_name?.[0] ?? ""}${u.last_name?.[0] ?? ""}`.toUpperCase();
+              const canEval = can("evaluaciones");
+              const content = (
+                <>
+                  {u.avatar_url ? (
+                    <img
+                      src={u.avatar_url}
+                      alt={name}
+                      className="w-9 h-9 rounded-full object-cover flex-shrink-0 border border-[#e0ddd4]"
+                    />
+                  ) : (
+                    <div
+                      className="w-9 h-9 rounded-full flex items-center justify-center text-[13px] font-bold text-white flex-shrink-0"
+                      style={{ background: line.color }}
+                    >
+                      {initials}
+                    </div>
+                  )}
+                  <span className="text-[14px] font-medium text-[#333]">{name}</span>
+                  {canEval && (
+                    <svg
+                      width="10" height="10" viewBox="0 0 10 10" fill="none"
+                      stroke="currentColor" strokeWidth="1.8" className="text-[#bbb] flex-shrink-0"
+                    >
+                      <path d="M2 5h6M5 2l3 3-3 3" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
+                </>
+              );
+              return canEval ? (
+                <button
+                  key={u.user_id}
+                  onClick={() => navigate(`/evaluaciones/empleado/${u.user_id}`)}
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl border border-[#e0ddd4] hover:bg-[#fafaf7] hover:border-[#d0ccc0] transition-colors"
+                  title={`Ver evaluación de ${name}`}
+                >
+                  {content}
+                </button>
+              ) : (
+                <div
+                  key={u.user_id}
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl border border-[#e0ddd4]"
+                >
+                  {content}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>

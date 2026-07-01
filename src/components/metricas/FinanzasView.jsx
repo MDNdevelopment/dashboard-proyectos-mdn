@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
 } from "recharts";
@@ -20,6 +22,8 @@ const SECCIONES = [
 ];
 
 export default function FinanzasView({ line, companyId, year, month }) {
+  const navigate = useNavigate();
+  const { can = () => true } = useAuth();
   const [report, setReport] = useState(null);
   const [lineClients, setLineClients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -177,10 +181,21 @@ export default function FinanzasView({ line, companyId, year, month }) {
                 return (
                   <div key={item.id ?? idx} className="flex items-center gap-2">
                     {isClientRow ? (
-                      /* Fila ligada a cliente: nombre solo-lectura */
-                      <span className="flex-1 min-w-0 text-[14px] text-[#333] px-2.5 py-2 bg-[#faf9f5] border border-[#e8e5db] rounded-lg truncate">
-                        {item.descripcion}
-                      </span>
+                      /* Fila ligada a cliente: nombre solo-lectura; clickeable hacia Tareas si hay permiso */
+                      can("tareas") && item.clienteId ? (
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/tareas?view=base&team=${line.id}&client=${item.clienteId}`)}
+                          className="flex-1 min-w-0 text-[14px] text-[#333] px-2.5 py-2 bg-[#faf9f5] border border-[#e8e5db] rounded-lg truncate text-left hover:bg-[#f0ede3] hover:border-[#d0ccc0] transition-colors"
+                          title={`Ver tareas de ${item.descripcion}`}
+                        >
+                          {item.descripcion}
+                        </button>
+                      ) : (
+                        <span className="flex-1 min-w-0 text-[14px] text-[#333] px-2.5 py-2 bg-[#faf9f5] border border-[#e8e5db] rounded-lg truncate">
+                          {item.descripcion}
+                        </span>
+                      )
                     ) : (
                       <input
                         type="text"
