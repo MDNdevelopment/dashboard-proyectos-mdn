@@ -61,10 +61,17 @@ La granularidad es `módulo`, `módulo.tab` y `módulo.acción`:
 
 **Invariantes del evaluador** (`src/lib/permissions.js` → `canAccessModule()` / alias `can()`):
 - Sin reglas configuradas para esa clave → **abierto** (cualquier autenticado pasa).
-- `admin=true` → siempre pasa, sin importar las reglas.
-- Formato de reglas: DNF — array de grupos OR; cada grupo tiene `all: []` (AND de condiciones).
+- `admin=true` → siempre pasa, sin importar las reglas ni las exclusiones.
+- Formato de config guardado en `module_permissions.rules` (jsonb):
+  ```json
+  { "rules": [ { "all": [cond, ...] }, ... ],  "deny": [ cond, ... ] }
+  ```
+- `rules`: DNF — array de grupos OR; cada grupo tiene `all: []` (AND de condiciones).
+- `deny`: lista plana de condiciones (OR). Si el usuario cumple **cualquiera**, queda excluido aunque las `rules` lo permitirían. Se evalúa **después** del check de `admin` y **antes** de las `rules`.
 - Tipos de condición: `min_level`, `department`, `position`, `user`.
-- **Negación por condición (`negate`):** cada condición puede llevar `negate: true` para invertir su resultado (ej. `{ type: 'user', ids: ['uuid'], negate: true }` → ese usuario queda excluido). Guarda crítica: `negate` solo aplica a tipos conocidos; tipo ausente o desconocido siempre devuelve `false` sin invertir (no abre acceso por error). La negación excluye **solo dentro de su propio grupo OR**; si hay otro grupo alternativo que concede acceso, ese grupo sigue funcionando independientemente.
+- **Exclusiones ("todo el mundo menos X"):** usar el bloque `deny` en la UI. Ejemplo: `deny: [{ type: 'department', ids: [5] }]` → todos acceden excepto el departamento 5. Es la forma correcta de expresar "MENOS X".
+- **Negación por condición (`negate`):** soporte interno en el evaluador (retrocompat con datos viejos). No se expone en la UI. Guarda crítica: `negate` solo aplica a tipos conocidos; tipo ausente o desconocido siempre devuelve `false` sin invertir.
+- **Orden de evaluación:** sin perfil → false · admin → true · deny → false · sin rules → true · DNF rules.
 
 **Fuente única de verdad:** el mismo evaluador corre en JS (frontend) y en SQL:
 - JS: `can(capabilityKey)` en `AuthContext` — carga todas las filas de `module_permissions` al login.
@@ -108,6 +115,7 @@ gestiona por capability).
 | `supabase/migrations/20260706000001_rls_capabilities.sql` | Políticas de escritura config-driven |
 | `supabase/migrations/20260706000002_seed_capability_defaults.sql` | Defaults iniciales |
 | `supabase/migrations/20260707000000_user_can_negation.sql` | `create or replace user_can()` con soporte de `negate` |
+| `supabase/migrations/20260708000000_user_can_deny.sql` | `create or replace user_can()` con soporte de exclusiones (`deny`) |
 
 ### Base de datos compartida
 

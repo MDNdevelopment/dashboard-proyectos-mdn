@@ -12,16 +12,26 @@ const COND_TYPES = [
   { value: 'position',   label: 'Cargo / Posición' },
 ]
 
+// Tipos permitidos en el bloque de Exclusiones (solo identidad, no nivel)
+const DENY_COND_TYPES = [
+  { value: 'department', label: 'Departamento' },
+  { value: 'user',       label: 'Usuario específico' },
+  { value: 'position',   label: 'Cargo / Posición' },
+]
+
 const NIVEL_LABELS = { 1: 'Nivel 1', 2: 'Nivel 2', 3: 'Nivel 3', 4: 'Nivel 4' }
 
 function emptyCondition() {
-  return { type: 'department', ids: [], value: 1, negate: false }
+  return { type: 'department', ids: [], value: 1 }
+}
+function emptyDenyCond() {
+  return { type: 'department', ids: [] }
 }
 function emptyGroup() {
   return { all: [emptyCondition()] }
 }
 function emptyRules() {
-  return { rules: [] }
+  return { rules: [], deny: [] }
 }
 
 // ──────────────────────────────────────────────
@@ -85,43 +95,23 @@ function ChipSelect({ options, selected, onChange, placeholder, wrapperClass = '
 
 // ──────────────────────────────────────────────
 // Una condición dentro de un grupo
-// Layout mobile: 2 filas (tipo+toggle+× / valor)
+// Layout mobile: 2 filas (tipo+× / valor)
 // Layout sm+: fila única con flex-wrap
 // ──────────────────────────────────────────────
-function ConditionRow({ cond, onChange, onRemove, departments, users, positions }) {
+function ConditionRow({ cond, onChange, onRemove, departments, users, positions, condTypes = COND_TYPES }) {
   function update(patch) { onChange({ ...cond, ...patch }) }
-
-  const isNegated = cond.negate === true
 
   return (
     <div className="flex flex-col gap-2">
-      {/* Fila 1: toggle + tipo + botón eliminar */}
+      {/* Fila 1: tipo + botón eliminar */}
       <div className="flex items-center gap-2">
-        {/* Toggle es / no es */}
-        <div className="flex rounded-lg border border-[#d4d0c8] overflow-hidden flex-shrink-0 text-[12.5px] font-semibold">
-          <button
-            type="button"
-            onClick={() => update({ negate: false })}
-            className={`px-2.5 py-1.5 transition-colors ${!isNegated ? 'bg-[#111] text-white' : 'bg-white text-[#888] hover:bg-[#f5f3eb]'}`}
-          >
-            es
-          </button>
-          <button
-            type="button"
-            onClick={() => update({ negate: true })}
-            className={`px-2.5 py-1.5 transition-colors border-l border-[#d4d0c8] ${isNegated ? 'bg-[#e00] text-white' : 'bg-white text-[#888] hover:bg-[#fff0f0]'}`}
-          >
-            no es
-          </button>
-        </div>
-
         {/* Selector de tipo */}
         <select
           value={cond.type}
           onChange={e => update({ type: e.target.value, ids: [], value: 1 })}
           className="flex-1 min-w-0 px-3 py-1.5 bg-white border border-[#d4d0c8] rounded-lg text-[13.5px] text-[#444] focus:outline-none focus:border-[#999] transition-colors"
         >
-          {COND_TYPES.map(t => (
+          {condTypes.map(t => (
             <option key={t.value} value={t.value}>{t.label}</option>
           ))}
         </select>
@@ -266,15 +256,29 @@ function CapabilitySection({
   departments, users, positions,
 }) {
   const hasRules = rules.rules.length > 0
+  const deny     = rules.deny ?? []
+  const hasDeny  = deny.length > 0
 
+  // Handlers para grupos de permiso
   function addGroup() {
-    onChange({ rules: [...rules.rules, emptyGroup()] })
+    onChange({ ...rules, rules: [...rules.rules, emptyGroup()] })
   }
   function updateGroup(i, g) {
-    onChange({ rules: rules.rules.map((r, idx) => idx === i ? g : r) })
+    onChange({ ...rules, rules: rules.rules.map((r, idx) => idx === i ? g : r) })
   }
   function removeGroup(i) {
-    onChange({ rules: rules.rules.filter((_, idx) => idx !== i) })
+    onChange({ ...rules, rules: rules.rules.filter((_, idx) => idx !== i) })
+  }
+
+  // Handlers para exclusiones (deny)
+  function addDeny() {
+    onChange({ ...rules, deny: [...deny, emptyDenyCond()] })
+  }
+  function updateDeny(i, patch) {
+    onChange({ ...rules, deny: deny.map((c, idx) => idx === i ? { ...c, ...patch } : c) })
+  }
+  function removeDeny(i) {
+    onChange({ ...rules, deny: deny.filter((_, idx) => idx !== i) })
   }
 
   return (
@@ -303,8 +307,8 @@ function CapabilitySection({
           <span className="hidden sm:inline text-[12px] font-mono text-[#ccc] truncate">{capKey}</span>
         </div>
 
-        {/* Derecha: badge estado + botón guardar */}
-        <div className="flex items-center gap-2 flex-shrink-0">
+        {/* Derecha: chips de estado + botón guardar */}
+        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
           {hasRules ? (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#fff3cd] text-[11.5px] font-semibold text-[#8a6300]">
               <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="7" width="10" height="8" rx="1.5"/><path d="M5 7V5a3 3 0 0 1 6 0v2" strokeLinecap="round"/><circle cx="8" cy="11" r="1" fill="currentColor" stroke="none"/></svg>
@@ -314,6 +318,12 @@ function CapabilitySection({
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#e8f5e9] text-[11.5px] font-semibold text-[#2e7d32]">
               <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="8" cy="8" r="6.5"/><path d="M5 8.5l2 2 4-4" strokeLinecap="round" strokeLinejoin="round"/></svg>
               Acceso libre
+            </span>
+          )}
+          {hasDeny && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#fff0f0] text-[11.5px] font-semibold text-[#cc0000]">
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="8" cy="8" r="6.5"/><path d="M5 8h6" strokeLinecap="round"/></svg>
+              {deny.length} {deny.length === 1 ? 'exclusión' : 'exclusiones'}
             </span>
           )}
           <button
@@ -327,7 +337,7 @@ function CapabilitySection({
         </div>
       </div>
 
-      {/* Grupos OR */}
+      {/* Grupos OR (reglas de permiso) */}
       <div className="space-y-3">
         {!hasRules && (
           <p className="text-[13.5px] text-[#aaa] py-1">
@@ -367,6 +377,60 @@ function CapabilitySection({
             <path d="M8 3v10M3 8h10" strokeLinecap="round"/>
           </svg>
           {hasRules ? 'Agregar grupo alternativo (O)' : 'Agregar restricción'}
+        </button>
+      </div>
+
+      {/* ── Bloque de Exclusiones ────────────────────────────────────────── */}
+      <div className="mt-4 pt-4 border-t border-[#f0ede3]">
+        {/* Encabezado del bloque */}
+        <div className="flex items-center gap-2 mb-2">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#cc0000" strokeWidth="2" className="flex-shrink-0">
+            <circle cx="8" cy="8" r="6.5"/><path d="M5 8h6" strokeLinecap="round"/>
+          </svg>
+          <span className="text-[12px] font-mono font-bold tracking-widest uppercase text-[#cc0000]">
+            Exclusiones
+          </span>
+        </div>
+        <p className="text-[12.5px] text-[#999] mb-3 leading-relaxed">
+          Quién <strong>nunca</strong> puede acceder, aunque cumpla las reglas de arriba. Los administradores siempre acceden sin importar estas exclusiones.
+        </p>
+
+        {/* Lista de condiciones deny */}
+        {deny.length > 0 && (
+          <div className="space-y-2 mb-3 p-3 bg-[#fff8f8] border border-[#ffd0d0] rounded-xl">
+            {deny.map((cond, i) => (
+              <div key={i}>
+                {i > 0 && (
+                  <div className="flex items-center gap-2 my-1.5">
+                    <div className="h-px flex-1 bg-[#ffd0d0]" />
+                    <span className="text-[11px] font-mono font-bold text-[#cc0000] uppercase tracking-widest">O</span>
+                    <div className="h-px flex-1 bg-[#ffd0d0]" />
+                  </div>
+                )}
+                <ConditionRow
+                  cond={cond}
+                  onChange={patch => updateDeny(i, patch)}
+                  onRemove={() => removeDeny(i)}
+                  departments={departments}
+                  users={users}
+                  positions={positions}
+                  condTypes={DENY_COND_TYPES}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Botón agregar exclusión */}
+        <button
+          type="button"
+          onClick={addDeny}
+          className="flex items-center gap-2 text-[13px] font-medium text-[#cc0000] border border-dashed border-[#ffd0d0] rounded-lg px-4 py-2 w-full hover:border-[#cc0000] hover:bg-[#fff0f0] transition-colors"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M8 3v10M3 8h10" strokeLinecap="round"/>
+          </svg>
+          Agregar exclusión
         </button>
       </div>
     </div>
@@ -434,7 +498,11 @@ export default function PermisosView({ companyId }) {
         base[cap.key] = emptyRules()
       })
     })
-    dbRows.forEach(row => { base[row.module_key] = row.rules })
+    dbRows.forEach(row => {
+      // Normalizar: garantizar que deny siempre sea array (retrocompat con filas viejas)
+      const config = row.rules ?? {}
+      base[row.module_key] = { rules: config.rules ?? [], deny: config.deny ?? [] }
+    })
     return base
   }, [])
 
@@ -517,9 +585,11 @@ export default function PermisosView({ companyId }) {
             eliminar). Por capacidad podés crear <strong>grupos de condiciones</strong>: el usuario accede si
             cumple <strong>cualquier grupo completo</strong> (lógica <strong>O</strong>). Dentro de cada
             grupo, todas las condiciones deben cumplirse (lógica <strong>Y</strong>). Sin reglas = acceso
-            libre. Los administradores siempre tienen acceso.{' '}
-            Cada condición puede marcarse como <strong>no es</strong> para invertirla (ej. «usuario
-            NO es Juan»); la exclusión aplica solo dentro de su grupo.
+            libre.{' '}
+            Usá el bloque de <strong>Exclusiones</strong> para bloquear a departamentos, usuarios o cargos
+            específicos (ej. «todo el mundo menos Diseño»): si alguien cumple <strong>cualquier</strong>{' '}
+            exclusión, no puede acceder aunque las reglas lo permitan.{' '}
+            Los administradores siempre tienen acceso, sin excepción.
           </p>
         </div>
       </div>
