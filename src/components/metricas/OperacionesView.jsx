@@ -148,7 +148,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
         score={scores?.reuniones}
         max={INDICATORS[0].peso}
       >
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Realizadas">
             <input type="number" min="0" className="input-base"
               value={report.reuniones.realizadas ?? ""}
@@ -285,7 +285,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
         score={scores?.solicitudes}
         max={INDICATORS[3].peso}
       >
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Solicitudes recibidas">
             <input type="number" min="0" className="input-base"
               value={report.solicitudes.solicitudes ?? ""}
@@ -342,7 +342,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
         score={scores?.piezas}
         max={INDICATORS[5].peso}
       >
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Piezas totales">
             <input type="number" min="0" className="input-base"
               value={report.piezas.piezas ?? ""}

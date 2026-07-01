@@ -92,7 +92,7 @@ export default function LineHubView({ line, companyId, year = CURRENT_YEAR }) {
   return (
     <div className="space-y-5">
       {/* KPIs */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="bg-white rounded-2xl border border-[#e0ddd4] px-5 py-4 flex flex-col items-center justify-center">
           <ScoreDial score={lastScore ?? 0} color={line.color} size={140} />
           <p className="text-[13px] font-mono font-bold uppercase tracking-[0.1em] text-[#888] mt-2">
@@ -115,7 +115,7 @@ export default function LineHubView({ line, companyId, year = CURRENT_YEAR }) {
               return (
                 <div key={ind.key} className="flex items-center gap-2">
                   <span className="text-[12px] font-mono text-[#888] w-[90px] flex-shrink-0">{ind.short}</span>
-                  <div className="flex-1 h-1.5 bg-[#f0ede3] rounded-full overflow-hidden">
+                  <div className="flex-1 min-w-0 h-1.5 bg-[#f0ede3] rounded-full overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all"
                       style={{ width: `${Math.min(100, pct)}%`, background: INDICATOR_COLORS[i] }}
