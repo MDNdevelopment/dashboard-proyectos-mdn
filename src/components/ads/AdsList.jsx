@@ -154,7 +154,7 @@ export default function AdsList({ campaigns, loading, canManage, usersMap, clien
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Buscar táctica, cliente, responsable..."
-          className="input-base text-[14px] py-1.5 flex-1 min-w-[200px]"
+          className="input-base text-[14px] py-1.5 flex-1 min-w-[160px] sm:min-w-[200px]"
         />
         <div className="flex gap-2">
           <select

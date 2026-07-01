@@ -119,7 +119,7 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-5 overflow-y-auto flex-1">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Fecha inicio */}
             <div>
               <label className={labelClass}>Fecha inicio</label>
@@ -145,7 +145,7 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
             </div>
 
             {/* Táctica — full width */}
-            <div className="col-span-2">
+            <div className="col-span-1 sm:col-span-2">
               <label className={labelClass}>Táctica / Campaña</label>
               <input
                 type="text"
@@ -230,7 +230,7 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
             </div>
 
             {/* Notas — full width */}
-            <div className="col-span-2">
+            <div className="col-span-1 sm:col-span-2">
               <label className={labelClass}>Notas</label>
               <textarea
                 className="input-base w-full resize-none"
