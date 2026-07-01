@@ -160,7 +160,7 @@ export default function VacationsDialog({ employee, onClose }) {
                 {formError && (
                   <p className="text-[14px] text-red-600">{formError}</p>
                 )}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1">
                       Inicio *

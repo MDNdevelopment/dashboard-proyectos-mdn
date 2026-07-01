@@ -194,7 +194,7 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
           </div>
 
           {/* Día de pago + Mensualidad — fila */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
                 Día de pago
@@ -240,7 +240,7 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
           </div>
 
           {/* Aniversario + Cliente desde MDN */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
                 Aniversario empresa
@@ -308,7 +308,7 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
                         </svg>
                       </button>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <div>
                         <p className="text-[11.5px] font-mono text-[#aaa] uppercase tracking-wide mb-1">Cargo</p>
                         <input
