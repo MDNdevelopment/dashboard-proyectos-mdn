@@ -3,8 +3,10 @@ import { MemoryRouter } from 'react-router-dom'
 import { vi } from 'vitest'
 
 // ── Datos de prueba ────────────────────────────────────────────────────────────
+const USER_ID_MEMBER = 'u-mgr'
+
 const MOCK_LINES = [
-  { id: 'line-1', company_id: 'co-1', name: 'Georgina',  color: '#FAB51A', sort_order: 0, member_user_ids: [] },
+  { id: 'line-1', company_id: 'co-1', name: 'Georgina',  color: '#FAB51A', sort_order: 0, member_user_ids: [USER_ID_MEMBER] },
   { id: 'line-2', company_id: 'co-1', name: 'Daniellys', color: '#3B82F6', sort_order: 1, member_user_ids: [] },
 ]
 
@@ -67,13 +69,18 @@ vi.mock('../context/AuthContext', () => ({
 import { useAuth } from '../context/AuthContext'
 import TareasPage from '../pages/TareasPage'
 
-function renderPage() {
+/**
+ * Renderiza TareasPage con un userProfile configurable.
+ * @param {object} profileOverride - Propiedades a sobreescribir en el userProfile base.
+ */
+function renderPage(profileOverride = {}) {
   useAuth.mockReturnValue({
     userProfile: {
-      user_id: 'u-mgr',
+      user_id: USER_ID_MEMBER,
       company_id: 'co-1',
       access_level: 2,
       admin: false,
+      ...profileOverride,
     },
   })
   return render(
@@ -98,16 +105,46 @@ describe('TareasPage — líneas desde metric_lines', () => {
     })
   })
 
-  it('renderiza los chips de las líneas cargadas', async () => {
-    renderPage()
+  // Caso 1 — Nivel 4: ve TODAS las líneas
+  it('nivel 4 ve todas las líneas (Georgina y Daniellys)', async () => {
+    renderPage({ access_level: 4, user_id: 'u-otro' })
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Georgina' })).toBeInTheDocument()
     })
     expect(screen.getByRole('button', { name: 'Daniellys' })).toBeInTheDocument()
   })
 
+  // Caso 1 — admin=true: ve TODAS las líneas
+  it('admin ve todas las líneas (Georgina y Daniellys)', async () => {
+    renderPage({ admin: true, access_level: 1, user_id: 'u-otro' })
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Georgina' })).toBeInTheDocument()
+    })
+    expect(screen.getByRole('button', { name: 'Daniellys' })).toBeInTheDocument()
+  })
+
+  // Caso 2 — Nivel 2 miembro de line-1: ve solo Georgina, no Daniellys
+  it('nivel 2 miembro de line-1 ve solo Georgina, no Daniellys', async () => {
+    // USER_ID_MEMBER está en member_user_ids de line-1 (ver MOCK_LINES)
+    renderPage({ access_level: 2, admin: false, user_id: USER_ID_MEMBER })
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Georgina' })).toBeInTheDocument()
+    })
+    expect(screen.queryByRole('button', { name: 'Daniellys' })).not.toBeInTheDocument()
+  })
+
+  // Caso 3 — Nivel 2 sin membresía en ninguna línea: muestra empty state
+  it('nivel 2 sin membresía muestra estado vacío "No hay líneas creadas"', async () => {
+    renderPage({ access_level: 2, admin: false, user_id: 'u-sin-linea' })
+    await waitFor(() => {
+      expect(screen.getByText('No hay líneas creadas')).toBeInTheDocument()
+    })
+    expect(screen.getByText(/Empresa → Líneas/)).toBeInTheDocument()
+  })
+
+  // Verificaciones de ausencia de UI legacy (usan nivel 4 para garantizar que haya chips)
   it('no muestra el botón "Gestionar teams"', async () => {
-    renderPage()
+    renderPage({ access_level: 4 })
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Georgina' })).toBeInTheDocument()
     })
@@ -115,7 +152,7 @@ describe('TareasPage — líneas desde metric_lines', () => {
   })
 
   it('no muestra el modal de gestión de teams', async () => {
-    renderPage()
+    renderPage({ access_level: 4 })
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Georgina' })).toBeInTheDocument()
     })
