@@ -52,7 +52,7 @@ export default function TicketList({ tickets, loading, onSelect, isIT }) {
         />
       </div>
       {/* Filters */}
-      <div className="grid grid-cols-3 gap-2 mb-2">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
         <select
           value={filterStatus}
           onChange={e => setFilterStatus(e.target.value)}
