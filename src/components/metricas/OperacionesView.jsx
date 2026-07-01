@@ -222,7 +222,8 @@ export default function OperacionesView({ line, companyId, year, month }) {
         score={scores?.crecimiento}
         max={INDICATORS[2].peso}
       >
-        <div className="space-y-2">
+        <div className="overflow-x-auto">
+        <div className="space-y-2 min-w-[480px]">
           {report.crecimiento.items.length === 0 ? (
             <p className="text-[14px] text-[#bbb]">Sin clientes. Configurá la cartera en la pestaña Configuración.</p>
           ) : (
@@ -276,6 +277,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
             })
           )}
         </div>
+        </div>
       </Section>
 
       {/* 4. SOLICITUDES */}
@@ -308,7 +310,8 @@ export default function OperacionesView({ line, companyId, year, month }) {
         score={scores?.pautas}
         max={INDICATORS[4].peso}
       >
-        <div className="space-y-2">
+        <div className="overflow-x-auto">
+        <div className="space-y-2 min-w-[320px]">
           {report.pautas.items.length === 0 ? (
             <p className="text-[14px] text-[#bbb]">Sin clientes configurados.</p>
           ) : (
@@ -332,6 +335,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
               </div>
             ))
           )}
+        </div>
         </div>
       </Section>
 
