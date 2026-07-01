@@ -290,6 +290,145 @@ describe('capacidades granulares — empresa (escenario del usuario)', () => {
 })
 
 // ──────────────────────────────────────────────
+// Negación de condiciones (flag negate: true)
+// ──────────────────────────────────────────────
+describe('negación de condiciones', () => {
+  // ── department negado ──────────────────────
+  describe('department negado', () => {
+    // Regla única: "Departamento NO es depto 10" → todos salvo depto 10
+    const config = {
+      ads: { rules: [{ all: [{ type: 'department', ids: [10], negate: true }] }] },
+    }
+
+    it('usuario en depto 10 NO pasa (excluido por negación)', () => {
+      expect(canAccessModule('ads', BASE_USER, config)).toBe(false) // department_id=10
+    })
+
+    it('usuario en otro depto SÍ pasa', () => {
+      expect(canAccessModule('ads', OTHER_DEPT_USER, config)).toBe(true) // department_id=99
+    })
+  })
+
+  // ── user negado combinado con AND ──────────
+  describe('user negado + AND (caso "usuario específico no puede verlo")', () => {
+    // Regla: nivel ≥ 2  Y  usuario NO es user-1
+    const config = {
+      ads: {
+        rules: [{
+          all: [
+            { type: 'min_level', value: 2 },
+            { type: 'user', ids: ['user-1'], negate: true },
+          ],
+        }],
+      },
+    }
+
+    it('nivel 2, usuario diferente → pasa', () => {
+      const u = { ...LEVEL2_USER, user_id: 'user-99' }
+      expect(canAccessModule('ads', u, config)).toBe(true)
+    })
+
+    it('nivel 2, usuario excluido (user-1) → no pasa', () => {
+      expect(canAccessModule('ads', LEVEL2_USER, config)).toBe(false) // user_id='user-1'
+    })
+
+    it('nivel 1, usuario diferente → no pasa (falla min_level)', () => {
+      const u = { ...BASE_USER, user_id: 'user-99' }
+      expect(canAccessModule('ads', u, config)).toBe(false)
+    })
+  })
+
+  // ── min_level negado ───────────────────────
+  describe('min_level negado', () => {
+    // "NOT nivel ≥ 3" → solo pasan niveles 1 y 2
+    const config = {
+      ads: { rules: [{ all: [{ type: 'min_level', value: 3, negate: true }] }] },
+    }
+
+    it('nivel 1 pasa (nivel < 3, negación invierte)', () => {
+      expect(canAccessModule('ads', BASE_USER, config)).toBe(true)
+    })
+
+    it('nivel 2 pasa', () => {
+      expect(canAccessModule('ads', LEVEL2_USER, config)).toBe(true)
+    })
+
+    it('nivel 3 NO pasa (cumplía la condición original, negación la invierte)', () => {
+      expect(canAccessModule('ads', LEVEL3_USER, config)).toBe(false)
+    })
+  })
+
+  // ── position negado ────────────────────────
+  describe('position negado', () => {
+    // "Cargo NO es posición 20"
+    const config = {
+      ads: { rules: [{ all: [{ type: 'position', ids: [20], negate: true }] }] },
+    }
+
+    it('usuario con position_id=20 NO pasa', () => {
+      expect(canAccessModule('ads', BASE_USER, config)).toBe(false) // position_id=20
+    })
+
+    it('usuario con otro cargo SÍ pasa', () => {
+      const u = { ...BASE_USER, position_id: 99 }
+      expect(canAccessModule('ads', u, config)).toBe(true)
+    })
+  })
+
+  // ── Semántica O: negación excluye solo dentro de su grupo ──
+  describe('semántica O — negación no es exclusión global', () => {
+    // Grupo 1: nivel ≥ 2  Y  usuario NO es user-1
+    // Grupo 2 (O): usuario es user-1
+    // → user-1 sigue entrando por el grupo 2
+    const config = {
+      ads: {
+        rules: [
+          { all: [{ type: 'min_level', value: 2 }, { type: 'user', ids: ['user-1'], negate: true }] },
+          { all: [{ type: 'user', ids: ['user-1'] }] },
+        ],
+      },
+    }
+
+    it('usuario excluido en grupo 1 igual entra por grupo 2 (O)', () => {
+      expect(canAccessModule('ads', LEVEL2_USER, config)).toBe(true) // user-1 admitido por grupo 2
+    })
+
+    it('un usuario sin concesión alternativa no entra si no cumple ningún grupo', () => {
+      const u = { ...BASE_USER, user_id: 'nadie', access_level: 1 }
+      expect(canAccessModule('ads', u, config)).toBe(false)
+    })
+  })
+
+  // ── Guarda de tipo desconocido: negate NO invierte false de tipo desconocido ──
+  describe('guarda de seguridad — tipo desconocido con negate no abre acceso', () => {
+    it('{ type: "unknown", negate: true } → false (NO se invierte a true)', () => {
+      const config = { ads: { rules: [{ all: [{ type: 'unknown', ids: ['x'], negate: true }] }] } }
+      expect(canAccessModule('ads', BASE_USER, config)).toBe(false)
+    })
+
+    it('{ type ausente, negate: true } → false', () => {
+      const config = { ads: { rules: [{ all: [{ negate: true }] }] } }
+      expect(canAccessModule('ads', BASE_USER, config)).toBe(false)
+    })
+  })
+
+  // ── Compatibilidad: condición sin negate se comporta como antes ──
+  describe('compatibilidad hacia atrás — sin negate igual que antes', () => {
+    it('department sin negate sigue funcionando', () => {
+      const config = { ads: { rules: [{ all: [{ type: 'department', ids: [10] }] }] } }
+      expect(canAccessModule('ads', BASE_USER, config)).toBe(true)
+      expect(canAccessModule('ads', OTHER_DEPT_USER, config)).toBe(false)
+    })
+
+    it('min_level sin negate sigue funcionando', () => {
+      const config = { ads: { rules: [{ all: [{ type: 'min_level', value: 2 }] }] } }
+      expect(canAccessModule('ads', BASE_USER, config)).toBe(false)
+      expect(canAccessModule('ads', LEVEL2_USER, config)).toBe(true)
+    })
+  })
+})
+
+// ──────────────────────────────────────────────
 // Claves granulares para otros módulos
 // ──────────────────────────────────────────────
 describe('capacidades granulares — tareas (tabs por nivel)', () => {

@@ -64,6 +64,7 @@ La granularidad es `módulo`, `módulo.tab` y `módulo.acción`:
 - `admin=true` → siempre pasa, sin importar las reglas.
 - Formato de reglas: DNF — array de grupos OR; cada grupo tiene `all: []` (AND de condiciones).
 - Tipos de condición: `min_level`, `department`, `position`, `user`.
+- **Negación por condición (`negate`):** cada condición puede llevar `negate: true` para invertir su resultado (ej. `{ type: 'user', ids: ['uuid'], negate: true }` → ese usuario queda excluido). Guarda crítica: `negate` solo aplica a tipos conocidos; tipo ausente o desconocido siempre devuelve `false` sin invertir (no abre acceso por error). La negación excluye **solo dentro de su propio grupo OR**; si hay otro grupo alternativo que concede acceso, ese grupo sigue funcionando independientemente.
 
 **Fuente única de verdad:** el mismo evaluador corre en JS (frontend) y en SQL:
 - JS: `can(capabilityKey)` en `AuthContext` — carga todas las filas de `module_permissions` al login.
@@ -103,9 +104,10 @@ gestiona por capability).
 | `src/context/AuthContext.jsx` | Carga `module_permissions`, expone `can()` |
 | `src/components/empresa/PermisosView.jsx` | UI de configuración (una card por capacidad) |
 | `src/components/RequireModule.jsx` | Guard de acceso al módulo completo |
-| `supabase/migrations/20260706000000_user_can_evaluator.sql` | Función SQL `user_can()` |
+| `supabase/migrations/20260706000000_user_can_evaluator.sql` | Función SQL `user_can()` original |
 | `supabase/migrations/20260706000001_rls_capabilities.sql` | Políticas de escritura config-driven |
 | `supabase/migrations/20260706000002_seed_capability_defaults.sql` | Defaults iniciales |
+| `supabase/migrations/20260707000000_user_can_negation.sql` | `create or replace user_can()` con soporte de `negate` |
 
 ### Base de datos compartida
 

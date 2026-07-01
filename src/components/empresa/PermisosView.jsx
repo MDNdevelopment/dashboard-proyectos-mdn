@@ -15,7 +15,7 @@ const COND_TYPES = [
 const NIVEL_LABELS = { 1: 'Nivel 1', 2: 'Nivel 2', 3: 'Nivel 3', 4: 'Nivel 4' }
 
 function emptyCondition() {
-  return { type: 'department', ids: [], value: 1 }
+  return { type: 'department', ids: [], value: 1, negate: false }
 }
 function emptyGroup() {
   return { all: [emptyCondition()] }
@@ -89,8 +89,28 @@ function ChipSelect({ options, selected, onChange, placeholder }) {
 function ConditionRow({ cond, onChange, onRemove, departments, users, positions }) {
   function update(patch) { onChange({ ...cond, ...patch }) }
 
+  const isNegated = cond.negate === true
+
   return (
     <div className="flex items-start gap-2 flex-wrap">
+      {/* Toggle es / no es */}
+      <div className="flex rounded-lg border border-[#d4d0c8] overflow-hidden flex-shrink-0 text-[12.5px] font-semibold">
+        <button
+          type="button"
+          onClick={() => update({ negate: false })}
+          className={`px-2.5 py-1.5 transition-colors ${!isNegated ? 'bg-[#111] text-white' : 'bg-white text-[#888] hover:bg-[#f5f3eb]'}`}
+        >
+          es
+        </button>
+        <button
+          type="button"
+          onClick={() => update({ negate: true })}
+          className={`px-2.5 py-1.5 transition-colors border-l border-[#d4d0c8] ${isNegated ? 'bg-[#e00] text-white' : 'bg-white text-[#888] hover:bg-[#fff0f0]'}`}
+        >
+          no es
+        </button>
+      </div>
+
       {/* Selector de tipo */}
       <select
         value={cond.type}
@@ -487,7 +507,10 @@ export default function PermisosView({ companyId }) {
             cumple <strong>cualquier grupo completo</strong> (lógica <strong>O</strong>). Dentro de cada
             grupo, todas las condiciones deben cumplirse (lógica <strong>Y</strong>). Sin reglas = acceso
             libre. Los administradores siempre tienen acceso, sin importar las reglas. Los cambios de RLS
-            (base de datos) se aplican a las acciones de <em>Modificar</em>.
+            (base de datos) se aplican a las acciones de <em>Modificar</em>.{' '}
+            Cada condición puede marcarse como <strong>no es</strong> para invertirla (ej. «usuario
+            NO es Juan»). Tené en cuenta que la exclusión aplica dentro de su grupo: si hay otro grupo
+            alternativo que concede acceso, ese grupo sigue funcionando.
           </p>
         </div>
       </div>

@@ -6,10 +6,14 @@
  *   grupo.all   = [condición1, condición2] ← AND dentro del grupo
  *
  * Tipos de condición:
- *   { type: 'department', ids: [number] }   → department_id ∈ ids
- *   { type: 'min_level',  value: number }   → access_level >= value
- *   { type: 'user',       ids: [string] }   → user_id ∈ ids
- *   { type: 'position',   ids: [number] }   → position_id ∈ ids
+ *   { type: 'department', ids: [number], negate?: boolean }   → department_id ∈ ids
+ *   { type: 'min_level',  value: number, negate?: boolean }   → access_level >= value
+ *   { type: 'user',       ids: [string], negate?: boolean }   → user_id ∈ ids
+ *   { type: 'position',   ids: [number], negate?: boolean }   → position_id ∈ ids
+ *
+ * Negación: cuando negate === true el resultado de la condición se invierte.
+ * IMPORTANTE: negate solo aplica a tipos conocidos; tipo ausente/desconocido
+ * siempre devuelve false sin invertir (para no abrir acceso por error).
  *
  * Defaults:
  *   - Si userProfile es null/undefined → false
@@ -60,22 +64,31 @@ function groupPasses(group, userProfile) {
 }
 
 function matchCondition(cond, userProfile) {
+  // Tipo ausente → false, NO se invierte (evita apertura por error)
   if (!cond?.type) return false
 
+  let res
   switch (cond.type) {
     case 'department':
-      return Array.isArray(cond.ids) && cond.ids.includes(userProfile.department_id)
+      res = Array.isArray(cond.ids) && cond.ids.includes(userProfile.department_id)
+      break
 
     case 'min_level':
-      return (userProfile.access_level ?? 1) >= (cond.value ?? 1)
+      res = (userProfile.access_level ?? 1) >= (cond.value ?? 1)
+      break
 
     case 'user':
-      return Array.isArray(cond.ids) && cond.ids.includes(userProfile.user_id)
+      res = Array.isArray(cond.ids) && cond.ids.includes(userProfile.user_id)
+      break
 
     case 'position':
-      return Array.isArray(cond.ids) && cond.ids.includes(userProfile.position_id)
+      res = Array.isArray(cond.ids) && cond.ids.includes(userProfile.position_id)
+      break
 
     default:
+      // Tipo desconocido → false, NO se invierte
       return false
   }
+
+  return cond.negate ? !res : res
 }
