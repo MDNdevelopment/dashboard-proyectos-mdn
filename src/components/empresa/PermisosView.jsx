@@ -27,7 +27,7 @@ function emptyRules() {
 // ──────────────────────────────────────────────
 // MultiSelect pequeño (chips)
 // ──────────────────────────────────────────────
-function ChipSelect({ options, selected, onChange, placeholder }) {
+function ChipSelect({ options, selected, onChange, placeholder, wrapperClass = '' }) {
   const [open, setOpen] = useState(false)
 
   function toggle(id) {
@@ -40,11 +40,11 @@ function ChipSelect({ options, selected, onChange, placeholder }) {
     .map(o => o.label)
 
   return (
-    <div className="relative">
+    <div className={`relative ${wrapperClass}`}>
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-[#d4d0c8] rounded-lg text-[13.5px] text-[#444] hover:border-[#aaa] transition-colors min-w-[140px] text-left"
+        className="flex items-center gap-1.5 w-full px-3 py-1.5 bg-white border border-[#d4d0c8] rounded-lg text-[13.5px] text-[#444] hover:border-[#aaa] transition-colors text-left"
       >
         <span className="flex-1 truncate">
           {selectedLabels.length === 0
@@ -56,7 +56,7 @@ function ChipSelect({ options, selected, onChange, placeholder }) {
         </svg>
       </button>
       {open && (
-        <div className="absolute z-20 mt-1 min-w-[180px] bg-white border border-[#d4d0c8] rounded-xl shadow-lg overflow-hidden">
+        <div className="absolute z-20 mt-1 w-full min-w-[160px] bg-white border border-[#d4d0c8] rounded-xl shadow-lg overflow-hidden">
           {options.length === 0 && (
             <p className="px-3 py-2 text-[13px] text-[#aaa]">Sin opciones</p>
           )}
@@ -85,6 +85,8 @@ function ChipSelect({ options, selected, onChange, placeholder }) {
 
 // ──────────────────────────────────────────────
 // Una condición dentro de un grupo
+// Layout mobile: 2 filas (tipo+toggle+× / valor)
+// Layout sm+: fila única con flex-wrap
 // ──────────────────────────────────────────────
 function ConditionRow({ cond, onChange, onRemove, departments, users, positions }) {
   function update(patch) { onChange({ ...cond, ...patch }) }
@@ -92,43 +94,59 @@ function ConditionRow({ cond, onChange, onRemove, departments, users, positions 
   const isNegated = cond.negate === true
 
   return (
-    <div className="flex items-start gap-2 flex-wrap">
-      {/* Toggle es / no es */}
-      <div className="flex rounded-lg border border-[#d4d0c8] overflow-hidden flex-shrink-0 text-[12.5px] font-semibold">
+    <div className="flex flex-col gap-2">
+      {/* Fila 1: toggle + tipo + botón eliminar */}
+      <div className="flex items-center gap-2">
+        {/* Toggle es / no es */}
+        <div className="flex rounded-lg border border-[#d4d0c8] overflow-hidden flex-shrink-0 text-[12.5px] font-semibold">
+          <button
+            type="button"
+            onClick={() => update({ negate: false })}
+            className={`px-2.5 py-1.5 transition-colors ${!isNegated ? 'bg-[#111] text-white' : 'bg-white text-[#888] hover:bg-[#f5f3eb]'}`}
+          >
+            es
+          </button>
+          <button
+            type="button"
+            onClick={() => update({ negate: true })}
+            className={`px-2.5 py-1.5 transition-colors border-l border-[#d4d0c8] ${isNegated ? 'bg-[#e00] text-white' : 'bg-white text-[#888] hover:bg-[#fff0f0]'}`}
+          >
+            no es
+          </button>
+        </div>
+
+        {/* Selector de tipo */}
+        <select
+          value={cond.type}
+          onChange={e => update({ type: e.target.value, ids: [], value: 1 })}
+          className="flex-1 min-w-0 px-3 py-1.5 bg-white border border-[#d4d0c8] rounded-lg text-[13.5px] text-[#444] focus:outline-none focus:border-[#999] transition-colors"
+        >
+          {COND_TYPES.map(t => (
+            <option key={t.value} value={t.value}>{t.label}</option>
+          ))}
+        </select>
+
+        {/* Eliminar condición */}
         <button
           type="button"
-          onClick={() => update({ negate: false })}
-          className={`px-2.5 py-1.5 transition-colors ${!isNegated ? 'bg-[#111] text-white' : 'bg-white text-[#888] hover:bg-[#f5f3eb]'}`}
+          onClick={onRemove}
+          title="Eliminar condición"
+          className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-[#bbb] hover:text-[#e00] hover:bg-[#fff0f0] transition-colors"
         >
-          es
-        </button>
-        <button
-          type="button"
-          onClick={() => update({ negate: true })}
-          className={`px-2.5 py-1.5 transition-colors border-l border-[#d4d0c8] ${isNegated ? 'bg-[#e00] text-white' : 'bg-white text-[#888] hover:bg-[#fff0f0]'}`}
-        >
-          no es
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <path d="M3 3l10 10M13 3L3 13" strokeLinecap="round"/>
+          </svg>
         </button>
       </div>
 
-      {/* Selector de tipo */}
-      <select
-        value={cond.type}
-        onChange={e => update({ type: e.target.value, ids: [], value: 1 })}
-        className="px-3 py-1.5 bg-white border border-[#d4d0c8] rounded-lg text-[13.5px] text-[#444] focus:outline-none focus:border-[#999] transition-colors"
-      >
-        {COND_TYPES.map(t => (
-          <option key={t.value} value={t.value}>{t.label}</option>
-        ))}
-      </select>
-
-      {/* Selector de valor según tipo */}
+      {/* Fila 2: selector de valor (ocupa todo el ancho) */}
       {cond.type === 'department' && (
         <ChipSelect
           options={departments.map(d => ({ value: d.department_id, label: d.department_name }))}
           selected={cond.ids ?? []}
           onChange={ids => update({ ids })}
           placeholder="Seleccionar..."
+          wrapperClass="w-full"
         />
       )}
 
@@ -136,7 +154,7 @@ function ConditionRow({ cond, onChange, onRemove, departments, users, positions 
         <select
           value={cond.value ?? 1}
           onChange={e => update({ value: Number(e.target.value) })}
-          className="px-3 py-1.5 bg-white border border-[#d4d0c8] rounded-lg text-[13.5px] text-[#444] focus:outline-none focus:border-[#999]"
+          className="w-full sm:w-auto px-3 py-1.5 bg-white border border-[#d4d0c8] rounded-lg text-[13.5px] text-[#444] focus:outline-none focus:border-[#999]"
         >
           {[1, 2, 3, 4].map(n => (
             <option key={n} value={n}>{NIVEL_LABELS[n]}</option>
@@ -150,6 +168,7 @@ function ConditionRow({ cond, onChange, onRemove, departments, users, positions 
           selected={cond.ids ?? []}
           onChange={ids => update({ ids })}
           placeholder="Seleccionar usuario..."
+          wrapperClass="w-full"
         />
       )}
 
@@ -159,20 +178,9 @@ function ConditionRow({ cond, onChange, onRemove, departments, users, positions 
           selected={cond.ids ?? []}
           onChange={ids => update({ ids })}
           placeholder="Seleccionar cargo..."
+          wrapperClass="w-full"
         />
       )}
-
-      {/* Eliminar condición */}
-      <button
-        type="button"
-        onClick={onRemove}
-        title="Eliminar condición"
-        className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-[#bbb] hover:text-[#e00] hover:bg-[#fff0f0] transition-colors mt-0.5"
-      >
-        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
-          <path d="M3 3l10 10M13 3L3 13" strokeLinecap="round"/>
-        </svg>
-      </button>
     </div>
   )
 }
@@ -194,17 +202,17 @@ function GroupBlock({ group, groupIndex, onChange, onRemove, isOnly, departments
   }
 
   return (
-    <div className="relative bg-[#fafaf7] border border-[#e8e4d8] rounded-xl p-4">
+    <div className="relative bg-[#fafaf7] border border-[#e8e4d8] rounded-xl p-3 sm:p-4">
       {/* Header del grupo */}
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-[12px] font-mono font-bold tracking-widest uppercase text-[#999]">
-          Grupo {groupIndex + 1} — cumple todo lo siguiente
+      <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+        <span className="text-[11px] sm:text-[12px] font-mono font-bold tracking-widest uppercase text-[#999]">
+          Grupo {groupIndex + 1} — todo lo siguiente
         </span>
         {!isOnly && (
           <button
             type="button"
             onClick={onRemove}
-            className="text-[12px] text-[#bbb] hover:text-[#e00] font-medium transition-colors"
+            className="text-[12px] text-[#bbb] hover:text-[#e00] font-medium transition-colors flex-shrink-0"
           >
             Eliminar grupo
           </button>
@@ -270,19 +278,20 @@ function CapabilitySection({
   }
 
   return (
-    <div className="px-5 py-4 border-b border-[#f0ede3] last:border-b-0">
-      {/* Cabecera de capacidad */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
+    <div className="px-3 py-3 sm:px-5 sm:py-4 border-b border-[#f0ede3] last:border-b-0">
+      {/* Cabecera de capacidad — apila en mobile, inline en sm+ */}
+      <div className="flex flex-col gap-2 mb-3 sm:flex-row sm:items-center sm:justify-between">
+        {/* Izquierda: badge tipo + nombre */}
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
           {isManage ? (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#f0e6ff] text-[11.5px] font-bold text-[#7c3aed] uppercase tracking-wide">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#f0e6ff] text-[11.5px] font-bold text-[#7c3aed] uppercase tracking-wide flex-shrink-0">
               <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M11 2l3 3-8 8H3v-3L11 2Z" strokeLinejoin="round"/>
               </svg>
               Modificar
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#e8f4ff] text-[11.5px] font-bold text-[#1d6fa8] uppercase tracking-wide">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#e8f4ff] text-[11.5px] font-bold text-[#1d6fa8] uppercase tracking-wide flex-shrink-0">
               <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="8" cy="8" r="6.5"/>
                 <path d="M8 7v4M8 5v.5" strokeLinecap="round"/>
@@ -290,10 +299,12 @@ function CapabilitySection({
               Ver
             </span>
           )}
-          <span className="text-[14px] font-semibold text-[#222]">{label}</span>
-          <span className="text-[12px] font-mono text-[#ccc]">{capKey}</span>
+          <span className="text-[14px] font-semibold text-[#222] truncate">{label}</span>
+          <span className="hidden sm:inline text-[12px] font-mono text-[#ccc] truncate">{capKey}</span>
         </div>
-        <div className="flex items-center gap-2">
+
+        {/* Derecha: badge estado + botón guardar */}
+        <div className="flex items-center gap-2 flex-shrink-0">
           {hasRules ? (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#fff3cd] text-[11.5px] font-semibold text-[#8a6300]">
               <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="7" width="10" height="8" rx="1.5"/><path d="M5 7V5a3 3 0 0 1 6 0v2" strokeLinecap="round"/><circle cx="8" cy="11" r="1" fill="currentColor" stroke="none"/></svg>
@@ -371,13 +382,13 @@ function ModuleCard({ module, rules, onChangeCapability, onSave, savingKey, depa
   return (
     <div className="bg-white border border-[#e0ddd4] rounded-xl overflow-hidden">
       {/* Header del módulo */}
-      <div className="px-5 py-3.5 border-b border-[#e0ddd4] bg-[#fafaf7] flex items-center gap-3">
-        <div>
-          <h3 className="text-[15.5px] font-bold text-[#111]">{module.label}</h3>
-          <p className="text-[13px] text-[#888]">{module.description}</p>
+      <div className="px-3 py-3 sm:px-5 sm:py-3.5 border-b border-[#e0ddd4] bg-[#fafaf7] flex items-center gap-3">
+        <div className="min-w-0">
+          <h3 className="text-[15px] sm:text-[15.5px] font-bold text-[#111]">{module.label}</h3>
+          <p className="text-[12.5px] sm:text-[13px] text-[#888]">{module.description}</p>
         </div>
-        <span className="ml-auto text-[12px] font-mono text-[#ccc]">
-          {capabilities.length} {capabilities.length === 1 ? 'capacidad' : 'capacidades'}
+        <span className="ml-auto text-[12px] font-mono text-[#ccc] flex-shrink-0">
+          {capabilities.length} {capabilities.length === 1 ? 'cap.' : 'caps.'}
         </span>
       </div>
 
@@ -484,33 +495,31 @@ export default function PermisosView({ companyId }) {
     <div className="space-y-4 relative">
       {/* Toast */}
       {toast && (
-        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-5 py-3 rounded-xl shadow-lg text-[14px] font-semibold transition-all ${
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-4 sm:px-5 py-3 rounded-xl shadow-lg text-[13px] sm:text-[14px] font-semibold transition-all max-w-[90vw] text-center ${
           toast.type === 'ok' ? 'bg-[#111] text-white' : 'bg-[#e00] text-white'
         }`}>
           {toast.type === 'ok'
-            ? <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="8" cy="8" r="6.5"/><path d="M5 8.5l2 2 4-4" strokeLinecap="round" strokeLinejoin="round"/></svg>
-            : <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="8" cy="8" r="6.5"/><path d="M8 5v4M8 11v.5" strokeLinecap="round"/></svg>
+            ? <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" className="flex-shrink-0"><circle cx="8" cy="8" r="6.5"/><path d="M5 8.5l2 2 4-4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            : <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" className="flex-shrink-0"><circle cx="8" cy="8" r="6.5"/><path d="M8 5v4M8 11v.5" strokeLinecap="round"/></svg>
           }
           {toast.msg}
         </div>
       )}
 
       {/* Descripción */}
-      <div className="bg-[#fffbeb] border border-[#ffe58f] rounded-xl px-5 py-4 flex gap-3">
+      <div className="bg-[#fffbeb] border border-[#ffe58f] rounded-xl px-3 py-3 sm:px-5 sm:py-4 flex gap-3">
         <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="#8a6300" strokeWidth="1.8" className="flex-shrink-0 mt-0.5"><circle cx="8" cy="8" r="6.5"/><path d="M8 7v4M8 5v.5" strokeLinecap="round"/></svg>
         <div>
           <p className="text-[14px] font-semibold text-[#8a6300] mb-1">Cómo funcionan los permisos</p>
-          <p className="text-[13.5px] text-[#a07800] leading-relaxed">
+          <p className="text-[13px] sm:text-[13.5px] text-[#a07800] leading-relaxed">
             Cada módulo tiene capacidades: <strong>acceso</strong> (entrar al módulo),{' '}
-            <strong>ver</strong> (ver una sección específica) y <strong>modificar</strong> (crear, editar o
+            <strong>ver</strong> (ver una sección) y <strong>modificar</strong> (crear, editar o
             eliminar). Por capacidad podés crear <strong>grupos de condiciones</strong>: el usuario accede si
             cumple <strong>cualquier grupo completo</strong> (lógica <strong>O</strong>). Dentro de cada
             grupo, todas las condiciones deben cumplirse (lógica <strong>Y</strong>). Sin reglas = acceso
-            libre. Los administradores siempre tienen acceso, sin importar las reglas. Los cambios de RLS
-            (base de datos) se aplican a las acciones de <em>Modificar</em>.{' '}
+            libre. Los administradores siempre tienen acceso.{' '}
             Cada condición puede marcarse como <strong>no es</strong> para invertirla (ej. «usuario
-            NO es Juan»). Tené en cuenta que la exclusión aplica dentro de su grupo: si hay otro grupo
-            alternativo que concede acceso, ese grupo sigue funcionando.
+            NO es Juan»); la exclusión aplica solo dentro de su grupo.
           </p>
         </div>
       </div>
