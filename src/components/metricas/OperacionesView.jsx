@@ -173,7 +173,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
       >
         <div className="space-y-2">
           {report.productividad.tareas.map((tarea, idx) => (
-            <div key={idx} className="grid grid-cols-[1fr_auto_auto] gap-2 items-center">
+            <div key={idx} className="grid grid-cols-[minmax(100px,1fr)_auto_auto] gap-2 items-center">
               <input
                 type="text"
                 className="input-base text-[14px]"
@@ -223,14 +223,14 @@ export default function OperacionesView({ line, companyId, year, month }) {
         max={INDICATORS[2].peso}
       >
         <div className="overflow-x-auto">
-        <div className="space-y-2 min-w-[480px]">
+        <div className="space-y-2">
           {report.crecimiento.items.length === 0 ? (
             <p className="text-[14px] text-[#bbb]">Sin clientes. Configurá la cartera en la pestaña Configuración.</p>
           ) : (
             report.crecimiento.items.map((item, idx) => {
               const { crecimiento: delta, cumple } = crecimientoCliente(item);
               return (
-                <div key={item.clienteId} className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 items-center">
+                <div key={item.clienteId} className="grid grid-cols-[minmax(100px,1fr)_auto_auto_auto_auto] gap-2 items-center">
                   <span className="text-[14px] text-[#555] truncate">{clientName(item.clienteId)}</span>
                   <div className="flex items-center gap-1">
                     <span className="text-[11px] text-[#aaa] whitespace-nowrap">Base manual</span>
@@ -311,12 +311,12 @@ export default function OperacionesView({ line, companyId, year, month }) {
         max={INDICATORS[4].peso}
       >
         <div className="overflow-x-auto">
-        <div className="space-y-2 min-w-[320px]">
+        <div className="space-y-2">
           {report.pautas.items.length === 0 ? (
             <p className="text-[14px] text-[#bbb]">Sin clientes configurados.</p>
           ) : (
             report.pautas.items.map((item, idx) => (
-              <div key={item.clienteId} className="grid grid-cols-[1fr_auto_auto] gap-2 items-center">
+              <div key={item.clienteId} className="grid grid-cols-[minmax(100px,1fr)_auto_auto] gap-2 items-center">
                 <span className="text-[14px] text-[#555] truncate">{clientName(item.clienteId)}</span>
                 <div className="flex items-center gap-1">
                   <span className="text-[11px] text-[#aaa]">Realizadas</span>
@@ -374,7 +374,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
             <p className="text-[14px] text-[#bbb]">Sin clientes configurados.</p>
           ) : (
             report.feedback.items.map((item, idx) => (
-              <div key={item.clienteId} className="grid grid-cols-[1fr_auto] gap-2 items-center">
+              <div key={item.clienteId} className="grid grid-cols-[minmax(100px,1fr)_auto] gap-2 items-center">
                 <span className="text-[14px] text-[#555] truncate">{clientName(item.clienteId)}</span>
                 <div className="flex items-center gap-1">
                   <span className="text-[11px] text-[#aaa]">Score (0–10)</span>
