@@ -456,38 +456,51 @@ function CapabilitySection({
 // ──────────────────────────────────────────────
 function ModuleCard({ module, rules, onChangeCapability, onSave, savingKey, departments, users, positions }) {
   const capabilities = capabilitiesForModule(module)
+  const [open, setOpen] = useState(false)
 
   return (
     <div className="bg-white border border-[#e0ddd4] rounded-xl overflow-hidden">
-      {/* Header del módulo */}
-      <div className="px-3 py-3 sm:px-5 sm:py-3.5 border-b border-[#e0ddd4] bg-[#fafaf7] flex items-center gap-3">
-        <div className="min-w-0">
+      {/* Header del módulo — clickeable para expandir/colapsar */}
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full px-3 py-3 sm:px-5 sm:py-3.5 bg-[#fafaf7] flex items-center gap-3 text-left hover:bg-[#f5f3eb] transition-colors"
+      >
+        <div className="min-w-0 flex-1">
           <h3 className="text-[15px] sm:text-[15.5px] font-bold text-[#111]">{module.label}</h3>
           <p className="text-[12.5px] sm:text-[13px] text-[#888]">{module.description}</p>
         </div>
-        <span className="ml-auto text-[12px] font-mono text-[#ccc] flex-shrink-0">
+        <span className="text-[12px] font-mono text-[#ccc] flex-shrink-0">
           {capabilities.length} {capabilities.length === 1 ? 'cap.' : 'caps.'}
         </span>
-      </div>
+        <svg
+          width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#aaa" strokeWidth="2"
+          className={`flex-shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+        >
+          <path d="M3 5.5l5 5 5-5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
 
-      {/* Sección por capacidad */}
-      <div>
-        {capabilities.map(cap => (
-          <CapabilitySection
-            key={cap.key}
-            capKey={cap.key}
-            label={cap.label}
-            isManage={cap.isManage ?? false}
-            rules={rules[cap.key] ?? emptyRules()}
-            onChange={r => onChangeCapability(cap.key, r)}
-            onSave={() => onSave(cap.key)}
-            saving={savingKey === cap.key}
-            departments={departments}
-            users={users}
-            positions={positions}
-          />
-        ))}
-      </div>
+      {/* Sección por capacidad — solo visible cuando está abierto */}
+      {open && (
+        <div className="border-t border-[#e0ddd4]">
+          {capabilities.map(cap => (
+            <CapabilitySection
+              key={cap.key}
+              capKey={cap.key}
+              label={cap.label}
+              isManage={cap.isManage ?? false}
+              rules={rules[cap.key] ?? emptyRules()}
+              onChange={r => onChangeCapability(cap.key, r)}
+              onSave={() => onSave(cap.key)}
+              saving={savingKey === cap.key}
+              departments={departments}
+              users={users}
+              positions={positions}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
