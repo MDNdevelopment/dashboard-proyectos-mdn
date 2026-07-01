@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Outlet, useSearchParams } from 'react-router-dom'
+import { Outlet, useSearchParams, useLocation } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { useAuth } from '../context/AuthContext'
 import Sidebar from './Sidebar'
@@ -14,12 +14,15 @@ const normalize = (row) => ({ ...row, createdAt: row.created_at })
 export default function AppLayout() {
   const { userProfile } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
+  const location = useLocation()
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
   const [connected, setConnected] = useState(false)
   const [activeFilter, setActiveFilter] = useState('all')
   const [modalProject, setModalProject] = useState(undefined)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  useEffect(() => { setSidebarOpen(false) }, [location.pathname])
 
   useEffect(() => {
     // Channel is created synchronously so the cleanup always has a reference to it,
@@ -139,7 +142,7 @@ export default function AppLayout() {
             </svg>
           </button>
           <div className="flex-1 flex justify-center">
-            <MDNLogo size={32} />
+            <MDNLogo size={44} />
           </div>
           <NotificationBell />
         </div>

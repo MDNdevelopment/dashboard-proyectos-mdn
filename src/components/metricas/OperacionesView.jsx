@@ -148,7 +148,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
         score={scores?.reuniones}
         max={INDICATORS[0].peso}
       >
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Realizadas">
             <input type="number" min="0" className="input-base"
               value={report.reuniones.realizadas ?? ""}
@@ -173,7 +173,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
       >
         <div className="space-y-2">
           {report.productividad.tareas.map((tarea, idx) => (
-            <div key={idx} className="grid grid-cols-[1fr_auto_auto] gap-2 items-center">
+            <div key={idx} className="grid grid-cols-[minmax(100px,1fr)_auto_auto] gap-2 items-center">
               <input
                 type="text"
                 className="input-base text-[14px]"
@@ -222,6 +222,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
         score={scores?.crecimiento}
         max={INDICATORS[2].peso}
       >
+        <div className="overflow-x-auto">
         <div className="space-y-2">
           {report.crecimiento.items.length === 0 ? (
             <p className="text-[14px] text-[#bbb]">Sin clientes. Configurá la cartera en la pestaña Configuración.</p>
@@ -229,7 +230,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
             report.crecimiento.items.map((item, idx) => {
               const { crecimiento: delta, cumple } = crecimientoCliente(item);
               return (
-                <div key={item.clienteId} className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 items-center">
+                <div key={item.clienteId} className="grid grid-cols-[minmax(100px,1fr)_auto_auto_auto_auto] gap-2 items-center">
                   <span className="text-[14px] text-[#555] truncate">{clientName(item.clienteId)}</span>
                   <div className="flex items-center gap-1">
                     <span className="text-[11px] text-[#aaa] whitespace-nowrap">Base manual</span>
@@ -276,6 +277,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
             })
           )}
         </div>
+        </div>
       </Section>
 
       {/* 4. SOLICITUDES */}
@@ -285,7 +287,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
         score={scores?.solicitudes}
         max={INDICATORS[3].peso}
       >
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Solicitudes recibidas">
             <input type="number" min="0" className="input-base"
               value={report.solicitudes.solicitudes ?? ""}
@@ -308,12 +310,13 @@ export default function OperacionesView({ line, companyId, year, month }) {
         score={scores?.pautas}
         max={INDICATORS[4].peso}
       >
+        <div className="overflow-x-auto">
         <div className="space-y-2">
           {report.pautas.items.length === 0 ? (
             <p className="text-[14px] text-[#bbb]">Sin clientes configurados.</p>
           ) : (
             report.pautas.items.map((item, idx) => (
-              <div key={item.clienteId} className="grid grid-cols-[1fr_auto_auto] gap-2 items-center">
+              <div key={item.clienteId} className="grid grid-cols-[minmax(100px,1fr)_auto_auto] gap-2 items-center">
                 <span className="text-[14px] text-[#555] truncate">{clientName(item.clienteId)}</span>
                 <div className="flex items-center gap-1">
                   <span className="text-[11px] text-[#aaa]">Realizadas</span>
@@ -333,6 +336,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
             ))
           )}
         </div>
+        </div>
       </Section>
 
       {/* 6. PIEZAS */}
@@ -342,7 +346,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
         score={scores?.piezas}
         max={INDICATORS[5].peso}
       >
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Piezas totales">
             <input type="number" min="0" className="input-base"
               value={report.piezas.piezas ?? ""}
@@ -370,7 +374,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
             <p className="text-[14px] text-[#bbb]">Sin clientes configurados.</p>
           ) : (
             report.feedback.items.map((item, idx) => (
-              <div key={item.clienteId} className="grid grid-cols-[1fr_auto] gap-2 items-center">
+              <div key={item.clienteId} className="grid grid-cols-[minmax(100px,1fr)_auto] gap-2 items-center">
                 <span className="text-[14px] text-[#555] truncate">{clientName(item.clienteId)}</span>
                 <div className="flex items-center gap-1">
                   <span className="text-[11px] text-[#aaa]">Score (0–10)</span>

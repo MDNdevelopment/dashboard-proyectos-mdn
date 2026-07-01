@@ -19,7 +19,7 @@ import ConfirmDeleteDialog from '../common/ConfirmDeleteDialog'
  *   - Mover un empleado de línea (assignMemberToLine lo quita de la anterior)
  *   - Quitar un empleado de su línea
  */
-export default function LinesView({ companyId }) {
+export default function LinesView({ companyId, canManage = true }) {
   const [lines, setLines]     = useState([])
   const [users, setUsers]     = useState([])
   const [loading, setLoading] = useState(true)
@@ -137,15 +137,17 @@ export default function LinesView({ companyId }) {
           Gestioná las líneas operativas y asigná empleados a cada una.
           Al asignar un empleado a una línea, se mueve automáticamente si ya pertenecía a otra.
         </p>
-        <button
-          onClick={() => setLineModal(null)}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#FAB51A] text-[#111] font-bold text-[14.5px] hover:bg-[#e8a315] transition-colors flex-shrink-0 ml-4"
-        >
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="2.2">
-            <path d="M6.5 1v11M1 6.5h11" strokeLinecap="round"/>
-          </svg>
-          Nueva línea
-        </button>
+        {canManage && (
+          <button
+            onClick={() => setLineModal(null)}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#FAB51A] text-[#111] font-bold text-[14.5px] hover:bg-[#e8a315] transition-colors flex-shrink-0 ml-4"
+          >
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="2.2">
+              <path d="M6.5 1v11M1 6.5h11" strokeLinecap="round"/>
+            </svg>
+            Nueva línea
+          </button>
+        )}
       </div>
 
       {error && (
@@ -186,39 +188,41 @@ export default function LinesView({ companyId }) {
                       {members.length} {members.length !== 1 ? 'miembros' : 'miembro'}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => setMetasModal(line)}
-                      className="p-1.5 rounded-lg text-[#aaa] hover:text-[#555] hover:bg-white/60 transition-colors"
-                      title="Configurar metas"
-                      aria-label="Configurar metas"
-                    >
-                      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
-                        <circle cx="8" cy="8" r="2.5"/>
-                        <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.42 1.42M11.53 11.53l1.42 1.42M3.05 12.95l1.42-1.42M11.53 4.47l1.42-1.42" strokeLinecap="round"/>
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => setLineModal(line)}
-                      className="p-1.5 rounded-lg text-[#aaa] hover:text-[#555] hover:bg-white/60 transition-colors"
-                      title="Editar línea"
-                      aria-label="Editar línea"
-                    >
-                      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
-                        <path d="M11 2l3 3-8 8H3v-3L11 2Z" strokeLinejoin="round"/>
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => setConfirmDelete({ id: line.id, name: line.name })}
-                      className="p-1.5 rounded-lg text-[#aaa] hover:text-red-400 hover:bg-white/60 transition-colors"
-                      title="Eliminar línea"
-                      aria-label="Eliminar línea"
-                    >
-                      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
-                        <path d="M3 5h10M6 5V3h4v2M5 5l.5 8h5l.5-8" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    </button>
-                  </div>
+                  {canManage && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setMetasModal(line)}
+                        className="p-1.5 rounded-lg text-[#aaa] hover:text-[#555] hover:bg-white/60 transition-colors"
+                        title="Configurar metas"
+                        aria-label="Configurar metas"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
+                          <circle cx="8" cy="8" r="2.5"/>
+                          <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.42 1.42M11.53 11.53l1.42 1.42M3.05 12.95l1.42-1.42M11.53 4.47l1.42-1.42" strokeLinecap="round"/>
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => setLineModal(line)}
+                        className="p-1.5 rounded-lg text-[#aaa] hover:text-[#555] hover:bg-white/60 transition-colors"
+                        title="Editar línea"
+                        aria-label="Editar línea"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
+                          <path d="M11 2l3 3-8 8H3v-3L11 2Z" strokeLinejoin="round"/>
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => setConfirmDelete({ id: line.id, name: line.name })}
+                        className="p-1.5 rounded-lg text-[#aaa] hover:text-red-400 hover:bg-white/60 transition-colors"
+                        title="Eliminar línea"
+                        aria-label="Eliminar línea"
+                      >
+                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
+                          <path d="M3 5h10M6 5V3h4v2M5 5l.5 8h5l.5-8" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Miembros */}
@@ -252,24 +256,26 @@ export default function LinesView({ companyId }) {
                             <span className="text-[13px] font-medium text-[#333]">
                               {u ? fullName(u) : uid}
                             </span>
-                            <button
-                              onClick={() => handleRemoveMember(line.id, uid)}
-                              className="ml-0.5 text-[#ccc] hover:text-red-400 transition-colors"
-                              aria-label={`Quitar ${u ? fullName(u) : uid}`}
-                              disabled={isSaving}
-                            >
-                              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M2 2l6 6M8 2L2 8" strokeLinecap="round"/>
-                              </svg>
-                            </button>
+                            {canManage && (
+                              <button
+                                onClick={() => handleRemoveMember(line.id, uid)}
+                                className="ml-0.5 text-[#ccc] hover:text-red-400 transition-colors"
+                                aria-label={`Quitar ${u ? fullName(u) : uid}`}
+                                disabled={isSaving}
+                              >
+                                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M2 2l6 6M8 2L2 8" strokeLinecap="round"/>
+                                </svg>
+                              </button>
+                            )}
                           </div>
                         )
                       })}
                     </div>
                   )}
 
-                  {/* Selector: agregar/mover empleado */}
-                  {available.length > 0 && (
+                  {/* Selector: agregar/mover empleado (solo si tiene permiso de modificar) */}
+                  {canManage && available.length > 0 && (
                     <div className="flex items-center gap-2 pt-1">
                       <select
                         className="input-base flex-1 text-[13.5px]"

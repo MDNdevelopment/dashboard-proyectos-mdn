@@ -74,6 +74,12 @@ function renderAsManager() {
   )
 }
 
+// Capabilities restringidas para nivel 1 según los defaults sembrados
+const LEVEL1_RESTRICTED = [
+  'empresa.departamentos', 'empresa.empleados', 'empresa.preguntas', 'empresa.permisos',
+  'empresa.clientes', 'empresa.lineas', 'empresa.clientes.manage', 'empresa.lineas.manage',
+]
+
 function renderAsRegular() {
   useAuth.mockReturnValue({
     userProfile: {
@@ -82,6 +88,7 @@ function renderAsRegular() {
       access_level: 1,
       admin: false,
     },
+    can: (key) => !LEVEL1_RESTRICTED.includes(key),
   })
   return render(
     <MemoryRouter initialEntries={['/empresa']}>

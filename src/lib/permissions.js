@@ -1,0 +1,94 @@
+/**
+ * Lógica pura de evaluación de permisos por módulo.
+ *
+ * Modelo de reglas — Forma Normal Disyuntiva (DNF):
+ *   config.rules = [grupo1, grupo2, ...]   ← OR entre grupos
+ *   grupo.all   = [condición1, condición2] ← AND dentro del grupo
+ *
+ * Tipos de condición:
+ *   { type: 'department', ids: [number], negate?: boolean }   → department_id ∈ ids
+ *   { type: 'min_level',  value: number, negate?: boolean }   → access_level >= value
+ *   { type: 'user',       ids: [string], negate?: boolean }   → user_id ∈ ids
+ *   { type: 'position',   ids: [number], negate?: boolean }   → position_id ∈ ids
+ *
+ * Negación: cuando negate === true el resultado de la condición se invierte.
+ * IMPORTANTE: negate solo aplica a tipos conocidos; tipo ausente/desconocido
+ * siempre devuelve false sin invertir (para no abrir acceso por error).
+ *
+ * Defaults:
+ *   - Si userProfile es null/undefined → false
+ *   - Si userProfile.admin === true    → true (siempre)
+ *   - Si no hay reglas configuradas    → true (módulo abierto a todos)
+ *   - Un grupo sin condiciones         → true (grupo vacío pasa)
+ */
+
+/**
+ * @param {string}   moduleKey
+ * @param {object}   userProfile  — objeto del contexto Auth (puede ser null)
+ * @param {object}   configByModule — { [moduleKey]: { rules: [...] } }
+ * @returns {boolean}
+ */
+/**
+ * Alias de canAccessModule para claves de capacidad granulares.
+ * Usa la misma firma — el evaluador funciona igual para 'empresa',
+ * 'empresa.clientes' o 'empresa.lineas.manage'.
+ *
+ * @param {string} key - Clave de capacidad (módulo, tab o acción)
+ * @param {object} userProfile
+ * @param {object} configByModule - { [key]: { rules: [...] } }
+ * @returns {boolean}
+ */
+export const can = canAccessModule
+
+export function canAccessModule(moduleKey, userProfile, configByModule) {
+  if (!userProfile) return false
+  if (userProfile.admin === true) return true
+
+  const config = configByModule?.[moduleKey]
+  const rules = config?.rules ?? []
+
+  // Sin reglas = acceso libre
+  if (rules.length === 0) return true
+
+  // OR: basta con que un grupo pase
+  return rules.some(group => groupPasses(group, userProfile))
+}
+
+/**
+ * Un grupo pasa si TODAS sus condiciones se cumplen (AND).
+ */
+function groupPasses(group, userProfile) {
+  const conditions = group?.all ?? []
+  if (conditions.length === 0) return true
+  return conditions.every(cond => matchCondition(cond, userProfile))
+}
+
+function matchCondition(cond, userProfile) {
+  // Tipo ausente → false, NO se invierte (evita apertura por error)
+  if (!cond?.type) return false
+
+  let res
+  switch (cond.type) {
+    case 'department':
+      res = Array.isArray(cond.ids) && cond.ids.includes(userProfile.department_id)
+      break
+
+    case 'min_level':
+      res = (userProfile.access_level ?? 1) >= (cond.value ?? 1)
+      break
+
+    case 'user':
+      res = Array.isArray(cond.ids) && cond.ids.includes(userProfile.user_id)
+      break
+
+    case 'position':
+      res = Array.isArray(cond.ids) && cond.ids.includes(userProfile.position_id)
+      break
+
+    default:
+      // Tipo desconocido → false, NO se invierte
+      return false
+  }
+
+  return cond.negate ? !res : res
+}

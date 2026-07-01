@@ -13,13 +13,14 @@ function pathToKey(pathname) {
 }
 
 export default function MetricasPage() {
-  const { userProfile } = useAuth();
+  const { userProfile, can = () => true } = useAuth();
+  const canManage = can("reportes.manage");
   const location = useLocation();
   const navigate = useNavigate();
   const { lineId } = useParams();
 
-  // Solo nivel 3+ o admin pueden ver Métricas.
-  const canView = userProfile?.access_level >= 3 || userProfile?.admin === true;
+  // Acceso controlado por el módulo Permisos config-driven (can('reportes')).
+  // Los admins siempre pasan; sin reglas configuradas el módulo es libre.
   const activeKey = pathToKey(location.pathname);
 
   const [lines, setLines] = useState([]);
@@ -27,12 +28,12 @@ export default function MetricasPage() {
   const [seeding, setSeeding] = useState(false);
   const [toast, setToast] = useState(null);
 
-  // Redirige si no tiene acceso (nivel 3+ o admin requerido)
+  // Redirige si no tiene acceso según la config de Permisos
   useEffect(() => {
-    if (userProfile != null && !canView) {
+    if (userProfile != null && !can('reportes')) {
       navigate("/", { replace: true });
     }
-  }, [canView, userProfile, navigate]);
+  }, [can, userProfile, navigate]);
 
   const fetchLines = useCallback(async () => {
     if (!userProfile?.company_id) return;
@@ -115,7 +116,7 @@ export default function MetricasPage() {
 
   return (
     <main className="flex-1 overflow-y-auto main-bg h-screen">
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
         {/* Header */}
         <div className="flex items-start justify-between mb-6">
           <div>
@@ -124,27 +125,29 @@ export default function MetricasPage() {
               Reportes mensuales · Líneas operativas
             </p>
           </div>
-          {/* Botones export/import */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleExport}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#e0ddd4] bg-white text-[13.5px] font-medium text-[#555] hover:bg-[#f5f3eb] transition-colors"
-            >
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
-                <path d="M8 1v9M5 7l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M2 12v2h12v-2" strokeLinecap="round"/>
-              </svg>
-              Exportar
-            </button>
-            <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#e0ddd4] bg-white text-[13.5px] font-medium text-[#555] hover:bg-[#f5f3eb] transition-colors cursor-pointer">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
-                <path d="M8 11V2M5 5l3-3 3 3" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M2 12v2h12v-2" strokeLinecap="round"/>
-              </svg>
-              Importar
-              <input type="file" accept=".json" className="hidden" onChange={handleImport} />
-            </label>
-          </div>
+          {/* Botones export/import — solo si tiene permiso de modificar */}
+          {canManage && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleExport}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#e0ddd4] bg-white text-[13.5px] font-medium text-[#555] hover:bg-[#f5f3eb] transition-colors"
+              >
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
+                  <path d="M8 1v9M5 7l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M2 12v2h12v-2" strokeLinecap="round"/>
+                </svg>
+                Exportar
+              </button>
+              <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#e0ddd4] bg-white text-[13.5px] font-medium text-[#555] hover:bg-[#f5f3eb] transition-colors cursor-pointer">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
+                  <path d="M8 11V2M5 5l3-3 3 3" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M2 12v2h12v-2" strokeLinecap="round"/>
+                </svg>
+                Importar
+                <input type="file" accept=".json" className="hidden" onChange={handleImport} />
+              </label>
+            </div>
+          )}
         </div>
 
         {/* Tab switcher — líneas como tabs */}

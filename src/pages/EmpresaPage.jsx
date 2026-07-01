@@ -6,14 +6,16 @@ import EmployeesView from '../components/empresa/EmployeesView'
 import QuestionsView from '../components/empresa/QuestionsView'
 import ClientsView from '../components/empresa/ClientsView'
 import LinesView from '../components/empresa/LinesView'
+import PermisosView from '../components/empresa/PermisosView'
 
 const ALL_TABS = [
-  { key: 'general',       label: 'Inicio',         path: '/empresa',               adminOnly: false, managerPlus: false },
-  { key: 'departamentos', label: 'Departamentos',   path: '/empresa/departamentos', adminOnly: true,  managerPlus: false },
-  { key: 'empleados',     label: 'Empleados',       path: '/empresa/empleados',     adminOnly: true,  managerPlus: false },
-  { key: 'preguntas',     label: 'Preguntas',       path: '/empresa/preguntas',     adminOnly: true,  managerPlus: false },
-  { key: 'clientes',      label: 'Clientes',        path: '/empresa/clientes',      adminOnly: false, managerPlus: true  },
-  { key: 'lineas',        label: 'Líneas',          path: '/empresa/lineas',        adminOnly: false, managerPlus: true  },
+  { key: 'general',       label: 'Inicio',         path: '/empresa' },
+  { key: 'departamentos', label: 'Departamentos',   path: '/empresa/departamentos' },
+  { key: 'empleados',     label: 'Empleados',       path: '/empresa/empleados' },
+  { key: 'preguntas',     label: 'Preguntas',       path: '/empresa/preguntas' },
+  { key: 'clientes',      label: 'Clientes',        path: '/empresa/clientes' },
+  { key: 'lineas',        label: 'Líneas',          path: '/empresa/lineas' },
+  { key: 'permisos',      label: 'Permisos',        path: '/empresa/permisos' },
 ]
 
 function pathToKey(pathname) {
@@ -22,34 +24,30 @@ function pathToKey(pathname) {
   if (pathname.startsWith('/empresa/preguntas'))     return 'preguntas'
   if (pathname.startsWith('/empresa/clientes'))      return 'clientes'
   if (pathname.startsWith('/empresa/lineas'))        return 'lineas'
+  if (pathname.startsWith('/empresa/permisos'))      return 'permisos'
   return 'general'
 }
 
 export default function EmpresaPage() {
-  const { userProfile } = useAuth()
+  const { userProfile, can = () => true } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
 
-  const isAdmin          = userProfile?.admin === true
-  const canManageClients = userProfile?.access_level >= 2 || userProfile?.admin === true
-  const tabs = ALL_TABS.filter(t =>
-    (!t.adminOnly   || isAdmin) &&
-    (!t.managerPlus || canManageClients)
-  )
+  // Cada tab se muestra solo si el usuario tiene la capacidad correspondiente
+  const tabs = ALL_TABS.filter(t => can(`empresa.${t.key}`))
   const activeKey = pathToKey(location.pathname)
 
   // Redirigir si el usuario no tiene acceso a la ruta activa
   useEffect(() => {
     if (userProfile == null) return
-    const tab = ALL_TABS.find(t => t.key === activeKey)
-    if (!tab) return
-    if (tab.adminOnly   && !isAdmin)          { navigate('/empresa', { replace: true }); return }
-    if (tab.managerPlus && !canManageClients) { navigate('/empresa', { replace: true }); return }
-  }, [activeKey, isAdmin, canManageClients, navigate, userProfile])
+    if (!can(`empresa.${activeKey}`)) {
+      navigate('/empresa', { replace: true })
+    }
+  }, [activeKey, can, navigate, userProfile])
 
   return (
     <main className="flex-1 overflow-y-auto main-bg h-screen">
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
 
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
@@ -60,7 +58,7 @@ export default function EmpresaPage() {
         </div>
 
         {/* Tab switcher */}
-        <div className="flex bg-white border border-[#e0ddd4] rounded-xl p-1 w-fit mb-6">
+        <div className="flex flex-wrap gap-1 bg-white border border-[#e0ddd4] rounded-xl p-1 w-fit mb-6">
           {tabs.map(tab => (
             <button
               key={tab.key}
@@ -77,7 +75,7 @@ export default function EmpresaPage() {
         </div>
 
         {/* Contenido por tab */}
-        {activeKey === 'general' && (
+        {activeKey === 'general' && can('empresa.general') && (
           <div className="bg-white rounded-xl border border-[#e0ddd4] p-10 text-center">
             <p className="text-[17px] font-semibold text-[#888] mb-1">Próximamente</p>
             <p className="text-[15px] text-[#bbb]">
@@ -86,24 +84,34 @@ export default function EmpresaPage() {
           </div>
         )}
 
-        {activeKey === 'departamentos' && isAdmin && (
+        {activeKey === 'departamentos' && can('empresa.departamentos') && (
           <DepartmentsView companyId={userProfile.company_id} />
         )}
 
-        {activeKey === 'empleados' && isAdmin && (
+        {activeKey === 'empleados' && can('empresa.empleados') && (
           <EmployeesView companyId={userProfile.company_id} />
         )}
 
-        {activeKey === 'preguntas' && isAdmin && (
+        {activeKey === 'preguntas' && can('empresa.preguntas') && (
           <QuestionsView companyId={userProfile.company_id} />
         )}
 
-        {activeKey === 'clientes' && canManageClients && (
-          <ClientsView companyId={userProfile.company_id} />
+        {activeKey === 'clientes' && can('empresa.clientes') && (
+          <ClientsView
+            companyId={userProfile.company_id}
+            canManage={can('empresa.clientes.manage')}
+          />
         )}
 
-        {activeKey === 'lineas' && canManageClients && (
-          <LinesView companyId={userProfile.company_id} />
+        {activeKey === 'lineas' && can('empresa.lineas') && (
+          <LinesView
+            companyId={userProfile.company_id}
+            canManage={can('empresa.lineas.manage')}
+          />
+        )}
+
+        {activeKey === 'permisos' && can('empresa.permisos') && (
+          <PermisosView companyId={userProfile.company_id} />
         )}
 
       </div>

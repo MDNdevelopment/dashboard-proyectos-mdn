@@ -52,7 +52,7 @@ export default function TicketList({ tickets, loading, onSelect, isIT }) {
         />
       </div>
       {/* Filters */}
-      <div className="grid grid-cols-3 gap-2 mb-2">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
         <select
           value={filterStatus}
           onChange={e => setFilterStatus(e.target.value)}
@@ -78,7 +78,7 @@ export default function TicketList({ tickets, loading, onSelect, isIT }) {
           {CATEGORIES.map(c => <option key={c} value={c}>{CATEGORY[c].label}</option>)}
         </select>
       </div>
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex flex-wrap items-center gap-3 mb-4">
         <div className="flex items-center gap-1.5">
           <span className="text-[13px] font-mono text-[#888]">Desde</span>
           <input

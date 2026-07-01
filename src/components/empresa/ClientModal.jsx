@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient, updateClient } from '../metricas/metricsApi'
 import { SOCIAL_NETWORKS, MONTHS } from '../metricas/constants'
 import AvatarUpload from './AvatarUpload'
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 
 /**
  * Modal crear/editar cliente (marca).
@@ -28,6 +29,8 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
     anniversary_date: client?.anniversary_date ?? '',
     mdn_since:        client?.mdn_since        ?? '',
   }))
+  const initialForm = useRef(form)
+  const { requestClose } = useUnsavedChanges({ value: form, baseline: initialForm.current, onClose })
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState(null)
 
@@ -37,10 +40,10 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
 
   // Escape para cerrar
   useEffect(() => {
-    const fn = e => { if (e.key === 'Escape') onClose() }
+    const fn = e => { if (e.key === 'Escape') requestClose() }
     document.addEventListener('keydown', fn)
     return () => document.removeEventListener('keydown', fn)
-  }, [onClose])
+  }, [requestClose])
 
   // ── Redes sociales ────────────────────────────────────────────────────────────
   function addSocialLink() {
@@ -118,7 +121,7 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25 backdrop-blur-[3px]"
-      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+      onClick={e => { if (e.target === e.currentTarget) requestClose() }}
     >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         {/* Header */}
@@ -128,7 +131,7 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
           </h2>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             className="w-7 h-7 flex items-center justify-center rounded-lg text-[#999] hover:text-[#111] hover:bg-[#f0ede3] transition-colors"
             aria-label="Cerrar"
           >
@@ -191,7 +194,7 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
           </div>
 
           {/* Día de pago + Mensualidad — fila */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
                 Día de pago
@@ -237,7 +240,7 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
           </div>
 
           {/* Aniversario + Cliente desde MDN */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
                 Aniversario empresa
@@ -305,7 +308,7 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
                         </svg>
                       </button>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <div>
                         <p className="text-[11.5px] font-mono text-[#aaa] uppercase tracking-wide mb-1">Cargo</p>
                         <input
@@ -407,7 +410,7 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
           <div className="flex items-center justify-end gap-2 pt-1">
             <button
               type="button"
-              onClick={onClose}
+              onClick={requestClose}
               className="px-4 py-2 rounded-xl text-[15px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
             >
               Cancelar

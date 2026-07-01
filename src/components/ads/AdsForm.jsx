@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../supabase'
 import { useAuth } from '../../context/AuthContext'
 import { STATUSES, PRIORITIES } from './constants'
 import UserPickerSingle from '../tareas/UserPickerSingle'
 import { loadClients } from '../metricas/metricsApi'
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 
 export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
   const { userProfile } = useAuth()
@@ -20,6 +21,8 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
     status:     campaign?.status     ?? 'Pendiente',
     notes:      campaign?.notes      ?? '',
   })
+  const initialFields = useRef(fields)
+  const { requestClose } = useUnsavedChanges({ value: fields, baseline: initialFields.current, onClose })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
 
@@ -108,7 +111,7 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
           <h2 className="text-[19px] font-bold text-[#111]">
             {isEdit ? 'Editar campaña' : 'Nueva campaña'}
           </h2>
-          <button onClick={onClose} className="text-[#999] hover:text-[#111] transition-colors p-1">
+          <button onClick={requestClose} className="text-[#999] hover:text-[#111] transition-colors p-1">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M2 2l12 12M14 2L2 14" strokeLinecap="round"/>
             </svg>
@@ -116,7 +119,7 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-5 overflow-y-auto flex-1">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Fecha inicio */}
             <div>
               <label className={labelClass}>Fecha inicio</label>
@@ -142,7 +145,7 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
             </div>
 
             {/* Táctica — full width */}
-            <div className="col-span-2">
+            <div className="col-span-1 sm:col-span-2">
               <label className={labelClass}>Táctica / Campaña</label>
               <input
                 type="text"
@@ -227,7 +230,7 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
             </div>
 
             {/* Notas — full width */}
-            <div className="col-span-2">
+            <div className="col-span-1 sm:col-span-2">
               <label className={labelClass}>Notas</label>
               <textarea
                 className="input-base w-full resize-none"
@@ -244,7 +247,7 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
           <div className="flex gap-3 pt-4 mt-2 border-t border-[#ece9df]">
             <button
               type="button"
-              onClick={onClose}
+              onClick={requestClose}
               className="flex-1 py-2.5 rounded-xl border border-[#e0ddd4] text-[15px] font-semibold text-[#555] hover:bg-[#f5f3eb] transition-colors"
             >
               Cancelar

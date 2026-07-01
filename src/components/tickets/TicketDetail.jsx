@@ -77,7 +77,7 @@ export default function TicketDetail({ ticket, onClose, onUpdated }) {
         {/* Body */}
         <div className="px-6 py-5 overflow-y-auto flex-1">
           {/* Meta */}
-          <div className="grid grid-cols-2 gap-3 mb-5 text-[14px]">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5 text-[14px]">
             <div>
               <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-0.5">Solicitante</p>
               <p className="text-[#333] font-medium">{requesterName}</p>

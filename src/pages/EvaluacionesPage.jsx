@@ -23,12 +23,11 @@ function pathToKey(pathname) {
 }
 
 export default function EvaluacionesPage() {
-  const { userProfile } = useAuth();
+  const { userProfile, can = () => true } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const { id: employeeId } = useParams();
 
-  const canEval = userProfile?.access_level >= 2 || userProfile?.admin === true;
   const activeKey = pathToKey(location.pathname);
   const isProfileView = location.pathname.startsWith("/evaluaciones/empleado/");
   // Nota: isPerfilView captura tanto /perfil como /perfil-v2 (startsWith).
@@ -37,12 +36,18 @@ export default function EvaluacionesPage() {
   const isPerfilView  = location.pathname.startsWith("/evaluaciones/perfil");
   const isPerfilV2View = location.pathname.startsWith("/evaluaciones/perfil-v2");
 
-  // Si el usuario no puede evaluar, sólo puede ver su propio perfil
+  // Visibilidad config-driven de tabs y acciones
+  const canManage = can("evaluaciones.manage");
+  // Tabs visibles según las capacidades configuradas
+  const visibleTabs = ALL_TABS.filter(t => can(`evaluaciones.${t.key}`));
+
+  // Si el usuario no puede ver el tab activo, redirigir a su perfil
   useEffect(() => {
-    if (!canEval && userProfile != null && !isPerfilView) {
+    if (userProfile == null || isPerfilView || isProfileView) return;
+    if (!can(`evaluaciones.${activeKey}`)) {
       navigate("/evaluaciones/perfil", { replace: true });
     }
-  }, [canEval, navigate, userProfile, isPerfilView]);
+  }, [can, navigate, userProfile, activeKey, isPerfilView, isProfileView]);
 
   if (!userProfile) {
     return (
@@ -56,7 +61,7 @@ export default function EvaluacionesPage() {
 
   return (
     <main className="flex-1 overflow-y-auto main-bg h-screen">
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -69,10 +74,10 @@ export default function EvaluacionesPage() {
           </div>
         </div>
 
-        {/* Tab switcher — visible solo para managers/admins; oculto en perfil de empleado ajeno */}
-        {canEval && !isProfileView && (
+        {/* Tab switcher — oculto en perfil de empleado ajeno */}
+        {visibleTabs.length > 0 && !isProfileView && (
           <div className="flex bg-white border border-[#e0ddd4] rounded-xl p-1 w-fit mb-6">
-            {ALL_TABS.map((tab) => (
+            {visibleTabs.map((tab) => (
               <button
                 key={tab.key}
                 onClick={() => navigate(tab.path)}
@@ -97,7 +102,7 @@ export default function EvaluacionesPage() {
             companyId={userProfile.company_id}
             departmentId={userProfile.department_id}
             userProfile={userProfile}
-            canEval={canEval}
+            canEval={canManage}
           />
         ) : isPerfilView ? (
           <MiPerfilView

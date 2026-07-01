@@ -43,7 +43,7 @@ export default function NotificationPreferencesPage() {
   if (!isITAdmin) {
     return (
       <main className="flex-1 overflow-y-auto main-bg h-screen">
-        <div className="max-w-5xl mx-auto px-6 py-8">
+        <div className="max-w-5xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
           <div className="bg-white border border-[#e0ddd4] rounded-2xl p-8 text-center">
             <p className="text-[17px] font-semibold text-[#111]">Acceso restringido</p>
             <p className="text-[15px] text-[#888] mt-1">Solo administradores IT pueden ver esta página.</p>
@@ -57,7 +57,7 @@ export default function NotificationPreferencesPage() {
 
   return (
     <main className="flex-1 overflow-y-auto main-bg h-screen">
-      <div className="max-w-5xl mx-auto px-6 py-8">
+      <div className="max-w-5xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
         {/* Header */}
         <div className="mb-6">
           <h1 className="text-[26px] font-bold text-[#111] leading-tight">Notificaciones de tickets</h1>

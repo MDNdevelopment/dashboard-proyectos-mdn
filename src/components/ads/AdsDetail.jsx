@@ -85,7 +85,7 @@ export default function AdsDetail({
 
         {/* Body */}
         <div className="px-6 py-5 overflow-y-auto flex-1">
-          <div className="grid grid-cols-2 gap-3 mb-4 text-[14px]">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 text-[14px]">
             <div>
               <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-0.5">
                 Cliente
