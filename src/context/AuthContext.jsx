@@ -9,6 +9,7 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
   const [userProfile, setUserProfile] = useState(null)
   const [modulePermissions, setModulePermissions] = useState({})
+  const [permissionsLoaded, setPermissionsLoaded] = useState(false)
 
   async function fetchUserProfile(userId) {
     const { data } = await supabase
@@ -21,7 +22,10 @@ export function AuthProvider({ children }) {
   }
 
   async function fetchModulePermissions(companyId) {
-    if (!companyId) return
+    if (!companyId) {
+      setPermissionsLoaded(true)
+      return
+    }
     const { data } = await supabase
       .from('module_permissions')
       .select('module_key, rules')
@@ -31,6 +35,7 @@ export function AuthProvider({ children }) {
       data.forEach(row => { map[row.module_key] = row.rules })
       setModulePermissions(map)
     }
+    setPermissionsLoaded(true)
   }
 
   useEffect(() => {
@@ -43,7 +48,7 @@ export function AuthProvider({ children }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
       if (session) fetchUserProfile(session.user.id)
-      else { setUserProfile(null); setModulePermissions({}) }
+      else { setUserProfile(null); setModulePermissions({}); setPermissionsLoaded(true) }
     })
 
     return () => subscription.unsubscribe()
@@ -79,7 +84,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={{
-      session, loading, userProfile, modulePermissions,
+      session, loading, userProfile, modulePermissions, permissionsLoaded,
       signIn, signOut, resetPassword, refreshProfile,
       can,
     }}>

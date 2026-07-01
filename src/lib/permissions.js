@@ -15,9 +15,17 @@
  * IMPORTANTE: negate solo aplica a tipos conocidos; tipo ausente/desconocido
  * siempre devuelve false sin invertir (para no abrir acceso por error).
  *
+ * Exclusiones (deny):
+ *   config.deny = [condición, ...]  ← lista plana; el usuario queda excluido
+ *   si cumple CUALQUIERA de las condiciones (OR). Las exclusiones se evalúan
+ *   después del check de admin y ANTES de las reglas de permiso; si alguna
+ *   coincide, se deniega el acceso independientemente de lo que digan rules.
+ *   Los administradores NUNCA son afectados por deny.
+ *
  * Defaults:
  *   - Si userProfile es null/undefined → false
- *   - Si userProfile.admin === true    → true (siempre)
+ *   - Si userProfile.admin === true    → true (siempre, incluso si está en deny)
+ *   - Si cumple alguna exclusión deny  → false (gana a rules)
  *   - Si no hay reglas configuradas    → true (módulo abierto a todos)
  *   - Un grupo sin condiciones         → true (grupo vacío pasa)
  */
@@ -42,9 +50,14 @@ export const can = canAccessModule
 
 export function canAccessModule(moduleKey, userProfile, configByModule) {
   if (!userProfile) return false
-  if (userProfile.admin === true) return true
+  if (userProfile.admin === true) return true   // admin ve todo, incluso si está en deny
 
   const config = configByModule?.[moduleKey]
+
+  // Exclusiones: si cumple cualquier condición de deny → denegar (gana a rules)
+  const deny = config?.deny ?? []
+  if (deny.some(cond => matchCondition(cond, userProfile))) return false
+
   const rules = config?.rules ?? []
 
   // Sin reglas = acceso libre

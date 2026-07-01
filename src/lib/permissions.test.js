@@ -457,3 +457,115 @@ describe('capacidades granulares — tareas (tabs por nivel)', () => {
     expect(canAccessModule('tareas.manage', LEVEL2_USER, configTareas)).toBe(true)
   })
 })
+
+// ──────────────────────────────────────────────
+// Exclusiones (deny) — "todo el mundo MENOS X"
+// ──────────────────────────────────────────────
+describe('exclusiones (deny)', () => {
+  const DISENO_USER  = { ...BASE_USER, department_id: 5 }
+  const OTRO_USER    = { ...BASE_USER, department_id: 99, user_id: 'user-99' }
+  const ADMIN_DISENO = { ...ADMIN_USER, department_id: 5 }
+
+  // ── deny por department ────────────────────
+  describe('deny por department — "todo el mundo menos Diseño"', () => {
+    const config = {
+      ads: { rules: [], deny: [{ type: 'department', ids: [5] }] },
+    }
+
+    it('usuario en depto 5 (Diseño) queda excluido aunque no haya reglas (módulo abierto)', () => {
+      expect(canAccessModule('ads', DISENO_USER, config)).toBe(false)
+    })
+
+    it('usuario en otro depto sí accede', () => {
+      expect(canAccessModule('ads', OTRO_USER, config)).toBe(true)
+    })
+  })
+
+  // ── deny por user ──────────────────────────
+  describe('deny por user — "todo el mundo menos Juan"', () => {
+    const config = {
+      ads: { rules: [], deny: [{ type: 'user', ids: ['user-1'] }] },
+    }
+
+    it('usuario excluido (user-1) no accede', () => {
+      expect(canAccessModule('ads', BASE_USER, config)).toBe(false)
+    })
+
+    it('otro usuario sí accede', () => {
+      expect(canAccessModule('ads', OTRO_USER, config)).toBe(true)
+    })
+  })
+
+  // ── deny gana a allow ──────────────────────
+  describe('deny tiene prioridad sobre rules de permiso', () => {
+    // rules concedería acceso a nivel ≥ 1 (= todos), pero deny bloquea al depto 5
+    const config = {
+      ads: {
+        rules: [{ all: [{ type: 'min_level', value: 1 }] }],
+        deny:  [{ type: 'department', ids: [5] }],
+      },
+    }
+
+    it('usuario en deny queda bloqueado aunque rules lo permitirían', () => {
+      expect(canAccessModule('ads', DISENO_USER, config)).toBe(false)
+    })
+
+    it('usuario que no está en deny sí pasa las rules', () => {
+      expect(canAccessModule('ads', OTRO_USER, config)).toBe(true)
+    })
+  })
+
+  // ── admin ignora deny ──────────────────────
+  describe('admin siempre accede aunque esté en deny', () => {
+    const config = {
+      ads: { rules: [], deny: [{ type: 'department', ids: [5] }] },
+    }
+
+    it('admin en depto 5 (excluido) igual accede', () => {
+      expect(canAccessModule('ads', ADMIN_DISENO, config)).toBe(true)
+    })
+  })
+
+  // ── OR de exclusiones ──────────────────────
+  describe('OR de condiciones deny — depto 5 O usuario user-1', () => {
+    const config = {
+      ads: {
+        rules: [],
+        deny: [
+          { type: 'department', ids: [5] },
+          { type: 'user', ids: ['user-1'] },
+        ],
+      },
+    }
+
+    it('usuario en depto 5 queda bloqueado', () => {
+      expect(canAccessModule('ads', DISENO_USER, config)).toBe(false)
+    })
+
+    it('usuario user-1 (base, depto 10) queda bloqueado', () => {
+      expect(canAccessModule('ads', BASE_USER, config)).toBe(false)
+    })
+
+    it('usuario en otro depto y otra id sí accede', () => {
+      expect(canAccessModule('ads', OTRO_USER, config)).toBe(true)
+    })
+  })
+
+  // ── Retrocompatibilidad ────────────────────
+  describe('retrocompatibilidad — config sin deny funciona igual que antes', () => {
+    it('config con solo rules (sin deny) no se ve afectado', () => {
+      const config = { ads: { rules: [{ all: [{ type: 'min_level', value: 2 }] }] } }
+      expect(canAccessModule('ads', BASE_USER, config)).toBe(false)   // nivel 1 no pasa
+      expect(canAccessModule('ads', LEVEL2_USER, config)).toBe(true)  // nivel 2 sí pasa
+    })
+
+    it('deny: [] vacío no excluye a nadie', () => {
+      const config = { ads: { rules: [], deny: [] } }
+      expect(canAccessModule('ads', BASE_USER, config)).toBe(true)
+    })
+
+    it('config undefined sigue siendo acceso libre', () => {
+      expect(canAccessModule('ads', BASE_USER, undefined)).toBe(true)
+    })
+  })
+})
