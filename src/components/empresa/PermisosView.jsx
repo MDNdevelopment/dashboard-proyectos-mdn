@@ -321,7 +321,7 @@ function CapabilitySection({
             </span>
           )}
           {hasDeny && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#fff0f0] text-[11.5px] font-semibold text-[#cc0000]">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#f6ece8] text-[11.5px] font-semibold text-[#a35a4d]">
               <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="8" cy="8" r="6.5"/><path d="M5 8h6" strokeLinecap="round"/></svg>
               {deny.length} {deny.length === 1 ? 'exclusión' : 'exclusiones'}
             </span>
@@ -381,57 +381,71 @@ function CapabilitySection({
       </div>
 
       {/* ── Bloque de Exclusiones ────────────────────────────────────────── */}
-      <div className="mt-4 pt-4 border-t border-[#f0ede3]">
-        {/* Encabezado del bloque */}
-        <div className="flex items-center gap-2 mb-2">
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#cc0000" strokeWidth="2" className="flex-shrink-0">
-            <circle cx="8" cy="8" r="6.5"/><path d="M5 8h6" strokeLinecap="round"/>
-          </svg>
-          <span className="text-[12px] font-mono font-bold tracking-widest uppercase text-[#cc0000]">
-            Exclusiones
-          </span>
-        </div>
-        <p className="text-[12.5px] text-[#999] mb-3 leading-relaxed">
-          Quién <strong>nunca</strong> puede acceder, aunque cumpla las reglas de arriba. Los administradores siempre acceden sin importar estas exclusiones.
-        </p>
+      <div className="mt-3 pt-3 border-t border-[#f0ede3]">
+        {deny.length === 0 ? (
+          /* Estado vacío: disparador discreto de una sola línea */
+          <button
+            type="button"
+            onClick={addDeny}
+            className="flex items-center gap-2 text-[12.5px] text-[#a35a4d] hover:text-[#8a463b] transition-colors group"
+          >
+            <span className="w-5 h-5 rounded-full bg-[#f6ece8] flex items-center justify-center flex-shrink-0 group-hover:bg-[#ecdcd6] transition-colors">
+              <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <path d="M8 3v10M3 8h10" strokeLinecap="round"/>
+              </svg>
+            </span>
+            Excluir a alguien
+          </button>
+        ) : (
+          /* Estado poblado: contenedor cálido compacto */
+          <div className="bg-[#faf6f4] border border-[#ecdcd6] rounded-xl p-3">
+            {/* Label compacto */}
+            <div className="flex items-center gap-1.5 mb-2.5">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="#a35a4d" strokeWidth="2" className="flex-shrink-0">
+                <circle cx="8" cy="8" r="6.5"/><path d="M5 8h6" strokeLinecap="round"/>
+              </svg>
+              <span className="text-[11px] font-mono font-semibold uppercase tracking-widest text-[#a35a4d]">
+                Exclusiones
+              </span>
+            </div>
 
-        {/* Lista de condiciones deny */}
-        {deny.length > 0 && (
-          <div className="space-y-2 mb-3 p-3 bg-[#fff8f8] border border-[#ffd0d0] rounded-xl">
-            {deny.map((cond, i) => (
-              <div key={i}>
-                {i > 0 && (
-                  <div className="flex items-center gap-2 my-1.5">
-                    <div className="h-px flex-1 bg-[#ffd0d0]" />
-                    <span className="text-[11px] font-mono font-bold text-[#cc0000] uppercase tracking-widest">O</span>
-                    <div className="h-px flex-1 bg-[#ffd0d0]" />
-                  </div>
-                )}
-                <ConditionRow
-                  cond={cond}
-                  onChange={patch => updateDeny(i, patch)}
-                  onRemove={() => removeDeny(i)}
-                  departments={departments}
-                  users={users}
-                  positions={positions}
-                  condTypes={DENY_COND_TYPES}
-                />
-              </div>
-            ))}
+            {/* Filas deny */}
+            <div className="space-y-2">
+              {deny.map((cond, i) => (
+                <div key={i}>
+                  {i > 0 && (
+                    <div className="flex items-center gap-2 my-1.5">
+                      <div className="h-px flex-1 bg-[#eaddd7]" />
+                      <span className="text-[10px] font-mono text-[#c4a49e]">o</span>
+                      <div className="h-px flex-1 bg-[#eaddd7]" />
+                    </div>
+                  )}
+                  <ConditionRow
+                    cond={cond}
+                    onChange={patch => updateDeny(i, patch)}
+                    onRemove={() => removeDeny(i)}
+                    departments={departments}
+                    users={users}
+                    positions={positions}
+                    condTypes={DENY_COND_TYPES}
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* Botón agregar inline */}
+            <button
+              type="button"
+              onClick={addDeny}
+              className="mt-2.5 flex items-center gap-1.5 text-[12.5px] text-[#a35a4d] hover:text-[#8a463b] transition-colors"
+            >
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M8 3v10M3 8h10" strokeLinecap="round"/>
+              </svg>
+              Agregar exclusión
+            </button>
           </div>
         )}
-
-        {/* Botón agregar exclusión */}
-        <button
-          type="button"
-          onClick={addDeny}
-          className="flex items-center gap-2 text-[13px] font-medium text-[#cc0000] border border-dashed border-[#ffd0d0] rounded-lg px-4 py-2 w-full hover:border-[#cc0000] hover:bg-[#fff0f0] transition-colors"
-        >
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M8 3v10M3 8h10" strokeLinecap="round"/>
-          </svg>
-          Agregar exclusión
-        </button>
       </div>
     </div>
   )
