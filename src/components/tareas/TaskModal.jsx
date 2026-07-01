@@ -284,7 +284,7 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Fecha solicitud</label>
               <input type="date" className="input-base" value={form.request_date} onChange={e => set('request_date', e.target.value)} />
