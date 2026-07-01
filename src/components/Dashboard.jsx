@@ -160,7 +160,7 @@ function Dashboard({ projects, loading, activeFilter, onNewProject, onEditProjec
   return (
     <div className="main-bg min-h-screen">
 
-<div className="px-6 lg:px-10 pt-8 pb-16 max-w-[1400px]">
+<div className="px-4 sm:px-6 lg:px-10 pt-8 pb-16 max-w-[1400px]">
 
         {/* Header */}
         <div className="flex items-end justify-between mb-7 gap-4">
