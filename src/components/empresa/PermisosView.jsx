@@ -380,8 +380,8 @@ function CapabilitySection({
         </button>
       </div>
 
-      {/* ── Bloque de Exclusiones ────────────────────────────────────────── */}
-      <div className="mt-3 pt-3 border-t border-[#f0ede3]">
+      {/* ── Bloque de Exclusiones (solo en capacidades de vista; manage las hereda) ── */}
+      {!isManage && <div className="mt-3 pt-3 border-t border-[#f0ede3]">
         {deny.length === 0 ? (
           /* Estado vacío: disparador discreto de una sola línea */
           <button
@@ -446,7 +446,7 @@ function CapabilitySection({
             </button>
           </div>
         )}
-      </div>
+      </div>}
     </div>
   )
 }
@@ -540,18 +540,28 @@ export default function PermisosView({ companyId }) {
   }, [companyId, initRules])
 
   function updateCapabilityRules(capKey, newRules) {
-    setRules(prev => ({ ...prev, [capKey]: newRules }))
+    setRules(prev => {
+      const next = { ...prev, [capKey]: newRules }
+      // Propagar deny a la contraparte manage (ver → modificar)
+      const manageKey = capKey + '.manage'
+      if (!capKey.endsWith('.manage') && prev[manageKey] !== undefined) {
+        next[manageKey] = { ...prev[manageKey], deny: newRules.deny }
+      }
+      return next
+    })
   }
 
   async function saveCapability(capKey) {
     setSavingKey(capKey)
-    const payload = rules[capKey]
+    const upserts = [{ company_id: companyId, module_key: capKey, rules: rules[capKey] }]
+    // Al guardar una capacidad de vista, persistir también la contraparte manage
+    const manageKey = capKey + '.manage'
+    if (!capKey.endsWith('.manage') && rules[manageKey] !== undefined) {
+      upserts.push({ company_id: companyId, module_key: manageKey, rules: rules[manageKey] })
+    }
     const { error } = await supabase
       .from('module_permissions')
-      .upsert(
-        { company_id: companyId, module_key: capKey, rules: payload },
-        { onConflict: 'company_id,module_key' }
-      )
+      .upsert(upserts, { onConflict: 'company_id,module_key' })
     setSavingKey(null)
     if (error) {
       showToast('err', `Error al guardar: ${error.message}`)
