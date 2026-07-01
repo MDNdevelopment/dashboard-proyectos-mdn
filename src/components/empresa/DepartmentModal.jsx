@@ -61,7 +61,7 @@ export default function DepartmentModal({ department = null, companyId, onClose,
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25 backdrop-blur-[3px]"
-      onClick={e => { if (e.target === e.currentTarget) requestClose() }}
+      
     >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
         {/* Header */}

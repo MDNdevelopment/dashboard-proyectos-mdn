@@ -112,7 +112,7 @@ export default function ProjectModal({ project, onClose, onSave }) {
   return (
     <div
       className="fixed inset-0 bg-black/25 backdrop-blur-[3px] flex items-center justify-center z-50 p-4"
-      onClick={e => { if (e.target === e.currentTarget) requestClose() }}
+      
     >
       <div className="bg-white rounded-2xl border border-[#e8e5db] w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl">
 

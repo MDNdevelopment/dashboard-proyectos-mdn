@@ -162,7 +162,6 @@ export default function AvatarUpload({ user, onUploaded, size = 72, label = 'Cam
       {imgSrc && createPortal(
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-[3px]"
-          onMouseDown={e => { if (e.target === e.currentTarget) handleCancel() }}
         >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
             {/* Header */}
