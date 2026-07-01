@@ -56,7 +56,7 @@ function ChipSelect({ options, selected, onChange, placeholder, wrapperClass = '
         </svg>
       </button>
       {open && (
-        <div className="absolute z-20 mt-1 w-full min-w-[160px] bg-white border border-[#d4d0c8] rounded-xl shadow-lg overflow-hidden">
+        <div className="absolute z-20 mt-1 w-full min-w-[160px] bg-white border border-[#d4d0c8] rounded-xl shadow-lg overflow-y-auto max-h-56">
           {options.length === 0 && (
             <p className="px-3 py-2 text-[13px] text-[#aaa]">Sin opciones</p>
           )}
