@@ -33,9 +33,9 @@ const EVAL_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" st
 const METRICS_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><polyline points="1 12 5 7 8 10 11 5 15 8" strokeLinecap="round" strokeLinejoin="round"/><path d="M1 14h14" strokeLinecap="round"/></svg>
 
 function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
-  // can con fallback () => true: cuando el contexto no tiene can (tests / carga inicial)
-  // el comportamiento es "default abierto" — igual que no tener reglas configuradas.
-  const { signOut, userProfile, refreshProfile, can = () => true } = useAuth()
+  const { signOut, userProfile, refreshProfile, can = () => false, permissionsLoaded = false } = useAuth()
+  // Hasta que los permisos carguen desde BD, ningún módulo gateado aparece (evita flash).
+  const canR = permissionsLoaded ? can : () => false
   const [menuOpen, setMenuOpen] = useState(false)
   const avatarInputRef = useRef(null)
   const menuRef = useRef(null)
@@ -211,7 +211,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
           )}
 
           {/* Soporte técnico — menú desplegable */}
-          {can('tickets') && <button
+          {canR('tickets') && <button
             onClick={() => setTicketsOpen(o => !o)}
             className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all text-left ${
               isTicketsRoute && !ticketsOpen
@@ -233,7 +233,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
             </svg>
           </button>}
 
-          {can('tickets') && ticketsOpen && (
+          {canR('tickets') && ticketsOpen && (
             <div className="ml-3 pl-3 border-l-2 border-[#ece9df] space-y-0.5 mt-0.5">
               <Link
                 to="/tickets"
@@ -281,7 +281,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
             </div>
           )}
           {/* Campañas & Tácticas — menú desplegable */}
-          {can('ads') && <button
+          {canR('ads') && <button
             onClick={() => setAdsOpen(o => !o)}
             className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all text-left ${
               isAdsRoute && !adsOpen
@@ -303,7 +303,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
             </svg>
           </button>}
 
-          {can('ads') && adsOpen && (
+          {canR('ads') && adsOpen && (
             <div className="ml-3 pl-3 border-l-2 border-[#ece9df] space-y-0.5 mt-0.5">
               <Link
                 to="/ads"
@@ -321,7 +321,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
             </div>
           )}
           {/* Gestión de Tareas — menú desplegable */}
-          {can('tareas') && <button
+          {canR('tareas') && <button
             onClick={() => setTareasOpen(o => !o)}
             className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all text-left ${
               isTareasRoute && !tareasOpen
@@ -343,7 +343,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
             </svg>
           </button>}
 
-          {can('tareas') && tareasOpen && (
+          {canR('tareas') && tareasOpen && (
             <div className="ml-3 pl-3 border-l-2 border-[#ece9df] space-y-0.5 mt-0.5">
               <Link
                 to="/tareas"
@@ -362,7 +362,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
           )}
 
           {/* Empresa */}
-          {can('empresa') && <button
+          {canR('empresa') && <button
             onClick={() => setEmpresaOpen(o => !o)}
             className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all text-left ${
               isEmpresaRoute && !empresaOpen
@@ -384,7 +384,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
             </svg>
           </button>}
 
-          {can('empresa') && empresaOpen && (
+          {canR('empresa') && empresaOpen && (
             <div className="ml-3 pl-3 border-l-2 border-[#ece9df] space-y-0.5 mt-0.5">
               <Link
                 to="/empresa"
@@ -490,7 +490,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
           )}
 
           {/* Evaluaciones */}
-          {can('evaluaciones') && <>
+          {canR('evaluaciones') && <>
             <button
               onClick={() => setEvalOpen(o => !o)}
               className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all text-left ${
@@ -569,7 +569,7 @@ function Sidebar({ projects, activeFilter, onFilterChange, connected }) {
           </>}
 
           {/* Reportes — gate configurable vía Permisos (antes: solo nivel 3+/admin hardcodeado) */}
-          {can('reportes') && (
+          {canR('reportes') && (
             <>
               <button
                 onClick={() => setMetricasOpen(o => !o)}
