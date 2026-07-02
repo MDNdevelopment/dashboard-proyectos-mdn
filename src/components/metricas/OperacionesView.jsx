@@ -289,7 +289,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
                             {/* Mes anterior — disabled */}
                             <div className="flex gap-2 items-center">
                               <div className="flex flex-col items-center gap-0.5">
-                                <span className="text-[10px] text-[#ccc] whitespace-nowrap">Ganados</span>
+                                <span className="text-[10px] text-[#999] whitespace-nowrap">Gan. {prevMonthName.slice(0,3)}</span>
                                 <input
                                   type="number"
                                   disabled
@@ -300,7 +300,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
                                 />
                               </div>
                               <div className="flex flex-col items-center gap-0.5">
-                                <span className="text-[10px] text-[#ccc] whitespace-nowrap">Totales</span>
+                                <span className="text-[10px] text-[#999] whitespace-nowrap">Tot. {prevMonthName.slice(0,3)}</span>
                                 <input
                                   type="number"
                                   disabled
@@ -315,7 +315,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
                             {/* Mes actual — editables */}
                             <div className="flex gap-2 items-center border-l border-[#e0ddd4] pl-2">
                               <div className="flex flex-col items-center gap-0.5">
-                                <span className="text-[10px] text-[#aaa] whitespace-nowrap">Ganados</span>
+                                <span className="text-[10px] text-[#aaa] whitespace-nowrap">Gan. {currMonthName.slice(0,3)}</span>
                                 <input
                                   type="number"
                                   className="input-base !w-[92px] flex-none text-[13px]"
@@ -325,7 +325,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
                                 />
                               </div>
                               <div className="flex flex-col items-center gap-0.5">
-                                <span className="text-[10px] text-[#aaa] whitespace-nowrap">Totales</span>
+                                <span className="text-[10px] text-[#aaa] whitespace-nowrap">Tot. {currMonthName.slice(0,3)}</span>
                                 <input
                                   type="number"
                                   className="input-base !w-[92px] flex-none text-[13px]"
