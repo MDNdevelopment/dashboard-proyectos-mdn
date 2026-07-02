@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../supabase'
 import DepartmentModal from './DepartmentModal'
+import PositionModal from './PositionModal'
 import ConfirmDeleteDialog from '../common/ConfirmDeleteDialog'
 
 export default function DepartmentsView({ companyId }) {
@@ -23,8 +24,8 @@ export default function DepartmentsView({ companyId }) {
   const [newPosName, setNewPosName] = useState('')
   const [savingPos, setSavingPos] = useState(false)
 
-  // Inline: editar cargo
-  const [editingPos, setEditingPos] = useState(null) // { position_id, position_name } | null
+  // Modal de edición de cargo
+  const [posModal, setPosModal] = useState(null) // null | objeto position a editar
 
   const [posError, setPosError] = useState(null)
 
@@ -171,35 +172,18 @@ export default function DepartmentsView({ companyId }) {
     setSavingPos(false)
   }
 
-  // ── Cargos: editar inline ───────────────────────────────────────────────────
-  async function handleSaveEditPos() {
-    if (!editingPos) return
-    const name = editingPos.position_name.trim()
-    if (!name) return
-    setSavingPos(true)
-    setPosError(null)
-
-    const { data, error } = await supabase
-      .from('positions')
-      .update({ position_name: name })
-      .eq('position_id', editingPos.position_id)
-      .select()
-      .single()
-
-    if (error) { setPosError(error.message); setSavingPos(false); return }
-
+  // ── Cargos: guardar desde modal ────────────────────────────────────────────
+  function handlePosSaved(saved) {
     setPositionsByDept(prev => {
       const next = new Map(prev)
       for (const [deptId, list] of next.entries()) {
-        if (list.some(p => p.position_id === data.position_id)) {
-          next.set(deptId, list.map(p => p.position_id === data.position_id ? data : p))
+        if (list.some(p => p.position_id === saved.position_id)) {
+          next.set(deptId, list.map(p => p.position_id === saved.position_id ? saved : p))
           break
         }
       }
       return next
     })
-    setEditingPos(null)
-    setSavingPos(false)
   }
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -323,76 +307,33 @@ export default function DepartmentsView({ companyId }) {
                     )}
 
                     <div className="space-y-1 mb-2">
-                      {positions.map(pos => {
-                        const isEditingThis = editingPos?.position_id === pos.position_id
-                        return (
-                          <div key={pos.position_id} className="flex items-center gap-2 group">
-                            {isEditingThis ? (
-                              <>
-                                <input
-                                  type="text"
-                                  className="input-base flex-1 !py-1.5 text-[15px]"
-                                  value={editingPos.position_name}
-                                  onChange={e =>
-                                    setEditingPos(ep => ({ ...ep, position_name: e.target.value }))
-                                  }
-                                  onKeyDown={e => {
-                                    if (e.key === 'Enter') handleSaveEditPos()
-                                    if (e.key === 'Escape') setEditingPos(null)
-                                  }}
-                                  autoFocus
-                                />
-                                <button
-                                  type="button"
-                                  onClick={handleSaveEditPos}
-                                  disabled={savingPos}
-                                  className="px-3 py-1.5 rounded-lg text-[14px] font-bold bg-[#111] text-white hover:bg-[#222] disabled:opacity-50 transition-colors"
-                                >
-                                  {savingPos ? '…' : 'Guardar'}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setEditingPos(null)}
-                                  className="px-3 py-1.5 rounded-lg text-[14px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
-                                >
-                                  Cancelar
-                                </button>
-                              </>
-                            ) : (
-                              <>
-                                <span className="flex-1 text-[15px] text-[#333] py-1">
-                                  {pos.position_name}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setEditingPos({
-                                      position_id: pos.position_id,
-                                      position_name: pos.position_name,
-                                    })
-                                  }
-                                  className="w-6 h-6 flex items-center justify-center rounded text-[#bbb] hover:text-[#111] hover:bg-[#f5f3eb] opacity-0 group-hover:opacity-100 transition-all"
-                                  aria-label={`Editar cargo ${pos.position_name}`}
-                                >
-                                  <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
-                                    <path d="M11.5 2.5l2 2L6 12l-3 1 1-3 7.5-7.5z" />
-                                  </svg>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setDeleteDialog({ type: 'pos', item: pos })}
-                                  className="w-6 h-6 flex items-center justify-center rounded text-[#bbb] hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
-                                  aria-label={`Eliminar cargo ${pos.position_name}`}
-                                >
-                                  <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
-                                    <path d="M3 4h10M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M13 4l-1 9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1L3 4" />
-                                  </svg>
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        )
-                      })}
+                      {positions.map(pos => (
+                        <div key={pos.position_id} className="flex items-center gap-2 group">
+                          <span className="flex-1 text-[15px] text-[#333] py-1">
+                            {pos.position_name}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setPosModal(pos)}
+                            className="w-6 h-6 flex items-center justify-center rounded text-[#bbb] hover:text-[#111] hover:bg-[#f5f3eb] opacity-0 group-hover:opacity-100 transition-all"
+                            aria-label={`Editar cargo ${pos.position_name}`}
+                          >
+                            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
+                              <path d="M11.5 2.5l2 2L6 12l-3 1 1-3 7.5-7.5z" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteDialog({ type: 'pos', item: pos })}
+                            className="w-6 h-6 flex items-center justify-center rounded text-[#bbb] hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
+                            aria-label={`Eliminar cargo ${pos.position_name}`}
+                          >
+                            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
+                              <path d="M3 4h10M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M13 4l-1 9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1L3 4" />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
                     </div>
 
                     {posError && (
@@ -472,6 +413,15 @@ export default function DepartmentsView({ companyId }) {
           onConfirm={handleConfirmDelete}
           onCancel={() => setDeleteDialog(null)}
           confirming={deleting}
+        />
+      )}
+
+      {/* Modal editar cargo */}
+      {posModal !== null && (
+        <PositionModal
+          position={posModal}
+          onClose={() => setPosModal(null)}
+          onSaved={saved => { handlePosSaved(saved); setPosModal(null) }}
         />
       )}
     </>

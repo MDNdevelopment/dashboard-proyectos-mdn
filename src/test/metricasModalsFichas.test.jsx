@@ -1,0 +1,647 @@
+/**
+ * Tests para los cambios funcionales del módulo Reportes/Métricas (fase 2):
+ * - EmployeeInfoModal: renderiza info básica del empleado + línea
+ * - ClientFichaModal: renderiza ficha técnica del cliente
+ * - LineHubView: sin datos rinde el Resumen (no early-return), dos columnas, sin Promedio Anual / Radar
+ * - OperacionesView: no hay sección "Feedback"
+ * - FinanzasView: toggle lista/tarjetas, KPIs clickeables
+ */
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
+import { vi } from 'vitest'
+
+// ── Mocks globales ─────────────────────────────────────────────────────────────
+
+vi.mock('../supabase', () => ({
+  supabase: {
+    from: vi.fn().mockReturnValue({
+      select:      vi.fn().mockReturnThis(),
+      insert:      vi.fn().mockReturnThis(),
+      update:      vi.fn().mockReturnThis(),
+      delete:      vi.fn().mockReturnThis(),
+      upsert:      vi.fn().mockReturnThis(),
+      eq:          vi.fn().mockReturnThis(),
+      order:       vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      single:      vi.fn().mockResolvedValue({ data: null, error: null }),
+    }),
+    channel: vi.fn(() => ({ on: vi.fn().mockReturnThis(), subscribe: vi.fn().mockReturnThis() })),
+    removeChannel: vi.fn(),
+  },
+}))
+
+vi.mock('../context/AuthContext', () => ({
+  useAuth: vi.fn(() => ({
+    userProfile: { user_id: 'u-1', company_id: 'co-1', access_level: 4, admin: true, first_name: 'Admin', last_name: 'Test' },
+    can: () => true,
+    signOut: vi.fn(),
+  })),
+}))
+
+vi.mock('recharts', () => ({
+  LineChart:           ({ children }) => <div data-testid="line-chart">{children}</div>,
+  BarChart:            ({ children }) => <div data-testid="bar-chart">{children}</div>,
+  Line:                () => null,
+  Bar:                 () => null,
+  XAxis:               () => null,
+  YAxis:               () => null,
+  Tooltip:             () => null,
+  Legend:              () => null,
+  CartesianGrid:       () => null,
+  ResponsiveContainer: ({ children }) => <div>{children}</div>,
+}))
+
+vi.mock('../components/metricas/ScoreDial', () => ({
+  default: () => <div data-testid="score-dial" />,
+}))
+
+// Mock de metricsApi centralizado — todos los consumidores de este archivo lo usan
+const mockLoadYearReports = vi.fn().mockResolvedValue({ data: [], error: null })
+const mockLoadCompanyEmployees = vi.fn().mockResolvedValue({
+  data: [
+    {
+      user_id: 'u-2', first_name: 'María', last_name: 'González',
+      avatar_url: null,
+      position:   { position_name: 'Diseñadora' },
+      department: { department_name: 'Diseño' },
+      email: 'maria@mdn.com', phone_number: null,
+      hire_date: null, birth_date: null, access_level: 2, admin: false,
+    },
+  ],
+  error: null,
+})
+const mockLoadClients = vi.fn().mockResolvedValue({
+  data: [
+    { id: 'c-1', name: 'Pepsi', monthly_fee: 1500, payment_day: 5,
+      logo_url: null, line_id: 'l-1', contacts: [], social_links: [] },
+  ],
+  error: null,
+})
+const mockLoadReport    = vi.fn().mockResolvedValue({ data: null, error: null })
+const mockLoadPrevReport = vi.fn().mockResolvedValue({ data: null, error: null })
+const mockUpsertReport  = vi.fn().mockResolvedValue({ data: null, error: null })
+
+vi.mock('../components/metricas/metricsApi', () => ({
+  loadYearReports:      (...a) => mockLoadYearReports(...a),
+  loadCompanyEmployees: (...a) => mockLoadCompanyEmployees(...a),
+  loadClients:          (...a) => mockLoadClients(...a),
+  loadReport:           (...a) => mockLoadReport(...a),
+  loadPrevReport:       (...a) => mockLoadPrevReport(...a),
+  upsertReport:         (...a) => mockUpsertReport(...a),
+  loadCompanyUsers:     vi.fn().mockResolvedValue({ data: [], error: null }),
+  seedMetricsIfEmpty:   vi.fn().mockResolvedValue(null),
+  loadLines:            vi.fn().mockResolvedValue({ data: [], error: null }),
+}))
+
+vi.mock('../utils/metricsFinance', () => ({
+  calcFinanzas: vi.fn(() => ({
+    totIngresos: 1700, totGastosOperativos: 0,
+    totSueldos: 0, totOtrosGastos: 0, totEgresos: 0, diferencia: 1700,
+  })),
+  ensureFinanzas: vi.fn(),
+  fmtUSD: vi.fn(v => `$${v}`),
+}))
+
+vi.mock('../utils/initMetricReport', () => ({
+  initMetricReport: vi.fn(() => MINIMAL_REPORT_DATA),
+}))
+vi.mock('../utils/syncReportClients', () => ({
+  syncReportClients: vi.fn((r) => r),
+}))
+
+// ── Fixtures ───────────────────────────────────────────────────────────────────
+
+const MINIMAL_REPORT_DATA = {
+  reuniones:     { realizadas: 0, meta: 15 },
+  productividad: { tareas: [] },
+  crecimiento:   { items: [] },
+  solicitudes:   { solicitudes: 0, editadas: 0 },
+  pautas:        { items: [] },
+  piezas:        { piezas: 0, editadas: 0 },
+  finanzas:      { ingresos: [], gastosOperativos: [], sueldos: [], otrosGastos: [] },
+}
+
+const FINANZAS_REPORT_DATA = {
+  ...MINIMAL_REPORT_DATA,
+  finanzas: {
+    ingresos: [
+      { id: 'i-1', clienteId: 'c-1', descripcion: 'Pepsi', monto: 1500 },
+      { id: 'i-2', clienteId: null,   descripcion: 'Otro ingreso', monto: 200 },
+    ],
+    gastosOperativos: [],
+    sueldos: [],
+    otrosGastos: [],
+  },
+}
+
+const MOCK_LINE = { id: 'l-1', name: 'Georgina', color: '#FAB51A', member_user_ids: ['u-2'] }
+
+function wrap(ui, initialEntry = '/') {
+  return render(<MemoryRouter initialEntries={[initialEntry]}>{ui}</MemoryRouter>)
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 1. EmployeeInfoModal
+// ══════════════════════════════════════════════════════════════════════════════
+
+import EmployeeInfoModal from '../components/metricas/EmployeeInfoModal'
+
+const MOCK_EMPLOYEE = {
+  user_id:      'u-2',
+  first_name:   'María',
+  last_name:    'González',
+  email:        'maria@mdn.com',
+  phone_number: '+58 412 1234567',
+  hire_date:    '2023-03-15',
+  birth_date:   '1995-07-22',
+  access_level: 2,
+  admin:        false,
+  avatar_url:   null,
+  position: {
+    position_name:        'Diseñadora',
+    position_description: 'Responsable de identidad visual de las marcas.',
+    position_functions:   ['Crear piezas gráficas', 'Revisar calendarios', 'Coordinar con clientes'],
+  },
+  department:   { department_name: 'Diseño' },
+}
+
+describe('EmployeeInfoModal — ficha del empleado', () => {
+  it('renderiza nombre completo del empleado', () => {
+    wrap(<EmployeeInfoModal employee={MOCK_EMPLOYEE} line={MOCK_LINE} onClose={vi.fn()} />)
+    expect(screen.getByText('María González')).toBeInTheDocument()
+  })
+
+  it('renderiza el cargo del empleado', () => {
+    wrap(<EmployeeInfoModal employee={MOCK_EMPLOYEE} line={MOCK_LINE} onClose={vi.fn()} />)
+    expect(screen.getByText('Diseñadora')).toBeInTheDocument()
+  })
+
+  it('renderiza el departamento', () => {
+    wrap(<EmployeeInfoModal employee={MOCK_EMPLOYEE} line={MOCK_LINE} onClose={vi.fn()} />)
+    expect(screen.getByText('Diseño')).toBeInTheDocument()
+  })
+
+  it('renderiza el correo', () => {
+    wrap(<EmployeeInfoModal employee={MOCK_EMPLOYEE} line={MOCK_LINE} onClose={vi.fn()} />)
+    expect(screen.getByText('maria@mdn.com')).toBeInTheDocument()
+  })
+
+  it('renderiza el chip de la línea', () => {
+    wrap(<EmployeeInfoModal employee={MOCK_EMPLOYEE} line={MOCK_LINE} onClose={vi.fn()} />)
+    expect(screen.getAllByText('Georgina').length).toBeGreaterThan(0)
+  })
+
+  it('renderiza el nivel de acceso "Nivel 2"', () => {
+    wrap(<EmployeeInfoModal employee={MOCK_EMPLOYEE} line={MOCK_LINE} onClose={vi.fn()} />)
+    expect(screen.getByText('Nivel 2')).toBeInTheDocument()
+  })
+
+  it('renderiza la descripción del cargo', () => {
+    wrap(<EmployeeInfoModal employee={MOCK_EMPLOYEE} line={MOCK_LINE} onClose={vi.fn()} />)
+    expect(screen.getByText('Responsable de identidad visual de las marcas.')).toBeInTheDocument()
+  })
+
+  it('renderiza las funciones del cargo como bullets', () => {
+    wrap(<EmployeeInfoModal employee={MOCK_EMPLOYEE} line={MOCK_LINE} onClose={vi.fn()} />)
+    expect(screen.getByText('Crear piezas gráficas')).toBeInTheDocument()
+    expect(screen.getByText('Revisar calendarios')).toBeInTheDocument()
+    expect(screen.getByText('Coordinar con clientes')).toBeInTheDocument()
+  })
+
+  it('no renderiza sección de funciones cuando position_functions está vacío', () => {
+    const emp = {
+      ...MOCK_EMPLOYEE,
+      position: { ...MOCK_EMPLOYEE.position, position_functions: [] },
+    }
+    wrap(<EmployeeInfoModal employee={emp} line={MOCK_LINE} onClose={vi.fn()} />)
+    expect(screen.queryByText(/Funciones/i)).not.toBeInTheDocument()
+  })
+
+  it('muestra "Ver perfil completo" cuando can("evaluaciones") es true', () => {
+    wrap(<EmployeeInfoModal employee={MOCK_EMPLOYEE} line={MOCK_LINE} onClose={vi.fn()} />)
+    expect(screen.getByText('Ver perfil completo')).toBeInTheDocument()
+  })
+
+  it('llama onClose al presionar el botón X', async () => {
+    const onClose = vi.fn()
+    wrap(<EmployeeInfoModal employee={MOCK_EMPLOYEE} line={MOCK_LINE} onClose={onClose} />)
+    await userEvent.click(screen.getByRole('button', { name: /cerrar/i }))
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it('llama onClose al presionar Escape', () => {
+    const onClose = vi.fn()
+    wrap(<EmployeeInfoModal employee={MOCK_EMPLOYEE} line={MOCK_LINE} onClose={onClose} />)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 2. ClientFichaModal
+// ══════════════════════════════════════════════════════════════════════════════
+
+import ClientFichaModal from '../components/metricas/ClientFichaModal'
+
+const MOCK_CLIENT = {
+  id:               'c-1',
+  name:             'Pepsi',
+  line_id:          'l-1',
+  monthly_fee:      1500,
+  payment_day:      5,
+  website:          'https://pepsi.com',
+  anniversary_date: '2019-04-01',
+  mdn_since:        '2021-06-15',
+  logo_url:         null,
+  contacts: [
+    { name: 'Carlos Rodríguez', role: 'Marketing', birth_day: 10, birth_month: 3 },
+  ],
+  social_links: [
+    { red: 'Instagram', link: 'https://instagram.com/pepsi' },
+    { red: 'TikTok',    link: 'https://tiktok.com/@pepsi' },
+  ],
+}
+
+describe('ClientFichaModal — ficha técnica del cliente (usuario privilegiado)', () => {
+  // El mock global de useAuth tiene access_level: 4, admin: true → privileged = true
+
+  it('renderiza el nombre del cliente', () => {
+    wrap(<ClientFichaModal client={MOCK_CLIENT} line={MOCK_LINE} onClose={vi.fn()} />)
+    expect(screen.getByText('Pepsi')).toBeInTheDocument()
+  })
+
+  it('renderiza la mensualidad para usuario privilegiado', () => {
+    wrap(<ClientFichaModal client={MOCK_CLIENT} line={MOCK_LINE} onClose={vi.fn()} />)
+    // fmtUSD mock devuelve "$1500"
+    expect(screen.getByText('$1500')).toBeInTheDocument()
+  })
+
+  it('renderiza el día de pago para usuario privilegiado', () => {
+    wrap(<ClientFichaModal client={MOCK_CLIENT} line={MOCK_LINE} onClose={vi.fn()} />)
+    expect(screen.getByText('día 5')).toBeInTheDocument()
+  })
+
+  it('renderiza el sitio web', () => {
+    wrap(<ClientFichaModal client={MOCK_CLIENT} line={MOCK_LINE} onClose={vi.fn()} />)
+    expect(screen.getByText('pepsi.com')).toBeInTheDocument()
+  })
+
+  it('renderiza los contactos', () => {
+    wrap(<ClientFichaModal client={MOCK_CLIENT} line={MOCK_LINE} onClose={vi.fn()} />)
+    expect(screen.getByText('Carlos Rodríguez')).toBeInTheDocument()
+    expect(screen.getByText('Marketing')).toBeInTheDocument()
+  })
+
+  it('renderiza las redes sociales', () => {
+    wrap(<ClientFichaModal client={MOCK_CLIENT} line={MOCK_LINE} onClose={vi.fn()} />)
+    expect(screen.getByText('Instagram')).toBeInTheDocument()
+    expect(screen.getByText('TikTok')).toBeInTheDocument()
+  })
+
+  it('llama onClose al presionar el botón X', async () => {
+    const onClose = vi.fn()
+    wrap(<ClientFichaModal client={MOCK_CLIENT} line={MOCK_LINE} onClose={onClose} />)
+    await userEvent.click(screen.getByRole('button', { name: /cerrar/i }))
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it('llama onClose al presionar Escape', () => {
+    const onClose = vi.fn()
+    wrap(<ClientFichaModal client={MOCK_CLIENT} line={MOCK_LINE} onClose={onClose} />)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+})
+
+import { useAuth as useAuthImport } from '../context/AuthContext'
+
+describe('ClientFichaModal — gating para usuarios sin privilegio (nivel < 4, no admin)', () => {
+  beforeEach(() => {
+    // Sobreescribir el mock de useAuth para este bloque
+    useAuthImport.mockReturnValue({
+      userProfile: { user_id: 'u-3', company_id: 'co-1', access_level: 2, admin: false },
+      can: () => true,
+      signOut: vi.fn(),
+    })
+  })
+
+  afterEach(() => {
+    // Restaurar el mock original con admin: true
+    useAuthImport.mockReturnValue({
+      userProfile: { user_id: 'u-1', company_id: 'co-1', access_level: 4, admin: true, first_name: 'Admin', last_name: 'Test' },
+      can: () => true,
+      signOut: vi.fn(),
+    })
+  })
+
+  it('oculta la mensualidad para usuario no privilegiado', () => {
+    wrap(<ClientFichaModal client={MOCK_CLIENT} line={MOCK_LINE} onClose={vi.fn()} />)
+    expect(screen.queryByText('$1500')).not.toBeInTheDocument()
+  })
+
+  it('oculta el día de pago para usuario no privilegiado', () => {
+    wrap(<ClientFichaModal client={MOCK_CLIENT} line={MOCK_LINE} onClose={vi.fn()} />)
+    expect(screen.queryByText('día 5')).not.toBeInTheDocument()
+  })
+
+  it('sigue mostrando el nombre y contactos para usuario no privilegiado', () => {
+    wrap(<ClientFichaModal client={MOCK_CLIENT} line={MOCK_LINE} onClose={vi.fn()} />)
+    expect(screen.getByText('Pepsi')).toBeInTheDocument()
+    expect(screen.getByText('Carlos Rodríguez')).toBeInTheDocument()
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 3. LineHubView — sin datos rinde el Resumen; dos columnas; sin Promedio Anual / Radar
+// ══════════════════════════════════════════════════════════════════════════════
+
+import LineHubView from '../components/metricas/LineHubView'
+
+describe('LineHubView — resumen sin reportes', () => {
+  it('con reports=[] renderiza el Resumen completo (no bloquea con "Sin datos")', async () => {
+    wrap(<LineHubView line={MOCK_LINE} companyId="co-1" year={2026} />)
+    await waitFor(() => {
+      expect(screen.getByTestId('score-dial')).toBeInTheDocument()
+    })
+    expect(screen.queryByText(/Sin datos para/)).not.toBeInTheDocument()
+  })
+
+  it('muestra un aviso de "Sin reportes" (banner informativo)', async () => {
+    wrap(<LineHubView line={MOCK_LINE} companyId="co-1" year={2026} />)
+    await waitFor(() => {
+      expect(screen.getByText(/Sin reportes para 2026/i)).toBeInTheDocument()
+    })
+  })
+
+  it('NO muestra "Promedio anual"', async () => {
+    wrap(<LineHubView line={MOCK_LINE} companyId="co-1" year={2026} />)
+    await waitFor(() => expect(screen.getByTestId('score-dial')).toBeInTheDocument())
+    expect(screen.queryByText(/promedio anual/i)).not.toBeInTheDocument()
+  })
+
+  it('NO renderiza el Radar de indicadores', async () => {
+    wrap(<LineHubView line={MOCK_LINE} companyId="co-1" year={2026} />)
+    await waitFor(() => expect(screen.getByTestId('score-dial')).toBeInTheDocument())
+    expect(screen.queryByText(/Radar de indicadores/i)).not.toBeInTheDocument()
+  })
+
+  it('muestra la columna de Empleados con María González', async () => {
+    wrap(<LineHubView line={MOCK_LINE} companyId="co-1" year={2026} />)
+    await waitFor(() => {
+      expect(screen.getByText('María González')).toBeInTheDocument()
+    })
+  })
+
+  it('muestra la columna de Marcas con Pepsi', async () => {
+    wrap(<LineHubView line={MOCK_LINE} companyId="co-1" year={2026} />)
+    await waitFor(() => {
+      expect(screen.getByText('Pepsi')).toBeInTheDocument()
+    })
+  })
+
+  it('al hacer click en el empleado abre EmployeeInfoModal', async () => {
+    wrap(<LineHubView line={MOCK_LINE} companyId="co-1" year={2026} />)
+    await waitFor(() => expect(screen.getByText('María González')).toBeInTheDocument())
+    await userEvent.click(screen.getByTitle('Ver información de María González'))
+    // El modal duplica el nombre en su header
+    await waitFor(() => {
+      expect(screen.getAllByText('María González').length).toBeGreaterThan(1)
+    })
+  })
+
+  it('al hacer click en la marca abre ClientFichaModal', async () => {
+    wrap(<LineHubView line={MOCK_LINE} companyId="co-1" year={2026} />)
+    await waitFor(() => expect(screen.getByText('Pepsi')).toBeInTheDocument())
+    await userEvent.click(screen.getByTitle('Ver ficha de Pepsi'))
+    await waitFor(() => {
+      expect(screen.getByText('día 5')).toBeInTheDocument()
+    })
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 4. OperacionesView — no existe sección "7. Feedback"
+// ══════════════════════════════════════════════════════════════════════════════
+
+import OperacionesView from '../components/metricas/OperacionesView'
+
+describe('OperacionesView — sin sección Feedback', () => {
+  beforeEach(() => {
+    mockLoadReport.mockResolvedValue({ data: { data: MINIMAL_REPORT_DATA }, error: null })
+    mockLoadPrevReport.mockResolvedValue({ data: null, error: null })
+    mockLoadClients.mockResolvedValue({ data: [], error: null })
+  })
+
+  it('no renderiza el título "7. Feedback de clientes"', async () => {
+    wrap(
+      <OperacionesView line={MOCK_LINE} companyId="co-1" year={2026} month={6} />,
+    )
+    await waitFor(() => {
+      expect(screen.getByText(/Reuniones realizadas/i)).toBeInTheDocument()
+    })
+    expect(screen.queryByText(/Feedback de clientes/i)).not.toBeInTheDocument()
+  })
+
+  it('sí renderiza las 6 secciones restantes', async () => {
+    wrap(
+      <OperacionesView line={MOCK_LINE} companyId="co-1" year={2026} month={6} />,
+    )
+    await waitFor(() => {
+      expect(screen.getByText(/Reuniones realizadas/i)).toBeInTheDocument()
+    })
+    expect(screen.getByText(/Tareas Fijas/i)).toBeInTheDocument()
+    expect(screen.getByText(/Crecimiento de seguidores/i)).toBeInTheDocument()
+    expect(screen.getByText(/Solicitudes vs Entregados/i)).toBeInTheDocument()
+    expect(screen.getByText(/Nº Pautas/i)).toBeInTheDocument()
+    expect(screen.getByText(/Nº Piezas/i)).toBeInTheDocument()
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 5. FinanzasView — toggle Lista/Tarjetas + KPIs clickeables
+// ══════════════════════════════════════════════════════════════════════════════
+
+import FinanzasView from '../components/metricas/FinanzasView'
+
+describe('FinanzasView — toggle Lista/Tarjetas + KPIs + Nómina', () => {
+  beforeEach(() => {
+    mockLoadReport.mockResolvedValue({ data: { data: FINANZAS_REPORT_DATA }, error: null })
+    mockLoadPrevReport.mockResolvedValue({ data: null, error: null })
+    mockLoadClients.mockResolvedValue({
+      data: [
+        { id: 'c-1', name: 'Pepsi', monthly_fee: 1500, payment_day: 5,
+          logo_url: null, line_id: 'l-1', contacts: [], social_links: [] },
+      ],
+      error: null,
+    })
+    // Restaurar auth privilegiado
+    useAuthImport.mockReturnValue({
+      userProfile: { user_id: 'u-1', company_id: 'co-1', access_level: 4, admin: true, first_name: 'Admin', last_name: 'Test' },
+      can: () => true,
+      signOut: vi.fn(),
+    })
+  })
+
+  it('renderiza el toggle "Lista" / "Tarjetas" en la sección Ingresos', async () => {
+    wrap(<FinanzasView line={MOCK_LINE} companyId="co-1" year={2026} month={6} />)
+    await waitFor(() => {
+      // Hay 2 toggles: Ingresos y Sueldos
+      expect(screen.getAllByText('Lista').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('Tarjetas').length).toBeGreaterThanOrEqual(1)
+    })
+  })
+
+  it('la vista por defecto es Tarjetas — Pepsi visible sin hacer click', async () => {
+    wrap(<FinanzasView line={MOCK_LINE} companyId="co-1" year={2026} month={6} />)
+    await waitFor(() => {
+      expect(screen.getByText('Pepsi')).toBeInTheDocument()
+    })
+  })
+
+  it('al cambiar a "Lista" Pepsi sigue visible', async () => {
+    wrap(<FinanzasView line={MOCK_LINE} companyId="co-1" year={2026} month={6} />)
+    await waitFor(() => expect(screen.getAllByText('Lista').length).toBeGreaterThanOrEqual(1))
+    // Click el primer toggle "Lista" (sección Ingresos)
+    await userEvent.click(screen.getAllByText('Lista')[0])
+    await waitFor(() => {
+      expect(screen.getByText('Pepsi')).toBeInTheDocument()
+    })
+  })
+
+  it('el KPI "Ingresos brutos" es un botón (clickeable)', async () => {
+    wrap(<FinanzasView line={MOCK_LINE} companyId="co-1" year={2026} month={6} />)
+    await waitFor(() => {
+      expect(screen.getByTitle('Ir a ingresos')).toBeInTheDocument()
+    })
+    expect(screen.getByTitle('Ir a ingresos').tagName.toLowerCase()).toBe('button')
+  })
+
+  it('el KPI "Total egresos" es un botón (clickeable)', async () => {
+    wrap(<FinanzasView line={MOCK_LINE} companyId="co-1" year={2026} month={6} />)
+    await waitFor(() => {
+      expect(screen.getByTitle('Ir a gastos')).toBeInTheDocument()
+    })
+    expect(screen.getByTitle('Ir a gastos').tagName.toLowerCase()).toBe('button')
+  })
+
+  it('muestra la sección Sueldos / Nómina para usuario privilegiado', async () => {
+    wrap(<FinanzasView line={MOCK_LINE} companyId="co-1" year={2026} month={6} />)
+    await waitFor(() => {
+      expect(screen.getByText('Sueldos / Nómina')).toBeInTheDocument()
+    })
+  })
+
+  it('oculta la sección Sueldos / Nómina para usuario no privilegiado', async () => {
+    useAuthImport.mockReturnValue({
+      userProfile: { user_id: 'u-3', company_id: 'co-1', access_level: 2, admin: false },
+      can: () => true,
+      signOut: vi.fn(),
+    })
+    wrap(<FinanzasView line={MOCK_LINE} companyId="co-1" year={2026} month={6} />)
+    await waitFor(() => {
+      // Ingresos siempre visible
+      expect(screen.getByText('Ingresos')).toBeInTheDocument()
+    })
+    expect(screen.queryByText('Sueldos / Nómina')).not.toBeInTheDocument()
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 6. FinanzasView — Sueldos: toggle Lista/Tarjetas + foto de perfil
+// ══════════════════════════════════════════════════════════════════════════════
+
+describe('FinanzasView — Sueldos toggle Lista/Tarjetas y foto de perfil', () => {
+  const EMPLOYEE_WITH_AVATAR = {
+    user_id:    'u-2',
+    first_name: 'María',
+    last_name:  'González',
+    avatar_url: 'https://res.cloudinary.com/test/image/upload/maria.jpg',
+    position:   { position_name: 'Diseñadora' },
+    department: { department_name: 'Diseño' },
+    email: 'maria@mdn.com', phone_number: null,
+    hire_date: null, birth_date: null, access_level: 2, admin: false,
+  }
+
+  const SUELDOS_REPORT = {
+    ...MINIMAL_REPORT_DATA,
+    finanzas: {
+      ingresos:         [],
+      gastosOperativos: [],
+      sueldos: [
+        { id: 'sue-u-2', empleadoId: 'u-2', descripcion: 'María González', monto: 1200 },
+      ],
+      otrosGastos: [],
+    },
+  }
+
+  beforeEach(() => {
+    mockLoadReport.mockResolvedValue({ data: { data: SUELDOS_REPORT }, error: null })
+    mockLoadPrevReport.mockResolvedValue({ data: null, error: null })
+    mockLoadClients.mockResolvedValue({ data: [], error: null })
+    mockLoadCompanyEmployees.mockResolvedValue({ data: [EMPLOYEE_WITH_AVATAR], error: null })
+    useAuthImport.mockReturnValue({
+      userProfile: { user_id: 'u-1', company_id: 'co-1', access_level: 4, admin: true, first_name: 'Admin', last_name: 'Test' },
+      can: () => true,
+      signOut: vi.fn(),
+    })
+  })
+
+  afterEach(() => {
+    // Restaurar el mock global de empleados (sin avatar)
+    mockLoadCompanyEmployees.mockResolvedValue({
+      data: [
+        {
+          user_id: 'u-2', first_name: 'María', last_name: 'González',
+          avatar_url: null,
+          position:   { position_name: 'Diseñadora' },
+          department: { department_name: 'Diseño' },
+          email: 'maria@mdn.com', phone_number: null,
+          hire_date: null, birth_date: null, access_level: 2, admin: false,
+        },
+      ],
+      error: null,
+    })
+  })
+
+  it('la sección Sueldos tiene el toggle Lista/Tarjetas (igual que Ingresos)', async () => {
+    wrap(<FinanzasView line={MOCK_LINE} companyId="co-1" year={2026} month={6} />)
+    await waitFor(() => expect(screen.getByText('Sueldos / Nómina')).toBeInTheDocument())
+    // Ingresos + Sueldos → 2 botones "Lista" y 2 "Tarjetas"
+    expect(screen.getAllByText('Lista').length).toBe(2)
+    expect(screen.getAllByText('Tarjetas').length).toBe(2)
+  })
+
+  it('en vista tarjetas (default) muestra la foto de perfil del empleado', async () => {
+    wrap(<FinanzasView line={MOCK_LINE} companyId="co-1" year={2026} month={6} />)
+    await waitFor(() => {
+      const img = screen.getByAltText('MG')
+      expect(img).toHaveAttribute('src', EMPLOYEE_WITH_AVATAR.avatar_url)
+    })
+  })
+
+  it('al cambiar a vista lista la foto de perfil sigue visible', async () => {
+    wrap(<FinanzasView line={MOCK_LINE} companyId="co-1" year={2026} month={6} />)
+    await waitFor(() => expect(screen.getByText('Sueldos / Nómina')).toBeInTheDocument())
+    // Click "Lista" del toggle de Sueldos (el segundo de los dos toggles)
+    const listaButtons = screen.getAllByText('Lista')
+    await userEvent.click(listaButtons[1])
+    await waitFor(() => {
+      const img = screen.getByAltText('MG')
+      expect(img).toHaveAttribute('src', EMPLOYEE_WITH_AVATAR.avatar_url)
+    })
+  })
+
+  it('sin avatar_url muestra iniciales en lugar de img', async () => {
+    mockLoadCompanyEmployees.mockResolvedValue({
+      data: [{ ...EMPLOYEE_WITH_AVATAR, avatar_url: null }],
+      error: null,
+    })
+    wrap(<FinanzasView line={MOCK_LINE} companyId="co-1" year={2026} month={6} />)
+    await waitFor(() => expect(screen.getByText('Sueldos / Nómina')).toBeInTheDocument())
+    await waitFor(() => {
+      expect(screen.queryByAltText('MG')).not.toBeInTheDocument() // no hay <img>
+      expect(screen.getByText('MG')).toBeInTheDocument()           // se muestran iniciales
+    })
+  })
+})

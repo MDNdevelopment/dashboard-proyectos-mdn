@@ -85,6 +85,15 @@ export async function loadCompanyUsers(companyId) {
     .order("first_name");
 }
 
+/** Carga empleados con toda la información básica (cargo y departamento incluidos). */
+export async function loadCompanyEmployees(companyId) {
+  return supabase
+    .from("users")
+    .select("*, department:departments(department_name), position:positions(position_name, position_description, position_functions)")
+    .eq("company_id", companyId)
+    .order("first_name");
+}
+
 export async function deleteClient(clientId) {
   return supabase.from("metric_clients").delete().eq("id", clientId);
 }

@@ -1,14 +1,17 @@
-import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "../../context/AuthContext";
+import { isFinancePrivileged } from "../../lib/permissions";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
-import { loadReport, loadPrevReport, upsertReport, loadClients } from "./metricsApi";
+import { loadReport, loadPrevReport, upsertReport, loadClients, loadCompanyEmployees } from "./metricsApi";
 import { initMetricReport } from "../../utils/initMetricReport";
 import { syncReportClients } from "../../utils/syncReportClients";
 import { calcFinanzas, ensureFinanzas, fmtUSD } from "../../utils/metricsFinance";
 import { MONTHS } from "./constants";
+import ClientFichaModal from "./ClientFichaModal";
+import EmployeeInfoModal from "./EmployeeInfoModal";
+import { Avatar } from "../tareas/UserPickerSingle";
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
@@ -22,37 +25,54 @@ const SECCIONES = [
 ];
 
 export default function FinanzasView({ line, companyId, year, month }) {
-  const navigate = useNavigate();
-  const { can = () => true } = useAuth();
-  const [report, setReport] = useState(null);
+  const { can = () => true, userProfile } = useAuth();
+  const privileged = isFinancePrivileged(userProfile);
+
+  const [report, setReport]           = useState(null);
   const [lineClients, setLineClients] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState(null);
+  const [lineEmployees, setLineEmployees] = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [saving, setSaving]           = useState(false);
+  const [saved, setSaved]             = useState(false);
+  const [error, setError]             = useState(null);
+  const [cliModal, setCliModal]       = useState(null); // null=cerrado, objeto=cliente
+  const [empModal, setEmpModal]       = useState(null); // null=cerrado, objeto=empleado
+  const [ingresosView, setIngresosView] = useState("tarjetas"); // "lista" | "tarjetas" — tarjetas por defecto
+  const [sueldosView,  setSueldosView]  = useState("tarjetas"); // "lista" | "tarjetas" — tarjetas por defecto
+
+  // Refs para scroll de KPIs
+  const ingresosRef = useRef(null);
+  const gastosRef   = useRef(null);
 
   const load = useCallback(async () => {
     if (!line?.id || !companyId) return;
     setLoading(true);
     setError(null);
-    const [reportRes, prevRes, clientsRes] = await Promise.all([
+    const [reportRes, prevRes, clientsRes, employeesRes] = await Promise.all([
       loadReport(line.id, year, month),
       loadPrevReport(line.id, year, month),
       loadClients(companyId, line.id),
+      loadCompanyEmployees(companyId),
     ]);
     const clients = clientsRes.data ?? [];
     setLineClients(clients);
+
+    // Filtrar empleados del team de esta línea (member_user_ids es un array jsonb)
+    const memberIds = new Set(line.member_user_ids ?? []);
+    const employees = (employeesRes.data ?? []).filter(e => memberIds.has(e.user_id));
+    setLineEmployees(employees);
+
     if (reportRes.data) {
       const d = reportRes.data.data;
       ensureFinanzas(d);
-      setReport(syncReportClients(d, clients));
+      setReport(syncReportClients(d, clients, employees));
     } else {
-      const fresh = initMetricReport(prevRes.data?.data ?? null, clients);
+      const fresh = initMetricReport(prevRes.data?.data ?? null, clients, {}, employees);
       ensureFinanzas(fresh);
-      setReport(syncReportClients(fresh, clients));
+      setReport(syncReportClients(fresh, clients, employees));
     }
     setLoading(false);
-  }, [line?.id, companyId, year, month]);
+  }, [line?.id, line?.member_user_ids, companyId, year, month]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -111,6 +131,11 @@ export default function FinanzasView({ line, companyId, year, month }) {
     { name: "Diferencia", valor: f.diferencia },
   ];
 
+  // Secciones visibles (sueldos solo para privilegiados)
+  const seccionesVisibles = SECCIONES.filter(
+    sec => sec.key !== "sueldos" || privileged
+  );
+
   return (
     <div className="space-y-5">
       {/* KPIs */}
@@ -118,8 +143,20 @@ export default function FinanzasView({ line, companyId, year, month }) {
         {line.name} · {MONTHS[month - 1]} {year}
       </div>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        <KpiCard label="Ingresos brutos"    value={fmtUSD(f.totIngresos)}    color="text-green-600" />
-        <KpiCard label="Total egresos"      value={fmtUSD(f.totEgresos)}     color="text-red-500"   />
+        <KpiCard
+          label="Ingresos brutos"
+          value={fmtUSD(f.totIngresos)}
+          color="text-green-600"
+          onClick={() => ingresosRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+          title="Ir a ingresos"
+        />
+        <KpiCard
+          label="Total egresos"
+          value={fmtUSD(f.totEgresos)}
+          color="text-red-500"
+          onClick={() => gastosRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+          title="Ir a gastos"
+        />
         <KpiCard
           label="Diferencia"
           value={fmtUSD(f.diferencia)}
@@ -158,101 +195,286 @@ export default function FinanzasView({ line, companyId, year, month }) {
       </div>
 
       {/* Secciones editables */}
-      {SECCIONES.map(sec => (
-        <div key={sec.key} className="bg-white rounded-2xl border border-[#e0ddd4] px-5 py-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: sec.color }} />
-              <p className="text-[15px] font-bold text-[#111]">{sec.label}</p>
-            </div>
-            <span className="text-[16px] font-bold text-[#111] tabular-nums">
-              {fmtUSD(
-                (report.finanzas[sec.key] ?? []).reduce((a, it) => a + Number(it.monto ?? 0), 0)
-              )}
-            </span>
-          </div>
+      {seccionesVisibles.map((sec) => {
+        const isIngresos     = sec.key === "ingresos";
+        const isSueldos      = sec.key === "sueldos";
+        const isFirstGastos  = sec.key === "gastosOperativos";
+        const items = report.finanzas[sec.key] ?? [];
 
-          {(report.finanzas[sec.key] ?? []).length === 0 ? (
-            <p className="text-[13px] text-[#bbb]">Sin entradas aún.</p>
-          ) : (
-            <div className="space-y-2">
-              {(report.finanzas[sec.key] ?? []).map((item, idx) => {
-                const isClientRow = sec.key === "ingresos" && item.clienteId != null;
-                return (
-                  <div key={item.id ?? idx} className="flex items-center gap-2">
-                    {isClientRow ? (
-                      /* Fila ligada a cliente: nombre solo-lectura; clickeable hacia Tareas si hay permiso */
-                      can("tareas") && item.clienteId ? (
+        // Vista-toggle compartida: ingresos y sueldos tienen Lista/Tarjetas
+        const sectionView    = isIngresos ? ingresosView : sueldosView;
+        const setSectionView = isIngresos ? setIngresosView : setSueldosView;
+
+        return (
+          <div
+            key={sec.key}
+            ref={isIngresos ? ingresosRef : isFirstGastos ? gastosRef : null}
+            className="bg-white rounded-2xl border border-[#e0ddd4] px-5 py-4 space-y-3"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: sec.color }} />
+                <p className="text-[15px] font-bold text-[#111]">{sec.label}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                {/* Toggle Lista/Tarjetas — ingresos y sueldos */}
+                {(isIngresos || isSueldos) && (
+                  <div className="flex bg-[#f5f3eb] border border-[#e0ddd4] rounded-lg p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setSectionView("lista")}
+                      className={`px-2.5 py-1 rounded-md text-[12px] font-semibold transition-all ${
+                        sectionView === "lista"
+                          ? "bg-white text-[#111] shadow-sm"
+                          : "text-[#888] hover:text-[#555]"
+                      }`}
+                      title="Vista lista"
+                    >
+                      Lista
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSectionView("tarjetas")}
+                      className={`px-2.5 py-1 rounded-md text-[12px] font-semibold transition-all ${
+                        sectionView === "tarjetas"
+                          ? "bg-white text-[#111] shadow-sm"
+                          : "text-[#888] hover:text-[#555]"
+                      }`}
+                      title="Vista tarjetas"
+                    >
+                      Tarjetas
+                    </button>
+                  </div>
+                )}
+                <span className="text-[16px] font-bold text-[#111] tabular-nums">
+                  {fmtUSD(items.reduce((a, it) => a + Number(it.monto ?? 0), 0))}
+                </span>
+              </div>
+            </div>
+
+            {items.length === 0 ? (
+              <p className="text-[13px] text-[#bbb]">Sin entradas aún.</p>
+            ) : isIngresos && sectionView === "tarjetas" ? (
+              /* ── Vista tarjetas para ingresos — editable ── */
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                {items.map((item, idx) => {
+                  const isClientRow = item.clienteId != null;
+                  const clientObj   = isClientRow ? lineClients.find(c => c.id === item.clienteId) : null;
+                  return (
+                    <div
+                      key={item.id ?? idx}
+                      className="flex flex-col gap-1.5 px-3 py-2.5 rounded-xl border border-[#e0ddd4] bg-[#faf9f5]"
+                    >
+                      {/* Nombre: clickeable si es cliente */}
+                      {isClientRow && clientObj ? (
                         <button
                           type="button"
-                          onClick={() => navigate(`/tareas?view=base&team=${line.id}&client=${item.clienteId}`)}
-                          className="flex-1 min-w-0 text-[14px] text-[#333] px-2.5 py-2 bg-[#faf9f5] border border-[#e8e5db] rounded-lg truncate text-left hover:bg-[#f0ede3] hover:border-[#d0ccc0] transition-colors"
-                          title={`Ver tareas de ${item.descripcion}`}
+                          onClick={() => setCliModal(clientObj)}
+                          className="text-[13px] font-semibold text-[#333] truncate text-left hover:text-[#111] hover:underline transition-colors"
+                          title={`Ver ficha de ${item.descripcion}`}
                         >
                           {item.descripcion}
                         </button>
+                      ) : isClientRow ? (
+                        <span className="text-[13px] font-semibold text-[#333] truncate">{item.descripcion || "—"}</span>
                       ) : (
-                        <span className="flex-1 min-w-0 text-[14px] text-[#333] px-2.5 py-2 bg-[#faf9f5] border border-[#e8e5db] rounded-lg truncate">
-                          {item.descripcion}
-                        </span>
-                      )
-                    ) : (
+                        <input
+                          type="text"
+                          className="input-base !py-1 text-[13px]"
+                          placeholder="Descripción"
+                          value={item.descripcion ?? ""}
+                          onChange={e => updateItem("ingresos", idx, "descripcion", e.target.value)}
+                        />
+                      )}
+                      {/* Monto editable */}
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          className="input-base !py-1 flex-1 min-w-0 text-[13px] font-mono"
+                          placeholder="0.00"
+                          value={item.monto ?? ""}
+                          onChange={e => updateItem("ingresos", idx, "monto", e.target.value)}
+                        />
+                        {!isClientRow && (
+                          <button
+                            type="button"
+                            onClick={() => removeItem("ingresos", idx)}
+                            className="text-[#ccc] hover:text-red-400 transition-colors flex-shrink-0"
+                            title="Eliminar"
+                          >
+                            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
+                              <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round"/>
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : isSueldos && sectionView === "tarjetas" ? (
+              /* ── Vista tarjetas para sueldos — con foto de perfil ── */
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                {items.map((item, idx) => {
+                  const isEmployeeRow = item.empleadoId != null;
+                  const employeeObj   = isEmployeeRow ? lineEmployees.find(e => e.user_id === item.empleadoId) : null;
+                  return (
+                    <div
+                      key={item.id ?? idx}
+                      className="flex flex-col gap-1.5 px-3 py-2.5 rounded-xl border border-[#e0ddd4] bg-[#faf9f5]"
+                    >
+                      {/* Avatar + nombre: clickeable si hay empleado resuelto */}
+                      {isEmployeeRow && employeeObj ? (
+                        <button
+                          type="button"
+                          onClick={() => setEmpModal(employeeObj)}
+                          className="flex items-center gap-2 text-left hover:opacity-75 transition-opacity"
+                          title={`Ver ficha de ${item.descripcion}`}
+                        >
+                          <Avatar user={employeeObj} size={28} />
+                          <span className="text-[13px] font-semibold text-[#333] truncate">{item.descripcion}</span>
+                        </button>
+                      ) : isEmployeeRow ? (
+                        <span className="text-[13px] font-semibold text-[#333] truncate">{item.descripcion || "—"}</span>
+                      ) : (
+                        <input
+                          type="text"
+                          className="input-base !py-1 text-[13px]"
+                          placeholder="Descripción"
+                          value={item.descripcion ?? ""}
+                          onChange={e => updateItem("sueldos", idx, "descripcion", e.target.value)}
+                        />
+                      )}
+                      {/* Monto editable */}
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          className="input-base !py-1 flex-1 min-w-0 text-[13px] font-mono"
+                          placeholder="0.00"
+                          value={item.monto ?? ""}
+                          onChange={e => updateItem("sueldos", idx, "monto", e.target.value)}
+                        />
+                        {!isEmployeeRow && (
+                          <button
+                            type="button"
+                            onClick={() => removeItem("sueldos", idx)}
+                            className="text-[#ccc] hover:text-red-400 transition-colors flex-shrink-0"
+                            title="Eliminar"
+                          >
+                            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
+                              <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round"/>
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              /* ── Vista lista (default para todas las secciones no-ingresos + ingresos en lista) ── */
+              <div className="space-y-2">
+                {items.map((item, idx) => {
+                  const isClientRow   = isIngresos  && item.clienteId  != null;
+                  const isEmployeeRow = isSueldos   && item.empleadoId != null;
+                  const clientObj     = isClientRow   ? lineClients.find(c => c.id === item.clienteId)     : null;
+                  const employeeObj   = isEmployeeRow ? lineEmployees.find(e => e.user_id === item.empleadoId) : null;
+                  return (
+                    <div key={item.id ?? idx} className="flex items-center gap-2">
+                      {isClientRow ? (
+                        /* Fila ligada a cliente: nombre solo-lectura; clickeable hacia ficha técnica */
+                        clientObj ? (
+                          <button
+                            type="button"
+                            onClick={() => setCliModal(clientObj)}
+                            className="flex-1 min-w-0 text-[14px] text-[#333] px-2.5 py-2 bg-[#faf9f5] border border-[#e8e5db] rounded-lg truncate text-left hover:bg-[#f0ede3] hover:border-[#d0ccc0] transition-colors"
+                            title={`Ver ficha de ${item.descripcion}`}
+                          >
+                            {item.descripcion}
+                          </button>
+                        ) : (
+                          <span className="flex-1 min-w-0 text-[14px] text-[#333] px-2.5 py-2 bg-[#faf9f5] border border-[#e8e5db] rounded-lg truncate">
+                            {item.descripcion}
+                          </span>
+                        )
+                      ) : isEmployeeRow ? (
+                        /* Fila ligada a empleado: avatar + nombre; clickeable hacia ficha empleado */
+                        employeeObj ? (
+                          <button
+                            type="button"
+                            onClick={() => setEmpModal(employeeObj)}
+                            className="flex-1 min-w-0 flex items-center gap-2 text-[14px] text-[#333] px-2.5 py-2 bg-[#faf9f5] border border-[#e8e5db] rounded-lg text-left hover:bg-[#f0ede3] hover:border-[#d0ccc0] transition-colors"
+                            title={`Ver ficha de ${item.descripcion}`}
+                          >
+                            <Avatar user={employeeObj} size={22} />
+                            <span className="truncate">{item.descripcion}</span>
+                          </button>
+                        ) : (
+                          <span className="flex-1 min-w-0 text-[14px] text-[#333] px-2.5 py-2 bg-[#faf9f5] border border-[#e8e5db] rounded-lg truncate">
+                            {item.descripcion}
+                          </span>
+                        )
+                      ) : (
+                        <input
+                          type="text"
+                          className="input-base flex-1 min-w-0 text-[14px]"
+                          placeholder="Justificación"
+                          value={item.descripcion ?? ""}
+                          onChange={e => updateItem(sec.key, idx, "descripcion", e.target.value)}
+                        />
+                      )}
                       <input
-                        type="text"
-                        className="input-base flex-1 min-w-0 text-[14px]"
-                        placeholder="Justificación"
-                        value={item.descripcion ?? ""}
-                        onChange={e => updateItem(sec.key, idx, "descripcion", e.target.value)}
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        className="input-base !w-28 flex-none text-[14px]"
+                        placeholder="0.00"
+                        value={item.monto ?? ""}
+                        onChange={e => updateItem(sec.key, idx, "monto", e.target.value)}
                       />
-                    )}
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      className="input-base !w-28 flex-none text-[14px]"
-                      placeholder="0.00"
-                      value={item.monto ?? ""}
-                      onChange={e => updateItem(sec.key, idx, "monto", e.target.value)}
-                    />
-                    {!isClientRow && (
-                      <button
-                        onClick={() => removeItem(sec.key, idx)}
-                        className="text-[#ccc] hover:text-red-400 transition-colors flex-shrink-0"
-                        title="Eliminar"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
-                          <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round"/>
-                        </svg>
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                      {!isClientRow && !isEmployeeRow && (
+                        <button
+                          onClick={() => removeItem(sec.key, idx)}
+                          className="text-[#ccc] hover:text-red-400 transition-colors flex-shrink-0"
+                          title="Eliminar"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
+                            <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round"/>
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
-          <button
-            onClick={() => {
-              if (sec.key === "ingresos") {
-                // Ingresos manuales: sin clienteId
-                setReport(prev => {
-                  const next = structuredClone(prev);
-                  next.finanzas.ingresos.push({ id: uid(), clienteId: null, descripcion: "", monto: 0 });
-                  return next;
-                });
-              } else {
-                addItem(sec.key);
-              }
-            }}
-            className="text-[13px] text-[#888] hover:text-[#111] font-medium flex items-center gap-1"
-          >
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d="M6 1v10M1 6h10" strokeLinecap="round"/>
-            </svg>
-            Agregar entrada
-          </button>
-        </div>
-      ))}
+            <button
+              onClick={() => {
+                if (sec.key === "ingresos") {
+                  setReport(prev => {
+                    const next = structuredClone(prev);
+                    next.finanzas.ingresos.push({ id: uid(), clienteId: null, descripcion: "", monto: 0 });
+                    return next;
+                  });
+                } else {
+                  addItem(sec.key);
+                }
+              }}
+              className="text-[13px] text-[#888] hover:text-[#111] font-medium flex items-center gap-1"
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M6 1v10M1 6h10" strokeLinecap="round"/>
+              </svg>
+              Agregar entrada
+            </button>
+          </div>
+        );
+      })}
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 text-[14px] rounded-xl px-4 py-3">{error}</div>
@@ -279,13 +501,40 @@ export default function FinanzasView({ line, companyId, year, month }) {
           {saved ? "Guardado" : saving ? "Guardando..." : "Guardar finanzas"}
         </button>
       </div>
+
+      {/* Modal ficha técnica cliente */}
+      {cliModal && (
+        <ClientFichaModal
+          client={cliModal}
+          line={line}
+          onClose={() => setCliModal(null)}
+        />
+      )}
+
+      {/* Modal ficha empleado */}
+      {empModal && (
+        <EmployeeInfoModal
+          employee={empModal}
+          line={line}
+          onClose={() => setEmpModal(null)}
+        />
+      )}
     </div>
   );
 }
 
-function KpiCard({ label, value, color }) {
-  return (
-    <div className="bg-white rounded-2xl border border-[#e0ddd4] px-4 py-4">
+function KpiCard({ label, value, color, onClick, title }) {
+  const base = "bg-white rounded-2xl border border-[#e0ddd4] px-4 py-4";
+  const interactive = onClick
+    ? `${base} cursor-pointer hover:bg-[#fafaf7] hover:border-[#d0ccc0] transition-colors`
+    : base;
+  return onClick ? (
+    <button type="button" onClick={onClick} title={title} className={`${interactive} text-left w-full`}>
+      <p className="text-[12px] font-mono font-bold uppercase tracking-[0.12em] text-[#aaa] mb-1">{label}</p>
+      <p className={`text-[22px] font-bold tabular-nums ${color}`}>{value}</p>
+    </button>
+  ) : (
+    <div className={base}>
       <p className="text-[12px] font-mono font-bold uppercase tracking-[0.12em] text-[#aaa] mb-1">{label}</p>
       <p className={`text-[22px] font-bold tabular-nums ${color}`}>{value}</p>
     </div>

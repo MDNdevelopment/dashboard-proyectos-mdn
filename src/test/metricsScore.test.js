@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   calcReuniones, calcProductividad, calcCrecimiento,
-  calcSolicitudes, calcPautas, calcPiezas, calcFeedback,
+  calcSolicitudes, calcPautas, calcPiezas,
   calcTotal, sumScore, crecimientoCliente,
 } from "../utils/metricsScore";
 import { INDICATORS } from "../components/metricas/constants";
@@ -15,7 +15,6 @@ function makeReport(overrides = {}) {
     solicitudes:   { solicitudes: 0, editadas: 0 },
     pautas:        { items: [] },
     piezas:        { piezas: 0, editadas: 0 },
-    feedback:      { items: [] },
     finanzas:      { ingresos: [], gastosOperativos: [], sueldos: [], otrosGastos: [] },
     ...overrides,
   };
@@ -23,9 +22,17 @@ function makeReport(overrides = {}) {
 
 // ─── pesos ────────────────────────────────────────────────────────────────────
 describe("INDICATORS weights", () => {
-  it("Los pesos de los 7 indicadores suman 100", () => {
+  it("Los pesos de los 6 indicadores suman 100", () => {
     const total = INDICATORS.reduce((acc, ind) => acc + ind.peso, 0);
     expect(total).toBe(100);
+  });
+
+  it("hay exactamente 6 indicadores", () => {
+    expect(INDICATORS).toHaveLength(6);
+  });
+
+  it("no existe el indicador feedback", () => {
+    expect(INDICATORS.find(i => i.key === "feedback")).toBeUndefined();
   });
 });
 
@@ -47,9 +54,9 @@ describe("calcReuniones", () => {
   });
 });
 
-// ─── calcProductividad ────────────────────────────────────────────────────────
+// ─── calcProductividad (peso 20) ──────────────────────────────────────────────
 describe("calcProductividad", () => {
-  it("retorna 15 cuando se cumplen todas las tareas", () => {
+  it("retorna 20 cuando se cumplen todas las tareas (peso nuevo)", () => {
     const r = makeReport({
       productividad: {
         tareas: [
@@ -58,7 +65,7 @@ describe("calcProductividad", () => {
         ],
       },
     });
-    expect(calcProductividad(r)).toBe(15);
+    expect(calcProductividad(r)).toBe(20);
   });
 
   it("retorna 0 cuando no hay tareas", () => {
@@ -75,8 +82,8 @@ describe("calcProductividad", () => {
         ],
       },
     });
-    // (15/30)*15 = 7.5
-    expect(calcProductividad(r)).toBe(7.5);
+    // (15/30)*20 = 10
+    expect(calcProductividad(r)).toBe(10);
   });
 });
 
@@ -139,25 +146,25 @@ describe("crecimientoCliente", () => {
   });
 });
 
-// ─── calcCrecimiento ──────────────────────────────────────────────────────────
+// ─── calcCrecimiento (peso 20) ────────────────────────────────────────────────
 describe("calcCrecimiento", () => {
   const clienteId = "c1";
 
-  it("retorna 15 cuando todos los clientes cumplen la meta (con mes anterior)", () => {
+  it("retorna 20 cuando todos los clientes cumplen la meta (peso nuevo)", () => {
     const prev = makeReport({
       crecimiento: { items: [{ clienteId, seguidoresActuales: 1000, meta: 0 }] },
     });
     const curr = makeReport({
       crecimiento: { items: [{ clienteId, seguidoresActuales: 1100, meta: 100 }] },
     });
-    expect(calcCrecimiento(curr, prev)).toBe(15);
+    expect(calcCrecimiento(curr, prev)).toBe(20);
   });
 
   it("usa seguidoresBase manual si no hay mes anterior", () => {
     const curr = makeReport({
       crecimiento: { items: [{ clienteId, seguidoresActuales: 1100, seguidoresBase: 1000, meta: 100 }] },
     });
-    expect(calcCrecimiento(curr, null)).toBe(15);
+    expect(calcCrecimiento(curr, null)).toBe(20);
   });
 
   it("retorna 0 si no hay datos de base", () => {
@@ -188,34 +195,39 @@ describe("calcCrecimiento", () => {
         ],
       },
     });
-    // 1/2 clientes cumplen → (1/2)*15 = 7.5
-    expect(calcCrecimiento(curr, prev)).toBe(7.5);
+    // 1/2 clientes cumplen → (1/2)*20 = 10
+    expect(calcCrecimiento(curr, prev)).toBe(10);
   });
 });
 
-// ─── calcSolicitudes ──────────────────────────────────────────────────────────
+// ─── calcSolicitudes (peso 10) ────────────────────────────────────────────────
 describe("calcSolicitudes", () => {
-  it("retorna 15 cuando editadas === solicitudes", () => {
+  it("retorna 10 cuando editadas === solicitudes (peso nuevo)", () => {
     const r = makeReport({ solicitudes: { solicitudes: 10, editadas: 10 } });
-    expect(calcSolicitudes(r)).toBe(15);
+    expect(calcSolicitudes(r)).toBe(10);
   });
 
   it("retorna 0 cuando solicitudes === 0", () => {
     const r = makeReport({ solicitudes: { solicitudes: 0, editadas: 5 } });
     expect(calcSolicitudes(r)).toBe(0);
   });
+
+  it("proporciona correctamente editadas < solicitudes", () => {
+    const r = makeReport({ solicitudes: { solicitudes: 10, editadas: 5 } });
+    expect(calcSolicitudes(r)).toBe(5); // (5/10)*10
+  });
 });
 
-// ─── calcPautas ───────────────────────────────────────────────────────────────
+// ─── calcPautas (peso 20) ─────────────────────────────────────────────────────
 describe("calcPautas", () => {
-  it("retorna 10 cuando todos los clientes cumplen", () => {
+  it("retorna 20 cuando todos los clientes cumplen (peso nuevo)", () => {
     const r = makeReport({
       pautas: { items: [
         { clienteId: "c1", realizadas: 5, meta: 5 },
         { clienteId: "c2", realizadas: 3, meta: 3 },
       ]},
     });
-    expect(calcPautas(r)).toBe(10);
+    expect(calcPautas(r)).toBe(20);
   });
 
   it("retorna 0 cuando no hay items", () => {
@@ -229,89 +241,59 @@ describe("calcPautas", () => {
         { clienteId: "c2", realizadas: 2, meta: 5 }, // no cumple
       ]},
     });
-    expect(calcPautas(r)).toBe(5); // (1/2)*10
+    expect(calcPautas(r)).toBe(10); // (1/2)*20
   });
 });
 
-// ─── calcPiezas ───────────────────────────────────────────────────────────────
+// ─── calcPiezas (peso 10) ─────────────────────────────────────────────────────
 describe("calcPiezas", () => {
-  it("retorna 15 cuando editadas === piezas", () => {
+  it("retorna 10 cuando editadas === piezas (peso nuevo)", () => {
     const r = makeReport({ piezas: { piezas: 20, editadas: 20 } });
-    expect(calcPiezas(r)).toBe(15);
+    expect(calcPiezas(r)).toBe(10);
   });
 
   it("retorna 0 cuando piezas === 0", () => {
     expect(calcPiezas(makeReport())).toBe(0);
   });
-});
 
-// ─── calcFeedback ─────────────────────────────────────────────────────────────
-describe("calcFeedback", () => {
-  it("retorna 10 cuando todos los scores son 10", () => {
-    const r = makeReport({
-      feedback: { items: [
-        { clienteId: "c1", score: 10 },
-        { clienteId: "c2", score: 10 },
-      ]},
-    });
-    expect(calcFeedback(r)).toBe(10);
-  });
-
-  it("retorna 0 cuando no hay scores", () => {
-    expect(calcFeedback(makeReport())).toBe(0);
-  });
-
-  it("ignora items sin score (null)", () => {
-    const r = makeReport({
-      feedback: { items: [
-        { clienteId: "c1", score: 10 },
-        { clienteId: "c2", score: null }, // ignorado
-      ]},
-    });
-    expect(calcFeedback(r)).toBe(10);
-  });
-
-  it("promedia los scores disponibles", () => {
-    const r = makeReport({
-      feedback: { items: [
-        { clienteId: "c1", score: 8 },
-        { clienteId: "c2", score: 6 },
-      ]},
-    });
-    // avg = 7, (7/10)*10 = 7
-    expect(calcFeedback(r)).toBe(7);
+  it("proporciona correctamente editadas < piezas", () => {
+    const r = makeReport({ piezas: { piezas: 20, editadas: 10 } });
+    expect(calcPiezas(r)).toBe(5); // (10/20)*10
   });
 });
 
 // ─── calcTotal + sumScore ─────────────────────────────────────────────────────
 describe("calcTotal + sumScore", () => {
-  it("clampea a 100 cuando los indicadores de ratio se exceden", () => {
-    // Reuniones: realizadas (30) > meta (15) → calcReuniones devuelve 40 (2×20)
-    const r = makeReport({
-      reuniones:     { realizadas: 30, meta: 15 },
-      productividad: { tareas: [{ nombre: "T", realizado: 20, meta: 10 }] }, // 2×15
-      solicitudes:   { solicitudes: 10, editadas: 10 },
-      piezas:        { piezas: 10, editadas: 10 },
-      feedback:      { items: [{ clienteId: "c1", score: 10 }] },
-      pautas:        { items: [{ clienteId: "c1", realizadas: 5, meta: 5 }] },
-      crecimiento:   { items: [{ clienteId: "c1", seguidoresActuales: 1100, seguidoresBase: 1000, meta: 100 }] },
-    });
-    const scores = calcTotal(r, null);
-    // sumScore sin clamp sería 40+30+15+15+10+15+10 = 135
-    expect(sumScore(scores)).toBe(100);
+  it("calcTotal no incluye la clave feedback", () => {
+    const scores = calcTotal(makeReport(), null);
+    expect(scores).not.toHaveProperty("feedback");
   });
 
-  it("todos los indicadores en su máximo suman 100", () => {
+  it("sumScore con todos los indicadores al máximo es 100", () => {
     const r = makeReport({
       reuniones:     { realizadas: 15, meta: 15 },
       productividad: { tareas: [{ nombre: "T", realizado: 10, meta: 10 }] },
       solicitudes:   { solicitudes: 10, editadas: 10 },
       piezas:        { piezas: 10, editadas: 10 },
-      feedback:      { items: [{ clienteId: "c1", score: 10 }] },
       pautas:        { items: [{ clienteId: "c1", realizadas: 5, meta: 5 }] },
       crecimiento:   { items: [{ clienteId: "c1", seguidoresActuales: 1100, seguidoresBase: 1000, meta: 100 }] },
     });
     const scores = calcTotal(r, null);
+    expect(sumScore(scores)).toBe(100);
+  });
+
+  it("clampea a 100 cuando los ratios se exceden", () => {
+    // Todos al doble de la meta → cada indicador da 2× su peso → suma > 100
+    const r = makeReport({
+      reuniones:     { realizadas: 30, meta: 15 },   // 40 pts
+      productividad: { tareas: [{ nombre: "T", realizado: 20, meta: 10 }] }, // 40 pts
+      solicitudes:   { solicitudes: 10, editadas: 10 },  // 10 pts
+      piezas:        { piezas: 10, editadas: 10 },        // 10 pts
+      pautas:        { items: [{ clienteId: "c1", realizadas: 5, meta: 5 }] }, // 20 pts
+      crecimiento:   { items: [{ clienteId: "c1", seguidoresActuales: 1100, seguidoresBase: 1000, meta: 100 }] }, // 20 pts
+    });
+    const scores = calcTotal(r, null);
+    // sin clamp: 40+40+20+10+20+10 = 140
     expect(sumScore(scores)).toBe(100);
   });
 
@@ -324,6 +306,24 @@ describe("calcTotal + sumScore", () => {
     expect(scores.solicitudes).toBe(0);
     expect(scores.pautas).toBe(0);
     expect(scores.piezas).toBe(0);
-    expect(scores.feedback).toBe(0);
+  });
+
+  it("el score parcial de cada indicador no supera su peso individual", () => {
+    // Indicadores al 100%
+    const r = makeReport({
+      reuniones:     { realizadas: 15, meta: 15 },
+      productividad: { tareas: [{ nombre: "T", realizado: 10, meta: 10 }] },
+      solicitudes:   { solicitudes: 10, editadas: 10 },
+      piezas:        { piezas: 10, editadas: 10 },
+      pautas:        { items: [{ clienteId: "c1", realizadas: 5, meta: 5 }] },
+      crecimiento:   { items: [{ clienteId: "c1", seguidoresActuales: 1100, seguidoresBase: 1000, meta: 100 }] },
+    });
+    const scores = calcTotal(r, null);
+    expect(scores.reuniones).toBe(20);
+    expect(scores.productividad).toBe(20);
+    expect(scores.crecimiento).toBe(20);
+    expect(scores.solicitudes).toBe(10);
+    expect(scores.pautas).toBe(20);
+    expect(scores.piezas).toBe(10);
   });
 });

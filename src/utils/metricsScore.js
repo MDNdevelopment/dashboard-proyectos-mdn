@@ -1,9 +1,10 @@
 /**
- * Cálculo de los 7 indicadores ponderados (suma = 100 puntos).
+ * Cálculo de los 6 indicadores ponderados (suma = 100 puntos).
  * Todas las funciones son puras: reciben el objeto `report` (y opcionalmente
  * `prevReport` para el crecimiento) y retornan el puntaje parcial.
  *
- * Portado verbatim desde el <script> del prototipo HTML original.
+ * Indicadores y pesos: Reuniones 20, Productividad 20, Crecimiento 20,
+ * Solicitudes 10, Pautas 20, Piezas 10.
  */
 
 /** Reuniones — peso 20 */
@@ -13,14 +14,14 @@ export function calcReuniones(report) {
   return (Number(report.reuniones.realizadas ?? 0) / meta) * 20;
 }
 
-/** Productividad (tareas fijas) — peso 15 */
+/** Productividad (tareas fijas) — peso 20 */
 export function calcProductividad(report) {
   let real = 0, meta = 0;
   (report.productividad?.tareas ?? []).forEach(t => {
     real += Number(t.realizado ?? 0);
     meta += Number(t.meta ?? 0);
   });
-  return meta === 0 ? 0 : (real / meta) * 15;
+  return meta === 0 ? 0 : (real / meta) * 20;
 }
 
 /**
@@ -70,17 +71,17 @@ export function calcCrecimiento(report, prevReport = null) {
     if (cumple === true) cumplieron++;
   });
 
-  return (cumplieron / items.length) * 15;
+  return (cumplieron / items.length) * 20;
 }
 
-/** Solicitudes vs Entregados — peso 15 */
+/** Solicitudes vs Entregados — peso 10 */
 export function calcSolicitudes(report) {
   const s = Number(report.solicitudes?.solicitudes ?? 0);
   if (s === 0) return 0;
-  return (Number(report.solicitudes.editadas ?? 0) / s) * 15;
+  return (Number(report.solicitudes.editadas ?? 0) / s) * 10;
 }
 
-/** Pautas — peso 10 */
+/** Pautas — peso 20 */
 export function calcPautas(report) {
   const items = report.pautas?.items ?? [];
   if (items.length === 0) return 0;
@@ -88,26 +89,14 @@ export function calcPautas(report) {
   items.forEach(it => {
     if (Number(it.realizadas ?? 0) >= Number(it.meta ?? 0)) cumplieron++;
   });
-  return (cumplieron / items.length) * 10;
+  return (cumplieron / items.length) * 20;
 }
 
-/** Piezas — peso 15 */
+/** Piezas — peso 10 */
 export function calcPiezas(report) {
   const p = Number(report.piezas?.piezas ?? 0);
   if (p === 0) return 0;
-  return (Number(report.piezas.editadas ?? 0) / p) * 15;
-}
-
-/**
- * Feedback — peso 10.
- * Promedio de scores 0–10 de los clientes que tienen score registrado,
- * escalado a 10 puntos.
- */
-export function calcFeedback(report) {
-  const withScore = (report.feedback?.items ?? []).filter(i => i.score != null);
-  if (withScore.length === 0) return 0;
-  const avg = withScore.reduce((acc, i) => acc + Number(i.score ?? 0), 0) / withScore.length;
-  return (avg / 10) * 10;
+  return (Number(report.piezas.editadas ?? 0) / p) * 10;
 }
 
 /**
@@ -123,7 +112,6 @@ export function calcTotal(report, prevReport = null) {
     solicitudes:   calcSolicitudes(report),
     pautas:        calcPautas(report),
     piezas:        calcPiezas(report),
-    feedback:      calcFeedback(report),
   };
 }
 
@@ -131,6 +119,6 @@ export function calcTotal(report, prevReport = null) {
 export function sumScore(scores) {
   const raw =
     scores.reuniones + scores.productividad + scores.crecimiento +
-    scores.solicitudes + scores.pautas + scores.piezas + scores.feedback;
+    scores.solicitudes + scores.pautas + scores.piezas;
   return Math.min(100, raw);
 }
