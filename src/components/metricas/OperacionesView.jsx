@@ -247,6 +247,8 @@ export default function OperacionesView({ line, companyId, year, month }) {
         const prevMonth = month - 1 < 1 ? 12 : month - 1;
         const prevMonthName = MONTHS[prevMonth - 1];
         const currMonthName = MONTHS[month - 1];
+        // seedMode: no hay reporte previo → las columnas del periodo pasado se vuelven editables
+        const seedMode = !prevReport;
         return (
           <Section
             title="3. Crecimiento de seguidores"
@@ -254,6 +256,11 @@ export default function OperacionesView({ line, companyId, year, month }) {
             score={scores?.crecimiento}
             max={INDICATORS[2].peso}
           >
+            {seedMode && (
+              <p className="text-[12px] text-[#888] bg-[#faf9f3] border border-[#e8e4d8] rounded-lg px-3 py-2 mb-1">
+                Primer mes de uso: ingresá manualmente los seguidores del periodo anterior como línea base. A partir del próximo mes se auto-completará.
+              </p>
+            )}
             <div className="overflow-x-auto">
               <div className="min-w-[640px]">
                 {report.crecimiento.items.length === 0 ? (
@@ -265,7 +272,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
                       <div />
                       {/* Título único mes anterior (centrado sobre las 2 columnas del grupo) */}
                       <div className="text-center">
-                        <span className="text-[11px] font-mono font-bold uppercase tracking-[0.08em] text-[#bbb] whitespace-nowrap">{prevMonthName}</span>
+                        <span className={`text-[11px] font-mono font-bold uppercase tracking-[0.08em] whitespace-nowrap ${seedMode ? "text-[#888]" : "text-[#bbb]"}`}>{prevMonthName}</span>
                       </div>
                       {/* Título único mes actual (centrado sobre las 2 columnas del grupo) */}
                       <div className="text-center border-l border-[#e0ddd4] pl-2">
@@ -280,34 +287,37 @@ export default function OperacionesView({ line, companyId, year, month }) {
                         const { ganados, cumple, pct } = crecimientoCliente(item);
                         const prevItem = (prevReport?.crecimiento?.items ?? [])
                           .find(i => i.clienteId === item.clienteId);
-                        const prevGanados = prevItem?.seguidoresGanados ?? null;
-                        const prevTotales = prevItem?.seguidoresActuales ?? null;
+                        // En seedMode: valores del propio reporte actual (bootstrap)
+                        const prevGanados = seedMode ? (item.seguidoresGanadosPrev ?? "") : (prevItem?.seguidoresGanados ?? "");
+                        const prevTotales = seedMode ? (item.seguidoresBase ?? "") : (prevItem?.seguidoresActuales ?? "");
                         return (
                           <div key={item.clienteId} className="grid grid-cols-[minmax(110px,1fr)_auto_auto_auto_auto] gap-x-3 items-center">
                             <ClientLink clienteId={item.clienteId} />
 
-                            {/* Mes anterior — disabled */}
+                            {/* Mes anterior — editable en seedMode, disabled en los demás */}
                             <div className="flex gap-2 items-center">
                               <div className="flex flex-col items-center gap-0.5">
-                                <span className="text-[10px] text-[#999] whitespace-nowrap">Gan. {prevMonthName.slice(0,3)}</span>
+                                <span className={`text-[10px] whitespace-nowrap ${seedMode ? "text-[#777]" : "text-[#999]"}`}>Gan. {prevMonthName.slice(0,3)}</span>
                                 <input
                                   type="number"
-                                  disabled
-                                  className="input-base !w-[92px] flex-none text-[13px] bg-[#f5f3ec] text-[#bbb] cursor-not-allowed"
+                                  disabled={!seedMode}
+                                  readOnly={!seedMode}
+                                  className={`input-base !w-[92px] flex-none text-[13px] ${seedMode ? "" : "bg-[#f5f3ec] text-[#bbb] cursor-not-allowed"}`}
                                   placeholder="—"
-                                  value={prevGanados ?? ""}
-                                  readOnly
+                                  value={prevGanados}
+                                  onChange={seedMode ? e => setItemField("crecimiento", idx, "seguidoresGanadosPrev", e.target.value === "" ? null : e.target.value) : undefined}
                                 />
                               </div>
                               <div className="flex flex-col items-center gap-0.5">
-                                <span className="text-[10px] text-[#999] whitespace-nowrap">Tot. {prevMonthName.slice(0,3)}</span>
+                                <span className={`text-[10px] whitespace-nowrap ${seedMode ? "text-[#777]" : "text-[#999]"}`}>Tot. {prevMonthName.slice(0,3)}</span>
                                 <input
                                   type="number"
-                                  disabled
-                                  className="input-base !w-[92px] flex-none text-[13px] bg-[#f5f3ec] text-[#bbb] cursor-not-allowed"
+                                  disabled={!seedMode}
+                                  readOnly={!seedMode}
+                                  className={`input-base !w-[92px] flex-none text-[13px] ${seedMode ? "" : "bg-[#f5f3ec] text-[#bbb] cursor-not-allowed"}`}
                                   placeholder="—"
-                                  value={prevTotales ?? ""}
-                                  readOnly
+                                  value={prevTotales}
+                                  onChange={seedMode ? e => setItemField("crecimiento", idx, "seguidoresBase", e.target.value === "" ? null : e.target.value) : undefined}
                                 />
                               </div>
                             </div>
@@ -467,7 +477,19 @@ export default function OperacionesView({ line, companyId, year, month }) {
       </Section>
 
       {/* Botón guardar */}
-      <div className="flex items-center justify-end pt-2 pb-6">
+      <div className="flex flex-col items-end gap-2 pt-2 pb-6">
+        {/* Checkbox mes incompleto */}
+        <label className="flex items-center gap-2 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={!!report.incompleto}
+            onChange={e => setField("incompleto", e.target.checked)}
+            className="w-4 h-4 rounded border-[#d0ccc0] accent-[#FAB51A] cursor-pointer"
+          />
+          <span className="text-[13px] text-[#888]">
+            Marcar mes como incompleto <span className="text-[#bbb]">(no contar en el promedio anual)</span>
+          </span>
+        </label>
         <button
           onClick={handleSave}
           disabled={saving}

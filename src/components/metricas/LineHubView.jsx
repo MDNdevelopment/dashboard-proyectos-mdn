@@ -54,7 +54,7 @@ export default function LineHubView({ line, companyId, year = CURRENT_YEAR }) {
   // Calcular scores por mes (tolera reports vacío → todos null)
   const monthScores = Array.from({ length: 12 }, (_, i) => {
     const r = reports.find(r => r.month === i + 1);
-    if (!r) return null;
+    if (!r || r.data?.incompleto) return null;
     const prev = i > 0 ? reports.find(r2 => r2.month === i) : null;
     return { month: i + 1, ...calcTotal(r.data, prev?.data ?? null), r };
   });

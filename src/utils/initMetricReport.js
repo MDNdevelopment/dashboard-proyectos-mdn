@@ -46,6 +46,7 @@ export function initMetricReport(prevReport, lineClients = [], lineMetas = {}, l
         items: (prevReport.crecimiento?.items ?? []).map(i => ({
           clienteId: i.clienteId,
           seguidoresGanados: null,
+          seguidoresGanadosPrev: null,
           seguidoresActuales: null,
           seguidoresBase: null,
           meta: i.meta,
@@ -82,7 +83,7 @@ export function initMetricReport(prevReport, lineClients = [], lineMetas = {}, l
         tareas: DEFAULT_SUBTAREAS.map(s => ({ nombre: s.nombre, realizado: 0, meta: s.meta })),
       },
       crecimiento: {
-        items: lineClients.map(c => ({ clienteId: c.id, seguidoresGanados: null, seguidoresActuales: null, seguidoresBase: null, meta: 0 })),
+        items: lineClients.map(c => ({ clienteId: c.id, seguidoresGanados: null, seguidoresGanadosPrev: null, seguidoresActuales: null, seguidoresBase: null, meta: 0 })),
       },
       solicitudes: { solicitudes: 0, editadas: 0 },
       pautas: {
