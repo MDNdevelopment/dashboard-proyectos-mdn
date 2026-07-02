@@ -31,6 +31,7 @@ describe("syncReportClients — crecimiento / pautas / feedback", () => {
 
     expect(synced.crecimiento.items[0]).toEqual({
       clienteId: "c1",
+      seguidoresGanados: null,
       seguidoresActuales: null,
       seguidoresBase: null,
       meta: 0,

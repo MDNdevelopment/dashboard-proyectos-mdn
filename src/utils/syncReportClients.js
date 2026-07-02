@@ -25,6 +25,7 @@ export function syncReportClients(reportData, lineClients, lineEmployees = []) {
       items: lineClients.map(c =>
         existingMap[c.id] ?? {
           clienteId: c.id,
+          seguidoresGanados: null,
           seguidoresActuales: null,
           seguidoresBase: null,
           meta: 0,

@@ -10,6 +10,7 @@ import { MONTHS, INDICATORS } from "./constants";
 export default function OperacionesView({ line, companyId, year, month }) {
   const { can = () => true } = useAuth();
   const [report, setReport] = useState(null);
+  const [prevReport, setPrevReport] = useState(null);
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -30,6 +31,9 @@ export default function OperacionesView({ line, companyId, year, month }) {
 
     const lineClients = clientsRes.data ?? [];
     setClients(lineClients);
+
+    // Guardar el reporte del mes anterior para mostrarlo en la sección de crecimiento
+    setPrevReport(prevRes.data?.data ?? null);
 
     if (reportRes.data) {
       // Sincronizar items con los clientes actuales de la línea
@@ -239,69 +243,148 @@ export default function OperacionesView({ line, companyId, year, month }) {
       </Section>
 
       {/* 3. CRECIMIENTO */}
-      <Section
-        title="3. Crecimiento de seguidores"
-        subtitle={`Peso: ${INDICATORS[2].peso} pts — cliente cumple si (actuales − base) ≥ meta`}
-        score={scores?.crecimiento}
-        max={INDICATORS[2].peso}
-      >
-        <div className="overflow-x-auto">
-        <div className="space-y-2">
-          {report.crecimiento.items.length === 0 ? (
-            <p className="text-[14px] text-[#bbb]">Sin clientes. Configurá la cartera en la pestaña Configuración.</p>
-          ) : (
-            report.crecimiento.items.map((item, idx) => {
-              const { crecimiento: delta, cumple } = crecimientoCliente(item);
-              return (
-                <div key={item.clienteId} className="grid grid-cols-[minmax(100px,1fr)_auto_auto_auto_auto] gap-2 items-center">
-                  <ClientLink clienteId={item.clienteId} />
-                  <div className="flex items-center gap-1">
-                    <span className="text-[11px] text-[#aaa] whitespace-nowrap">Base manual</span>
-                    <input type="number" className="input-base !w-24 flex-none text-[13px]"
-                      placeholder="—"
-                      value={item.seguidoresBase ?? ""}
-                      onChange={e => setItemField("crecimiento", idx, "seguidoresBase", e.target.value === "" ? null : e.target.value)}
-                    />
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <span className="text-[11px] text-[#aaa] whitespace-nowrap">Actuales</span>
-                    <input type="number" className="input-base !w-24 flex-none text-[13px]"
-                      placeholder="—"
-                      value={item.seguidoresActuales ?? ""}
-                      onChange={e => setItemField("crecimiento", idx, "seguidoresActuales", e.target.value === "" ? null : e.target.value)}
-                    />
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <span className="text-[11px] text-[#aaa] whitespace-nowrap">Meta de crecimiento</span>
-                    <input type="number" min="0" className="input-base !w-20 flex-none text-[13px]"
-                      value={item.meta ?? 0}
-                      onChange={e => setItemField("crecimiento", idx, "meta", e.target.value)}
-                    />
-                  </div>
-                  {/* Indicador de cumplimiento */}
-                  {cumple === null ? (
-                    <span
-                      className="text-[12px] text-[#bbb] font-mono w-24 text-center"
-                      title="Faltan datos de base o seguidores actuales"
-                    >—</span>
-                  ) : cumple ? (
-                    <span
-                      className="text-[12px] font-semibold text-green-700 bg-green-50 rounded-full px-2.5 py-0.5 whitespace-nowrap"
-                      title={delta !== null ? `+${delta} seguidores` : ""}
-                    >✓ Cumple</span>
-                  ) : (
-                    <span
-                      className="text-[12px] font-semibold text-[#a06a00] bg-[#fff6e0] rounded-full px-2.5 py-0.5 whitespace-nowrap"
-                      title={delta !== null ? `+${delta} seguidores` : ""}
-                    >Pendiente</span>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
-        </div>
-      </Section>
+      {(() => {
+        const prevMonth = month - 1 < 1 ? 12 : month - 1;
+        const prevMonthName = MONTHS[prevMonth - 1];
+        const currMonthName = MONTHS[month - 1];
+        return (
+          <Section
+            title="3. Crecimiento de seguidores"
+            subtitle={`Peso: ${INDICATORS[2].peso} pts — cliente cumple si seguidores ganados ≥ meta`}
+            score={scores?.crecimiento}
+            max={INDICATORS[2].peso}
+          >
+            <div className="overflow-x-auto">
+              <div className="min-w-[640px]">
+                {report.crecimiento.items.length === 0 ? (
+                  <p className="text-[14px] text-[#bbb]">Sin clientes. Configurá la cartera en la pestaña Configuración.</p>
+                ) : (
+                  <>
+                    {/* Fila de encabezados de columna */}
+                    <div className="grid grid-cols-[minmax(110px,1fr)_auto_auto_auto_auto] gap-x-3 gap-y-0 items-end mb-1">
+                      <div />
+                      {/* Encabezado mes anterior */}
+                      <div className="flex gap-2 items-end">
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-[0.08em] text-[#bbb] whitespace-nowrap w-[92px] text-center">{prevMonthName}</span>
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-[0.08em] text-[#bbb] whitespace-nowrap w-[92px] text-center">{prevMonthName}</span>
+                      </div>
+                      {/* Encabezado mes actual */}
+                      <div className="flex gap-2 items-end">
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-[0.08em] text-[#555] whitespace-nowrap w-[92px] text-center">{currMonthName}</span>
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-[0.08em] text-[#555] whitespace-nowrap w-[92px] text-center">{currMonthName}</span>
+                      </div>
+                      <div />
+                      <div />
+                    </div>
+                    {/* Filas por cliente */}
+                    <div className="space-y-2">
+                      {report.crecimiento.items.map((item, idx) => {
+                        const { ganados, cumple, pct } = crecimientoCliente(item);
+                        const prevItem = (prevReport?.crecimiento?.items ?? [])
+                          .find(i => i.clienteId === item.clienteId);
+                        const prevGanados = prevItem?.seguidoresGanados ?? null;
+                        const prevTotales = prevItem?.seguidoresActuales ?? null;
+                        return (
+                          <div key={item.clienteId} className="grid grid-cols-[minmax(110px,1fr)_auto_auto_auto_auto] gap-x-3 items-center">
+                            <ClientLink clienteId={item.clienteId} />
+
+                            {/* Mes anterior — disabled */}
+                            <div className="flex gap-2 items-center">
+                              <div className="flex flex-col items-center gap-0.5">
+                                <span className="text-[10px] text-[#ccc] whitespace-nowrap">Ganados</span>
+                                <input
+                                  type="number"
+                                  disabled
+                                  className="input-base !w-[92px] flex-none text-[13px] bg-[#f5f3ec] text-[#bbb] cursor-not-allowed"
+                                  placeholder="—"
+                                  value={prevGanados ?? ""}
+                                  readOnly
+                                />
+                              </div>
+                              <div className="flex flex-col items-center gap-0.5">
+                                <span className="text-[10px] text-[#ccc] whitespace-nowrap">Totales</span>
+                                <input
+                                  type="number"
+                                  disabled
+                                  className="input-base !w-[92px] flex-none text-[13px] bg-[#f5f3ec] text-[#bbb] cursor-not-allowed"
+                                  placeholder="—"
+                                  value={prevTotales ?? ""}
+                                  readOnly
+                                />
+                              </div>
+                            </div>
+
+                            {/* Mes actual — editables */}
+                            <div className="flex gap-2 items-center">
+                              <div className="flex flex-col items-center gap-0.5">
+                                <span className="text-[10px] text-[#aaa] whitespace-nowrap">Ganados</span>
+                                <input
+                                  type="number"
+                                  className="input-base !w-[92px] flex-none text-[13px]"
+                                  placeholder="—"
+                                  value={item.seguidoresGanados ?? ""}
+                                  onChange={e => setItemField("crecimiento", idx, "seguidoresGanados", e.target.value === "" ? null : e.target.value)}
+                                />
+                              </div>
+                              <div className="flex flex-col items-center gap-0.5">
+                                <span className="text-[10px] text-[#aaa] whitespace-nowrap">Totales</span>
+                                <input
+                                  type="number"
+                                  className="input-base !w-[92px] flex-none text-[13px]"
+                                  placeholder="—"
+                                  value={item.seguidoresActuales ?? ""}
+                                  onChange={e => setItemField("crecimiento", idx, "seguidoresActuales", e.target.value === "" ? null : e.target.value)}
+                                />
+                              </div>
+                            </div>
+
+                            {/* Meta */}
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className="text-[10px] text-[#aaa] whitespace-nowrap">Meta</span>
+                              <input
+                                type="number"
+                                min="0"
+                                className="input-base !w-20 flex-none text-[13px]"
+                                value={item.meta ?? 0}
+                                onChange={e => setItemField("crecimiento", idx, "meta", e.target.value)}
+                              />
+                            </div>
+
+                            {/* Indicador de cumplimiento + % */}
+                            <div className="flex flex-col items-center gap-0.5 min-w-[80px]">
+                              {cumple === null ? (
+                                <span
+                                  className="text-[12px] text-[#bbb] font-mono"
+                                  title="Faltan datos de seguidores ganados"
+                                >—</span>
+                              ) : cumple ? (
+                                <span
+                                  className="text-[12px] font-semibold text-green-700 bg-green-50 rounded-full px-2.5 py-0.5 whitespace-nowrap"
+                                  title={ganados !== null ? `+${ganados} seguidores ganados` : ""}
+                                >✓ Cumple</span>
+                              ) : (
+                                <span
+                                  className="text-[12px] font-semibold text-[#a06a00] bg-[#fff6e0] rounded-full px-2.5 py-0.5 whitespace-nowrap"
+                                  title={ganados !== null ? `${ganados} seguidores ganados` : ""}
+                                >Pendiente</span>
+                              )}
+                              {pct !== null && (
+                                <span className={`text-[11px] font-mono font-semibold ${pct >= 0 ? "text-green-600" : "text-red-500"}`}>
+                                  {pct >= 0 ? "+" : ""}{Math.round(pct)}%
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </Section>
+        );
+      })()}
 
       {/* 4. SOLICITUDES */}
       <Section

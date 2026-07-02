@@ -89,59 +89,102 @@ describe("calcProductividad", () => {
 
 // ─── crecimientoCliente ───────────────────────────────────────────────────────
 describe("crecimientoCliente", () => {
-  it("cumple cuando (actuales − base) >= meta, usando seguidoresBase", () => {
-    const item = { clienteId: "c1", seguidoresActuales: 1100, seguidoresBase: 1000, meta: 100 };
+  // ── Modelo nuevo: seguidoresGanados explícito ─────────────────────────────
+  it("cumple cuando seguidoresGanados >= meta (modelo nuevo)", () => {
+    const item = { clienteId: "c1", seguidoresGanados: 120, seguidoresActuales: 1120, meta: 100 };
     const res = crecimientoCliente(item, null);
-    expect(res.crecimiento).toBe(100);
+    expect(res.ganados).toBe(120);
     expect(res.cumple).toBe(true);
   });
 
-  it("no cumple cuando (actuales − base) < meta", () => {
-    const item = { clienteId: "c1", seguidoresActuales: 1050, seguidoresBase: 1000, meta: 100 };
+  it("no cumple cuando seguidoresGanados < meta", () => {
+    const item = { clienteId: "c1", seguidoresGanados: 50, seguidoresActuales: 1050, meta: 100 };
     const res = crecimientoCliente(item, null);
-    expect(res.crecimiento).toBe(50);
+    expect(res.ganados).toBe(50);
     expect(res.cumple).toBe(false);
   });
 
-  it("cumple exacto en el límite (crec === meta)", () => {
-    const item = { clienteId: "c1", seguidoresActuales: 1100, seguidoresBase: 1000, meta: 100 };
+  it("cumple exacto en el límite (ganados === meta)", () => {
+    const item = { clienteId: "c1", seguidoresGanados: 100, seguidoresActuales: 1100, meta: 100 };
     const res = crecimientoCliente(item, null);
     expect(res.cumple).toBe(true);
   });
 
-  it("retorna cumple: null cuando falta seguidoresActuales", () => {
-    const item = { clienteId: "c1", seguidoresActuales: null, seguidoresBase: 1000, meta: 100 };
+  it("retorna ganados: null cuando no hay seguidoresGanados ni datos de fallback", () => {
+    const item = { clienteId: "c1", seguidoresGanados: null, seguidoresActuales: null, seguidoresBase: null, meta: 100 };
     const res = crecimientoCliente(item, null);
-    expect(res.crecimiento).toBeNull();
+    expect(res.ganados).toBeNull();
+    expect(res.cumple).toBeNull();
+    expect(res.pct).toBeNull();
+  });
+
+  // ── pct (porcentaje vs meta) ──────────────────────────────────────────────
+  it("pct es positivo cuando se excedió la meta", () => {
+    const item = { clienteId: "c1", seguidoresGanados: 120, meta: 100 };
+    const res = crecimientoCliente(item, null);
+    expect(res.pct).toBeCloseTo(20); // (120-100)/100*100 = 20%
+  });
+
+  it("pct es negativo cuando no se alcanzó la meta", () => {
+    const item = { clienteId: "c1", seguidoresGanados: 80, meta: 100 };
+    const res = crecimientoCliente(item, null);
+    expect(res.pct).toBeCloseTo(-20); // (80-100)/100*100 = -20%
+  });
+
+  it("pct es null cuando meta es 0 (evita división por cero)", () => {
+    const item = { clienteId: "c1", seguidoresGanados: 50, meta: 0 };
+    const res = crecimientoCliente(item, null);
+    expect(res.pct).toBeNull();
+  });
+
+  // ── Fallback para reportes históricos (sin seguidoresGanados) ────────────
+  it("fallback: cumple cuando (actuales − seguidoresBase) >= meta", () => {
+    const item = { clienteId: "c1", seguidoresGanados: null, seguidoresActuales: 1100, seguidoresBase: 1000, meta: 100 };
+    const res = crecimientoCliente(item, null);
+    expect(res.ganados).toBe(100);
+    expect(res.cumple).toBe(true);
+  });
+
+  it("fallback: no cumple cuando (actuales − seguidoresBase) < meta", () => {
+    const item = { clienteId: "c1", seguidoresGanados: null, seguidoresActuales: 1050, seguidoresBase: 1000, meta: 100 };
+    const res = crecimientoCliente(item, null);
+    expect(res.ganados).toBe(50);
+    expect(res.cumple).toBe(false);
+  });
+
+  it("fallback: retorna null cuando falta seguidoresActuales", () => {
+    const item = { clienteId: "c1", seguidoresGanados: null, seguidoresActuales: null, seguidoresBase: 1000, meta: 100 };
+    const res = crecimientoCliente(item, null);
+    expect(res.ganados).toBeNull();
     expect(res.cumple).toBeNull();
   });
 
-  it("retorna cumple: null cuando falta base (sin seguidoresBase ni prevReport)", () => {
-    const item = { clienteId: "c1", seguidoresActuales: 1100, seguidoresBase: null, meta: 100 };
+  it("fallback: retorna null cuando falta base (sin seguidoresBase ni prevReport)", () => {
+    const item = { clienteId: "c1", seguidoresGanados: null, seguidoresActuales: 1100, seguidoresBase: null, meta: 100 };
     const res = crecimientoCliente(item, null);
-    expect(res.crecimiento).toBeNull();
+    expect(res.ganados).toBeNull();
     expect(res.cumple).toBeNull();
   });
 
-  it("toma la base del mes anterior (seguidoresActuales de prevReport) en lugar de seguidoresBase", () => {
+  it("fallback: toma la base del mes anterior (seguidoresActuales de prevReport)", () => {
     const prevReport = {
       crecimiento: { items: [{ clienteId: "c1", seguidoresActuales: 900 }] },
     };
-    const item = { clienteId: "c1", seguidoresActuales: 1050, seguidoresBase: 1000, meta: 100 };
+    const item = { clienteId: "c1", seguidoresGanados: null, seguidoresActuales: 1050, seguidoresBase: 1000, meta: 100 };
     const res = crecimientoCliente(item, prevReport);
-    // base = 900 (mes anterior), no 1000 (manual); crec = 150 >= 100 → cumple
-    expect(res.crecimiento).toBe(150);
+    // base = 900 (mes anterior), no 1000 (manual); ganados = 150 >= 100 → cumple
+    expect(res.ganados).toBe(150);
     expect(res.cumple).toBe(true);
   });
 
-  it("cae a seguidoresBase si el prevReport no tiene el cliente", () => {
+  it("fallback: cae a seguidoresBase si el prevReport no tiene el cliente", () => {
     const prevReport = {
       crecimiento: { items: [{ clienteId: "c2", seguidoresActuales: 900 }] },
     };
-    const item = { clienteId: "c1", seguidoresActuales: 1050, seguidoresBase: 1000, meta: 100 };
+    const item = { clienteId: "c1", seguidoresGanados: null, seguidoresActuales: 1050, seguidoresBase: 1000, meta: 100 };
     const res = crecimientoCliente(item, prevReport);
-    // prevReport no tiene c1 → base = 1000; crec = 50 < 100 → no cumple
-    expect(res.crecimiento).toBe(50);
+    // prevReport no tiene c1 → base = 1000; ganados = 50 < 100 → no cumple
+    expect(res.ganados).toBe(50);
     expect(res.cumple).toBe(false);
   });
 });
@@ -150,26 +193,33 @@ describe("crecimientoCliente", () => {
 describe("calcCrecimiento", () => {
   const clienteId = "c1";
 
-  it("retorna 20 cuando todos los clientes cumplen la meta (peso nuevo)", () => {
-    const prev = makeReport({
-      crecimiento: { items: [{ clienteId, seguidoresActuales: 1000, meta: 0 }] },
-    });
+  it("retorna 20 cuando el cliente cumple con seguidoresGanados explícito", () => {
     const curr = makeReport({
-      crecimiento: { items: [{ clienteId, seguidoresActuales: 1100, meta: 100 }] },
-    });
-    expect(calcCrecimiento(curr, prev)).toBe(20);
-  });
-
-  it("usa seguidoresBase manual si no hay mes anterior", () => {
-    const curr = makeReport({
-      crecimiento: { items: [{ clienteId, seguidoresActuales: 1100, seguidoresBase: 1000, meta: 100 }] },
+      crecimiento: { items: [{ clienteId, seguidoresGanados: 150, seguidoresActuales: 1150, meta: 100 }] },
     });
     expect(calcCrecimiento(curr, null)).toBe(20);
   });
 
-  it("retorna 0 si no hay datos de base", () => {
+  it("retorna 20 cuando todos los clientes cumplen (fallback via prevReport)", () => {
+    const prev = makeReport({
+      crecimiento: { items: [{ clienteId, seguidoresActuales: 1000, meta: 0 }] },
+    });
     const curr = makeReport({
-      crecimiento: { items: [{ clienteId, seguidoresActuales: 1100, seguidoresBase: null, meta: 100 }] },
+      crecimiento: { items: [{ clienteId, seguidoresGanados: null, seguidoresActuales: 1100, meta: 100 }] },
+    });
+    expect(calcCrecimiento(curr, prev)).toBe(20);
+  });
+
+  it("fallback: usa seguidoresBase manual si no hay mes anterior", () => {
+    const curr = makeReport({
+      crecimiento: { items: [{ clienteId, seguidoresGanados: null, seguidoresActuales: 1100, seguidoresBase: 1000, meta: 100 }] },
+    });
+    expect(calcCrecimiento(curr, null)).toBe(20);
+  });
+
+  it("retorna 0 si no hay datos de ganados ni base", () => {
+    const curr = makeReport({
+      crecimiento: { items: [{ clienteId, seguidoresGanados: null, seguidoresActuales: 1100, seguidoresBase: null, meta: 100 }] },
     });
     expect(calcCrecimiento(curr, null)).toBe(0);
   });
@@ -179,24 +229,16 @@ describe("calcCrecimiento", () => {
   });
 
   it("cuenta solo clientes que alcanzan la meta", () => {
-    const prev = makeReport({
-      crecimiento: {
-        items: [
-          { clienteId: "c1", seguidoresActuales: 1000, meta: 0 },
-          { clienteId: "c2", seguidoresActuales: 2000, meta: 0 },
-        ],
-      },
-    });
     const curr = makeReport({
       crecimiento: {
         items: [
-          { clienteId: "c1", seguidoresActuales: 1100, meta: 100 }, // +100 >= 100 ✓
-          { clienteId: "c2", seguidoresActuales: 2050, meta: 100 }, // +50 < 100 ✗
+          { clienteId: "c1", seguidoresGanados: 100, seguidoresActuales: 1100, meta: 100 }, // 100 >= 100 ✓
+          { clienteId: "c2", seguidoresGanados: 50,  seguidoresActuales: 2050, meta: 100 }, // 50 < 100 ✗
         ],
       },
     });
     // 1/2 clientes cumplen → (1/2)*20 = 10
-    expect(calcCrecimiento(curr, prev)).toBe(10);
+    expect(calcCrecimiento(curr, null)).toBe(10);
   });
 });
 
@@ -276,7 +318,7 @@ describe("calcTotal + sumScore", () => {
       solicitudes:   { solicitudes: 10, editadas: 10 },
       piezas:        { piezas: 10, editadas: 10 },
       pautas:        { items: [{ clienteId: "c1", realizadas: 5, meta: 5 }] },
-      crecimiento:   { items: [{ clienteId: "c1", seguidoresActuales: 1100, seguidoresBase: 1000, meta: 100 }] },
+      crecimiento:   { items: [{ clienteId: "c1", seguidoresGanados: 100, seguidoresActuales: 1100, meta: 100 }] },
     });
     const scores = calcTotal(r, null);
     expect(sumScore(scores)).toBe(100);
@@ -290,7 +332,7 @@ describe("calcTotal + sumScore", () => {
       solicitudes:   { solicitudes: 10, editadas: 10 },  // 10 pts
       piezas:        { piezas: 10, editadas: 10 },        // 10 pts
       pautas:        { items: [{ clienteId: "c1", realizadas: 5, meta: 5 }] }, // 20 pts
-      crecimiento:   { items: [{ clienteId: "c1", seguidoresActuales: 1100, seguidoresBase: 1000, meta: 100 }] }, // 20 pts
+      crecimiento:   { items: [{ clienteId: "c1", seguidoresGanados: 100, seguidoresActuales: 1100, meta: 100 }] }, // 20 pts
     });
     const scores = calcTotal(r, null);
     // sin clamp: 40+40+20+10+20+10 = 140
@@ -316,7 +358,7 @@ describe("calcTotal + sumScore", () => {
       solicitudes:   { solicitudes: 10, editadas: 10 },
       piezas:        { piezas: 10, editadas: 10 },
       pautas:        { items: [{ clienteId: "c1", realizadas: 5, meta: 5 }] },
-      crecimiento:   { items: [{ clienteId: "c1", seguidoresActuales: 1100, seguidoresBase: 1000, meta: 100 }] },
+      crecimiento:   { items: [{ clienteId: "c1", seguidoresGanados: 100, seguidoresActuales: 1100, meta: 100 }] },
     });
     const scores = calcTotal(r, null);
     expect(scores.reuniones).toBe(20);
