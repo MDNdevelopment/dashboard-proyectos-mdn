@@ -9,6 +9,7 @@ import {
 import { assignMemberToLine, removeMemberFromLine } from '../../utils/lineMembers'
 import LineModal from './LineModal'
 import LineMetasModal from './LineMetasModal'
+import LineFichaModal from './LineFichaModal'
 import ConfirmDeleteDialog from '../common/ConfirmDeleteDialog'
 
 /**
@@ -25,6 +26,7 @@ export default function LinesView({ companyId, canManage = true }) {
   const [loading, setLoading] = useState(true)
   const [lineModal, setLineModal]       = useState(undefined)   // undefined=cerrado, null=crear, obj=editar
   const [metasModal, setMetasModal]     = useState(null)        // null=cerrado, obj=línea a editar metas
+  const [fichaModal, setFichaModal]     = useState(null)        // null=cerrado, obj=línea cuya ficha se muestra
   const [confirmDelete, setConfirmDelete] = useState(null)       // { id, name }
   const [deleting, setDeleting]         = useState(false)
   const [savingLine, setSavingLine]     = useState(null)         // lineId que está guardando miembros
@@ -171,23 +173,33 @@ export default function LinesView({ companyId, canManage = true }) {
             return (
               <div
                 key={line.id}
-                className="bg-white rounded-2xl border border-[#e0ddd4] overflow-hidden"
+                className="bg-white rounded-2xl border border-[#e0ddd4] overflow-hidden cursor-pointer hover:border-[#d0ccc0] transition-colors"
+                onClick={e => {
+                  // Los controles de gestión (botones, select, links) no abren la ficha
+                  if (e.target.closest('button, select, a, input')) return
+                  setFichaModal(line)
+                }}
               >
                 {/* Card header */}
                 <div
                   className="px-5 py-3 flex items-center justify-between border-b border-[#f0ede3]"
                   style={{ background: line.color + '14' }}
                 >
-                  <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFichaModal(line)}
+                    aria-label={`Ver ficha de ${line.name}`}
+                    className="flex items-center gap-2 min-w-0 text-left"
+                  >
                     <span
                       className="w-3 h-3 rounded-full flex-shrink-0"
                       style={{ background: line.color }}
                     />
-                    <span className="text-[15.5px] font-bold text-[#111]">{line.name}</span>
+                    <span className="text-[15.5px] font-bold text-[#111] hover:underline decoration-[#ccc] underline-offset-2">{line.name}</span>
                     <span className="text-[12px] font-mono text-[#aaa]">
                       {members.length} {members.length !== 1 ? 'miembros' : 'miembro'}
                     </span>
-                  </div>
+                  </button>
                   {canManage && (
                     <div className="flex items-center gap-1">
                       <button
@@ -317,6 +329,15 @@ export default function LinesView({ companyId, canManage = true }) {
           sortOrder={lines.length}
           onClose={() => setLineModal(undefined)}
           onSaved={handleLineSaved}
+        />
+      )}
+
+      {/* Ficha de línea (read-only, con drill-down a empleado/cliente) */}
+      {fichaModal && (
+        <LineFichaModal
+          line={fichaModal}
+          companyId={companyId}
+          onClose={() => setFichaModal(null)}
         />
       )}
 
