@@ -36,7 +36,7 @@ export function calcProductividad(report) {
  * @returns {{ ganados: number|null, cumple: boolean|null, pct: number|null }}
  *   - ganados: seguidores ganados en el mes, o null si faltan datos.
  *   - cumple: true si ganados >= meta, false si no, null si faltan datos.
- *   - pct: (ganados − meta) / meta × 100, o null si meta es 0 o faltan datos.
+ *   - pct: ganados / meta × 100 (% de cumplimiento de la meta), o null si meta es 0 o faltan datos.
  */
 export function crecimientoCliente(item, prevReport = null) {
   let ganados = null;
@@ -64,7 +64,7 @@ export function crecimientoCliente(item, prevReport = null) {
 
   const meta = Number(item.meta ?? 0);
   const cumple = ganados >= meta;
-  const pct = meta > 0 ? ((ganados - meta) / meta) * 100 : null;
+  const pct = meta > 0 ? (ganados / meta) * 100 : null;
   return { ganados, cumple, pct };
 }
 

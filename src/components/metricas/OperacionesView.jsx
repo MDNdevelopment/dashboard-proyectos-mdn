@@ -263,15 +263,13 @@ export default function OperacionesView({ line, companyId, year, month }) {
                     {/* Fila de encabezados de columna */}
                     <div className="grid grid-cols-[minmax(110px,1fr)_auto_auto_auto_auto] gap-x-3 gap-y-0 items-end mb-1">
                       <div />
-                      {/* Encabezado mes anterior */}
-                      <div className="flex gap-2 items-end">
-                        <span className="text-[10px] font-mono font-bold uppercase tracking-[0.08em] text-[#bbb] whitespace-nowrap w-[92px] text-center">{prevMonthName}</span>
-                        <span className="text-[10px] font-mono font-bold uppercase tracking-[0.08em] text-[#bbb] whitespace-nowrap w-[92px] text-center">{prevMonthName}</span>
+                      {/* Título único mes anterior (centrado sobre las 2 columnas del grupo) */}
+                      <div className="text-center">
+                        <span className="text-[11px] font-mono font-bold uppercase tracking-[0.08em] text-[#bbb] whitespace-nowrap">{prevMonthName}</span>
                       </div>
-                      {/* Encabezado mes actual */}
-                      <div className="flex gap-2 items-end">
-                        <span className="text-[10px] font-mono font-bold uppercase tracking-[0.08em] text-[#555] whitespace-nowrap w-[92px] text-center">{currMonthName}</span>
-                        <span className="text-[10px] font-mono font-bold uppercase tracking-[0.08em] text-[#555] whitespace-nowrap w-[92px] text-center">{currMonthName}</span>
+                      {/* Título único mes actual (centrado sobre las 2 columnas del grupo) */}
+                      <div className="text-center">
+                        <span className="text-[11px] font-mono font-bold uppercase tracking-[0.08em] text-[#555] whitespace-nowrap">{currMonthName}</span>
                       </div>
                       <div />
                       <div />
@@ -369,8 +367,8 @@ export default function OperacionesView({ line, companyId, year, month }) {
                                 >Pendiente</span>
                               )}
                               {pct !== null && (
-                                <span className={`text-[11px] font-mono font-semibold ${pct >= 0 ? "text-green-600" : "text-red-500"}`}>
-                                  {pct >= 0 ? "+" : ""}{Math.round(pct)}%
+                                <span className={`text-[11px] font-mono font-semibold ${cumple ? "text-green-600" : "text-red-500"}`}>
+                                  {Math.round(pct)}%
                                 </span>
                               )}
                             </div>

@@ -118,17 +118,17 @@ describe("crecimientoCliente", () => {
     expect(res.pct).toBeNull();
   });
 
-  // ── pct (porcentaje vs meta) ──────────────────────────────────────────────
-  it("pct es positivo cuando se excedió la meta", () => {
+  // ── pct (porcentaje de cumplimiento: ganados / meta × 100) ──────────────
+  it("pct refleja el cumplimiento cuando se superó la meta", () => {
     const item = { clienteId: "c1", seguidoresGanados: 120, meta: 100 };
     const res = crecimientoCliente(item, null);
-    expect(res.pct).toBeCloseTo(20); // (120-100)/100*100 = 20%
+    expect(res.pct).toBeCloseTo(120); // 120/100*100 = 120%
   });
 
-  it("pct es negativo cuando no se alcanzó la meta", () => {
+  it("pct refleja el cumplimiento parcial cuando no se alcanzó la meta", () => {
     const item = { clienteId: "c1", seguidoresGanados: 80, meta: 100 };
     const res = crecimientoCliente(item, null);
-    expect(res.pct).toBeCloseTo(-20); // (80-100)/100*100 = -20%
+    expect(res.pct).toBeCloseTo(80); // 80/100*100 = 80%
   });
 
   it("pct es null cuando meta es 0 (evita división por cero)", () => {
