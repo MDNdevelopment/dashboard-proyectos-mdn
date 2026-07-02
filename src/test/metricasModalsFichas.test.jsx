@@ -8,7 +8,7 @@
  */
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { vi } from 'vitest'
 
 // ── Mocks globales ─────────────────────────────────────────────────────────────
@@ -643,5 +643,94 @@ describe('FinanzasView — Sueldos toggle Lista/Tarjetas y foto de perfil', () =
       expect(screen.queryByAltText('MG')).not.toBeInTheDocument() // no hay <img>
       expect(screen.getByText('MG')).toBeInTheDocument()           // se muestran iniciales
     })
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 7. FinanzasView — deep-link ?section=ingresos|gastos (scroll one-shot)
+// ══════════════════════════════════════════════════════════════════════════════
+
+describe('FinanzasView — scroll a sección desde ?section=', () => {
+  let scrollSpy
+
+  function LocationSpy() {
+    const loc = useLocation()
+    return <div data-testid="location">{loc.pathname + loc.search}</div>
+  }
+
+  function renderWithSection(search, month = 6) {
+    return render(
+      <MemoryRouter initialEntries={[`/reportes/linea/l-1${search}`]}>
+        <FinanzasView line={MOCK_LINE} companyId="co-1" year={2026} month={month} />
+        <LocationSpy />
+      </MemoryRouter>
+    )
+  }
+
+  beforeEach(() => {
+    mockLoadReport.mockResolvedValue({ data: { data: FINANZAS_REPORT_DATA }, error: null })
+    mockLoadPrevReport.mockResolvedValue({ data: null, error: null })
+    mockLoadClients.mockResolvedValue({
+      data: [
+        { id: 'c-1', name: 'Pepsi', monthly_fee: 1500, payment_day: 5,
+          logo_url: null, line_id: 'l-1', contacts: [], social_links: [] },
+      ],
+      error: null,
+    })
+    useAuthImport.mockReturnValue({
+      userProfile: { user_id: 'u-1', company_id: 'co-1', access_level: 4, admin: true, first_name: 'Admin', last_name: 'Test' },
+      can: () => true,
+      signOut: vi.fn(),
+    })
+    scrollSpy = vi.fn()
+    Element.prototype.scrollIntoView = scrollSpy // jsdom no lo implementa
+  })
+
+  it('con ?section=ingresos scrollea una vez tras cargar', async () => {
+    renderWithSection('?tab=finanzas&section=ingresos')
+    await waitFor(() => expect(scrollSpy).toHaveBeenCalledTimes(1))
+  })
+
+  it('con ?section=gastos scrollea a gastos operativos', async () => {
+    renderWithSection('?tab=finanzas&section=gastos')
+    await waitFor(() => expect(scrollSpy).toHaveBeenCalledTimes(1))
+  })
+
+  it('limpia el param section de la URL tras el scroll (conserva tab)', async () => {
+    renderWithSection('?tab=finanzas&section=ingresos')
+    await waitFor(() => expect(scrollSpy).toHaveBeenCalledTimes(1))
+    await waitFor(() => {
+      const loc = screen.getByTestId('location').textContent
+      expect(loc).toContain('tab=finanzas')
+      expect(loc).not.toContain('section=')
+    })
+  })
+
+  it('no re-scrollea al recargar por cambio de mes', async () => {
+    const view = renderWithSection('?tab=finanzas&section=ingresos')
+    await waitFor(() => expect(scrollSpy).toHaveBeenCalledTimes(1))
+    view.rerender(
+      <MemoryRouter initialEntries={['/reportes/linea/l-1?tab=finanzas&section=ingresos']}>
+        <FinanzasView line={MOCK_LINE} companyId="co-1" year={2026} month={7} />
+        <LocationSpy />
+      </MemoryRouter>
+    )
+    await waitFor(() => expect(screen.getByText('Ingresos')).toBeInTheDocument())
+    expect(scrollSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('sin ?section= no scrollea', async () => {
+    renderWithSection('?tab=finanzas')
+    await waitFor(() => expect(screen.getByText('Ingresos')).toBeInTheDocument())
+    expect(scrollSpy).not.toHaveBeenCalled()
+  })
+
+  it('con ?section= desconocido no scrollea pero limpia el param', async () => {
+    renderWithSection('?tab=finanzas&section=xyz')
+    await waitFor(() => expect(screen.getByText('Ingresos')).toBeInTheDocument())
+    await waitFor(() => {
+      expect(screen.getByTestId('location').textContent).not.toContain('section=')
+    })
+    expect(scrollSpy).not.toHaveBeenCalled()
   })
 })

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { isFinancePrivileged } from "../../lib/permissions";
 import {
@@ -44,6 +45,11 @@ export default function FinanzasView({ line, companyId, year, month }) {
   const ingresosRef = useRef(null);
   const gastosRef   = useRef(null);
 
+  // Deep-link ?section=ingresos|gastos (p.ej. desde LineFichaModal en Empresa):
+  // scroll one-shot a la sección tras la primera carga, luego se limpia el param.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const pendingSection = useRef(searchParams.get("section"));
+
   const load = useCallback(async () => {
     if (!line?.id || !companyId) return;
     setLoading(true);
@@ -75,6 +81,19 @@ export default function FinanzasView({ line, companyId, year, month }) {
   }, [line?.id, line?.member_user_ids, companyId, year, month]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (loading || !pendingSection.current) return;
+    const ref = pendingSection.current === "ingresos" ? ingresosRef
+              : pendingSection.current === "gastos"   ? gastosRef : null;
+    pendingSection.current = null; // one-shot: no re-scrollear al cambiar mes/año
+    ref?.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setSearchParams(prev => {
+      const p = new URLSearchParams(prev);
+      p.delete("section");
+      return p;
+    }, { replace: true });
+  }, [loading, setSearchParams]);
 
   async function handleSave() {
     if (!report) return;
