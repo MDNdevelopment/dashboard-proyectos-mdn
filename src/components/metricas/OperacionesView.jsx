@@ -268,7 +268,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
                         <span className="text-[11px] font-mono font-bold uppercase tracking-[0.08em] text-[#bbb] whitespace-nowrap">{prevMonthName}</span>
                       </div>
                       {/* Título único mes actual (centrado sobre las 2 columnas del grupo) */}
-                      <div className="text-center">
+                      <div className="text-center border-l border-[#e0ddd4] pl-2">
                         <span className="text-[11px] font-mono font-bold uppercase tracking-[0.08em] text-[#555] whitespace-nowrap">{currMonthName}</span>
                       </div>
                       <div />
@@ -313,7 +313,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
                             </div>
 
                             {/* Mes actual — editables */}
-                            <div className="flex gap-2 items-center">
+                            <div className="flex gap-2 items-center border-l border-[#e0ddd4] pl-2">
                               <div className="flex flex-col items-center gap-0.5">
                                 <span className="text-[10px] text-[#aaa] whitespace-nowrap">Ganados</span>
                                 <input
