@@ -11,6 +11,7 @@ import { useAuth } from "../../context/AuthContext";
 import EmployeeInfoModal from "./EmployeeInfoModal";
 import ClientFichaModal from "./ClientFichaModal";
 import { fmtUSD } from "../../utils/metricsFinance";
+import EntityGridList, { ViewToggle } from "../common/EntityGridList";
 
 const CURRENT_YEAR = new Date().getFullYear();
 const CURRENT_MONTH = new Date().getMonth() + 1;
@@ -185,110 +186,25 @@ export default function LineHubView({ line, companyId, year = CURRENT_YEAR }) {
             <p className="text-[13px] font-mono font-bold tracking-[0.14em] uppercase text-[#888]">
               Empleados · {teamMembers.length}
             </p>
-            <div className="flex bg-[#f5f3eb] border border-[#e0ddd4] rounded-lg p-0.5">
-              <button
-                type="button"
-                onClick={() => setEmpView("lista")}
-                className={`px-2.5 py-1 rounded-md text-[12px] font-semibold transition-all ${
-                  empView === "lista" ? "bg-white text-[#111] shadow-sm" : "text-[#888] hover:text-[#555]"
-                }`}
-                title="Vista lista"
-              >
-                Lista
-              </button>
-              <button
-                type="button"
-                onClick={() => setEmpView("tarjetas")}
-                className={`px-2.5 py-1 rounded-md text-[12px] font-semibold transition-all ${
-                  empView === "tarjetas" ? "bg-white text-[#111] shadow-sm" : "text-[#888] hover:text-[#555]"
-                }`}
-                title="Vista tarjetas"
-              >
-                Tarjetas
-              </button>
-            </div>
+            <ViewToggle view={empView} onChange={setEmpView} />
           </div>
-          {empView === "tarjetas" ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-              {teamMembers.map(u => {
-                const name = `${u.first_name} ${u.last_name}`;
-                const initials = `${u.first_name?.[0] ?? ""}${u.last_name?.[0] ?? ""}`.toUpperCase();
-                return (
-                  <button
-                    key={u.user_id}
-                    type="button"
-                    onClick={() => setEmpModal(u)}
-                    className="flex flex-col items-center gap-1.5 px-3 py-2.5 rounded-xl border border-[#e0ddd4] bg-[#faf9f5] hover:bg-[#f0ede3] hover:border-[#d0ccc0] transition-colors text-center"
-                    title={`Ver información de ${name}`}
-                  >
-                    {u.avatar_url ? (
-                      <img
-                        src={u.avatar_url}
-                        alt={name}
-                        className="w-10 h-10 rounded-full object-cover flex-shrink-0 border border-[#e0ddd4]"
-                      />
-                    ) : (
-                      <div
-                        className="w-10 h-10 rounded-full flex items-center justify-center text-[13px] font-bold text-white flex-shrink-0"
-                        style={{ background: line.color }}
-                      >
-                        {initials}
-                      </div>
-                    )}
-                    <div className="w-full min-w-0">
-                      <p className="text-[13px] font-medium text-[#333] truncate">{name}</p>
-                      {u.position?.position_name && (
-                        <p className="text-[11px] text-[#aaa] truncate">{u.position.position_name}</p>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {teamMembers.map(u => {
-                const name = `${u.first_name} ${u.last_name}`;
-                const initials = `${u.first_name?.[0] ?? ""}${u.last_name?.[0] ?? ""}`.toUpperCase();
-                return (
-                  <button
-                    key={u.user_id}
-                    type="button"
-                    onClick={() => setEmpModal(u)}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl border border-[#e0ddd4] hover:bg-[#fafaf7] hover:border-[#d0ccc0] transition-colors text-left"
-                    title={`Ver información de ${name}`}
-                  >
-                    {u.avatar_url ? (
-                      <img
-                        src={u.avatar_url}
-                        alt={name}
-                        className="w-8 h-8 rounded-full object-cover flex-shrink-0 border border-[#e0ddd4]"
-                      />
-                    ) : (
-                      <div
-                        className="w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-bold text-white flex-shrink-0"
-                        style={{ background: line.color }}
-                      >
-                        {initials}
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[14px] font-medium text-[#333] truncate">{name}</p>
-                      {u.position?.position_name && (
-                        <p className="text-[11.5px] text-[#aaa] truncate">{u.position.position_name}</p>
-                      )}
-                    </div>
-                    <svg
-                      width="10" height="10" viewBox="0 0 10 10" fill="none"
-                      stroke="currentColor" strokeWidth="1.8" className="text-[#ccc] flex-shrink-0"
-                    >
-                      <path d="M2 5h6M5 2l3 3-3 3" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          <EntityGridList
+            items={teamMembers.map(u => {
+              const name = `${u.first_name} ${u.last_name}`;
+              return {
+                id: u.user_id,
+                name,
+                secondary: u.position?.position_name,
+                imageUrl: u.avatar_url,
+                fallbackText: `${u.first_name?.[0] ?? ""}${u.last_name?.[0] ?? ""}`.toUpperCase(),
+                fallbackBg: line.color,
+                title: `Ver información de ${name}`,
+                raw: u,
+              };
+            })}
+            view={empView}
+            onItemClick={setEmpModal}
+          />
         </div>
       )}
 
@@ -299,98 +215,23 @@ export default function LineHubView({ line, companyId, year = CURRENT_YEAR }) {
             <p className="text-[13px] font-mono font-bold tracking-[0.14em] uppercase text-[#888]">
               Marcas · {lineClients.length}
             </p>
-            <div className="flex bg-[#f5f3eb] border border-[#e0ddd4] rounded-lg p-0.5">
-              <button
-                type="button"
-                onClick={() => setCliView("lista")}
-                className={`px-2.5 py-1 rounded-md text-[12px] font-semibold transition-all ${
-                  cliView === "lista" ? "bg-white text-[#111] shadow-sm" : "text-[#888] hover:text-[#555]"
-                }`}
-                title="Vista lista"
-              >
-                Lista
-              </button>
-              <button
-                type="button"
-                onClick={() => setCliView("tarjetas")}
-                className={`px-2.5 py-1 rounded-md text-[12px] font-semibold transition-all ${
-                  cliView === "tarjetas" ? "bg-white text-[#111] shadow-sm" : "text-[#888] hover:text-[#555]"
-                }`}
-                title="Vista tarjetas"
-              >
-                Tarjetas
-              </button>
-            </div>
+            <ViewToggle view={cliView} onChange={setCliView} />
           </div>
-          {cliView === "tarjetas" ? (
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
-              {lineClients.map(client => (
-                <button
-                  key={client.id}
-                  type="button"
-                  onClick={() => setCliModal(client)}
-                  className="flex flex-col items-center gap-1.5 px-3 py-2.5 rounded-xl border border-[#e0ddd4] bg-[#faf9f5] hover:bg-[#f0ede3] hover:border-[#d0ccc0] transition-colors text-center"
-                  title={`Ver ficha de ${client.name}`}
-                >
-                  {client.logo_url ? (
-                    <img
-                      src={client.logo_url}
-                      alt={client.name}
-                      className="w-10 h-10 rounded-full object-cover flex-shrink-0 border border-[#e0ddd4]"
-                    />
-                  ) : (
-                    <span className="w-10 h-10 rounded-full bg-[#f0ede3] flex items-center justify-center flex-shrink-0 text-[13px] font-bold text-[#aaa] uppercase">
-                      {client.name?.[0] ?? "?"}
-                    </span>
-                  )}
-                  <div className="w-full min-w-0">
-                    <p className="text-[13px] font-medium text-[#333] truncate">{client.name}</p>
-                    <p className="text-[11px] text-[#aaa] truncate">
-                      {client.monthly_fee != null ? fmtUSD(client.monthly_fee) : "—"}
-                      {client.payment_day ? ` · día ${client.payment_day}` : ""}
-                    </p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {lineClients.map(client => (
-                <button
-                  key={client.id}
-                  type="button"
-                  onClick={() => setCliModal(client)}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl border border-[#e0ddd4] hover:bg-[#fafaf7] hover:border-[#d0ccc0] transition-colors text-left"
-                  title={`Ver ficha de ${client.name}`}
-                >
-                  {client.logo_url ? (
-                    <img
-                      src={client.logo_url}
-                      alt={client.name}
-                      className="w-7 h-7 rounded-full object-cover flex-shrink-0 border border-[#e0ddd4]"
-                    />
-                  ) : (
-                    <span className="w-7 h-7 rounded-full bg-[#f0ede3] flex items-center justify-center flex-shrink-0 text-[11px] font-bold text-[#aaa] uppercase">
-                      {client.name?.[0] ?? "?"}
-                    </span>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[14px] font-medium text-[#333] truncate">{client.name}</p>
-                    <p className="text-[11.5px] text-[#aaa]">
-                      {client.monthly_fee != null ? fmtUSD(client.monthly_fee) : "—"}
-                      {client.payment_day ? ` · día ${client.payment_day}` : ""}
-                    </p>
-                  </div>
-                  <svg
-                    width="10" height="10" viewBox="0 0 10 10" fill="none"
-                    stroke="currentColor" strokeWidth="1.8" className="text-[#ccc] flex-shrink-0"
-                  >
-                    <path d="M2 5h6M5 2l3 3-3 3" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </button>
-              ))}
-            </div>
-          )}
+          <EntityGridList
+            items={lineClients.map(client => ({
+              id: client.id,
+              name: client.name,
+              secondary: `${client.monthly_fee != null ? fmtUSD(client.monthly_fee) : "—"}${client.payment_day ? ` · día ${client.payment_day}` : ""}`,
+              imageUrl: client.logo_url,
+              fallbackText: client.name?.[0] ?? "?",
+              fallbackBg: null,
+              title: `Ver ficha de ${client.name}`,
+              raw: client,
+            }))}
+            view={cliView}
+            onItemClick={setCliModal}
+            gridClass="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2"
+          />
         </div>
       )}
 

@@ -1,37 +1,59 @@
 import { useEffect, useState } from "react";
-import { loadCompanyEmployees, loadClients } from "../metricas/metricsApi";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
+import { isFinancePrivileged } from "../../lib/permissions";
+import { calcFinanzas, fmtUSD } from "../../utils/metricsFinance";
+import { MONTHS } from "../metricas/constants";
+import { loadCompanyEmployees, loadClients, loadYearReports } from "../metricas/metricsApi";
 import EmployeeFichaContent from "../metricas/EmployeeFichaContent";
 import ClientFichaContent from "../metricas/ClientFichaContent";
+import EntityGridList, { ViewToggle } from "../common/EntityGridList";
+
+const CURRENT_YEAR = new Date().getFullYear();
 
 /**
  * Ficha de solo lectura de una línea operativa (metric_lines), con drill-down
  * en un solo modal: click en un miembro o cliente reemplaza el contenido por
  * su ficha (EmployeeFichaContent / ClientFichaContent) con botón "← Volver".
  * Escape sube un nivel; en la raíz cierra. El botón X cierra desde cualquier nivel.
+ * Miembros y clientes se muestran en vista tarjetas (default) o lista (ViewToggle).
+ * Incluye resumen de finanzas del último período de la línea — visible solo para
+ * nivel 4 / admin (isFinancePrivileged); sus KPIs navegan a la sección de
+ * Finanzas del módulo Reportes si además can('reportes').
  * Props:
  *   line      — objeto de metric_lines (id, name, color, member_user_ids)
  *   companyId — uuid de la empresa
  *   onClose   — callback para cerrar
  */
 export default function LineFichaModal({ line, companyId, onClose }) {
-  const [members, setMembers] = useState(null); // null = cargando
-  const [clients, setClients] = useState(null); // null = cargando
-  const [drill, setDrill] = useState(null);     // null | { type: 'employee'|'client', entity }
+  const navigate = useNavigate();
+  const { userProfile, can = () => true } = useAuth();
+  const privileged = isFinancePrivileged(userProfile);
 
-  // Carga on-mount: empleados con joins position/department + clientes de la línea
+  const [members, setMembers] = useState(null);       // null = cargando
+  const [clients, setClients] = useState(null);       // null = cargando
+  const [finReports, setFinReports] = useState(null); // null = cargando, [] = sin datos
+  const [drill, setDrill] = useState(null);           // null | { type: 'employee'|'client', entity }
+  const [memberView, setMemberView] = useState("tarjetas"); // "lista" | "tarjetas"
+  const [clientView, setClientView] = useState("tarjetas"); // "lista" | "tarjetas"
+
+  // Carga on-mount: empleados con joins position/department + clientes de la línea.
+  // Los reportes del año (finanzas) solo se piden si el usuario puede verlos.
   useEffect(() => {
     let cancelled = false;
     Promise.all([
       loadCompanyEmployees(companyId),
       loadClients(companyId, line.id),
-    ]).then(([empRes, cliRes]) => {
+      privileged ? loadYearReports(companyId, CURRENT_YEAR) : Promise.resolve({ data: [] }),
+    ]).then(([empRes, cliRes, repRes]) => {
       if (cancelled) return;
       const memberIds = line.member_user_ids ?? [];
       setMembers((empRes.data ?? []).filter(u => memberIds.includes(u.user_id)));
       setClients(cliRes.data ?? []);
+      setFinReports((repRes.data ?? []).filter(r => r.line_id === line.id));
     });
     return () => { cancelled = true; };
-  }, [companyId, line.id, line.member_user_ids]);
+  }, [companyId, line.id, line.member_user_ids, privileged]);
 
   // Escape: en drill-down vuelve a la raíz; en la raíz cierra el modal
   useEffect(() => {
@@ -45,6 +67,17 @@ export default function LineFichaModal({ line, companyId, onClose }) {
   }, [drill, onClose]);
 
   const loading = members === null || clients === null;
+
+  // Último período con reporte de la línea (mes más alto del año actual)
+  const lastReport = (finReports ?? []).reduce(
+    (best, r) => (!best || r.month > best.month ? r : best),
+    null
+  );
+
+  function goFinanzas(section) {
+    onClose();
+    navigate(`/reportes/linea/${line.id}?tab=finanzas&section=${section}`);
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25 backdrop-blur-[3px]">
@@ -113,89 +146,136 @@ export default function LineFichaModal({ line, companyId, onClose }) {
 
                 {/* Miembros */}
                 <div>
-                  <p className="text-[11.5px] font-mono font-bold uppercase tracking-[0.12em] text-[#aaa] mb-2">
-                    Miembros
-                  </p>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[11.5px] font-mono font-bold uppercase tracking-[0.12em] text-[#aaa]">
+                      Miembros
+                    </p>
+                    {members.length > 0 && (
+                      <ViewToggle view={memberView} onChange={setMemberView} />
+                    )}
+                  </div>
                   {members.length === 0 ? (
                     <p className="text-[13.5px] text-[#bbb]">Sin miembros asignados.</p>
                   ) : (
-                    <div className="space-y-1.5">
-                      {members.map(u => {
+                    <EntityGridList
+                      items={members.map(u => {
                         const name = `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim();
-                        return (
-                          <button
-                            key={u.user_id}
-                            type="button"
-                            onClick={() => setDrill({ type: "employee", entity: u })}
-                            title={`Ver información de ${name}`}
-                            className="w-full flex items-center gap-3 p-2.5 rounded-xl bg-[#faf9f5] border border-[#ece9df] hover:border-[#d8d4c6] hover:bg-[#f5f3eb] transition-colors text-left"
-                          >
-                            {u.avatar_url ? (
-                              <img
-                                src={u.avatar_url}
-                                alt=""
-                                className="w-8 h-8 rounded-full object-cover flex-shrink-0"
-                              />
-                            ) : (
-                              <div
-                                className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-[12px] font-bold text-[#111]"
-                                style={{ background: line.color + "44" }}
-                              >
-                                {(u.first_name?.[0] ?? "") + (u.last_name?.[0] ?? "")}
-                              </div>
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <p className="text-[14px] font-semibold text-[#222] truncate">{name}</p>
-                              {u.position?.position_name && (
-                                <p className="text-[12px] text-[#999] truncate">{u.position.position_name}</p>
-                              )}
-                            </div>
-                          </button>
-                        );
+                        return {
+                          id: u.user_id,
+                          name,
+                          secondary: u.position?.position_name,
+                          imageUrl: u.avatar_url,
+                          fallbackText: `${u.first_name?.[0] ?? ""}${u.last_name?.[0] ?? ""}`.toUpperCase(),
+                          fallbackBg: line.color,
+                          title: `Ver información de ${name}`,
+                          raw: u,
+                        };
                       })}
-                    </div>
+                      view={memberView}
+                      onItemClick={u => setDrill({ type: "employee", entity: u })}
+                    />
                   )}
                 </div>
 
                 {/* Clientes */}
                 <div>
-                  <p className="text-[11.5px] font-mono font-bold uppercase tracking-[0.12em] text-[#aaa] mb-2">
-                    Clientes
-                  </p>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[11.5px] font-mono font-bold uppercase tracking-[0.12em] text-[#aaa]">
+                      Clientes
+                    </p>
+                    {clients.length > 0 && (
+                      <ViewToggle view={clientView} onChange={setClientView} />
+                    )}
+                  </div>
                   {clients.length === 0 ? (
                     <p className="text-[13.5px] text-[#bbb]">Sin clientes en esta línea.</p>
                   ) : (
-                    <div className="space-y-1.5">
-                      {clients.map(c => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => setDrill({ type: "client", entity: c })}
-                          title={`Ver ficha de ${c.name}`}
-                          className="w-full flex items-center gap-3 p-2.5 rounded-xl bg-[#faf9f5] border border-[#ece9df] hover:border-[#d8d4c6] hover:bg-[#f5f3eb] transition-colors text-left"
-                        >
-                          {c.logo_url ? (
-                            <img
-                              src={c.logo_url}
-                              alt=""
-                              className="w-8 h-8 rounded-full object-cover flex-shrink-0 border border-[#e0ddd4]"
-                            />
-                          ) : (
-                            <span className="w-8 h-8 rounded-full bg-[#f0ede3] flex items-center justify-center flex-shrink-0 text-[13px] font-bold text-[#aaa] uppercase">
-                              {c.name?.[0] ?? "?"}
-                            </span>
-                          )}
-                          <p className="flex-1 min-w-0 text-[14px] font-semibold text-[#222] truncate">{c.name}</p>
-                        </button>
-                      ))}
-                    </div>
+                    <EntityGridList
+                      items={clients.map(c => ({
+                        id: c.id,
+                        name: c.name,
+                        secondary: null,
+                        imageUrl: c.logo_url,
+                        fallbackText: c.name?.[0] ?? "?",
+                        fallbackBg: null,
+                        title: `Ver ficha de ${c.name}`,
+                        raw: c,
+                      }))}
+                      view={clientView}
+                      onItemClick={c => setDrill({ type: "client", entity: c })}
+                      gridClass="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2"
+                    />
                   )}
                 </div>
+
+                {/* Finanzas del último período — solo nivel 4 / admin */}
+                {privileged && (
+                  <div>
+                    <p className="text-[11.5px] font-mono font-bold uppercase tracking-[0.12em] text-[#aaa] mb-2">
+                      Finanzas{lastReport ? ` · ${MONTHS[lastReport.month - 1]} ${CURRENT_YEAR}` : ""}
+                    </p>
+                    {!lastReport ? (
+                      <p className="text-[13.5px] text-[#bbb]">
+                        Sin datos financieros para {CURRENT_YEAR}.
+                      </p>
+                    ) : (() => {
+                      const f = calcFinanzas(lastReport.data ?? {});
+                      const canGo = can("reportes");
+                      return (
+                        <div className="grid grid-cols-3 gap-2">
+                          <FinKpi
+                            label="Ingresos brutos"
+                            value={fmtUSD(f.totIngresos)}
+                            color="text-green-600"
+                            onClick={canGo ? () => goFinanzas("ingresos") : undefined}
+                            title={canGo ? "Ir a ingresos" : undefined}
+                          />
+                          <FinKpi
+                            label="Total egresos"
+                            value={fmtUSD(f.totEgresos)}
+                            color="text-red-500"
+                            onClick={canGo ? () => goFinanzas("gastos") : undefined}
+                            title={canGo ? "Ir a gastos" : undefined}
+                          />
+                          <FinKpi
+                            label="Diferencia"
+                            value={fmtUSD(f.diferencia)}
+                            color={f.diferencia >= 0 ? "text-green-600" : "text-red-500"}
+                          />
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
             )}
           </>
         )}
       </div>
     </div>
+  );
+}
+
+/** Mini-KPI financiero: botón navegable si recibe onClick, div estático si no. */
+function FinKpi({ label, value, color, onClick, title }) {
+  const inner = (
+    <>
+      <p className="text-[10.5px] font-mono font-bold uppercase tracking-[0.1em] text-[#aaa] mb-0.5">{label}</p>
+      <p className={`text-[15px] font-bold ${color}`}>{value}</p>
+    </>
+  );
+  const base = "p-3 rounded-xl bg-[#faf9f5] border border-[#ece9df] text-left";
+  if (!onClick) {
+    return <div className={base}>{inner}</div>;
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className={`${base} hover:bg-[#f5f3eb] hover:border-[#d8d4c6] transition-colors`}
+    >
+      {inner}
+    </button>
   );
 }

@@ -7,7 +7,7 @@
  */
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { vi } from 'vitest'
 
 // ── Mocks globales ─────────────────────────────────────────────────────────────
@@ -71,6 +71,31 @@ const MOCK_CLIENT = {
   social_links: [], mdn_since: null, anniversary_date: null,
 }
 
+// Reportes del año: meses 1 y 2 de la línea l-1 + un reporte de otra línea,
+// para probar filtrado por línea y selección del último período (Febrero)
+const CURRENT_YEAR = new Date().getFullYear()
+const MOCK_REPORTS = [
+  {
+    id: 'r-1', line_id: 'l-1', year: CURRENT_YEAR, month: 1,
+    data: { finanzas: { ingresos: [{ id: 'i-0', descripcion: 'Viejo', monto: 500 }], gastosOperativos: [], sueldos: [], otrosGastos: [] } },
+  },
+  {
+    id: 'r-2', line_id: 'l-1', year: CURRENT_YEAR, month: 2,
+    data: {
+      finanzas: {
+        ingresos:         [{ id: 'i-1', descripcion: 'Pepsi', monto: 1000 }],
+        gastosOperativos: [{ id: 'g-1', descripcion: 'Hosting', monto: 400 }],
+        sueldos:          [],
+        otrosGastos:      [],
+      },
+    },
+  },
+  {
+    id: 'r-3', line_id: 'l-otra', year: CURRENT_YEAR, month: 3,
+    data: { finanzas: { ingresos: [{ id: 'i-9', descripcion: 'Ajena', monto: 9999 }], gastosOperativos: [], sueldos: [], otrosGastos: [] } },
+  },
+]
+
 // Mock de metricsApi centralizado
 const mockLoadLines            = vi.fn().mockResolvedValue({ data: [MOCK_LINE], error: null })
 const mockLoadCompanyUsers     = vi.fn().mockResolvedValue({
@@ -81,6 +106,7 @@ const mockLoadCompanyEmployees = vi.fn().mockResolvedValue({ data: [MOCK_EMPLOYE
 const mockLoadClients          = vi.fn().mockResolvedValue({ data: [MOCK_CLIENT], error: null })
 const mockUpdateLine           = vi.fn().mockResolvedValue({ data: null, error: null })
 const mockDeleteLine           = vi.fn().mockResolvedValue({ error: null })
+const mockLoadYearReports      = vi.fn().mockResolvedValue({ data: MOCK_REPORTS, error: null })
 
 vi.mock('../components/metricas/metricsApi', () => ({
   loadLines:            (...a) => mockLoadLines(...a),
@@ -89,9 +115,12 @@ vi.mock('../components/metricas/metricsApi', () => ({
   loadClients:          (...a) => mockLoadClients(...a),
   updateLine:           (...a) => mockUpdateLine(...a),
   deleteLine:           (...a) => mockDeleteLine(...a),
+  loadYearReports:      (...a) => mockLoadYearReports(...a),
 }))
 
-vi.mock('../utils/metricsFinance', () => ({
+// calcFinanzas real (suma los montos de los fixtures) + fmtUSD simplificado
+vi.mock('../utils/metricsFinance', async importOriginal => ({
+  ...(await importOriginal()),
   fmtUSD: vi.fn(v => `$${v}`),
 }))
 
@@ -102,11 +131,27 @@ function wrap(ui) {
   return render(<MemoryRouter>{ui}</MemoryRouter>)
 }
 
+/** Expone la ubicación actual del MemoryRouter para assertear navegaciones. */
+function LocationSpy() {
+  const loc = useLocation()
+  return <div data-testid="location">{loc.pathname + loc.search}</div>
+}
+
 async function renderFicha(onClose = vi.fn()) {
-  wrap(<LineFichaModal line={MOCK_LINE} companyId="co-1" onClose={onClose} />)
+  wrap(
+    <>
+      <LineFichaModal line={MOCK_LINE} companyId="co-1" onClose={onClose} />
+      <LocationSpy />
+    </>
+  )
   await waitFor(() => expect(screen.getByText('Miembros')).toBeInTheDocument())
   return onClose
 }
+
+beforeEach(() => {
+  mockLoadYearReports.mockClear()
+  mockUpdateLine.mockClear()
+})
 
 afterEach(() => {
   vi.mocked(useAuth).mockReturnValue({
@@ -248,5 +293,107 @@ describe('LineFichaModal — drill-down en un solo modal', () => {
     expect(screen.getByText('Juan Pérez')).toBeInTheDocument()
     expect(screen.queryByText('$1500')).not.toBeInTheDocument()
     expect(screen.queryByText('día 5')).not.toBeInTheDocument()
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 3. LineFichaModal — toggle Lista/Tarjetas
+// ══════════════════════════════════════════════════════════════════════════════
+
+describe('LineFichaModal — toggle Lista/Tarjetas', () => {
+  it('la vista por defecto es Tarjetas en Miembros y Clientes', async () => {
+    await renderFicha()
+    // Dos toggles (Miembros y Clientes), ambos con "Tarjetas" activo
+    expect(screen.getAllByRole('button', { name: 'Tarjetas', pressed: true })).toHaveLength(2)
+    expect(screen.queryByRole('button', { name: 'Lista', pressed: true })).not.toBeInTheDocument()
+  })
+
+  it('cambiar Miembros a Lista mantiene el drill-down funcionando', async () => {
+    await renderFicha()
+    await userEvent.click(screen.getAllByRole('button', { name: 'Lista' })[0])
+    expect(screen.getAllByRole('button', { name: 'Lista', pressed: true })).toHaveLength(1)
+    await userEvent.click(screen.getByTitle('Ver información de María González'))
+    expect(screen.getByText('maria@mdn.com')).toBeInTheDocument()
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 4. LineFichaModal — resumen de finanzas del último período
+// ══════════════════════════════════════════════════════════════════════════════
+
+describe('LineFichaModal — resumen de finanzas del último período', () => {
+  it('usuario privilegiado ve los KPIs del último mes con datos (Febrero)', async () => {
+    await renderFicha()
+    expect(screen.getByText(`Finanzas · Febrero ${CURRENT_YEAR}`)).toBeInTheDocument()
+    expect(screen.getByText('Ingresos brutos')).toBeInTheDocument()
+    expect(screen.getByText('Total egresos')).toBeInTheDocument()
+    expect(screen.getByText('Diferencia')).toBeInTheDocument()
+    // Montos del mes 2 (último con reporte de l-1) con calcFinanzas real
+    expect(screen.getByText('$1000')).toBeInTheDocument()
+    expect(screen.getByText('$400')).toBeInTheDocument()
+    expect(screen.getByText('$600')).toBeInTheDocument()
+    // Ni el mes 1 de la misma línea ni los reportes de otra línea
+    expect(screen.queryByText('$500')).not.toBeInTheDocument()
+    expect(screen.queryByText('$9999')).not.toBeInTheDocument()
+  })
+
+  it('usuario no privilegiado: no pide reportes y no ve el bloque', async () => {
+    vi.mocked(useAuth).mockReturnValue({
+      userProfile: { user_id: 'u-3', company_id: 'co-1', access_level: 2, admin: false },
+      can: () => true,
+      signOut: vi.fn(),
+    })
+    await renderFicha()
+    expect(mockLoadYearReports).not.toHaveBeenCalled()
+    expect(screen.queryByText('Ingresos brutos')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Finanzas/)).not.toBeInTheDocument()
+  })
+
+  it('privilegiado sin reportes del año: muestra "Sin datos financieros"', async () => {
+    mockLoadYearReports.mockResolvedValueOnce({ data: [], error: null })
+    await renderFicha()
+    expect(screen.getByText(`Sin datos financieros para ${CURRENT_YEAR}.`)).toBeInTheDocument()
+    expect(screen.queryByText('Ingresos brutos')).not.toBeInTheDocument()
+  })
+
+  it('el resumen no aparece dentro del drill-down', async () => {
+    await renderFicha()
+    await userEvent.click(screen.getByTitle('Ver ficha de Pepsi'))
+    expect(screen.queryByText('Ingresos brutos')).not.toBeInTheDocument()
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 5. LineFichaModal — navegación a Finanzas del team
+// ══════════════════════════════════════════════════════════════════════════════
+
+describe('LineFichaModal — navegación a la sección de Finanzas', () => {
+  it('click en "Ingresos brutos" cierra el modal y navega con section=ingresos', async () => {
+    const onClose = await renderFicha()
+    await userEvent.click(screen.getByTitle('Ir a ingresos'))
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(screen.getByTestId('location').textContent)
+      .toBe('/reportes/linea/l-1?tab=finanzas&section=ingresos')
+  })
+
+  it('click en "Total egresos" navega con section=gastos', async () => {
+    const onClose = await renderFicha()
+    await userEvent.click(screen.getByTitle('Ir a gastos'))
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(screen.getByTestId('location').textContent)
+      .toBe('/reportes/linea/l-1?tab=finanzas&section=gastos')
+  })
+
+  it('sin can("reportes"): los KPIs se ven pero no son navegables', async () => {
+    vi.mocked(useAuth).mockReturnValue({
+      userProfile: { user_id: 'u-1', company_id: 'co-1', access_level: 4, admin: true },
+      can: k => k !== 'reportes',
+      signOut: vi.fn(),
+    })
+    await renderFicha()
+    expect(screen.getByText('Ingresos brutos')).toBeInTheDocument()
+    expect(screen.getByText('$1000')).toBeInTheDocument()
+    expect(screen.queryByTitle('Ir a ingresos')).not.toBeInTheDocument()
+    expect(screen.queryByTitle('Ir a gastos')).not.toBeInTheDocument()
   })
 })

@@ -10,6 +10,7 @@ import StandupView from '../components/tareas/StandupView'
 import TaskModal from '../components/tareas/TaskModal'
 import { loadLines, loadClients } from '../components/metricas/metricsApi'
 import { currentMonthIndex, fmtMonth } from '../components/tareas/constants'
+import { visibleLinesForUser } from '../utils/lineMembers'
 
 const VIEWS = [
   {
@@ -87,7 +88,7 @@ export default function TareasPage() {
       loadClients(companyId),
     ])
 
-    const fetchedTeams = linesRes.data ?? []
+    const fetchedTeams = visibleLinesForUser(linesRes.data ?? [], userProfile)
     setTeams(fetchedTeams)
     setTasks(tasksRes.data ?? [])
 
