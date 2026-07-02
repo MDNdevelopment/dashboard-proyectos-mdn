@@ -67,7 +67,9 @@ export default function TareasPage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userProfile, activeView])
-  const [activeTeamId, setActiveTeamId] = useState(null)
+  const [activeTeamId, setActiveTeamId] = useState(
+    () => searchParams.get('team') ?? null,
+  )
   const [monthIdx, setMonthIdx] = useState(currentMonthIndex())
   // null = closed, undefined = new task, object = edit existing
   const [taskModal, setTaskModal] = useState(null)

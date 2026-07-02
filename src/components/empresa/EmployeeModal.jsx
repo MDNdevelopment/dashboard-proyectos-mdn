@@ -2,23 +2,29 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../supabase'
 import AvatarUpload from './AvatarUpload'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
+import { useAuth } from '../../context/AuthContext'
+import { isFinancePrivileged } from '../../lib/permissions'
 
 /**
  * Modal editar empleado (solo edición — la creación es Fase 4).
  * Props: employee (objeto), departments, positions, onClose, onSaved(data)
  */
 export default function EmployeeModal({ employee, departments, positions, onClose, onSaved }) {
+  const { userProfile } = useAuth()
+  const privileged = isFinancePrivileged(userProfile)
+
   const [form, setForm] = useState(() => ({
-    first_name:   employee?.first_name   ?? '',
-    last_name:    employee?.last_name    ?? '',
-    phone_number: employee?.phone_number ?? '',
-    birth_date:   employee?.birth_date   ?? '',
-    hire_date:    employee?.hire_date    ?? '',
-    department_id: employee?.department_id ?? '',
-    position_id:   employee?.position_id   ?? '',
-    access_level:  employee?.access_level  ?? 1,
-    admin:         employee?.admin         ?? false,
-    avatar_url:    employee?.avatar_url    ?? '',
+    first_name:     employee?.first_name     ?? '',
+    last_name:      employee?.last_name      ?? '',
+    phone_number:   employee?.phone_number   ?? '',
+    birth_date:     employee?.birth_date     ?? '',
+    hire_date:      employee?.hire_date      ?? '',
+    department_id:  employee?.department_id  ?? '',
+    position_id:    employee?.position_id    ?? '',
+    access_level:   employee?.access_level   ?? 1,
+    admin:          employee?.admin          ?? false,
+    avatar_url:     employee?.avatar_url     ?? '',
+    monthly_salary: employee?.monthly_salary ?? '',
   }))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -62,20 +68,26 @@ export default function EmployeeModal({ employee, departments, positions, onClos
     setSaving(true)
     setError(null)
 
+    const updatePayload = {
+      first_name:    form.first_name.trim(),
+      last_name:     form.last_name.trim(),
+      phone_number:  form.phone_number.trim() || null,
+      birth_date:    form.birth_date  || null,
+      hire_date:     form.hire_date   || null,
+      department_id: form.department_id || null,
+      position_id:   form.position_id   || null,
+      access_level:  Number(form.access_level),
+      admin:         form.admin,
+      avatar_url:    form.avatar_url || null,
+    }
+    // Sueldo: solo lo escribe quien tiene permisos financieros
+    if (privileged) {
+      updatePayload.monthly_salary = form.monthly_salary !== '' ? Number(form.monthly_salary) : null
+    }
+
     const { data, error: err } = await supabase
       .from('users')
-      .update({
-        first_name:    form.first_name.trim(),
-        last_name:     form.last_name.trim(),
-        phone_number:  form.phone_number.trim() || null,
-        birth_date:    form.birth_date  || null,
-        hire_date:     form.hire_date   || null,
-        department_id: form.department_id || null,
-        position_id:   form.position_id   || null,
-        access_level:  Number(form.access_level),
-        admin:         form.admin,
-        avatar_url:    form.avatar_url || null,
-      })
+      .update(updatePayload)
       .eq('user_id', employee.user_id)
       .select('*, department:departments(department_name), position:positions(position_name)')
       .single()
@@ -246,8 +258,27 @@ export default function EmployeeModal({ employee, departments, positions, onClos
               <option value={1}>Nivel 1</option>
               <option value={2}>Nivel 2</option>
               <option value={3}>Nivel 3</option>
+              <option value={4}>Nivel 4</option>
             </select>
           </div>
+
+          {/* Sueldo mensual — solo nivel 4 / admin */}
+          {privileged && (
+            <div>
+              <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+                Sueldo mensual (USD)
+              </label>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                className="input-base"
+                value={form.monthly_salary}
+                onChange={e => set('monthly_salary', e.target.value)}
+                placeholder="0.00"
+              />
+            </div>
+          )}
 
           {/* Toggle admin */}
           <div className="flex items-center gap-3">

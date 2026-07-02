@@ -106,6 +106,7 @@ export default function BaseView({ tasks, teams, team, usersMap, clientsById = n
   const [q, setQ] = useState('')
   const [fStatus, setFStatus] = useState(() => searchParams.get('status') ?? '')
   const [fClient, setFClient] = useState('')
+  const [fClientId, setFClientId] = useState(() => searchParams.get('client') ?? '') // client_id desde Reportes
   const [fSupport, setFSupport] = useState('')   // '' | 'with' | 'without'
   const [fAlert, setFAlert] = useState(() => searchParams.get('fAlert') ?? '')  // '' | 'late' | 'drag' | 'ok'
   const [fAssignee, setFAssignee] = useState(() => searchParams.get('assignee') ?? '') // user_id | ''
@@ -133,11 +134,15 @@ export default function BaseView({ tasks, teams, team, usersMap, clientsById = n
     if (fAlert === 'drag' && !isDragged(t)) return false
     if (fAlert === 'ok' && (isLate(t) || isDragged(t))) return false
     if (fAssignee && !(t.assignee_ids ?? (t.assignee_id ? [t.assignee_id] : [])).includes(fAssignee)) return false
+    if (fClientId && t.client_id !== fClientId) return false
     return true
   }).sort((a, b) => (b.request_date ?? '').localeCompare(a.request_date ?? ''))
 
-  const hasFilters = q || fStatus || fClient || fSupport || fAlert || fAssignee
-  function clearFilters() { setQ(''); setFStatus(''); setFClient(''); setFSupport(''); setFAlert(''); setFAssignee('') }
+  const hasFilters = q || fStatus || fClient || fClientId || fSupport || fAlert || fAssignee
+  function clearFilters() { setQ(''); setFStatus(''); setFClient(''); setFClientId(''); setFSupport(''); setFAlert(''); setFAssignee('') }
+
+  // Nombre del cliente filtrado por ID (para mostrar etiqueta cuando viene de Reportes)
+  const activeClientName = fClientId ? clientsById.get(fClientId)?.name ?? null : null
 
   function userDisplay(id) {
     const u = usersMap.get(id)
@@ -196,10 +201,24 @@ export default function BaseView({ tasks, teams, team, usersMap, clientsById = n
             <option value="ok">Al día</option>
           </select>
         </div>
-        <div className="flex items-center justify-between">
-          <span className="text-[14px] text-[#888]">
-            {hasFilters ? `${filtered.length} de ${baseTasks.length}` : baseTasks.length} tarea{baseTasks.length !== 1 ? 's' : ''}
-          </span>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[14px] text-[#888]">
+              {hasFilters ? `${filtered.length} de ${baseTasks.length}` : baseTasks.length} tarea{baseTasks.length !== 1 ? 's' : ''}
+            </span>
+            {activeClientName && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-[#fff6e0] border border-[#e8c96a] rounded-full text-[12.5px] font-semibold text-[#a06a00]">
+                {activeClientName}
+                <button
+                  onClick={() => setFClientId('')}
+                  className="text-[#b58a00] hover:text-[#7a5c00] leading-none"
+                  title="Quitar filtro de cliente"
+                >
+                  ×
+                </button>
+              </span>
+            )}
+          </div>
           {hasFilters && (
             <button onClick={clearFilters} className="text-[14px] font-semibold text-[#888] hover:text-[#111] transition-colors">
               Limpiar filtros

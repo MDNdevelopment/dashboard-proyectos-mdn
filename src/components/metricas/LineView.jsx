@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import LineHubView from "./LineHubView";
 import OperacionesView from "./OperacionesView";
 import FinanzasView from "./FinanzasView";
@@ -13,7 +14,11 @@ const CURRENT_MONTH = new Date().getMonth() + 1;
 const YEARS = Array.from({ length: 4 }, (_, i) => CURRENT_YEAR - i);
 
 export default function LineView({ line, companyId, onLinesChange }) {
-  const [subView, setSubView] = useState("hub");
+  const [searchParams] = useSearchParams();
+  const [subView, setSubView] = useState(() => {
+    const tab = searchParams.get("tab");
+    return ["hub", "operaciones", "finanzas"].includes(tab) ? tab : "hub";
+  });
   const [year, setYear] = useState(CURRENT_YEAR);
   const [month, setMonth] = useState(CURRENT_MONTH);
 

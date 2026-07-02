@@ -10,7 +10,9 @@ import { useAuth } from '../context/AuthContext'
 import Sidebar from '../components/Sidebar'
 
 function renderSidebar(userProfile, { projects = null, activeFilter = 'all', onFilterChange = () => {}, initialRoute = '/' } = {}) {
-  useAuth.mockReturnValue({ signOut: vi.fn(), userProfile })
+  // permissionsLoaded + can abierto: simula permisos ya cargados sin reglas de exclusión,
+  // el contrato de useAuth desde el fix del flash de módulos (21e5e2e).
+  useAuth.mockReturnValue({ signOut: vi.fn(), userProfile, can: () => true, permissionsLoaded: true })
   return render(
     <MemoryRouter initialEntries={[initialRoute]}>
       <Sidebar projects={projects} activeFilter={activeFilter} onFilterChange={onFilterChange} connected={true} />

@@ -1,17 +1,21 @@
 import { useState, useEffect, useCallback } from "react";
+import { useAuth } from "../../context/AuthContext";
 import { loadReport, loadPrevReport, loadClients, upsertReport } from "./metricsApi";
+import ClientFichaModal from "./ClientFichaModal";
 import { initMetricReport } from "../../utils/initMetricReport";
 import { syncReportClients } from "../../utils/syncReportClients";
 import { calcTotal, sumScore, crecimientoCliente } from "../../utils/metricsScore";
 import { MONTHS, INDICATORS } from "./constants";
 
 export default function OperacionesView({ line, companyId, year, month }) {
+  const { can = () => true } = useAuth();
   const [report, setReport] = useState(null);
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState(null);
+  const [cliModal, setCliModal] = useState(null); // null=cerrado, objeto=cliente abierto
 
   const load = useCallback(async () => {
     if (!line?.id || !companyId) return;
@@ -55,6 +59,25 @@ export default function OperacionesView({ line, companyId, year, month }) {
 
   function clientName(clienteId) {
     return clients.find(c => c.id === clienteId)?.name ?? "[Cliente eliminado]";
+  }
+
+  // Renderiza el nombre del cliente como botón que abre la ficha técnica.
+  function ClientLink({ clienteId }) {
+    const name = clientName(clienteId);
+    const client = clients.find(c => c.id === clienteId);
+    if (client) {
+      return (
+        <button
+          type="button"
+          onClick={() => setCliModal(client)}
+          className="text-[14px] text-[#555] truncate hover:text-[#111] hover:underline text-left"
+          title={`Ver ficha de ${name}`}
+        >
+          {name}
+        </button>
+      );
+    }
+    return <span className="text-[14px] text-[#555] truncate">{name}</span>;
   }
 
   // Puntajes en tiempo real
@@ -231,7 +254,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
               const { crecimiento: delta, cumple } = crecimientoCliente(item);
               return (
                 <div key={item.clienteId} className="grid grid-cols-[minmax(100px,1fr)_auto_auto_auto_auto] gap-2 items-center">
-                  <span className="text-[14px] text-[#555] truncate">{clientName(item.clienteId)}</span>
+                  <ClientLink clienteId={item.clienteId} />
                   <div className="flex items-center gap-1">
                     <span className="text-[11px] text-[#aaa] whitespace-nowrap">Base manual</span>
                     <input type="number" className="input-base !w-24 flex-none text-[13px]"
@@ -317,7 +340,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
           ) : (
             report.pautas.items.map((item, idx) => (
               <div key={item.clienteId} className="grid grid-cols-[minmax(100px,1fr)_auto_auto] gap-2 items-center">
-                <span className="text-[14px] text-[#555] truncate">{clientName(item.clienteId)}</span>
+                <ClientLink clienteId={item.clienteId} />
                 <div className="flex items-center gap-1">
                   <span className="text-[11px] text-[#aaa]">Realizadas</span>
                   <input type="number" min="0" className="input-base w-20 text-[13px]"
@@ -362,36 +385,6 @@ export default function OperacionesView({ line, companyId, year, month }) {
         </div>
       </Section>
 
-      {/* 7. FEEDBACK */}
-      <Section
-        title="7. Feedback de clientes"
-        subtitle={`Peso: ${INDICATORS[6].peso} pts — score 0–10 por cliente, se promedia`}
-        score={scores?.feedback}
-        max={INDICATORS[6].peso}
-      >
-        <div className="space-y-2">
-          {report.feedback.items.length === 0 ? (
-            <p className="text-[14px] text-[#bbb]">Sin clientes configurados.</p>
-          ) : (
-            report.feedback.items.map((item, idx) => (
-              <div key={item.clienteId} className="grid grid-cols-[minmax(100px,1fr)_auto] gap-2 items-center">
-                <span className="text-[14px] text-[#555] truncate">{clientName(item.clienteId)}</span>
-                <div className="flex items-center gap-1">
-                  <span className="text-[11px] text-[#aaa]">Score (0–10)</span>
-                  <input
-                    type="number" min="0" max="10" step="0.1"
-                    className="input-base w-20 text-[13px]"
-                    placeholder="—"
-                    value={item.score ?? ""}
-                    onChange={e => setItemField("feedback", idx, "score", e.target.value === "" ? null : e.target.value)}
-                  />
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </Section>
-
       {/* Botón guardar */}
       <div className="flex items-center justify-end pt-2 pb-6">
         <button
@@ -413,6 +406,13 @@ export default function OperacionesView({ line, companyId, year, month }) {
           {saved ? "Guardado" : saving ? "Guardando..." : "Guardar reporte"}
         </button>
       </div>
+      {cliModal && (
+        <ClientFichaModal
+          client={cliModal}
+          line={line}
+          onClose={() => setCliModal(null)}
+        />
+      )}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, Legend, CartesianGrid, LabelList,
@@ -15,6 +16,7 @@ const YEARS = Array.from({ length: 4 }, (_, i) => CURRENT_YEAR - i);
 
 export default function DashboardView({ companyId, lines }) {
   const navigate = useNavigate();
+  const { can = () => true } = useAuth();
   const [year, setYear] = useState(CURRENT_YEAR);
   const [reports, setReports] = useState([]);
   const [clients, setClients] = useState([]);
@@ -118,6 +120,7 @@ export default function DashboardView({ companyId, lines }) {
           value={lider?.line.name ?? "—"}
           sub={lider ? `${lider.prom.toFixed(1)} prom. anual` : "Sin datos aún"}
           color="text-[#111]"
+          onClick={lider ? () => navigate(`/reportes/linea/${lider.line.id}`) : undefined}
         />
         <KpiCard
           label="Cobertura"
@@ -231,13 +234,32 @@ export default function DashboardView({ companyId, lines }) {
                 const cuentas = clients.filter(c => c.line_id === line.id).length;
                 const empleados = line.member_user_ids?.length ?? 0;
                 return (
-                  <div key={line.id} className="rounded-xl border border-[#e0ddd4] p-3 text-center">
+                  <button
+                    key={line.id}
+                    onClick={() => navigate(`/reportes/linea/${line.id}?tab=finanzas`)}
+                    className="rounded-xl border border-[#e0ddd4] p-3 text-center hover:bg-[#fafaf7] hover:border-[#d0ccc0] transition-colors w-full"
+                    title={`Ver finanzas de ${line.name}`}
+                  >
                     <div className="flex items-center justify-center gap-1.5 mb-0.5">
                       <span className="w-2 h-2 rounded-full" style={{ background: line.color }} />
                       <span className="text-[13px] font-semibold text-[#444]">{line.name}</span>
                     </div>
-                    <div className="text-[11px] font-mono text-[#bbb] mb-2">
-                      {cuentas} {cuentas !== 1 ? "cuentas" : "cuenta"} · {empleados} {empleados !== 1 ? "empleados" : "empleado"}
+                    <div className="text-[11px] font-mono text-[#bbb] mb-2 flex items-center justify-center gap-2 flex-wrap">
+                      <span
+                        onClick={e => { e.stopPropagation(); navigate(`/reportes/linea/${line.id}?tab=operaciones`); }}
+                        className="hover:text-[#888] hover:underline cursor-pointer"
+                        title="Ver clientes de esta línea"
+                      >
+                        {cuentas} {cuentas !== 1 ? "cuentas" : "cuenta"}
+                      </span>
+                      <span className="text-[#e0ddd4]">·</span>
+                      <span
+                        onClick={e => { e.stopPropagation(); navigate(`/reportes/linea/${line.id}`); }}
+                        className="hover:text-[#888] hover:underline cursor-pointer"
+                        title="Ver equipo de esta línea"
+                      >
+                        {empleados} {empleados !== 1 ? "empleados" : "empleado"}
+                      </span>
                     </div>
                     <div className="text-[12px] text-[#aaa] font-mono">Ingresos</div>
                     <div className="text-[14px] font-bold text-green-600">{fmtUSD(f.ingresos)}</div>
@@ -247,7 +269,7 @@ export default function DashboardView({ companyId, lines }) {
                     <div className={`text-[14px] font-bold ${positive ? "text-green-600" : "text-red-500"}`}>
                       {fmtUSD(f.diferencia)}
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -258,12 +280,17 @@ export default function DashboardView({ companyId, lines }) {
   );
 }
 
-function KpiCard({ label, value, sub, color }) {
+function KpiCard({ label, value, sub, color, onClick }) {
+  const Wrapper = onClick ? "button" : "div";
   return (
-    <div className="bg-white rounded-2xl border border-[#e0ddd4] px-4 py-4">
+    <Wrapper
+      className={`bg-white rounded-2xl border border-[#e0ddd4] px-4 py-4 text-left w-full${onClick ? " hover:bg-[#fafaf7] hover:border-[#d0ccc0] transition-colors cursor-pointer" : ""}`}
+      onClick={onClick}
+      title={onClick ? `Ir a ${value}` : undefined}
+    >
       <p className="text-[12px] font-mono font-bold uppercase tracking-[0.12em] text-[#aaa] mb-1">{label}</p>
       <p className={`text-[26px] font-bold leading-tight ${color}`}>{value}</p>
       <p className="text-[12px] text-[#bbb] mt-0.5">{sub}</p>
-    </div>
+    </Wrapper>
   );
 }

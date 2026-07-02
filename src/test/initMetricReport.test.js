@@ -68,7 +68,7 @@ describe("initMetricReport — sin mes anterior", () => {
     expect(r.reuniones.realizadas).toBe(0);
   });
 
-  it("inicializa finanzas con sueldos/gastos vacíos", () => {
+  it("inicializa finanzas con sueldos/gastos vacíos cuando no hay empleados", () => {
     const r = initMetricReport(null, []);
     expect(r.finanzas.sueldos).toEqual([]);
     expect(r.finanzas.gastosOperativos).toEqual([]);
@@ -99,6 +99,36 @@ describe("initMetricReport — sin mes anterior", () => {
   it("deja ingresos vacíos cuando no hay clientes", () => {
     const r = initMetricReport(null, []);
     expect(r.finanzas.ingresos).toEqual([]);
+  });
+
+  it("siembra sueldos desde lineEmployees con su monthly_salary", () => {
+    const employees = [
+      { user_id: "u1", first_name: "Juan",  last_name: "Pérez",  monthly_salary: 500 },
+      { user_id: "u2", first_name: "María", last_name: "Gómez",  monthly_salary: 450 },
+    ];
+    const r = initMetricReport(null, [], {}, employees);
+    expect(r.finanzas.sueldos).toHaveLength(2);
+    expect(r.finanzas.sueldos[0]).toMatchObject({
+      empleadoId: "u1",
+      descripcion: "Juan Pérez",
+      monto: 500,
+    });
+    expect(r.finanzas.sueldos[1]).toMatchObject({
+      empleadoId: "u2",
+      descripcion: "María Gómez",
+      monto: 450,
+    });
+  });
+
+  it("siembra sueldos con monto 0 cuando el empleado no tiene monthly_salary", () => {
+    const employees = [{ user_id: "ux", first_name: "Sin", last_name: "Sueldo" }];
+    const r = initMetricReport(null, [], {}, employees);
+    expect(r.finanzas.sueldos[0].monto).toBe(0);
+  });
+
+  it("retro-compatibilidad: 2 args no genera sueldos de empleados", () => {
+    const r = initMetricReport(null, []);
+    expect(r.finanzas.sueldos).toEqual([]);
   });
 });
 

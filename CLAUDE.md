@@ -76,6 +76,10 @@ RLS: all authenticated users can read and write any project (no per-user or per-
 ## Development Rules
 
 - Every new feature must include tests that pass before the work is considered complete. Do not return success on a feature without writing and running passing tests.
+- **Test execution strategy:** while iterating on a feature, run ONLY the tests related to the
+  files you touched (e.g. `npx vitest run src/test/<file>.test.jsx` or
+  `npx vitest related --run <changed-files>`). Run the full suite (`npm test`) exactly ONCE, at the
+  end, before declaring the feature complete — never during iteration.
 - Never modify a test just to make it pass. When a test fails, investigate the root cause in the implementation code. If the failure cannot be resolved, ask the developer for guidance before proceeding.
 - Before executing any destructive database operation (DROP, DELETE, TRUNCATE, or destructive
   migrations), ask for explicit confirmation once before proceeding.

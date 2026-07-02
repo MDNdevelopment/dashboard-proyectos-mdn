@@ -18,13 +18,14 @@
 import { DEFAULT_SUBTAREAS } from "../components/metricas/constants";
 
 /**
- * @param {object|null} prevReport  - Reporte del mes anterior, o null.
- * @param {Array} lineClients       - Array de { id, name } de la cartera actual.
- * @param {object} lineMetas        - Metas configuradas en la línea: { reuniones?: number, tareas?: [{nombre, meta}] }.
- *                                    Tiene prioridad sobre el carry-forward para meses no guardados.
+ * @param {object|null} prevReport   - Reporte del mes anterior, o null.
+ * @param {Array}  lineClients       - Array de { id, name } de la cartera actual.
+ * @param {object} lineMetas         - Metas configuradas en la línea: { reuniones?: number, tareas?: [{nombre, meta}] }.
+ *                                     Tiene prioridad sobre el carry-forward para meses no guardados.
+ * @param {Array}  lineEmployees     - Array de empleados (de users) filtrados para la línea.
  * @returns {object} - Objeto de datos del nuevo reporte (sin id/line_id/year/month).
  */
-export function initMetricReport(prevReport, lineClients = [], lineMetas = {}) {
+export function initMetricReport(prevReport, lineClients = [], lineMetas = {}, lineEmployees = []) {
   // ── 1. Construir base (carry-forward o defaults) ──────────────────────────────
   let base;
 
@@ -98,7 +99,12 @@ export function initMetricReport(prevReport, lineClients = [], lineMetas = {}) {
           monto: Number(c.monthly_fee) || 0,
         })),
         gastosOperativos: [],
-        sueldos: [],
+        sueldos: lineEmployees.map(emp => ({
+          id: 'sue-' + emp.user_id,
+          empleadoId: emp.user_id,
+          descripcion: `${emp.first_name ?? ''} ${emp.last_name ?? ''}`.trim(),
+          monto: Number(emp.monthly_salary) || 0,
+        })),
         otrosGastos: [],
       },
     };

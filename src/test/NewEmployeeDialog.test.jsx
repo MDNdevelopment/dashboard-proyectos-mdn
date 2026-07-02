@@ -13,6 +13,14 @@ vi.mock('../supabase', () => ({
   },
 }))
 
+vi.mock('../context/AuthContext', () => ({
+  useAuth: vi.fn(() => ({
+    userProfile: { user_id: 'u-admin', company_id: 'co-1', access_level: 4, admin: true },
+    can: () => true,
+    signOut: vi.fn(),
+  })),
+}))
+
 // ── Datos de prueba ───────────────────────────────────────────────────────────
 const MOCK_DEPARTMENTS = [
   { department_id: 'd1', department_name: 'Diseño', company_id: 'co-1' },

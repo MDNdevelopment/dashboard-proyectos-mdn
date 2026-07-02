@@ -48,6 +48,18 @@
  */
 export const can = canAccessModule
 
+/**
+ * Devuelve true si el usuario puede ver/editar información financiera sensible
+ * (sueldos de empleados, mensualidad y día de pago de clientes).
+ * Requiere ser admin o tener nivel de acceso ≥ 4.
+ *
+ * @param {object|null} userProfile — objeto del contexto Auth
+ * @returns {boolean}
+ */
+export function isFinancePrivileged(userProfile) {
+  return userProfile?.admin === true || (userProfile?.access_level ?? 0) >= 4
+}
+
 export function canAccessModule(moduleKey, userProfile, configByModule) {
   if (!userProfile) return false
   if (userProfile.admin === true) return true   // admin ve todo, incluso si está en deny

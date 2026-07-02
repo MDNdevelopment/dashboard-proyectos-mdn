@@ -215,3 +215,122 @@ describe("syncReportClients — ingresos", () => {
     expect(synced.finanzas.ingresos[0].monto).toBe(0);
   });
 });
+
+// ─── sueldos ────────────────────────────────────────────────────────────────
+
+const EMPLOYEES = [
+  { user_id: "u1", first_name: "Juan",  last_name: "Pérez",   monthly_salary: 500 },
+  { user_id: "u2", first_name: "María", last_name: "Gómez",   monthly_salary: 450 },
+];
+
+describe("syncReportClients — sueldos (auto-generación por empleado)", () => {
+  it("siembra sueldos de empleados cuando el reporte no tiene ninguno", () => {
+    const report = makeReport();
+    const synced = syncReportClients(report, CLIENTS, EMPLOYEES);
+
+    expect(synced.finanzas.sueldos).toHaveLength(2);
+    expect(synced.finanzas.sueldos[0]).toMatchObject({
+      empleadoId: "u1",
+      descripcion: "Juan Pérez",
+      monto: 500,
+    });
+    expect(synced.finanzas.sueldos[1]).toMatchObject({
+      empleadoId: "u2",
+      descripcion: "María Gómez",
+      monto: 450,
+    });
+  });
+
+  it("preserva el monto ya editado de un empleado existente", () => {
+    const report = makeReport({
+      finanzas: {
+        ingresos: [],
+        gastosOperativos: [],
+        sueldos: [
+          { id: "sue-u1", empleadoId: "u1", descripcion: "Juan Pérez", monto: 750 }, // editado
+        ],
+        otrosGastos: [],
+      },
+    });
+    const synced = syncReportClients(report, CLIENTS, EMPLOYEES);
+
+    const u1row = synced.finanzas.sueldos.find(i => i.empleadoId === "u1");
+    expect(u1row.monto).toBe(750); // editado conservado
+    const u2row = synced.finanzas.sueldos.find(i => i.empleadoId === "u2");
+    expect(u2row.monto).toBe(450); // nuevo con monthly_salary
+  });
+
+  it("descarta el sueldo de un empleado que salió del team", () => {
+    const report = makeReport({
+      finanzas: {
+        ingresos: [],
+        gastosOperativos: [],
+        sueldos: [
+          { id: "sue-u1",   empleadoId: "u1",   descripcion: "Juan Pérez", monto: 500 },
+          { id: "sue-uOld", empleadoId: "uOld", descripcion: "Ex-empleado", monto: 300 },
+        ],
+        otrosGastos: [],
+      },
+    });
+    const synced = syncReportClients(report, CLIENTS, EMPLOYEES); // EMPLOYEES = [u1, u2]
+
+    const ids = synced.finanzas.sueldos.map(i => i.empleadoId);
+    expect(ids).toContain("u1");
+    expect(ids).toContain("u2");
+    expect(ids).not.toContain("uOld");
+  });
+
+  it("conserva las filas manuales (empleadoId == null) aunque cambie el team", () => {
+    const report = makeReport({
+      finanzas: {
+        ingresos: [],
+        gastosOperativos: [],
+        sueldos: [
+          { id: "m1", empleadoId: null, descripcion: "Pago extra", monto: 100 },
+          { id: "sue-u1", empleadoId: "u1", descripcion: "Juan Pérez", monto: 500 },
+        ],
+        otrosGastos: [],
+      },
+    });
+    const synced = syncReportClients(report, CLIENTS, EMPLOYEES);
+
+    const manual = synced.finanzas.sueldos.filter(i => i.empleadoId == null);
+    expect(manual).toHaveLength(1);
+    expect(manual[0].descripcion).toBe("Pago extra");
+  });
+
+  it("trata monthly_salary nulo como monto 0 en empleados nuevos", () => {
+    const empSinSueldo = [{ user_id: "ux", first_name: "Sin", last_name: "Sueldo" }];
+    const report = makeReport();
+    const synced = syncReportClients(report, CLIENTS, empSinSueldo);
+
+    expect(synced.finanzas.sueldos[0].monto).toBe(0);
+  });
+
+  it("retro-compatibilidad: llamada con 2 args no siembra sueldos", () => {
+    const report = makeReport();
+    const synced = syncReportClients(report, CLIENTS);
+
+    // Sin employees, los sueldos se quedan como array vacío (el bloque queda sin fila de empleado)
+    const empRows = synced.finanzas.sueldos.filter(i => i.empleadoId != null);
+    expect(empRows).toHaveLength(0);
+  });
+
+  it("con team vacío solo conserva filas manuales de sueldos", () => {
+    const report = makeReport({
+      finanzas: {
+        ingresos: [],
+        gastosOperativos: [],
+        sueldos: [
+          { id: "m1", empleadoId: null, descripcion: "Gasto extra", monto: 50 },
+          { id: "sue-u1", empleadoId: "u1", descripcion: "Juan Pérez", monto: 500 },
+        ],
+        otrosGastos: [],
+      },
+    });
+    const synced = syncReportClients(report, CLIENTS, []);
+
+    expect(synced.finanzas.sueldos).toHaveLength(1);
+    expect(synced.finanzas.sueldos[0].empleadoId).toBeNull();
+  });
+});

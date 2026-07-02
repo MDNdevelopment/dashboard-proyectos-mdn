@@ -38,6 +38,14 @@ vi.mock('react-image-crop', () => ({
 }))
 vi.mock('react-image-crop/dist/ReactCrop.css', () => ({}))
 
+vi.mock('../context/AuthContext', () => ({
+  useAuth: vi.fn(() => ({
+    userProfile: { user_id: 'u-admin', company_id: 'co-1', access_level: 4, admin: true },
+    can: () => true,
+    signOut: vi.fn(),
+  })),
+}))
+
 import ClientModal from '../components/empresa/ClientModal'
 
 const MOCK_LINES = [

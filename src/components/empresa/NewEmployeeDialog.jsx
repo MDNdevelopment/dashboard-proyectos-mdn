@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../supabase'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
+import { useAuth } from '../../context/AuthContext'
+import { isFinancePrivileged } from '../../lib/permissions'
 
 /**
  * Dialog para crear un nuevo empleado vía la Netlify function create-employee.
@@ -10,14 +12,18 @@ import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
  * inserta el perfil en la tabla users. El component solo necesita el session token.
  */
 export default function NewEmployeeDialog({ departments, positions, onClose, onCreated }) {
+  const { userProfile } = useAuth()
+  const privileged = isFinancePrivileged(userProfile)
+
   const [form, setForm] = useState({
-    email:         '',
-    first_name:    '',
-    last_name:     '',
-    department_id: '',
-    position_id:   '',
-    access_level:  1,
-    admin:         false,
+    email:          '',
+    first_name:     '',
+    last_name:      '',
+    department_id:  '',
+    position_id:    '',
+    access_level:   1,
+    admin:          false,
+    monthly_salary: '',
   })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
@@ -73,13 +79,16 @@ export default function NewEmployeeDialog({ departments, positions, onClose, onC
           Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
-          email:         form.email.trim(),
-          first_name:    form.first_name.trim(),
-          last_name:     form.last_name.trim(),
-          department_id: form.department_id || null,
-          position_id:   form.position_id   || null,
-          access_level:  Number(form.access_level),
-          admin:         form.admin,
+          email:          form.email.trim(),
+          first_name:     form.first_name.trim(),
+          last_name:      form.last_name.trim(),
+          department_id:  form.department_id || null,
+          position_id:    form.position_id   || null,
+          access_level:   Number(form.access_level),
+          admin:          form.admin,
+          ...(privileged && form.monthly_salary !== ''
+            ? { monthly_salary: Number(form.monthly_salary) }
+            : {}),
         }),
       })
     } catch {
@@ -229,8 +238,27 @@ export default function NewEmployeeDialog({ departments, positions, onClose, onC
               <option value={1}>Nivel 1</option>
               <option value={2}>Nivel 2</option>
               <option value={3}>Nivel 3</option>
+              <option value={4}>Nivel 4</option>
             </select>
           </div>
+
+          {/* Sueldo mensual — solo nivel 4 / admin */}
+          {privileged && (
+            <div>
+              <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+                Sueldo mensual (USD)
+              </label>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                className="input-base"
+                value={form.monthly_salary}
+                onChange={e => set('monthly_salary', e.target.value)}
+                placeholder="0.00"
+              />
+            </div>
+          )}
 
           {/* Toggle admin */}
           <div className="flex items-center gap-3">

@@ -3,6 +3,8 @@ import { createClient, updateClient } from '../metricas/metricsApi'
 import { SOCIAL_NETWORKS, MONTHS } from '../metricas/constants'
 import AvatarUpload from './AvatarUpload'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
+import { useAuth } from '../../context/AuthContext'
+import { isFinancePrivileged } from '../../lib/permissions'
 
 /**
  * Modal crear/editar cliente (marca).
@@ -16,6 +18,8 @@ import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
  */
 export default function ClientModal({ client = null, companyId, lines = [], onClose, onSaved }) {
   const isEdit = client != null
+  const { userProfile } = useAuth()
+  const privileged = isFinancePrivileged(userProfile)
 
   const [form, setForm] = useState(() => ({
     name:             client?.name             ?? '',
@@ -83,11 +87,15 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
     const name = form.name.trim()
     if (!name) { setError('El nombre del cliente es obligatorio.'); return }
 
-    const payment_day = form.payment_day !== '' ? parseInt(form.payment_day, 10) : null
-    if (payment_day !== null && (payment_day < 1 || payment_day > 31)) {
-      setError('El día de pago debe estar entre 1 y 31.'); return
+    let payment_day = isEdit ? (client?.payment_day ?? null) : null
+    let monthly_fee = isEdit ? (client?.monthly_fee ?? null) : null
+    if (privileged) {
+      payment_day = form.payment_day !== '' ? parseInt(form.payment_day, 10) : null
+      if (payment_day !== null && (payment_day < 1 || payment_day > 31)) {
+        setError('El día de pago debe estar entre 1 y 31.'); return
+      }
+      monthly_fee = form.monthly_fee !== '' ? Number(form.monthly_fee) : null
     }
-    const monthly_fee = form.monthly_fee !== '' ? Number(form.monthly_fee) : null
 
     setSaving(true)
     setError(null)
@@ -193,37 +201,39 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
             </select>
           </div>
 
-          {/* Día de pago + Mensualidad — fila */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
-                Día de pago
-              </label>
-              <input
-                type="number"
-                min={1}
-                max={31}
-                className="input-base"
-                value={form.payment_day}
-                onChange={e => set('payment_day', e.target.value)}
-                placeholder="1–31"
-              />
+          {/* Día de pago + Mensualidad — solo nivel 4 / admin */}
+          {privileged && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+                  Día de pago
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={31}
+                  className="input-base"
+                  value={form.payment_day}
+                  onChange={e => set('payment_day', e.target.value)}
+                  placeholder="1–31"
+                />
+              </div>
+              <div>
+                <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+                  Mensualidad (USD)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  className="input-base"
+                  value={form.monthly_fee}
+                  onChange={e => set('monthly_fee', e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
-                Mensualidad (USD)
-              </label>
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                className="input-base"
-                value={form.monthly_fee}
-                onChange={e => set('monthly_fee', e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-          </div>
+          )}
 
           {/* Sitio web */}
           <div>

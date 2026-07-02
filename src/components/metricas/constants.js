@@ -9,12 +9,11 @@ export const MONTHS = [
 
 export const INDICATORS = [
   { key: "reuniones",    nombre: "Reuniones realizadas",          peso: 20, short: "Reuniones"    },
-  { key: "productividad",nombre: "Productividad – Tareas Fijas",  peso: 15, short: "Productividad" },
-  { key: "crecimiento",  nombre: "Crecimiento de seguidores",     peso: 15, short: "Crecimiento"  },
-  { key: "solicitudes",  nombre: "Solicitudes vs Entregados",     peso: 15, short: "Solicitudes"  },
-  { key: "pautas",       nombre: "Nº Pautas",                     peso: 10, short: "Pautas"       },
-  { key: "piezas",       nombre: "Nº Piezas vs Piezas editadas",  peso: 15, short: "Piezas"       },
-  { key: "feedback",     nombre: "Feedback de clientes",          peso: 10, short: "Feedback"     },
+  { key: "productividad",nombre: "Productividad – Tareas Fijas",  peso: 20, short: "Productividad" },
+  { key: "crecimiento",  nombre: "Crecimiento de seguidores",     peso: 20, short: "Crecimiento"  },
+  { key: "solicitudes",  nombre: "Solicitudes vs Entregados",     peso: 10, short: "Solicitudes"  },
+  { key: "pautas",       nombre: "Nº Pautas",                     peso: 20, short: "Pautas"       },
+  { key: "piezas",       nombre: "Nº Piezas vs Piezas editadas",  peso: 10, short: "Piezas"       },
 ];
 
 export const DEFAULT_SUBTAREAS = [
@@ -62,7 +61,7 @@ export const SEED_CLIENTES = {
   ],
 };
 
-// Colores para los 7 indicadores (coinciden con --ind-1..7 del HTML)
+// Colores para los 6 indicadores (coinciden con --ind-1..6 del HTML)
 export const INDICATOR_COLORS = [
-  "#FAB51A","#3B82F6","#10B981","#F97316","#8B5CF6","#06B6D4","#EC4899",
+  "#FAB51A","#3B82F6","#10B981","#F97316","#8B5CF6","#06B6D4",
 ];

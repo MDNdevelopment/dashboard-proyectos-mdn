@@ -106,7 +106,7 @@ gestiona por capability).
 
 | Archivo | Rol |
 |---|---|
-| `src/lib/permissions.js` | Evaluador puro (`canAccessModule` + alias `can`) |
+| `src/lib/permissions.js` | Evaluador puro (`canAccessModule` + alias `can`) · `isFinancePrivileged(userProfile)` → boolean (nivel 4 o admin: controla visibilidad de `monthly_fee`/`payment_day` de clientes y `monthly_salary` de empleados) |
 | `src/config/modules.js` | Registro central: `MODULES`, `capabilitiesForModule()` |
 | `src/context/AuthContext.jsx` | Carga `module_permissions`, expone `can()` |
 | `src/components/empresa/PermisosView.jsx` | UI de configuración (una card por capacidad) |
@@ -139,7 +139,7 @@ Realtime habilitado en todas.
 |---|---|
 | **Propósito** | Login, logout, recuperación y reseteo de contraseña. Carga el perfil del usuario (`userProfile`) y los permisos de módulo (`modulePermissions`) que gobiernan el acceso en toda la app. |
 | **Archivos principales** | `src/context/AuthContext.jsx` (provider + `useAuth` + `can()`) · `src/components/ProtectedRoute.jsx` · `src/components/RequireModule.jsx` · `src/lib/permissions.js` (`canAccessModule`) · `src/config/modules.js` (registro central) · `src/pages/LoginPage.jsx` · `src/pages/ForgotPasswordPage.jsx` · `src/pages/ResetPasswordPage.jsx` |
-| **Tablas** | `auth.users` (Supabase Auth) · `users` (perfil: `user_id, first_name, last_name, email, department_id→departments, position_id→positions, company_id, access_level, admin, avatar_url, receive_ticket_notifications`) · `module_permissions` (reglas de acceso por módulo) |
+| **Tablas** | `auth.users` (Supabase Auth) · `users` (perfil: `user_id, first_name, last_name, email, department_id→departments, position_id→positions, company_id, access_level, admin, avatar_url, receive_ticket_notifications, monthly_salary numeric`) · `module_permissions` (reglas de acceso por módulo) |
 | **Contexto Auth** | `userProfile` (perfil del usuario) · `modulePermissions` (mapa `{[capability_key]: {rules:[]}}`) · `can(capabilityKey)` → boolean — evalúa cualquier clave de capacidad (`empresa`, `empresa.clientes`, `empresa.lineas.manage`, etc.) contra el perfil actual |
 | **Rutas** | `/login` · `/forgot-password` · `/reset-password` |
 | **Permisos** | Público (sin sesión) |
@@ -175,14 +175,18 @@ Realtime habilitado en todas.
 
 | | |
 |---|---|
-| **Propósito** | Reportes mensuales ponderados (100 pts) por línea operativa: reuniones, productividad, crecimiento, solicitudes, pautas, piezas y feedback. Dashboard anual comparativo. |
-| **Archivos principales** | `src/pages/MetricasPage.jsx` · `src/components/metricas/DashboardView.jsx` · `LineView.jsx` · `LineHubView.jsx` · `OperacionesView.jsx` · `FinanzasView.jsx` · `ScoreDial.jsx` · `metricsApi.js` · `constants.js` · `src/utils/metricsScore.js` · `metricsFinance.js` · `initMetricReport.js` · `aggregateMetricsDashboard.js` |
+| **Propósito** | Reportes mensuales ponderados (100 pts) por línea operativa: reuniones, productividad, crecimiento, solicitudes, pautas y piezas. Dashboard anual comparativo. |
+| **Archivos principales** | `src/pages/MetricasPage.jsx` · `src/components/metricas/DashboardView.jsx` · `LineView.jsx` · `LineHubView.jsx` · `OperacionesView.jsx` · `FinanzasView.jsx` · `ScoreDial.jsx` · `metricsApi.js` · `constants.js` · `src/utils/metricsScore.js` · `metricsFinance.js` · `initMetricReport.js` · `aggregateMetricsDashboard.js` · **`EmployeeInfoModal.jsx`** · **`ClientFichaModal.jsx`** |
 | **Tablas** | `metric_lines` (`id, company_id, name, color, sort_order, member_user_ids jsonb, metas jsonb`) · `metric_clients` (`id, company_id, line_id→metric_lines, name, website, payment_day, monthly_fee, social_links jsonb, logo_url, contacts jsonb, anniversary_date, mdn_since`) · `metric_reports` (`id, company_id, line_id→metric_lines, year, month, data jsonb` — UNIQUE por `line_id+year+month`) |
 | **jsonb `metric_lines.metas`** | `{ "reuniones": 15, "tareas": [{ "nombre": "Calendario", "meta": 10 }, ...] }` — Metas de la línea para periodos no guardados. Tienen **prioridad sobre el carry-forward** del mes anterior (pisan `reuniones.meta` y `productividad.tareas`). Los reportes ya guardados quedan congelados. `{}` usa los defaults del código. Se configura en Empresa › Líneas. |
-| **jsonb `metric_reports.data`** | `{ reuniones:{realizadas,meta}, productividad:{tareas:[{nombre,realizado,meta}]}, crecimiento:{items:[{clienteId,seguidoresActuales,seguidoresBase,meta}]}, solicitudes:{solicitudes,editadas}, pautas:{items:[{clienteId,realizadas,meta}]}, piezas:{piezas,editadas}, feedback:{items:[{clienteId,score}]}, finanzas:{ingresos:[],gastosOperativos:[],sueldos:[],otrosGastos:[]} }` |
+| **jsonb `metric_reports.data`** | `{ reuniones:{realizadas,meta}, productividad:{tareas:[{nombre,realizado,meta}]}, crecimiento:{items:[{clienteId,seguidoresActuales,seguidoresBase,meta}]}, solicitudes:{solicitudes,editadas}, pautas:{items:[{clienteId,realizadas,meta}]}, piezas:{piezas,editadas}, finanzas:{ingresos:[],gastosOperativos:[],sueldos:[],otrosGastos:[]} }` — Nota: el campo `feedback` existente en reportes guardados ya no se captura ni se puntúa; se ignora en los cálculos. |
 | **Rutas** | `/reportes` (Dashboard anual) · `/reportes/linea/:lineId` (reporte de línea) |
 | **Permisos** | Acceso al módulo: controlado por `can('reportes')` del módulo Permisos config-driven (`src/lib/permissions.js`). Sin reglas configuradas → acceso libre a autenticados; admins siempre pasan. La compuerta aplica en el Sidebar (`Sidebar.jsx`) y en `MetricasPage.jsx` (redirige a `/` si no tiene acceso). **Caveat RLS:** los helpers de BD `metrics_user_can_view()` (≥3 o admin) y `metrics_user_view_all()` (≥4 o admin) siguen hardcodeados por nivel — si se concede acceso vía Permisos a alguien por debajo de nivel 3, el frontend lo dejará entrar pero la BD devolverá datos vacíos (fase 2 pendiente). Nivel 3: ve y edita **solo su propia línea** (filtrado en frontend + RLS). Nivel 4 y admin: ven y editan todas las líneas. Filtrado de líneas: `visibleLinesForUser(lines, userProfile)` en `src/utils/lineMembers.js`. Migración activa: `20260704000000_metric_reports_team_rls.sql`. |
-| **Estado de captura** | Mayoritariamente manual (inputs en `OperacionesView`/`FinanzasView`). Automatismos: para periodos no guardados → `initMetricReport.js` aplica carry-forward del mes anterior y después sobreescribe con `metric_lines.metas` (la línea tiene prioridad); reconciliación de cartera actual en crecimiento/pautas/feedback e **ingresos** vía `syncReportClients.js`. **Finanzas → Ingresos** se auto-puebla desde `metric_clients.monthly_fee` (sembrar-y-editar: valores conservados por `clienteId`; clientes fuera de línea se descartan; filas manuales `clienteId==null` se conservan). Reportes ya guardados quedan congelados. **No lee de `tasks` ni de `projects`.** |
+| **Estado de captura** | Mayoritariamente manual (inputs en `OperacionesView`/`FinanzasView`). Automatismos: para periodos no guardados → `initMetricReport.js` aplica carry-forward del mes anterior y después sobreescribe con `metric_lines.metas` (la línea tiene prioridad); reconciliación de cartera actual en crecimiento/pautas e **ingresos** y **sueldos** vía `syncReportClients.js`. **Finanzas → Ingresos** se auto-puebla desde `metric_clients.monthly_fee` (sembrar-y-editar: valores conservados por `clienteId`; clientes fuera de línea se descartan; filas manuales `clienteId==null` se conservan). **Finanzas → Sueldos** se auto-puebla desde `users.monthly_salary` filtrando por `metric_lines.member_user_ids` (mismo patrón: valores conservados por `empleadoId`; empleados que salen del team se descartan; filas manuales `empleadoId==null` se conservan). Reportes ya guardados quedan congelados. **No lee de `tasks` ni de `projects`.** |
+| **Modelo de score (6 indicadores, 100 pts)** | `reuniones` 20 · `productividad` 20 · `crecimiento` 20 · `pautas` 20 · `solicitudes` 10 · `piezas` 10. El indicador `feedback` fue eliminado. Lógica en `src/utils/metricsScore.js`; pesos en `constants.js` (`INDICATORS`). |
+| **UX — modales de detalle** | Clic en empleado del Resumen → `EmployeeInfoModal` (foto de perfil prominente `w-24 h-24`, nombre, cargo, dpto, email, teléfono, fechas, línea; descripción del cargo (`positions.position_description`) y funciones del cargo como bullets (`positions.position_functions jsonb[]`)). Clic en marca/cliente en Resumen, Operaciones o Finanzas → `ClientFichaModal` (mensualidad, día pago, web, contactos, redes — mensualidad y día de pago visibles **solo para nivel 4 y admin** vía `isFinancePrivileged`). Ambos coexisten con el deep-link a Tareas (botón interno en `ClientFichaModal`). |
+| **UX — Resumen (LineHubView)** | Siempre renderiza aunque no haya reportes del año (banner de aviso en vez de early-return). Sección "Equipo de la línea" con dos columnas (Empleados | Marcas). Carga empleados completos con `loadCompanyEmployees(companyId)` (select canónico con joins position+department). Sin "Promedio anual" ni "Radar de indicadores". |
+| **UX — Finanzas (FinanzasView)** | Sección Ingresos tiene toggle Lista/Tarjetas; **la vista por defecto es Tarjetas** y el monto es editable inline (el nombre del cliente en la tarjeta abre `ClientFichaModal`). Sección Sueldos auto-genera una fila por empleado del team (mismo patrón sembrar-y-editar que Ingresos): valores conservados mes a mes, empleados que salen del team se descartan, filas manuales se conservan. Las filas de sueldo son clickeables → abre `EmployeeInfoModal`. **La sección Sueldos solo es visible para nivel 4 y admin** (`isFinancePrivileged`). KPIs "Ingresos brutos" y "Total egresos" son botones con scroll a su sección. |
 
 ### 2.5 Empresa
 
@@ -272,6 +276,14 @@ Realtime habilitado en todas.
 
 Ver esquema detallado en `docs/MIGRATION_EVALUACION.md`.
 
+Columnas añadidas vía migración `supabase/migrations/20260709000000_position_details_and_salary.sql`:
+
+| Tabla | Columna | Tipo | Descripción |
+|---|---|---|---|
+| `positions` | `position_description` | `text` | Descripción narrativa del cargo, editble desde Empresa › Departamentos (modal de cargo). |
+| `positions` | `position_functions` | `jsonb` (default `[]`) | Lista de funciones del cargo como array de strings (bullets mostrados en `EmployeeInfoModal`). |
+| `users` | `monthly_salary` | `numeric` | Sueldo mensual en USD del empleado. Editable solo por nivel 4 / admin vía `isFinancePrivileged`. Precarga la sección Sueldos de `FinanzasView`. |
+
 ### 3.3 Diagrama de relaciones
 
 ```
@@ -335,7 +347,8 @@ Leyenda: `──→` FK formal declarada · `··→` relación lógica por conv
 |---|---|
 | `projects.phases` | `[{ id, name, tasks: [{ id, name, status }] }]` |
 | `metric_reports.data` | `{ reuniones:{realizadas,meta}, productividad:{tareas:[]}, crecimiento:{items:[]}, solicitudes, pautas:{items:[]}, piezas, feedback:{items:[]}, finanzas:{ingresos:[],gastosOperativos:[],sueldos:[],otrosGastos:[]} }` |
-| `metric_reports.data.finanzas.ingresos` | Items auto-sembrados desde `metric_clients.monthly_fee` tienen `{ id:"ing-<clientId>", clienteId, descripcion, monto }`. Items manuales (sin vínculo a cliente) tienen `clienteId: null` y la misma forma. `syncReportClients` reconcilia los ligados a cliente (preserva monto editado, agrega nuevos, descarta clientes que salieron) y conserva los manuales. Las demás secciones de finanzas (`gastosOperativos`, `sueldos`, `otrosGastos`) no usan `clienteId`. |
+| `metric_reports.data.finanzas.ingresos` | Items auto-sembrados desde `metric_clients.monthly_fee` tienen `{ id:"ing-<clientId>", clienteId, descripcion, monto }`. Items manuales (sin vínculo a cliente) tienen `clienteId: null` y la misma forma. `syncReportClients` reconcilia los ligados a cliente (preserva monto editado, agrega nuevos, descarta clientes que salieron) y conserva los manuales. |
+| `metric_reports.data.finanzas.sueldos` | Items auto-sembrados desde `users.monthly_salary` tienen `{ id:"sue-<userId>", empleadoId, descripcion, monto }`. Items manuales (sin vínculo a empleado) tienen `empleadoId: null` y la misma forma. `syncReportClients` reconcilia los ligados a empleado (mismo patrón que ingresos/clientes). La sección solo es visible para nivel 4 / admin (`isFinancePrivileged`). |
 | `metric_lines.member_user_ids` | `["uuid", ...]` |
 | `metric_lines.metas` | `{ reuniones: 15, tareas: [{ nombre, meta }] }` — Defaults de metas por línea |
 | `metric_clients.social_links` | `[{ red, link }, ...]` |
@@ -355,8 +368,14 @@ Leyenda: `──→` FK formal declarada · `··→` relación lógica por conv
 | **Ads ↔ Empresa/Métricas** | `campaigns.client_id → metric_clients.id`: las campañas se asocian al cliente central de Métricas/Empresa. |
 | **Tareas ↔ Empresa/Métricas** | `tasks.client_id → metric_clients.id` y `tasks.team_id → metric_lines.id`: las tareas están relacionadas relacionalmente a clientes y líneas. |
 | **Métricas ↔ Empresa (mensualidad)** | `metric_reports.data.finanzas.ingresos` se auto-puebla desde `metric_clients.monthly_fee`: `FinanzasView` carga los clientes de la línea, y `syncReportClients`/`initMetricReport` sincronizan los ingresos con la mensualidad guardada (valores editables mes a mes). |
+| **Métricas ↔ Empresa (sueldos)** | `metric_reports.data.finanzas.sueldos` se auto-puebla desde `users.monthly_salary` filtrando por `metric_lines.member_user_ids`: `FinanzasView` carga los empleados de la línea y `syncReportClients`/`initMetricReport` sincronizan los sueldos (mismo patrón sembrar-y-editar). Visible solo para nivel 4 / admin (`isFinancePrivileged`). El campo `monthly_salary` solo es editable por nivel 4 / admin en `EmployeeModal`/`NewEmployeeDialog`. |
 | **Notificaciones ↔ Tareas/Proyectos** | Triggers Postgres en `tasks.assignee_ids` y `projects.members` insertan notificaciones al detectar nuevos miembros → Edge fn `notify-dispatch` envía correo vía Resend. |
 | **Notificaciones ↔ Empresa (fechas)** | Job pg_cron diario consulta `metric_clients.anniversary_date`, `metric_clients.mdn_since`, `metric_clients.contacts[].birth_day/birth_month`, `users.birth_date` y `users.hire_date` para generar notificaciones de fecha in-app. Recipients derivados de `metric_lines.member_user_ids` y `users.access_level`. |
+| **Reportes → Tareas (deep-link)** | Clic en "Ver tareas de este cliente" dentro de `ClientFichaModal` navega a `/tareas?view=base&team={lineId}&client={clienteId}`. `TareasPage` lee `?team=` para pre-seleccionar el team; `BaseView` lee `?client=` (UUID de `metric_clients`) para filtrar tareas por `client_id`, mostrando una pill removible con el nombre del cliente. |
+| **Reportes → Evaluaciones (deep-link)** | `EmployeeInfoModal` (abierto desde `LineHubView`) muestra el botón "Ver perfil completo" → `/evaluaciones/empleado/{userId}` si `can('evaluaciones')`. |
+| **Reportes → ficha empleado (modal)** | `LineHubView` (pestaña Resumen) carga los miembros de la línea vía `loadCompanyEmployees(companyId)` (select completo con joins) + `line.member_user_ids`. Clic en empleado → `EmployeeInfoModal`. |
+| **Reportes → ficha cliente (modal)** | Clic en marca/cliente en `LineHubView` (columna Marcas), `OperacionesView` (ClientLink), o `FinanzasView` (filas de ingresos / tarjetas) → `ClientFichaModal`. Los objetos completos de `metric_clients` ya están en el estado local de cada vista. |
+| **Reportes → Reportes (deep-link interno)** | KPI "Línea líder" en `DashboardView` navega a `/reportes/linea/{lineId}`. Las tarjetas financieras de la tabla resumen navegan a `/reportes/linea/{lineId}?tab=finanzas`. Los sub-links "N cuentas" / "N empleados" de las tarjetas financieras navegan a `?tab=operaciones` y al Resumen de la línea respectivamente. `LineView` lee `?tab=hub|operaciones|finanzas` para pre-seleccionar la sub-pestaña al cargar. |
 
 ### Desconexión notable (doble fuente de verdad)
 
