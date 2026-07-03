@@ -46,7 +46,7 @@
  * @param {object} configByModule - { [key]: { rules: [...] } }
  * @returns {boolean}
  */
-export const can = canAccessModule
+export const can = canAccessModule;
 
 /**
  * Devuelve true si el usuario puede ver/editar información financiera sensible
@@ -57,63 +57,65 @@ export const can = canAccessModule
  * @returns {boolean}
  */
 export function isFinancePrivileged(userProfile) {
-  return userProfile?.admin === true || (userProfile?.access_level ?? 0) >= 4
+  return userProfile?.admin === true || (userProfile?.access_level ?? 0) >= 3;
 }
 
 export function canAccessModule(moduleKey, userProfile, configByModule) {
-  if (!userProfile) return false
-  if (userProfile.admin === true) return true   // admin ve todo, incluso si está en deny
+  if (!userProfile) return false;
+  if (userProfile.admin === true) return true; // admin ve todo, incluso si está en deny
 
-  const config = configByModule?.[moduleKey]
+  const config = configByModule?.[moduleKey];
 
   // Exclusiones: si cumple cualquier condición de deny → denegar (gana a rules)
-  const deny = config?.deny ?? []
-  if (deny.some(cond => matchCondition(cond, userProfile))) return false
+  const deny = config?.deny ?? [];
+  if (deny.some((cond) => matchCondition(cond, userProfile))) return false;
 
-  const rules = config?.rules ?? []
+  const rules = config?.rules ?? [];
 
   // Sin reglas = acceso libre
-  if (rules.length === 0) return true
+  if (rules.length === 0) return true;
 
   // OR: basta con que un grupo pase
-  return rules.some(group => groupPasses(group, userProfile))
+  return rules.some((group) => groupPasses(group, userProfile));
 }
 
 /**
  * Un grupo pasa si TODAS sus condiciones se cumplen (AND).
  */
 function groupPasses(group, userProfile) {
-  const conditions = group?.all ?? []
-  if (conditions.length === 0) return true
-  return conditions.every(cond => matchCondition(cond, userProfile))
+  const conditions = group?.all ?? [];
+  if (conditions.length === 0) return true;
+  return conditions.every((cond) => matchCondition(cond, userProfile));
 }
 
 function matchCondition(cond, userProfile) {
   // Tipo ausente → false, NO se invierte (evita apertura por error)
-  if (!cond?.type) return false
+  if (!cond?.type) return false;
 
-  let res
+  let res;
   switch (cond.type) {
-    case 'department':
-      res = Array.isArray(cond.ids) && cond.ids.includes(userProfile.department_id)
-      break
+    case "department":
+      res =
+        Array.isArray(cond.ids) && cond.ids.includes(userProfile.department_id);
+      break;
 
-    case 'min_level':
-      res = (userProfile.access_level ?? 1) >= (cond.value ?? 1)
-      break
+    case "min_level":
+      res = (userProfile.access_level ?? 1) >= (cond.value ?? 1);
+      break;
 
-    case 'user':
-      res = Array.isArray(cond.ids) && cond.ids.includes(userProfile.user_id)
-      break
+    case "user":
+      res = Array.isArray(cond.ids) && cond.ids.includes(userProfile.user_id);
+      break;
 
-    case 'position':
-      res = Array.isArray(cond.ids) && cond.ids.includes(userProfile.position_id)
-      break
+    case "position":
+      res =
+        Array.isArray(cond.ids) && cond.ids.includes(userProfile.position_id);
+      break;
 
     default:
       // Tipo desconocido → false, NO se invierte
-      return false
+      return false;
   }
 
-  return cond.negate ? !res : res
+  return cond.negate ? !res : res;
 }
