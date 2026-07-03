@@ -282,6 +282,96 @@ describe('DashboardView — KPI "Línea líder" y tarjetas financieras clickeabl
 })
 
 // ══════════════════════════════════════════════════════════════════════════════
+// 1d. LineView — filtrado de meses futuros en el selector
+// ══════════════════════════════════════════════════════════════════════════════
+
+const REAL_CURRENT_YEAR  = new Date().getFullYear()
+const REAL_CURRENT_MONTH = new Date().getMonth() + 1
+
+describe('LineView — selector de mes oculta periodos futuros', () => {
+  it('con el año actual, el selector de mes solo muestra meses hasta el mes en curso', () => {
+    renderWithRouter(
+      <LineView line={MOCK_LINE} companyId="co-1" />,
+      { initialEntry: `/reportes/linea/l-1?tab=operaciones&year=${REAL_CURRENT_YEAR}` },
+    )
+    const monthSelect = [...document.querySelectorAll('select')].find(s =>
+      [...s.options].every(o => Number(o.value) <= 12)
+    )
+    expect(monthSelect).toBeTruthy()
+    const values = [...monthSelect.options].map(o => Number(o.value))
+    // No debe haber ningún mes mayor al mes actual
+    expect(values.every(v => v <= REAL_CURRENT_MONTH)).toBe(true)
+    // Debe haber exactamente REAL_CURRENT_MONTH opciones
+    expect(values.length).toBe(REAL_CURRENT_MONTH)
+  })
+
+  it('con un año pasado, el selector de mes muestra los 12 meses', () => {
+    const pastYear = REAL_CURRENT_YEAR - 1
+    renderWithRouter(
+      <LineView line={MOCK_LINE} companyId="co-1" />,
+      { initialEntry: `/reportes/linea/l-1?tab=operaciones&year=${pastYear}` },
+    )
+    const monthSelect = [...document.querySelectorAll('select')].find(s =>
+      [...s.options].some(o => o.value === '12')
+    )
+    expect(monthSelect).toBeTruthy()
+    expect(monthSelect.options.length).toBe(12)
+  })
+
+  it('un ?month= futuro en la URL queda saneado al mes actual en el selector', () => {
+    // Solo tiene sentido si no estamos en Diciembre
+    if (REAL_CURRENT_MONTH >= 12) return
+    const futureMonth = REAL_CURRENT_MONTH + 1
+    renderWithRouter(
+      <LineView line={MOCK_LINE} companyId="co-1" />,
+      { initialEntry: `/reportes/linea/l-1?tab=operaciones&year=${REAL_CURRENT_YEAR}&month=${futureMonth}` },
+    )
+    const monthSelect = [...document.querySelectorAll('select')].find(s =>
+      [...s.options].every(o => Number(o.value) <= 12)
+    )
+    expect(monthSelect).toBeTruthy()
+    // El valor efectivo debe ser el mes actual (clamped), no el futuro
+    expect(Number(monthSelect.value)).toBe(REAL_CURRENT_MONTH)
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 2b. DashboardView — cards "Promedio anual" y "Cobertura" no se renderizan
+// ══════════════════════════════════════════════════════════════════════════════
+
+describe('DashboardView — KPIs eliminados (Promedio anual y Cobertura)', () => {
+  it('no renderiza la card "Promedio anual"', async () => {
+    renderWithRouter(<DashboardView companyId="co-1" lines={MOCK_LINES} />)
+    await waitFor(() => {
+      expect(screen.getByTitle('Ir a Georgina')).toBeInTheDocument()
+    })
+    expect(screen.queryByText(/promedio anual/i)).not.toBeInTheDocument()
+  })
+
+  it('no renderiza la card "Cobertura"', async () => {
+    renderWithRouter(<DashboardView companyId="co-1" lines={MOCK_LINES} />)
+    await waitFor(() => {
+      expect(screen.getByTitle('Ir a Georgina')).toBeInTheDocument()
+    })
+    expect(screen.queryByText(/cobertura/i)).not.toBeInTheDocument()
+  })
+
+  it('sigue renderizando la card "Mes actual"', async () => {
+    renderWithRouter(<DashboardView companyId="co-1" lines={MOCK_LINES} />)
+    await waitFor(() => {
+      expect(screen.getByText(/mes actual/i)).toBeInTheDocument()
+    })
+  })
+
+  it('sigue renderizando la card "Línea líder"', async () => {
+    renderWithRouter(<DashboardView companyId="co-1" lines={MOCK_LINES} />)
+    await waitFor(() => {
+      expect(screen.getByText(/línea líder/i)).toBeInTheDocument()
+    })
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
 // 3. BaseView — filtro por ?client= (client_id)
 // ══════════════════════════════════════════════════════════════════════════════
 

@@ -25,7 +25,9 @@ export default function LineView({ line, companyId, onLinesChange }) {
   const year = rawYear >= 2020 && rawYear <= 2099 ? rawYear : CURRENT_YEAR;
 
   const rawMonth = Number(searchParams.get("month"));
-  const month = rawMonth >= 1 && rawMonth <= 12 ? rawMonth : CURRENT_MONTH;
+  // Clamp month: never allow a future month in the current year
+  const clampedMonth = rawMonth >= 1 && rawMonth <= 12 ? rawMonth : CURRENT_MONTH;
+  const month = (year === CURRENT_YEAR && clampedMonth > CURRENT_MONTH) ? CURRENT_MONTH : clampedMonth;
 
   function setParam(key, value) {
     setSearchParams(prev => {
@@ -75,12 +77,27 @@ export default function LineView({ line, companyId, onLinesChange }) {
               value={month}
               onChange={e => setParam("month", e.target.value)}
             >
-              {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+              {MONTHS.map((m, i) => {
+                const monthNum = i + 1;
+                if (year === CURRENT_YEAR && monthNum > CURRENT_MONTH) return null;
+                return <option key={i} value={monthNum}>{m}</option>;
+              })}
             </select>
             <select
               className="input-base py-1 text-[14px]"
               value={year}
-              onChange={e => setParam("year", e.target.value)}
+              onChange={e => {
+                const newYear = Number(e.target.value);
+                setSearchParams(prev => {
+                  const p = new URLSearchParams(prev);
+                  p.set("year", String(newYear));
+                  // Clamp month if switching to current year with a future month selected
+                  if (newYear === CURRENT_YEAR && month > CURRENT_MONTH) {
+                    p.set("month", String(CURRENT_MONTH));
+                  }
+                  return p;
+                }, { replace: true });
+              }}
             >
               {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
             </select>

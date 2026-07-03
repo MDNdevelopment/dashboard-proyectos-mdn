@@ -55,8 +55,8 @@ export default function DashboardView({ companyId, lines }) {
 
   const agg = aggregateMetricsDashboard(lines, reports, year, calcTotal, sumScore, calcFinanzas);
   const {
-    matrix, currentMonth, promAnual, promMesActual, lider,
-    cobertura, ranking, rankingMonth, finTotalesPorLinea,
+    matrix, currentMonth, promMesActual, lider,
+    ranking, rankingMonth, finTotalesPorLinea,
   } = agg;
 
   // Datos para el LineChart de scores
@@ -103,13 +103,7 @@ export default function DashboardView({ companyId, lines }) {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KpiCard
-          label="Promedio anual"
-          value={promAnual > 0 ? promAnual.toFixed(1) : "—"}
-          sub="/100 prom. todas las líneas"
-          color="text-[#111]"
-        />
+      <div className="grid grid-cols-2 gap-3">
         <KpiCard
           label={`Mes actual (${MONTHS[currentMonth - 1]})`}
           value={promMesActual != null ? promMesActual.toFixed(1) : "—"}
@@ -122,12 +116,6 @@ export default function DashboardView({ companyId, lines }) {
           sub={lider ? `${lider.prom.toFixed(1)} prom. anual` : "Sin datos aún"}
           color="text-[#111]"
           onClick={lider ? () => navigate(`/reportes/linea/${lider.line.id}`) : undefined}
-        />
-        <KpiCard
-          label="Cobertura"
-          value={`${cobertura.toFixed(0)}%`}
-          sub={`${reports.length} de ${lines.length * currentMonth} reportes posibles`}
-          color={cobertura >= 80 ? "text-green-600" : cobertura >= 50 ? "text-[#b45309]" : "text-red-600"}
         />
       </div>
 
