@@ -60,10 +60,14 @@ export async function createClient(companyId, fields) {
     contacts = [],
     anniversary_date = null,
     mdn_since = null,
+    social_manager_id = null,
+    designer_id = null,
+    audiovisual_ids = [],
+    apoyo_ids = [],
   } = fields
   return supabase
     .from("metric_clients")
-    .insert({ company_id: companyId, name, line_id, website, payment_day, monthly_fee, social_links, logo_url, contacts, anniversary_date, mdn_since })
+    .insert({ company_id: companyId, name, line_id, website, payment_day, monthly_fee, social_links, logo_url, contacts, anniversary_date, mdn_since, social_manager_id, designer_id, audiovisual_ids, apoyo_ids })
     .select()
     .single();
 }

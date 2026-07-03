@@ -16,20 +16,28 @@ const MOCK_CLIENTS = [
 ]
 
 // ── Mock metricsApi ───────────────────────────────────────────────────────────
-const mockLoadLines       = vi.fn().mockResolvedValue({ data: MOCK_LINES, error: null })
-const mockLoadClients     = vi.fn().mockResolvedValue({ data: MOCK_CLIENTS, error: null })
-const mockCreateClient    = vi.fn().mockResolvedValue({ data: { id: 'cli-new', company_id: 'co-1', name: 'Nuevo', line_id: null, website: null, payment_day: null, social_links: [] }, error: null })
-const mockUpdateClient    = vi.fn().mockResolvedValue({ data: { id: 'cli-1', company_id: 'co-1', name: 'ALSA Editado', line_id: null, website: null, payment_day: null, social_links: [] }, error: null })
-const mockDeleteClient    = vi.fn().mockResolvedValue({ data: null, error: null })
-const mockSeedIfEmpty     = vi.fn().mockResolvedValue(null)
+const MOCK_EMPLOYEES = [
+  { user_id: 'emp-1', company_id: 'co-1', first_name: 'Ana',   last_name: 'García',  department_id: 1, avatar_url: null, position: { position_name: 'Social Media Manager' } },
+  { user_id: 'emp-2', company_id: 'co-1', first_name: 'Pedro', last_name: 'López',   department_id: 3, avatar_url: null, position: { position_name: 'Diseñador Gráfico' } },
+  { user_id: 'emp-3', company_id: 'co-1', first_name: 'Luis',  last_name: 'Martínez',department_id: 2, avatar_url: null, position: { position_name: 'Editor de Video' } },
+]
+
+const mockLoadLines           = vi.fn().mockResolvedValue({ data: MOCK_LINES, error: null })
+const mockLoadClients         = vi.fn().mockResolvedValue({ data: MOCK_CLIENTS, error: null })
+const mockLoadCompanyEmployees= vi.fn().mockResolvedValue({ data: MOCK_EMPLOYEES, error: null })
+const mockCreateClient        = vi.fn().mockResolvedValue({ data: { id: 'cli-new', company_id: 'co-1', name: 'Nuevo', line_id: null, website: null, payment_day: null, social_links: [], social_manager_id: null, designer_id: null, audiovisual_ids: [], apoyo_ids: [] }, error: null })
+const mockUpdateClient        = vi.fn().mockResolvedValue({ data: { id: 'cli-1', company_id: 'co-1', name: 'ALSA Editado', line_id: null, website: null, payment_day: null, social_links: [], social_manager_id: null, designer_id: null, audiovisual_ids: [], apoyo_ids: [] }, error: null })
+const mockDeleteClient        = vi.fn().mockResolvedValue({ data: null, error: null })
+const mockSeedIfEmpty         = vi.fn().mockResolvedValue(null)
 
 vi.mock('../components/metricas/metricsApi', () => ({
-  loadLines:          (...a) => mockLoadLines(...a),
-  loadClients:        (...a) => mockLoadClients(...a),
-  createClient:       (...a) => mockCreateClient(...a),
-  updateClient:       (...a) => mockUpdateClient(...a),
-  deleteClient:       (...a) => mockDeleteClient(...a),
-  seedMetricsIfEmpty: (...a) => mockSeedIfEmpty(...a),
+  loadLines:              (...a) => mockLoadLines(...a),
+  loadClients:            (...a) => mockLoadClients(...a),
+  loadCompanyEmployees:   (...a) => mockLoadCompanyEmployees(...a),
+  createClient:           (...a) => mockCreateClient(...a),
+  updateClient:           (...a) => mockUpdateClient(...a),
+  deleteClient:           (...a) => mockDeleteClient(...a),
+  seedMetricsIfEmpty:     (...a) => mockSeedIfEmpty(...a),
 }))
 
 // ── Mock supabase (realtime) ──────────────────────────────────────────────────
@@ -102,8 +110,9 @@ describe('ClientsView (sección Clientes en Empresa) — lista plana', () => {
     vi.clearAllMocks()
     mockLoadLines.mockResolvedValue({ data: MOCK_LINES, error: null })
     mockLoadClients.mockResolvedValue({ data: MOCK_CLIENTS, error: null })
-    mockCreateClient.mockResolvedValue({ data: { id: 'cli-new', company_id: 'co-1', name: 'Nuevo', line_id: null, website: null, payment_day: null, social_links: [] }, error: null })
-    mockUpdateClient.mockResolvedValue({ data: { id: 'cli-1', company_id: 'co-1', name: 'ALSA Editado', line_id: null, website: null, payment_day: null, social_links: [] }, error: null })
+    mockLoadCompanyEmployees.mockResolvedValue({ data: MOCK_EMPLOYEES, error: null })
+    mockCreateClient.mockResolvedValue({ data: { id: 'cli-new', company_id: 'co-1', name: 'Nuevo', line_id: null, website: null, payment_day: null, social_links: [], social_manager_id: null, designer_id: null, audiovisual_ids: [], apoyo_ids: [] }, error: null })
+    mockUpdateClient.mockResolvedValue({ data: { id: 'cli-1', company_id: 'co-1', name: 'ALSA Editado', line_id: null, website: null, payment_day: null, social_links: [], social_manager_id: null, designer_id: null, audiovisual_ids: [], apoyo_ids: [] }, error: null })
     mockDeleteClient.mockResolvedValue({ data: null, error: null })
   })
 
@@ -236,5 +245,92 @@ describe('ClientsView (sección Clientes en Empresa) — lista plana', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Líneas' })).toBeInTheDocument()
     })
+  })
+
+  it('click en una fila de cliente abre el modal en modo lectura ("Detalle del cliente")', async () => {
+    const user = userEvent.setup()
+    renderAsManager()
+    await waitFor(() => { expect(screen.getByText('ALSA')).toBeInTheDocument() })
+
+    // Click en el nombre del cliente (parte de la fila clickeable)
+    await user.click(screen.getByText('ALSA'))
+
+    expect(screen.getByRole('heading', { name: 'Detalle del cliente' })).toBeInTheDocument()
+    // El input de nombre debe estar deshabilitado
+    expect(screen.getByDisplayValue('ALSA')).toBeDisabled()
+    // Botón "Cerrar" del footer del modal (el X del header también tiene aria-label="Cerrar")
+    const cerrarBtns = screen.getAllByRole('button', { name: 'Cerrar' })
+    expect(cerrarBtns.length).toBeGreaterThanOrEqual(1)
+    // El último botón "Editar" en el DOM es el del modal (los primeros son los lápices de la lista)
+    const editarBtns = screen.getAllByRole('button', { name: 'Editar' })
+    expect(editarBtns[editarBtns.length - 1]).toBeInTheDocument()
+  })
+
+  it('botón "Editar" dentro del modal readonly lo convierte en modal editable', async () => {
+    const user = userEvent.setup()
+    renderAsManager()
+    await waitFor(() => { expect(screen.getByText('ALSA')).toBeInTheDocument() })
+
+    // Abrir en modo lectura
+    await user.click(screen.getByText('ALSA'))
+    expect(screen.getByRole('heading', { name: 'Detalle del cliente' })).toBeInTheDocument()
+
+    // El botón "Editar" del modal es el último en el DOM (los lápices de la fila van primero)
+    const editarBtns = screen.getAllByRole('button', { name: 'Editar' })
+    await user.click(editarBtns[editarBtns.length - 1])
+
+    // Ahora debe estar en modo edición
+    expect(screen.getByRole('heading', { name: 'Editar cliente' })).toBeInTheDocument()
+    expect(screen.getByDisplayValue('ALSA')).not.toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeInTheDocument()
+  })
+
+  it('el lápiz de la fila abre directamente en modo edición', async () => {
+    const user = userEvent.setup()
+    renderAsManager()
+    await waitFor(() => { expect(screen.getByText('ALSA')).toBeInTheDocument() })
+
+    const editBtns = screen.getAllByRole('button', { name: 'Editar' })
+    // El primero en el DOM que no es modal es el lápiz de la fila
+    await user.click(editBtns[0])
+
+    expect(screen.getByRole('heading', { name: 'Editar cliente' })).toBeInTheDocument()
+    expect(screen.getByDisplayValue('ALSA')).not.toBeDisabled()
+  })
+
+  it('el payload de crear cliente incluye los campos de equipo', async () => {
+    const user = userEvent.setup()
+    renderAsManager()
+    await waitFor(() => { expect(screen.getByText('ALSA')).toBeInTheDocument() })
+
+    await user.click(screen.getByRole('button', { name: /Nuevo cliente/i }))
+    await user.type(screen.getByPlaceholderText('Nombre del cliente / marca'), 'Cliente Test')
+    await user.click(screen.getByRole('button', { name: 'Crear cliente' }))
+
+    await waitFor(() => {
+      expect(mockCreateClient).toHaveBeenCalledWith(
+        'co-1',
+        expect.objectContaining({
+          name: 'Cliente Test',
+          social_manager_id: null,
+          designer_id: null,
+          audiovisual_ids: [],
+          apoyo_ids: [],
+        })
+      )
+    })
+  })
+
+  it('la sección "Equipo del cliente" muestra los pickers en el modal', async () => {
+    const user = userEvent.setup()
+    renderAsManager()
+    await waitFor(() => { expect(screen.getByText('ALSA')).toBeInTheDocument() })
+
+    await user.click(screen.getByRole('button', { name: /Nuevo cliente/i }))
+    expect(screen.getByText('Equipo del cliente')).toBeInTheDocument()
+    expect(screen.getByText('Social Asignado')).toBeInTheDocument()
+    expect(screen.getByText('Diseñador Asignado')).toBeInTheDocument()
+    expect(screen.getByText('Audiovisual')).toBeInTheDocument()
+    expect(screen.getByText('Apoyo')).toBeInTheDocument()
   })
 })

@@ -3,6 +3,7 @@ import { supabase } from '../../supabase'
 import {
   loadLines,
   loadClients,
+  loadCompanyEmployees,
   deleteClient,
   seedMetricsIfEmpty,
 } from '../metricas/metricsApi'
@@ -18,9 +19,11 @@ import ConfirmDeleteDialog from '../common/ConfirmDeleteDialog'
 export default function ClientsView({ companyId, canManage = true }) {
   const [lines, setLines]         = useState([])
   const [clients, setClients]     = useState([])
+  const [employees, setEmployees] = useState([])
   const [loading, setLoading]     = useState(true)
   const [filterLine, setFilterLine] = useState('all')   // 'all' | 'none' | line.id
   const [modal, setModal]         = useState(undefined) // undefined=cerrado, null=crear, objeto=editar
+  const [readOnly, setReadOnly]   = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(null)  // { id, name }
   const [deleting, setDeleting]   = useState(false)
   const [error, setError]         = useState(null)
@@ -28,12 +31,14 @@ export default function ClientsView({ companyId, canManage = true }) {
   // ── Carga inicial ─────────────────────────────────────────────────────────────
   const fetchAll = useCallback(async () => {
     if (!companyId) return
-    const [linesRes, clientsRes] = await Promise.all([
+    const [linesRes, clientsRes, employeesRes] = await Promise.all([
       loadLines(companyId),
       loadClients(companyId),
+      loadCompanyEmployees(companyId),
     ])
     setLines(linesRes.data ?? [])
     setClients((clientsRes.data ?? []).slice().sort((a, b) => a.name.localeCompare(b.name, 'es')))
+    setEmployees(employeesRes.data ?? [])
   }, [companyId])
 
   useEffect(() => {
@@ -160,7 +165,7 @@ export default function ClientsView({ companyId, canManage = true }) {
         {/* Botón nuevo cliente — solo si tiene permiso de modificar */}
         {canManage && (
           <button
-            onClick={() => setModal(null)}
+            onClick={() => { setModal(null); setReadOnly(false) }}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#FAB51A] text-[#111] font-bold text-[14.5px] hover:bg-[#e8a315] transition-colors flex-shrink-0"
           >
             <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="2.2">
@@ -202,7 +207,8 @@ export default function ClientsView({ companyId, canManage = true }) {
               return (
                 <div
                   key={client.id}
-                  className="flex items-center gap-3 px-5 py-3 hover:bg-[#fafaf7] transition-colors"
+                  className="flex items-center gap-3 px-5 py-3 hover:bg-[#fafaf7] transition-colors cursor-pointer"
+                  onClick={() => { setModal(client); setReadOnly(true) }}
                 >
                   {/* Logo + Nombre */}
                   <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -251,7 +257,7 @@ export default function ClientsView({ companyId, canManage = true }) {
                       rel="noopener noreferrer"
                       className="text-[#ccc] hover:text-[#555] transition-colors flex-shrink-0"
                       title={client.website}
-                      onClick={e => e.stopPropagation()}
+                      onClick={e => { e.stopPropagation() }}
                     >
                       <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
                         <circle cx="8" cy="8" r="6.5"/>
@@ -271,7 +277,7 @@ export default function ClientsView({ companyId, canManage = true }) {
                   {canManage && (
                     <>
                       <button
-                        onClick={() => setModal(client)}
+                        onClick={e => { e.stopPropagation(); setModal(client); setReadOnly(false) }}
                         className="text-[#aaa] hover:text-[#555] transition-colors flex-shrink-0"
                         title="Editar"
                         aria-label="Editar"
@@ -281,7 +287,7 @@ export default function ClientsView({ companyId, canManage = true }) {
                         </svg>
                       </button>
                       <button
-                        onClick={() => setConfirmDelete({ id: client.id, name: client.name })}
+                        onClick={e => { e.stopPropagation(); setConfirmDelete({ id: client.id, name: client.name }) }}
                         className="text-[#aaa] hover:text-red-400 transition-colors flex-shrink-0"
                         title="Eliminar"
                         aria-label="Eliminar"
@@ -305,7 +311,11 @@ export default function ClientsView({ companyId, canManage = true }) {
           client={modal}
           companyId={companyId}
           lines={lines}
-          onClose={() => setModal(undefined)}
+          employees={employees}
+          readOnly={readOnly}
+          canManage={canManage}
+          onRequestEdit={() => setReadOnly(false)}
+          onClose={() => { setModal(undefined); setReadOnly(false) }}
           onSaved={handleSaved}
         />
       )}

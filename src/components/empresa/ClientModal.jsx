@@ -1,37 +1,79 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { createClient, updateClient } from '../metricas/metricsApi'
 import { SOCIAL_NETWORKS, MONTHS } from '../metricas/constants'
 import AvatarUpload from './AvatarUpload'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import { useAuth } from '../../context/AuthContext'
 import { isFinancePrivileged } from '../../lib/permissions'
+import UserPickerSingle, { Avatar } from '../tareas/UserPickerSingle'
+import UserPickerMulti from '../tareas/UserPickerMulti'
+import { teamMemberUsers } from '../../utils/lineFilters'
+
+// ── Helpers de visualización readonly ─────────────────────────────────────────
+function EmployeeChip({ user }) {
+  if (!user) return <span className="text-[13.5px] text-[#bbb]">—</span>
+  return (
+    <div className="flex items-center gap-1.5 bg-[#f5f3eb] rounded-lg px-2 py-1 w-fit">
+      <Avatar user={user} size={20} />
+      <span className="text-[13px] text-[#333]">{user.first_name} {user.last_name}</span>
+    </div>
+  )
+}
+
+function EmployeeChipList({ userIds = [], employees = [] }) {
+  const users = userIds.map(id => employees.find(u => u.user_id === id)).filter(Boolean)
+  if (!users.length) return <span className="text-[13.5px] text-[#bbb]">—</span>
+  return (
+    <div className="flex flex-wrap gap-2">
+      {users.map(u => <EmployeeChip key={u.user_id} user={u} />)}
+    </div>
+  )
+}
 
 /**
- * Modal crear/editar cliente (marca).
- * Convención: client=null → crear, client=objeto → editar.
+ * Modal crear/editar/ver cliente (marca).
+ * Convención: client=null → crear, client=objeto → editar/ver.
  * Props:
- *   client       — null = crear, objeto = editar
- *   companyId    — string
- *   lines        — array de líneas disponibles para el selector
- *   onClose()    — cierra el modal
- *   onSaved(row) — recibe la fila guardada (para estado optimista en el padre)
+ *   client        — null = crear, objeto = editar/ver
+ *   companyId     — string
+ *   lines         — array de líneas disponibles para el selector
+ *   employees     — array de empleados de la empresa (con department_id, position)
+ *   readOnly      — bool: modo solo-lectura (default false)
+ *   canManage     — bool: si el usuario puede editar (muestra botón "Editar" en readOnly)
+ *   onRequestEdit — () => void: callback para salir del modo readOnly
+ *   onClose()     — cierra el modal
+ *   onSaved(row)  — recibe la fila guardada (para estado optimista en el padre)
  */
-export default function ClientModal({ client = null, companyId, lines = [], onClose, onSaved }) {
+export default function ClientModal({
+  client = null,
+  companyId,
+  lines = [],
+  employees = [],
+  readOnly = false,
+  canManage = true,
+  onRequestEdit,
+  onClose,
+  onSaved,
+}) {
   const isEdit = client != null
   const { userProfile } = useAuth()
   const privileged = isFinancePrivileged(userProfile)
 
   const [form, setForm] = useState(() => ({
-    name:             client?.name             ?? '',
-    logo_url:         client?.logo_url         ?? '',
-    line_id:          client?.line_id          ?? '',
-    payment_day:      client?.payment_day      ?? '',
-    monthly_fee:      client?.monthly_fee      ?? '',
-    website:          client?.website          ?? '',
-    social_links:     client?.social_links     ?? [],
-    contacts:         client?.contacts         ?? [],
-    anniversary_date: client?.anniversary_date ?? '',
-    mdn_since:        client?.mdn_since        ?? '',
+    name:              client?.name              ?? '',
+    logo_url:          client?.logo_url          ?? '',
+    line_id:           client?.line_id           ?? '',
+    payment_day:       client?.payment_day       ?? '',
+    monthly_fee:       client?.monthly_fee       ?? '',
+    website:           client?.website           ?? '',
+    social_links:      client?.social_links      ?? [],
+    contacts:          client?.contacts          ?? [],
+    anniversary_date:  client?.anniversary_date  ?? '',
+    mdn_since:         client?.mdn_since         ?? '',
+    social_manager_id: client?.social_manager_id ?? null,
+    designer_id:       client?.designer_id       ?? null,
+    audiovisual_ids:   client?.audiovisual_ids   ?? [],
+    apoyo_ids:         client?.apoyo_ids         ?? [],
   }))
   const initialForm = useRef(form)
   const { requestClose } = useUnsavedChanges({ value: form, baseline: initialForm.current, onClose })
@@ -40,6 +82,15 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
 
   function set(field, value) {
     setForm(f => ({ ...f, [field]: value }))
+  }
+
+  // Al cambiar de línea, resetear los empleados que ya no pertenecen a esa línea
+  function handleLineChange(newLineId) {
+    set('line_id', newLineId)
+    // Limpiar asignaciones si cambia la línea
+    set('social_manager_id', null)
+    set('designer_id', null)
+    set('audiovisual_ids', [])
   }
 
   // Escape para cerrar
@@ -102,15 +153,19 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
 
     const payload = {
       name,
-      logo_url:         form.logo_url || null,
-      line_id:          form.line_id || null,
-      website:          form.website.trim() || null,
+      logo_url:          form.logo_url || null,
+      line_id:           form.line_id || null,
+      website:           form.website.trim() || null,
       payment_day,
       monthly_fee,
-      social_links:     form.social_links.filter(s => s.link.trim()),
-      contacts:         form.contacts.filter(c => c.name.trim()),
-      anniversary_date: form.anniversary_date || null,
-      mdn_since:        form.mdn_since || null,
+      social_links:      form.social_links.filter(s => s.link.trim()),
+      contacts:          form.contacts.filter(c => c.name.trim()),
+      anniversary_date:  form.anniversary_date || null,
+      mdn_since:         form.mdn_since || null,
+      social_manager_id: form.social_manager_id || null,
+      designer_id:       form.designer_id || null,
+      audiovisual_ids:   form.audiovisual_ids,
+      apoyo_ids:         form.apoyo_ids,
     }
 
     let data, err
@@ -126,16 +181,33 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
     onClose()
   }
 
+  // ── Empleados filtrados por línea y departamento ───────────────────────────────
+  const selectedLine = useMemo(
+    () => lines.find(l => l.id === form.line_id) ?? null,
+    [lines, form.line_id]
+  )
+  const lineEmployees = useMemo(
+    () => teamMemberUsers(employees, selectedLine),
+    [employees, selectedLine]
+  )
+  // dept_id 1 = Redes (Social), 3 = Diseño, 2 = Audiovisual
+  const socialUsers      = useMemo(() => lineEmployees.filter(u => u.department_id === 1), [lineEmployees])
+  const designerUsers    = useMemo(() => lineEmployees.filter(u => u.department_id === 3), [lineEmployees])
+  const audiovisualUsers = useMemo(() => lineEmployees.filter(u => u.department_id === 2), [lineEmployees])
+
+  // Para readOnly: resolver usuario por id
+  const socialManagerUser  = employees.find(u => u.user_id === form.social_manager_id) ?? null
+  const designerUser       = employees.find(u => u.user_id === form.designer_id) ?? null
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25 backdrop-blur-[3px]"
-      
     >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-[#ece9df] sticky top-0 bg-white z-10">
           <h2 className="text-[18px] font-bold text-[#111]">
-            {isEdit ? 'Editar cliente' : 'Nuevo cliente'}
+            {readOnly ? 'Detalle del cliente' : isEdit ? 'Editar cliente' : 'Nuevo cliente'}
           </h2>
           <button
             type="button"
@@ -150,7 +222,7 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
+        <form onSubmit={readOnly ? e => e.preventDefault() : handleSubmit} className="px-6 py-5 space-y-5">
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 text-[14px] rounded-lg px-3 py-2">
               {error}
@@ -161,11 +233,12 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
           <div className="flex flex-col items-center">
             <AvatarUpload
               user={{ first_name: form.name || 'C', last_name: '', avatar_url: form.logo_url || null }}
-              onUploaded={url => set('logo_url', url)}
+              onUploaded={readOnly ? undefined : url => set('logo_url', url)}
               publicId={client?.id ? `clientes/client_${client.id}` : undefined}
               uploadPreset={import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET_LOGOS}
               size={96}
               label="Logo del cliente"
+              disabled={readOnly}
             />
           </div>
 
@@ -180,7 +253,8 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
               value={form.name}
               onChange={e => set('name', e.target.value)}
               placeholder="Nombre del cliente / marca"
-              autoFocus
+              autoFocus={!readOnly}
+              disabled={readOnly}
             />
           </div>
 
@@ -192,13 +266,83 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
             <select
               className="input-base"
               value={form.line_id}
-              onChange={e => set('line_id', e.target.value)}
+              onChange={e => handleLineChange(e.target.value)}
+              disabled={readOnly}
             >
               <option value="">Sin línea</option>
               {lines.map(l => (
                 <option key={l.id} value={l.id}>{l.name}</option>
               ))}
             </select>
+          </div>
+
+          {/* Equipo del cliente */}
+          <div className="space-y-3">
+            <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">
+              Equipo del cliente
+            </label>
+
+            {/* Social + Diseñador */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <p className="text-[11.5px] font-mono text-[#aaa] uppercase tracking-wide mb-1">Social Asignado</p>
+                {readOnly ? (
+                  <EmployeeChip user={socialManagerUser} />
+                ) : (
+                  <UserPickerSingle
+                    users={form.line_id ? socialUsers : []}
+                    selectedId={form.social_manager_id}
+                    onChange={id => set('social_manager_id', id)}
+                    placeholder={form.line_id ? 'Seleccionar...' : 'Selecciona una línea primero'}
+                    clearable
+                  />
+                )}
+              </div>
+              <div>
+                <p className="text-[11.5px] font-mono text-[#aaa] uppercase tracking-wide mb-1">Diseñador Asignado</p>
+                {readOnly ? (
+                  <EmployeeChip user={designerUser} />
+                ) : (
+                  <UserPickerSingle
+                    users={form.line_id ? designerUsers : []}
+                    selectedId={form.designer_id}
+                    onChange={id => set('designer_id', id)}
+                    placeholder={form.line_id ? 'Seleccionar...' : 'Selecciona una línea primero'}
+                    clearable
+                  />
+                )}
+              </div>
+            </div>
+
+            {/* Audiovisual */}
+            <div>
+              <p className="text-[11.5px] font-mono text-[#aaa] uppercase tracking-wide mb-1">Audiovisual</p>
+              {readOnly ? (
+                <EmployeeChipList userIds={form.audiovisual_ids} employees={employees} />
+              ) : (
+                <UserPickerMulti
+                  users={form.line_id ? audiovisualUsers : []}
+                  selectedIds={form.audiovisual_ids}
+                  onChange={ids => set('audiovisual_ids', ids)}
+                  placeholder={form.line_id ? 'Agregar audiovisual...' : 'Selecciona una línea primero'}
+                />
+              )}
+            </div>
+
+            {/* Apoyo — cualquier empleado de la empresa */}
+            <div>
+              <p className="text-[11.5px] font-mono text-[#aaa] uppercase tracking-wide mb-1">Apoyo</p>
+              {readOnly ? (
+                <EmployeeChipList userIds={form.apoyo_ids} employees={employees} />
+              ) : (
+                <UserPickerMulti
+                  users={employees}
+                  selectedIds={form.apoyo_ids}
+                  onChange={ids => set('apoyo_ids', ids)}
+                  placeholder="Agregar apoyo..."
+                />
+              )}
+            </div>
           </div>
 
           {/* Día de pago + Mensualidad — solo nivel 4 / admin */}
@@ -216,6 +360,7 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
                   value={form.payment_day}
                   onChange={e => set('payment_day', e.target.value)}
                   placeholder="1–31"
+                  disabled={readOnly}
                 />
               </div>
               <div>
@@ -230,6 +375,7 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
                   value={form.monthly_fee}
                   onChange={e => set('monthly_fee', e.target.value)}
                   placeholder="0.00"
+                  disabled={readOnly}
                 />
               </div>
             </div>
@@ -246,6 +392,7 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
               value={form.website}
               onChange={e => set('website', e.target.value)}
               placeholder="https://..."
+              disabled={readOnly}
             />
           </div>
 
@@ -260,6 +407,7 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
                 className="input-base"
                 value={form.anniversary_date}
                 onChange={e => set('anniversary_date', e.target.value)}
+                disabled={readOnly}
               />
             </div>
             <div>
@@ -271,6 +419,7 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
                 className="input-base"
                 value={form.mdn_since}
                 onChange={e => set('mdn_since', e.target.value)}
+                disabled={readOnly}
               />
             </div>
           </div>
@@ -281,16 +430,18 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
               <label className="text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">
                 Personas de la empresa
               </label>
-              <button
-                type="button"
-                onClick={addContact}
-                className="flex items-center gap-1 text-[13px] font-semibold text-[#FAB51A] hover:text-[#d49800] transition-colors"
-              >
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M6 1v10M1 6h10" strokeLinecap="round"/>
-                </svg>
-                Agregar
-              </button>
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={addContact}
+                  className="flex items-center gap-1 text-[13px] font-semibold text-[#FAB51A] hover:text-[#d49800] transition-colors"
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M6 1v10M1 6h10" strokeLinecap="round"/>
+                  </svg>
+                  Agregar
+                </button>
+              )}
             </div>
 
             {form.contacts.length === 0 ? (
@@ -306,17 +457,20 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
                         value={contact.name}
                         onChange={e => updateContact(i, 'name', e.target.value)}
                         placeholder="Nombre completo..."
+                        disabled={readOnly}
                       />
-                      <button
-                        type="button"
-                        onClick={() => removeContact(i)}
-                        className="flex-shrink-0 text-[#ccc] hover:text-red-400 transition-colors p-1"
-                        aria-label="Quitar persona"
-                      >
-                        <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M2 2l9 9M11 2L2 11" strokeLinecap="round"/>
-                        </svg>
-                      </button>
+                      {!readOnly && (
+                        <button
+                          type="button"
+                          onClick={() => removeContact(i)}
+                          className="flex-shrink-0 text-[#ccc] hover:text-red-400 transition-colors p-1"
+                          aria-label="Quitar persona"
+                        >
+                          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M2 2l9 9M11 2L2 11" strokeLinecap="round"/>
+                          </svg>
+                        </button>
+                      )}
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <div>
@@ -327,6 +481,7 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
                           value={contact.role}
                           onChange={e => updateContact(i, 'role', e.target.value)}
                           placeholder="Ej. Gerente de marca"
+                          disabled={readOnly}
                         />
                       </div>
                       <div>
@@ -340,11 +495,13 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
                             value={contact.birth_day}
                             onChange={e => updateContact(i, 'birth_day', e.target.value)}
                             placeholder="Día"
+                            disabled={readOnly}
                           />
                           <select
                             className="input-base text-[13px] flex-1 min-w-0"
                             value={contact.birth_month}
                             onChange={e => updateContact(i, 'birth_month', e.target.value)}
+                            disabled={readOnly}
                           >
                             <option value="">Mes</option>
                             {MONTHS.map((m, idx) => (
@@ -366,16 +523,18 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
               <label className="text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">
                 Redes sociales
               </label>
-              <button
-                type="button"
-                onClick={addSocialLink}
-                className="flex items-center gap-1 text-[13px] font-semibold text-[#FAB51A] hover:text-[#d49800] transition-colors"
-              >
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M6 1v10M1 6h10" strokeLinecap="round"/>
-                </svg>
-                Agregar
-              </button>
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={addSocialLink}
+                  className="flex items-center gap-1 text-[13px] font-semibold text-[#FAB51A] hover:text-[#d49800] transition-colors"
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M6 1v10M1 6h10" strokeLinecap="round"/>
+                  </svg>
+                  Agregar
+                </button>
+              )}
             </div>
 
             {form.social_links.length === 0 ? (
@@ -383,33 +542,50 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
             ) : (
               <div className="space-y-2">
                 {form.social_links.map((item, i) => (
-                  <div key={i} className="flex items-center gap-2">
+                  <div key={i} className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2">
                     <select
-                      className="input-base w-36 flex-shrink-0 text-[13.5px]"
+                      className="input-base w-full sm:w-32 flex-shrink-0 text-[13.5px]"
                       value={item.red}
                       onChange={e => updateSocialLink(i, 'red', e.target.value)}
+                      disabled={readOnly}
                     >
                       {SOCIAL_NETWORKS.map(net => (
                         <option key={net} value={net}>{net}</option>
                       ))}
                     </select>
-                    <input
-                      type="url"
-                      className="input-base flex-1 text-[13.5px]"
-                      value={item.link}
-                      onChange={e => updateSocialLink(i, 'link', e.target.value)}
-                      placeholder="https://..."
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeSocialLink(i)}
-                      className="flex-shrink-0 text-[#ccc] hover:text-red-400 transition-colors p-1"
-                      aria-label="Quitar red"
-                    >
-                      <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M2 2l9 9M11 2L2 11" strokeLinecap="round"/>
-                      </svg>
-                    </button>
+                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                      {readOnly && item.link ? (
+                        <a
+                          href={item.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 min-w-0 text-[13.5px] text-[#3B6FE0] hover:underline truncate"
+                        >
+                          {item.link}
+                        </a>
+                      ) : (
+                        <input
+                          type="url"
+                          className="input-base flex-1 min-w-0 text-[13.5px]"
+                          value={item.link}
+                          onChange={e => updateSocialLink(i, 'link', e.target.value)}
+                          placeholder="https://..."
+                          disabled={readOnly}
+                        />
+                      )}
+                      {!readOnly && (
+                        <button
+                          type="button"
+                          onClick={() => removeSocialLink(i)}
+                          className="flex-shrink-0 text-[#ccc] hover:text-red-400 transition-colors p-1"
+                          aria-label="Quitar red"
+                        >
+                          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M2 2l9 9M11 2L2 11" strokeLinecap="round"/>
+                          </svg>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -418,20 +594,43 @@ export default function ClientModal({ client = null, companyId, lines = [], onCl
 
           {/* Acciones */}
           <div className="flex items-center justify-end gap-2 pt-1">
-            <button
-              type="button"
-              onClick={requestClose}
-              className="px-4 py-2 rounded-xl text-[15px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-2 rounded-xl text-[15px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors disabled:opacity-50"
-            >
-              {saving ? 'Guardando…' : isEdit ? 'Guardar cambios' : 'Crear cliente'}
-            </button>
+            {readOnly ? (
+              <>
+                <button
+                  type="button"
+                  onClick={requestClose}
+                  className="px-4 py-2 rounded-xl text-[15px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
+                >
+                  Cerrar
+                </button>
+                {canManage && (
+                  <button
+                    type="button"
+                    onClick={onRequestEdit}
+                    className="px-4 py-2 rounded-xl text-[15px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors"
+                  >
+                    Editar
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={requestClose}
+                  className="px-4 py-2 rounded-xl text-[15px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="px-4 py-2 rounded-xl text-[15px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors disabled:opacity-50"
+                >
+                  {saving ? 'Guardando…' : isEdit ? 'Guardar cambios' : 'Crear cliente'}
+                </button>
+              </>
+            )}
           </div>
         </form>
       </div>
