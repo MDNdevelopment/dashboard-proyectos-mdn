@@ -28,6 +28,9 @@ export default function ClientsView({ companyId, canManage = true }) {
   const [deleting, setDeleting]   = useState(false)
   const [error, setError]         = useState(null)
 
+  const handleModalClose      = useCallback(() => { setModal(undefined); setReadOnly(false) }, [])
+  const handleModalRequestEdit = useCallback(() => setReadOnly(false), [])
+
   // ── Carga inicial ─────────────────────────────────────────────────────────────
   const fetchAll = useCallback(async () => {
     if (!companyId) return
@@ -308,14 +311,15 @@ export default function ClientsView({ companyId, canManage = true }) {
       {/* Modal cliente */}
       {modal !== undefined && (
         <ClientModal
+          key={readOnly ? `ro-${modal?.id ?? 'new'}` : `edit-${modal?.id ?? 'new'}`}
           client={modal}
           companyId={companyId}
           lines={lines}
           employees={employees}
           readOnly={readOnly}
           canManage={canManage}
-          onRequestEdit={() => setReadOnly(false)}
-          onClose={() => { setModal(undefined); setReadOnly(false) }}
+          onRequestEdit={handleModalRequestEdit}
+          onClose={handleModalClose}
           onSaved={handleSaved}
         />
       )}
