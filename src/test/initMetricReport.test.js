@@ -31,7 +31,7 @@ describe("initMetricReport — sin mes anterior", () => {
     const r = initMetricReport(null, CLIENTS);
     expect(r.productividad.tareas).toHaveLength(DEFAULT_SUBTAREAS.length);
     expect(r.productividad.tareas[0].nombre).toBe(DEFAULT_SUBTAREAS[0].nombre);
-    expect(r.productividad.tareas[0].realizado).toBe(0);
+    expect(r.productividad.tareas[0].realizado).toBeNull();
   });
 
   it("usa lineMetas.tareas cuando se proporcionan", () => {
@@ -65,7 +65,7 @@ describe("initMetricReport — sin mes anterior", () => {
   it("retorna meta de reuniones en 15 por defecto", () => {
     const r = initMetricReport(null, []);
     expect(r.reuniones.meta).toBe(15);
-    expect(r.reuniones.realizadas).toBe(0);
+    expect(r.reuniones.realizadas).toBeNull();
   });
 
   it("inicializa finanzas con sueldos/gastos vacíos cuando no hay empleados", () => {
@@ -136,14 +136,14 @@ describe("initMetricReport — con mes anterior (carry-forward)", () => {
   it("hereda la meta de reuniones del mes anterior", () => {
     const r = initMetricReport(makePrevReport(), []);
     expect(r.reuniones.meta).toBe(20); // heredada
-    expect(r.reuniones.realizadas).toBe(0); // reseteada
+    expect(r.reuniones.realizadas).toBeNull(); // reseteada
   });
 
   it("resetea los valores pero conserva las metas de tareas", () => {
     const r = initMetricReport(makePrevReport(), []);
     expect(r.productividad.tareas[0].nombre).toBe("Métricas");
     expect(r.productividad.tareas[0].meta).toBe(15);
-    expect(r.productividad.tareas[0].realizado).toBe(0); // reseteado
+    expect(r.productividad.tareas[0].realizado).toBeNull(); // reseteado
   });
 
   it("resetea seguidores pero conserva clientes y metas de crecimiento", () => {
@@ -156,7 +156,7 @@ describe("initMetricReport — con mes anterior (carry-forward)", () => {
 
   it("resetea realizadas en pautas pero conserva metas", () => {
     const r = initMetricReport(makePrevReport(), []);
-    expect(r.pautas.items[0].realizadas).toBe(0);
+    expect(r.pautas.items[0].realizadas).toBeNull();
     expect(r.pautas.items[0].meta).toBe(5);
   });
 
@@ -165,12 +165,12 @@ describe("initMetricReport — con mes anterior (carry-forward)", () => {
     expect(r.feedback.items[0].score).toBeNull();
   });
 
-  it("resetea solicitudes y piezas a 0", () => {
+  it("resetea solicitudes y piezas a null", () => {
     const r = initMetricReport(makePrevReport(), []);
-    expect(r.solicitudes.solicitudes).toBe(0);
-    expect(r.solicitudes.editadas).toBe(0);
-    expect(r.piezas.piezas).toBe(0);
-    expect(r.piezas.editadas).toBe(0);
+    expect(r.solicitudes.solicitudes).toBeNull();
+    expect(r.solicitudes.editadas).toBeNull();
+    expect(r.piezas.piezas).toBeNull();
+    expect(r.piezas.editadas).toBeNull();
   });
 
   it("hereda las finanzas del mes anterior con sus montos", () => {
@@ -193,7 +193,7 @@ describe("initMetricReport — lineMetas tiene prioridad sobre carry-forward", (
     // prevReport tiene reuniones.meta = 20, pero la línea configuró 12
     const r = initMetricReport(makePrevReport(), [], { reuniones: 12 });
     expect(r.reuniones.meta).toBe(12);
-    expect(r.reuniones.realizadas).toBe(0); // siempre reseteado
+    expect(r.reuniones.realizadas).toBeNull(); // siempre reseteado
   });
 
   it("lineMetas.tareas pisa las tareas del carry-forward", () => {

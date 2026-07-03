@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import LineHubView from "./LineHubView";
 import OperacionesView from "./OperacionesView";
@@ -13,14 +12,28 @@ const CURRENT_YEAR = new Date().getFullYear();
 const CURRENT_MONTH = new Date().getMonth() + 1;
 const YEARS = Array.from({ length: 4 }, (_, i) => CURRENT_YEAR - i);
 
+const VALID_TABS = ["hub", "operaciones", "finanzas"];
+
 export default function LineView({ line, companyId, onLinesChange }) {
-  const [searchParams] = useSearchParams();
-  const [subView, setSubView] = useState(() => {
-    const tab = searchParams.get("tab");
-    return ["hub", "operaciones", "finanzas"].includes(tab) ? tab : "hub";
-  });
-  const [year, setYear] = useState(CURRENT_YEAR);
-  const [month, setMonth] = useState(CURRENT_MONTH);
+  // sub-tab, mes y año viven en la URL para sobrevivir a F5 y remounts.
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const rawTab = searchParams.get("tab");
+  const subView = VALID_TABS.includes(rawTab) ? rawTab : "hub";
+
+  const rawYear = Number(searchParams.get("year"));
+  const year = rawYear >= 2020 && rawYear <= 2099 ? rawYear : CURRENT_YEAR;
+
+  const rawMonth = Number(searchParams.get("month"));
+  const month = rawMonth >= 1 && rawMonth <= 12 ? rawMonth : CURRENT_MONTH;
+
+  function setParam(key, value) {
+    setSearchParams(prev => {
+      const p = new URLSearchParams(prev);
+      p.set(key, String(value));
+      return p;
+    }, { replace: true });
+  }
 
   const SUB_TABS = [
     { key: "hub",         label: "Resumen"      },
@@ -42,7 +55,7 @@ export default function LineView({ line, companyId, onLinesChange }) {
           {SUB_TABS.map(tab => (
             <button
               key={tab.key}
-              onClick={() => setSubView(tab.key)}
+              onClick={() => setParam("tab", tab.key)}
               className={`px-4 py-1.5 rounded-lg text-[14px] font-semibold transition-all ${
                 subView === tab.key
                   ? "bg-[#111] text-white"
@@ -60,14 +73,14 @@ export default function LineView({ line, companyId, onLinesChange }) {
             <select
               className="input-base py-1 text-[14px]"
               value={month}
-              onChange={e => setMonth(Number(e.target.value))}
+              onChange={e => setParam("month", e.target.value)}
             >
               {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
             </select>
             <select
               className="input-base py-1 text-[14px]"
               value={year}
-              onChange={e => setYear(Number(e.target.value))}
+              onChange={e => setParam("year", e.target.value)}
             >
               {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
             </select>

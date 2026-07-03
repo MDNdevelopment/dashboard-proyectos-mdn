@@ -1,11 +1,13 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { loadReport, loadPrevReport, loadClients, upsertReport } from "./metricsApi";
+import SectionTotal from "../common/SectionTotal";
 import ClientFichaModal from "./ClientFichaModal";
 import { initMetricReport } from "../../utils/initMetricReport";
 import { syncReportClients } from "../../utils/syncReportClients";
 import { calcTotal, sumScore, crecimientoCliente } from "../../utils/metricsScore";
 import { MONTHS, INDICATORS } from "./constants";
+import { useUnsavedChanges } from "../../hooks/useUnsavedChanges";
 
 export default function OperacionesView({ line, companyId, year, month }) {
   const { can = () => true } = useAuth();
@@ -17,6 +19,10 @@ export default function OperacionesView({ line, companyId, year, month }) {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState(null);
   const [cliModal, setCliModal] = useState(null); // null=cerrado, objeto=cliente abierto
+
+  // Snapshot del reporte tal como vino del servidor (o quedó tras un save).
+  // Se usa para detectar cambios sin guardar y mostrar aviso al recargar/cerrar.
+  const baselineRef = useRef(null);
 
   const load = useCallback(async () => {
     if (!line?.id || !companyId) return;
@@ -39,17 +45,22 @@ export default function OperacionesView({ line, companyId, year, month }) {
       // Sincronizar items con los clientes actuales de la línea
       const synced = syncReportClients(reportRes.data.data, lineClients);
       setReport(synced);
+      baselineRef.current = synced;
     } else {
       // Inicializar con carry-forward y metas de la línea
       const lineMetas = line?.metas ?? {};
       const fresh = initMetricReport(prevRes.data?.data ?? null, lineClients, lineMetas);
       const synced = syncReportClients(fresh, lineClients);
       setReport(synced);
+      baselineRef.current = synced;
     }
     setLoading(false);
   }, [line?.id, companyId, year, month]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Aviso nativo del navegador si se intenta recargar/cerrar con cambios sin guardar.
+  useUnsavedChanges({ value: report, baseline: baselineRef.current, onClose: () => {} });
 
   async function handleSave() {
     if (!report) return;
@@ -57,6 +68,8 @@ export default function OperacionesView({ line, companyId, year, month }) {
     const { error: err } = await upsertReport(companyId, line.id, year, month, report);
     setSaving(false);
     if (err) { setError(err.message); return; }
+    // Actualizar baseline para que el aviso desaparezca tras guardar
+    baselineRef.current = report;
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
@@ -114,7 +127,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
   function setTareaField(idx, field, value) {
     setReport(prev => {
       const next = structuredClone(prev);
-      next.productividad.tareas[idx][field] = field === "nombre" ? value : Number(value);
+      next.productividad.tareas[idx][field] = field === "nombre" ? value : (value === "" ? null : Number(value));
       return next;
     });
   }
@@ -179,13 +192,13 @@ export default function OperacionesView({ line, companyId, year, month }) {
           <Field label="Realizadas">
             <input type="number" min="0" className="input-base"
               value={report.reuniones.realizadas ?? ""}
-              onChange={e => setField("reuniones.realizadas", Number(e.target.value))}
+              onChange={e => setField("reuniones.realizadas", e.target.value === "" ? null : Number(e.target.value))}
             />
           </Field>
           <Field label="Meta">
             <input type="number" min="1" className="input-base"
               value={report.reuniones.meta ?? ""}
-              onChange={e => setField("reuniones.meta", Number(e.target.value))}
+              onChange={e => setField("reuniones.meta", e.target.value === "" ? null : Number(e.target.value))}
             />
           </Field>
         </div>
@@ -228,7 +241,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
             onClick={() => {
               setReport(prev => {
                 const next = structuredClone(prev);
-                next.productividad.tareas.push({ nombre: "", realizado: 0, meta: 0 });
+                next.productividad.tareas.push({ nombre: "", realizado: null, meta: null });
                 return next;
               });
             }}
@@ -240,6 +253,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
             Agregar tarea
           </button>
         </div>
+        <SectionTotal label="tareas" count={report.productividad.tareas.length} />
       </Section>
 
       {/* 3. CRECIMIENTO */}
@@ -247,7 +261,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
         const prevMonth = month - 1 < 1 ? 12 : month - 1;
         const prevMonthName = MONTHS[prevMonth - 1];
         const currMonthName = MONTHS[month - 1];
-        // seedMode: no hay reporte previo → las columnas del periodo pasado se vuelven editables
+        // seedMode: no hay reporte previo → todas las columnas del periodo pasado son editables
         const seedMode = !prevReport;
         return (
           <Section
@@ -259,6 +273,15 @@ export default function OperacionesView({ line, companyId, year, month }) {
             {seedMode && (
               <p className="text-[12px] text-[#888] bg-[#faf9f3] border border-[#e8e4d8] rounded-lg px-3 py-2 mb-1">
                 Primer mes de uso: ingresá manualmente los seguidores del periodo anterior como línea base. A partir del próximo mes se auto-completará.
+              </p>
+            )}
+            {!seedMode && report.crecimiento.items.some(item => {
+              const prevItem = (prevReport?.crecimiento?.items ?? []).find(i => i.clienteId === item.clienteId);
+              return (prevItem?.seguidoresGanados == null || prevItem?.seguidoresGanados === "")
+                  || (prevItem?.seguidoresActuales == null || prevItem?.seguidoresActuales === "");
+            }) && (
+              <p className="text-[12px] text-[#888] bg-[#faf9f3] border border-[#e8e4d8] rounded-lg px-3 py-2 mb-1">
+                Algunos valores del mes anterior están vacíos. Podés completarlos manualmente como línea base.
               </p>
             )}
             <div className="overflow-x-auto">
@@ -287,37 +310,42 @@ export default function OperacionesView({ line, companyId, year, month }) {
                         const { ganados, cumple, pct } = crecimientoCliente(item);
                         const prevItem = (prevReport?.crecimiento?.items ?? [])
                           .find(i => i.clienteId === item.clienteId);
-                        // En seedMode: valores del propio reporte actual (bootstrap)
-                        const prevGanados = seedMode ? (item.seguidoresGanadosPrev ?? "") : (prevItem?.seguidoresGanados ?? "");
-                        const prevTotales = seedMode ? (item.seguidoresBase ?? "") : (prevItem?.seguidoresActuales ?? "");
+                        // Editable por campo: si el mes anterior tiene un valor, se muestra bloqueado;
+                        // si está vacío (o no hay reporte previo), se puede editar manualmente.
+                        const hasPrevGanados = prevItem?.seguidoresGanados != null && prevItem?.seguidoresGanados !== "";
+                        const hasPrevTotales = prevItem?.seguidoresActuales != null && prevItem?.seguidoresActuales !== "";
+                        const ganadosEditable = !hasPrevGanados;
+                        const totalesEditable = !hasPrevTotales;
+                        const prevGanados = hasPrevGanados ? prevItem.seguidoresGanados : (item.seguidoresGanadosPrev ?? "");
+                        const prevTotales = hasPrevTotales ? prevItem.seguidoresActuales : (item.seguidoresBase ?? "");
                         return (
                           <div key={item.clienteId} className="grid grid-cols-[minmax(110px,1fr)_auto_auto_auto_auto] gap-x-3 items-center">
                             <ClientLink clienteId={item.clienteId} />
 
-                            {/* Mes anterior — editable en seedMode, disabled en los demás */}
+                            {/* Mes anterior — editable si no hay dato en el reporte del mes anterior */}
                             <div className="flex gap-2 items-center">
                               <div className="flex flex-col items-center gap-0.5">
-                                <span className={`text-[10px] whitespace-nowrap ${seedMode ? "text-[#777]" : "text-[#999]"}`}>Gan. {prevMonthName.slice(0,3)}</span>
+                                <span className={`text-[10px] whitespace-nowrap ${ganadosEditable ? "text-[#777]" : "text-[#999]"}`}>Gan. {prevMonthName.slice(0,3)}</span>
                                 <input
                                   type="number"
-                                  disabled={!seedMode}
-                                  readOnly={!seedMode}
-                                  className={`input-base !w-[92px] flex-none text-[13px] ${seedMode ? "" : "bg-[#f5f3ec] text-[#bbb] cursor-not-allowed"}`}
+                                  disabled={!ganadosEditable}
+                                  readOnly={!ganadosEditable}
+                                  className={`input-base !w-[92px] flex-none text-[13px] ${ganadosEditable ? "" : "bg-[#f5f3ec] text-[#bbb] cursor-not-allowed"}`}
                                   placeholder="—"
                                   value={prevGanados}
-                                  onChange={seedMode ? e => setItemField("crecimiento", idx, "seguidoresGanadosPrev", e.target.value === "" ? null : e.target.value) : undefined}
+                                  onChange={ganadosEditable ? e => setItemField("crecimiento", idx, "seguidoresGanadosPrev", e.target.value === "" ? null : e.target.value) : undefined}
                                 />
                               </div>
                               <div className="flex flex-col items-center gap-0.5">
-                                <span className={`text-[10px] whitespace-nowrap ${seedMode ? "text-[#777]" : "text-[#999]"}`}>Tot. {prevMonthName.slice(0,3)}</span>
+                                <span className={`text-[10px] whitespace-nowrap ${totalesEditable ? "text-[#777]" : "text-[#999]"}`}>Tot. {prevMonthName.slice(0,3)}</span>
                                 <input
                                   type="number"
-                                  disabled={!seedMode}
-                                  readOnly={!seedMode}
-                                  className={`input-base !w-[92px] flex-none text-[13px] ${seedMode ? "" : "bg-[#f5f3ec] text-[#bbb] cursor-not-allowed"}`}
+                                  disabled={!totalesEditable}
+                                  readOnly={!totalesEditable}
+                                  className={`input-base !w-[92px] flex-none text-[13px] ${totalesEditable ? "" : "bg-[#f5f3ec] text-[#bbb] cursor-not-allowed"}`}
                                   placeholder="—"
                                   value={prevTotales}
-                                  onChange={seedMode ? e => setItemField("crecimiento", idx, "seguidoresBase", e.target.value === "" ? null : e.target.value) : undefined}
+                                  onChange={totalesEditable ? e => setItemField("crecimiento", idx, "seguidoresBase", e.target.value === "" ? null : e.target.value) : undefined}
                                 />
                               </div>
                             </div>
@@ -353,7 +381,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
                                 type="number"
                                 min="0"
                                 className="input-base !w-20 flex-none text-[13px]"
-                                value={item.meta ?? 0}
+                                value={item.meta ?? ""}
                                 onChange={e => setItemField("crecimiento", idx, "meta", e.target.value)}
                               />
                             </div>
@@ -390,6 +418,9 @@ export default function OperacionesView({ line, companyId, year, month }) {
                 )}
               </div>
             </div>
+            {report.crecimiento.items.length > 0 && (
+              <SectionTotal label="marcas" count={report.crecimiento.items.length} />
+            )}
           </Section>
         );
       })()}
@@ -405,13 +436,13 @@ export default function OperacionesView({ line, companyId, year, month }) {
           <Field label="Solicitudes recibidas">
             <input type="number" min="0" className="input-base"
               value={report.solicitudes.solicitudes ?? ""}
-              onChange={e => setField("solicitudes.solicitudes", Number(e.target.value))}
+              onChange={e => setField("solicitudes.solicitudes", e.target.value === "" ? null : Number(e.target.value))}
             />
           </Field>
           <Field label="Editadas / Entregadas">
             <input type="number" min="0" className="input-base"
               value={report.solicitudes.editadas ?? ""}
-              onChange={e => setField("solicitudes.editadas", Number(e.target.value))}
+              onChange={e => setField("solicitudes.editadas", e.target.value === "" ? null : Number(e.target.value))}
             />
           </Field>
         </div>
@@ -435,14 +466,14 @@ export default function OperacionesView({ line, companyId, year, month }) {
                 <div className="flex items-center gap-1">
                   <span className="text-[11px] text-[#aaa]">Realizadas</span>
                   <input type="number" min="0" className="input-base w-20 text-[13px]"
-                    value={item.realizadas ?? 0}
+                    value={item.realizadas ?? ""}
                     onChange={e => setItemField("pautas", idx, "realizadas", e.target.value)}
                   />
                 </div>
                 <div className="flex items-center gap-1">
                   <span className="text-[11px] text-[#aaa]">Meta</span>
                   <input type="number" min="0" className="input-base w-20 text-[13px]"
-                    value={item.meta ?? 0}
+                    value={item.meta ?? ""}
                     onChange={e => setItemField("pautas", idx, "meta", e.target.value)}
                   />
                 </div>
@@ -451,6 +482,9 @@ export default function OperacionesView({ line, companyId, year, month }) {
           )}
         </div>
         </div>
+        {report.pautas.items.length > 0 && (
+          <SectionTotal label="marcas" count={report.pautas.items.length} />
+        )}
       </Section>
 
       {/* 6. PIEZAS */}
@@ -464,13 +498,13 @@ export default function OperacionesView({ line, companyId, year, month }) {
           <Field label="Piezas totales">
             <input type="number" min="0" className="input-base"
               value={report.piezas.piezas ?? ""}
-              onChange={e => setField("piezas.piezas", Number(e.target.value))}
+              onChange={e => setField("piezas.piezas", e.target.value === "" ? null : Number(e.target.value))}
             />
           </Field>
           <Field label="Piezas editadas">
             <input type="number" min="0" className="input-base"
               value={report.piezas.editadas ?? ""}
-              onChange={e => setField("piezas.editadas", Number(e.target.value))}
+              onChange={e => setField("piezas.editadas", e.target.value === "" ? null : Number(e.target.value))}
             />
           </Field>
         </div>

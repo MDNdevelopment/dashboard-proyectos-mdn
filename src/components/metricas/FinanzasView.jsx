@@ -1,28 +1,30 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { isFinancePrivileged } from "../../lib/permissions";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LabelList,
 } from "recharts";
 import { loadReport, loadPrevReport, upsertReport, loadClients, loadCompanyEmployees } from "./metricsApi";
 import { initMetricReport } from "../../utils/initMetricReport";
 import { syncReportClients } from "../../utils/syncReportClients";
-import { calcFinanzas, ensureFinanzas, fmtUSD } from "../../utils/metricsFinance";
+import { calcFinanzas, calcConsolidado, calcConsolidadoConGasto, ensureFinanzas, fmtUSD } from "../../utils/metricsFinance";
+import SectionTotal from "../common/SectionTotal";
 import { MONTHS } from "./constants";
 import ClientFichaModal from "./ClientFichaModal";
 import EmployeeInfoModal from "./EmployeeInfoModal";
 import { Avatar } from "../tareas/UserPickerSingle";
+import { useUnsavedChanges } from "../../hooks/useUnsavedChanges";
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
 const SECCIONES = [
-  { key: "ingresos",         label: "Ingresos",          color: "#10B981" },
-  { key: "gastosOperativos", label: "Gastos operativos",  color: "#F97316" },
-  { key: "sueldos",          label: "Sueldos / Nómina",   color: "#EF4444" },
-  { key: "otrosGastos",      label: "Otros gastos",       color: "#8B5CF6" },
+  { key: "ingresos",         label: "Ingresos",          color: "#10B981", totalLabel: "ingresos" },
+  { key: "gastosOperativos", label: "Gastos operativos",  color: "#F97316", totalLabel: "gastos" },
+  { key: "sueldos",          label: "Sueldos / Nómina",   color: "#EF4444", totalLabel: "sueldos" },
+  { key: "otrosGastos",      label: "Otros gastos",       color: "#8B5CF6", totalLabel: "otros gastos" },
 ];
 
 export default function FinanzasView({ line, companyId, year, month }) {
@@ -40,6 +42,10 @@ export default function FinanzasView({ line, companyId, year, month }) {
   const [empModal, setEmpModal]       = useState(null); // null=cerrado, objeto=empleado
   const [ingresosView, setIngresosView] = useState("tarjetas"); // "lista" | "tarjetas" — tarjetas por defecto
   const [sueldosView,  setSueldosView]  = useState("tarjetas"); // "lista" | "tarjetas" — tarjetas por defecto
+
+  // Snapshot del reporte tal como vino del servidor (o quedó tras un save).
+  // Se usa para detectar cambios sin guardar y mostrar aviso al recargar/cerrar.
+  const baselineRef = useRef(null);
 
   // Refs para scroll de KPIs
   const ingresosRef = useRef(null);
@@ -71,16 +77,23 @@ export default function FinanzasView({ line, companyId, year, month }) {
     if (reportRes.data) {
       const d = reportRes.data.data;
       ensureFinanzas(d);
-      setReport(syncReportClients(d, clients, employees));
+      const synced = syncReportClients(d, clients, employees);
+      setReport(synced);
+      baselineRef.current = synced;
     } else {
       const fresh = initMetricReport(prevRes.data?.data ?? null, clients, {}, employees);
       ensureFinanzas(fresh);
-      setReport(syncReportClients(fresh, clients, employees));
+      const synced = syncReportClients(fresh, clients, employees);
+      setReport(synced);
+      baselineRef.current = synced;
     }
     setLoading(false);
   }, [line?.id, line?.member_user_ids, companyId, year, month]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Aviso nativo del navegador si se intenta recargar/cerrar con cambios sin guardar.
+  useUnsavedChanges({ value: report, baseline: baselineRef.current, onClose: () => {} });
 
   useEffect(() => {
     if (loading || !pendingSection.current) return;
@@ -101,6 +114,8 @@ export default function FinanzasView({ line, companyId, year, month }) {
     const { error: err } = await upsertReport(companyId, line.id, year, month, report);
     setSaving(false);
     if (err) { setError(err.message); return; }
+    // Actualizar baseline para que el aviso desaparezca tras guardar
+    baselineRef.current = report;
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
@@ -108,7 +123,9 @@ export default function FinanzasView({ line, companyId, year, month }) {
   function addItem(seccion) {
     setReport(prev => {
       const next = structuredClone(prev);
-      next.finanzas[seccion].push({ id: uid(), descripcion: "", monto: 0 });
+      const item = { id: uid(), descripcion: "", monto: null };
+      if (seccion === "gastosOperativos") item.clienteId = null;
+      next.finanzas[seccion].push(item);
       return next;
     });
   }
@@ -124,7 +141,7 @@ export default function FinanzasView({ line, companyId, year, month }) {
   function updateItem(seccion, idx, field, value) {
     setReport(prev => {
       const next = structuredClone(prev);
-      next.finanzas[seccion][idx][field] = field === "monto" ? Number(value) || 0 : value;
+      next.finanzas[seccion][idx][field] = field === "monto" ? (value === "" ? null : Number(value)) : value;
       return next;
     });
   }
@@ -188,8 +205,8 @@ export default function FinanzasView({ line, companyId, year, month }) {
         <p className="text-[13px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] mb-3">
           Resumen financiero
         </p>
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={chartData} margin={{ top: 28, right: 16, left: 0, bottom: 4 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0ede3" />
             <XAxis dataKey="name" tick={{ fontSize: 11, fontFamily: "DM Mono, monospace", fill: "#555" }} />
             <YAxis tick={{ fontSize: 10, fontFamily: "DM Mono, monospace", fill: "#888" }}
@@ -200,7 +217,6 @@ export default function FinanzasView({ line, companyId, year, month }) {
               formatter={(val) => fmtUSD(val)}
             />
             <Bar dataKey="valor" fill="#FAB51A" radius={[4, 4, 0, 0]}
-              label={false}
               cell={[
                 { fill: "#10B981" },
                 { fill: "#F97316" },
@@ -208,7 +224,14 @@ export default function FinanzasView({ line, companyId, year, month }) {
                 { fill: "#8B5CF6" },
                 { fill: positivo ? "#10B981" : "#EF4444" },
               ]}
-            />
+            >
+              <LabelList
+                dataKey="valor"
+                position="top"
+                formatter={(v) => fmtUSD(v)}
+                style={{ fontSize: 10, fontFamily: "DM Mono, monospace", fill: "#555" }}
+              />
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -224,7 +247,7 @@ export default function FinanzasView({ line, companyId, year, month }) {
         const sectionView    = isIngresos ? ingresosView : sueldosView;
         const setSectionView = isIngresos ? setIngresosView : setSueldosView;
 
-        return (
+        const seccionCard = (
           <div
             key={sec.key}
             ref={isIngresos ? ingresosRef : isFirstGastos ? gastosRef : null}
@@ -448,13 +471,27 @@ export default function FinanzasView({ line, companyId, year, month }) {
                           </span>
                         )
                       ) : (
-                        <input
-                          type="text"
-                          className="input-base flex-1 min-w-0 text-[14px]"
-                          placeholder="Justificación"
-                          value={item.descripcion ?? ""}
-                          onChange={e => updateItem(sec.key, idx, "descripcion", e.target.value)}
-                        />
+                        <>
+                          {isFirstGastos && (
+                            <select
+                              className="input-base !w-36 flex-none text-[14px]"
+                              value={item.clienteId ?? ""}
+                              onChange={e => updateItem(sec.key, idx, "clienteId", e.target.value || null)}
+                            >
+                              <option value="">Sin cliente</option>
+                              {lineClients.map(c => (
+                                <option key={c.id} value={c.id}>{c.name}</option>
+                              ))}
+                            </select>
+                          )}
+                          <input
+                            type="text"
+                            className="input-base flex-1 min-w-0 text-[14px]"
+                            placeholder="Justificación"
+                            value={item.descripcion ?? ""}
+                            onChange={e => updateItem(sec.key, idx, "descripcion", e.target.value)}
+                          />
+                        </>
                       )}
                       <input
                         type="number"
@@ -487,7 +524,7 @@ export default function FinanzasView({ line, companyId, year, month }) {
                 if (sec.key === "ingresos") {
                   setReport(prev => {
                     const next = structuredClone(prev);
-                    next.finanzas.ingresos.push({ id: uid(), clienteId: null, descripcion: "", monto: 0 });
+                    next.finanzas.ingresos.push({ id: uid(), clienteId: null, descripcion: "", monto: null });
                     return next;
                   });
                 } else {
@@ -501,7 +538,60 @@ export default function FinanzasView({ line, companyId, year, month }) {
               </svg>
               Agregar entrada
             </button>
+            <SectionTotal label={sec.totalLabel} count={items.length} />
           </div>
+        );
+
+        if (!isFirstGastos) return seccionCard;
+
+        // ── Consolidado de gastos (solo debajo de Gastos Operativos) ──
+        const { rows: consolidadoRows, totals: consolidadoTotals } = calcConsolidadoConGasto(report, lineClients);
+        return (
+          <React.Fragment key={sec.key}>
+            {seccionCard}
+            <div className="bg-white rounded-2xl border border-[#e0ddd4] px-5 py-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: "#6366F1" }} />
+                <p className="text-[15px] font-bold text-[#111]">Consolidado de gastos</p>
+              </div>
+              {consolidadoRows.length === 0 ? (
+                <p className="text-[13px] text-[#bbb]">Sin gastos operativos registrados.</p>
+              ) : (
+                <div className="space-y-1">
+                  {/* Encabezado */}
+                  <div className="grid grid-cols-[1fr_auto_auto_auto] gap-3 items-center pb-1 border-b border-[#f0ede3]">
+                    <span className="text-[11px] font-mono font-bold uppercase tracking-[0.1em] text-[#aaa]">Cliente</span>
+                    <span className="text-[11px] font-mono font-bold uppercase tracking-[0.1em] text-[#10B981] w-24 text-right">Ingresos</span>
+                    <span className="text-[11px] font-mono font-bold uppercase tracking-[0.1em] text-[#F97316] w-24 text-right">G. Oper.</span>
+                    <span className="text-[11px] font-mono font-bold uppercase tracking-[0.1em] text-[#888] w-24 text-right">Diferencia</span>
+                  </div>
+                  {consolidadoRows.map(fila => {
+                    const pos = fila.diferencia >= 0;
+                    return (
+                      <div key={fila.id} className="grid grid-cols-[1fr_auto_auto_auto] gap-3 items-center py-1.5">
+                        <span className="text-[14px] text-[#333] truncate">{fila.nombre}</span>
+                        <span className="text-[13px] font-mono text-[#10B981] w-24 text-right tabular-nums">{fmtUSD(fila.ingresos)}</span>
+                        <span className="text-[13px] font-mono text-[#F97316] w-24 text-right tabular-nums">{fmtUSD(fila.gastos)}</span>
+                        <span className={`text-[13px] font-mono font-semibold w-24 text-right tabular-nums ${pos ? "text-green-600" : "text-red-500"}`}>
+                          {pos ? "+" : ""}{fmtUSD(fila.diferencia)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  {/* Fila de totales */}
+                  <div className="grid grid-cols-[1fr_auto_auto_auto] gap-3 items-center pt-2 mt-1 border-t border-[#e0ddd4]">
+                    <span className="text-[13px] font-mono font-bold text-[#555]">Total</span>
+                    <span className="text-[13px] font-mono font-bold text-[#10B981] w-24 text-right tabular-nums">{fmtUSD(consolidadoTotals.ingresos)}</span>
+                    <span className="text-[13px] font-mono font-bold text-[#F97316] w-24 text-right tabular-nums">{fmtUSD(consolidadoTotals.gastos)}</span>
+                    <span className={`text-[13px] font-mono font-bold w-24 text-right tabular-nums ${consolidadoTotals.diferencia >= 0 ? "text-green-600" : "text-red-500"}`}>
+                      {consolidadoTotals.diferencia >= 0 ? "+" : ""}{fmtUSD(consolidadoTotals.diferencia)}
+                    </span>
+                  </div>
+                  <SectionTotal label="marcas" count={consolidadoRows.length} />
+                </div>
+              )}
+            </div>
+          </React.Fragment>
         );
       })}
 

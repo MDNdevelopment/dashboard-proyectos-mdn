@@ -36,6 +36,67 @@ export function fmtUSD(n) {
 }
 
 /**
+ * Calcula el consolidado de ingresos vs gastos operativos por cliente.
+ * Devuelve una fila por cada cliente de la línea (aunque esté en 0),
+ * más una fila "Sin cliente" si hay gastos operativos sin clienteId asignado.
+ *
+ * @param {object} report       - Reporte con campo `finanzas`.
+ * @param {Array}  lineClients  - Array de { id, name } de la cartera de la línea.
+ * @returns {Array<{ id, nombre, ingresos, gastos, diferencia }>}
+ */
+export function calcConsolidado(report, lineClients = []) {
+  const ing = report.finanzas?.ingresos ?? [];
+  const gas = report.finanzas?.gastosOperativos ?? [];
+
+  const sum = (arr, id) =>
+    arr.filter(x => x.clienteId === id)
+      .reduce((a, it) => a + Number(it.monto ?? 0), 0);
+
+  const filas = lineClients.map(c => {
+    const ingresos = sum(ing, c.id);
+    const gastos   = sum(gas, c.id);
+    return { id: c.id, nombre: c.name, ingresos, gastos, diferencia: ingresos - gastos };
+  });
+
+  const sinCliente = gas
+    .filter(x => x.clienteId == null)
+    .reduce((a, it) => a + Number(it.monto ?? 0), 0);
+
+  if (sinCliente > 0) {
+    filas.push({
+      id: "_none",
+      nombre: "Sin cliente",
+      ingresos: 0,
+      gastos: sinCliente,
+      diferencia: -sinCliente,
+    });
+  }
+
+  return filas;
+}
+
+/**
+ * Versión filtrada de calcConsolidado: devuelve solo las filas con gasto operativo > 0
+ * más los totales agregados de ingresos, gastos y diferencia.
+ *
+ * @param {object} report
+ * @param {Array}  lineClients
+ * @returns {{ rows: Array, totals: { ingresos, gastos, diferencia } }}
+ */
+export function calcConsolidadoConGasto(report, lineClients = []) {
+  const rows = calcConsolidado(report, lineClients).filter(f => f.gastos > 0);
+  const totals = rows.reduce(
+    (a, f) => ({
+      ingresos:   a.ingresos   + f.ingresos,
+      gastos:     a.gastos     + f.gastos,
+      diferencia: a.diferencia + f.diferencia,
+    }),
+    { ingresos: 0, gastos: 0, diferencia: 0 },
+  );
+  return { rows, totals };
+}
+
+/**
  * Garantiza que un reporte tenga la estructura de finanzas inicializada.
  * Muta el objeto in-place (igual que en el HTML original).
  * @param {object} report

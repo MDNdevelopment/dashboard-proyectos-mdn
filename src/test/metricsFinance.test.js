@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calcFinanzas, fmtUSD, ensureFinanzas } from "../utils/metricsFinance";
+import { calcFinanzas, calcConsolidado, calcConsolidadoConGasto, fmtUSD, ensureFinanzas } from "../utils/metricsFinance";
 
 function makeReport(overrides = {}) {
   return {
@@ -79,6 +79,153 @@ describe("fmtUSD", () => {
   it("tolera undefined/null → $0.00", () => {
     expect(fmtUSD(null)).toBe("$0.00");
     expect(fmtUSD(undefined)).toBe("$0.00");
+  });
+});
+
+describe("calcConsolidado", () => {
+  const CLIENTS = [
+    { id: "c1", name: "Cliente A" },
+    { id: "c2", name: "Cliente B" },
+  ];
+
+  it("calcula ingresos y gastos por cliente con diferencia correcta", () => {
+    const report = {
+      finanzas: {
+        ingresos:         [{ clienteId: "c1", monto: 1000 }, { clienteId: "c2", monto: 500 }],
+        gastosOperativos: [{ clienteId: "c1", monto: 300 }],
+        sueldos: [], otrosGastos: [],
+      },
+    };
+    const filas = calcConsolidado(report, CLIENTS);
+    expect(filas).toHaveLength(2);
+    const a = filas.find(f => f.id === "c1");
+    expect(a.ingresos).toBe(1000);
+    expect(a.gastos).toBe(300);
+    expect(a.diferencia).toBe(700);
+    const b = filas.find(f => f.id === "c2");
+    expect(b.ingresos).toBe(500);
+    expect(b.gastos).toBe(0);
+    expect(b.diferencia).toBe(500);
+  });
+
+  it("cliente sin datos aparece con todo en 0", () => {
+    const report = {
+      finanzas: { ingresos: [], gastosOperativos: [], sueldos: [], otrosGastos: [] },
+    };
+    const filas = calcConsolidado(report, CLIENTS);
+    expect(filas).toHaveLength(2);
+    filas.forEach(f => {
+      expect(f.ingresos).toBe(0);
+      expect(f.gastos).toBe(0);
+      expect(f.diferencia).toBe(0);
+    });
+  });
+
+  it("agrega fila 'Sin cliente' cuando hay gastos operativos sin clienteId", () => {
+    const report = {
+      finanzas: {
+        ingresos: [{ clienteId: "c1", monto: 800 }],
+        gastosOperativos: [{ clienteId: null, monto: 200 }, { clienteId: "c1", monto: 100 }],
+        sueldos: [], otrosGastos: [],
+      },
+    };
+    const filas = calcConsolidado(report, CLIENTS);
+    const sinCliente = filas.find(f => f.id === "_none");
+    expect(sinCliente).toBeDefined();
+    expect(sinCliente.nombre).toBe("Sin cliente");
+    expect(sinCliente.gastos).toBe(200);
+    expect(sinCliente.diferencia).toBe(-200);
+  });
+
+  it("no agrega fila 'Sin cliente' cuando no hay gastos sin asignar", () => {
+    const report = {
+      finanzas: {
+        ingresos: [{ clienteId: "c1", monto: 800 }],
+        gastosOperativos: [{ clienteId: "c1", monto: 100 }],
+        sueldos: [], otrosGastos: [],
+      },
+    };
+    const filas = calcConsolidado(report, CLIENTS);
+    expect(filas.find(f => f.id === "_none")).toBeUndefined();
+  });
+
+  it("tolera montos null/vacío en los totales", () => {
+    const report = {
+      finanzas: {
+        ingresos:         [{ clienteId: "c1", monto: null }, { clienteId: "c1", monto: 500 }],
+        gastosOperativos: [{ clienteId: "c1", monto: "" }],
+        sueldos: [], otrosGastos: [],
+      },
+    };
+    const filas = calcConsolidado(report, CLIENTS);
+    const a = filas.find(f => f.id === "c1");
+    expect(a.ingresos).toBe(500);
+    expect(a.gastos).toBe(0);
+  });
+});
+
+describe("calcConsolidadoConGasto", () => {
+  const CLIENTS = [
+    { id: "c1", name: "Cliente A" },
+    { id: "c2", name: "Cliente B" },
+  ];
+
+  it("filtra marcas cuyo gasto operativo es 0", () => {
+    const report = {
+      finanzas: {
+        ingresos:         [{ clienteId: "c1", monto: 500 }, { clienteId: "c2", monto: 300 }],
+        gastosOperativos: [{ clienteId: "c1", monto: 200 }],
+        sueldos: [], otrosGastos: [],
+      },
+    };
+    const { rows } = calcConsolidadoConGasto(report, CLIENTS);
+    // c2 no tiene gasto → solo c1 debe aparecer
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe("c1");
+  });
+
+  it("conserva la fila 'Sin cliente' cuando tiene gasto > 0", () => {
+    const report = {
+      finanzas: {
+        ingresos:         [],
+        gastosOperativos: [{ clienteId: null, monto: 150 }],
+        sueldos: [], otrosGastos: [],
+      },
+    };
+    const { rows } = calcConsolidadoConGasto(report, CLIENTS);
+    const sinCliente = rows.find(f => f.id === "_none");
+    expect(sinCliente).toBeDefined();
+    expect(sinCliente.gastos).toBe(150);
+  });
+
+  it("totals suma correctamente ingresos, gastos y diferencia de filas visibles", () => {
+    const report = {
+      finanzas: {
+        ingresos:         [{ clienteId: "c1", monto: 1000 }, { clienteId: "c2", monto: 400 }],
+        gastosOperativos: [{ clienteId: "c1", monto: 300 }, { clienteId: "c2", monto: 100 }],
+        sueldos: [], otrosGastos: [],
+      },
+    };
+    const { rows, totals } = calcConsolidadoConGasto(report, CLIENTS);
+    expect(rows).toHaveLength(2);
+    expect(totals.ingresos).toBe(1400);
+    expect(totals.gastos).toBe(400);
+    expect(totals.diferencia).toBe(1000);
+  });
+
+  it("devuelve rows vacío y totals en 0 cuando no hay gastos operativos", () => {
+    const report = {
+      finanzas: {
+        ingresos:         [{ clienteId: "c1", monto: 500 }],
+        gastosOperativos: [],
+        sueldos: [], otrosGastos: [],
+      },
+    };
+    const { rows, totals } = calcConsolidadoConGasto(report, CLIENTS);
+    expect(rows).toHaveLength(0);
+    expect(totals.ingresos).toBe(0);
+    expect(totals.gastos).toBe(0);
+    expect(totals.diferencia).toBe(0);
   });
 });
 

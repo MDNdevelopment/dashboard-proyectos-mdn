@@ -142,6 +142,81 @@ describe('LineView — sub-pestaña desde URL ?tab=', () => {
 })
 
 // ══════════════════════════════════════════════════════════════════════════════
+// 1b. LineView — persistencia de ?year= y ?month= en la URL
+// ══════════════════════════════════════════════════════════════════════════════
+
+describe('LineView — persistencia de ?year= y ?month= en la URL', () => {
+  it('inicializa el selector de año con el valor de ?year=', () => {
+    renderWithRouter(
+      <LineView line={MOCK_LINE} companyId="co-1" />,
+      { initialEntry: '/reportes/linea/l-1?tab=operaciones&year=2024' },
+    )
+    // Los <select> no tienen label; el de año es el que tiene opciones de 4 dígitos
+    const yearSelect = [...document.querySelectorAll('select')].find(s =>
+      [...s.options].some(o => o.value === '2024')
+    )
+    expect(yearSelect).toBeTruthy()
+    expect(yearSelect.value).toBe('2024')
+  })
+
+  it('inicializa el selector de mes con el valor de ?month=', () => {
+    renderWithRouter(
+      <LineView line={MOCK_LINE} companyId="co-1" />,
+      { initialEntry: '/reportes/linea/l-1?tab=finanzas&month=3' },
+    )
+    const monthSelect = [...document.querySelectorAll('select')].find(s =>
+      [...s.options].some(o => o.value === '3' && o.text === 'Marzo')
+    )
+    expect(monthSelect).toBeTruthy()
+    expect(monthSelect.value).toBe('3')
+  })
+
+  it('no muestra los selectores de mes/año en el tab Resumen (hub)', () => {
+    renderWithRouter(
+      <LineView line={MOCK_LINE} companyId="co-1" />,
+      { initialEntry: '/reportes/linea/l-1?tab=hub' },
+    )
+    // En hub no se renderizan los <select> de mes/año
+    const selects = document.querySelectorAll('select')
+    expect(selects.length).toBe(0)
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 1c. LineView — click en tab escribe el query param ?tab= en la URL
+// ══════════════════════════════════════════════════════════════════════════════
+
+describe('LineView — click en tab actualiza ?tab= en la URL', () => {
+  it('hacer click en Operaciones muestra el componente de operaciones', async () => {
+    const user = userEvent.setup()
+    renderWithRouter(
+      <LineView line={MOCK_LINE} companyId="co-1" />,
+      { initialEntry: '/reportes/linea/l-1' },
+    )
+
+    // Inicialmente en hub (Resumen)
+    expect(screen.getByTestId('hub-view')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Operaciones' }))
+
+    expect(screen.getByTestId('operaciones-view')).toBeInTheDocument()
+    expect(screen.queryByTestId('hub-view')).not.toBeInTheDocument()
+  })
+
+  it('hacer click en Finanzas muestra el componente de finanzas', async () => {
+    const user = userEvent.setup()
+    renderWithRouter(
+      <LineView line={MOCK_LINE} companyId="co-1" />,
+      { initialEntry: '/reportes/linea/l-1' },
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Finanzas' }))
+
+    expect(screen.getByTestId('finanzas-view')).toBeInTheDocument()
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
 // 2. DashboardView — KPI "Línea líder" y tarjetas financieras clickeables
 // ══════════════════════════════════════════════════════════════════════════════
 

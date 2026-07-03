@@ -43,12 +43,13 @@ vi.mock('recharts', () => ({
   LineChart:           ({ children }) => <div data-testid="line-chart">{children}</div>,
   BarChart:            ({ children }) => <div data-testid="bar-chart">{children}</div>,
   Line:                () => null,
-  Bar:                 () => null,
+  Bar:                 ({ children }) => <>{children}</>,
   XAxis:               () => null,
   YAxis:               () => null,
   Tooltip:             () => null,
   Legend:              () => null,
   CartesianGrid:       () => null,
+  LabelList:           () => null,
   ResponsiveContainer: ({ children }) => <div>{children}</div>,
 }))
 
@@ -99,6 +100,8 @@ vi.mock('../utils/metricsFinance', () => ({
     totIngresos: 1700, totGastosOperativos: 0,
     totSueldos: 0, totOtrosGastos: 0, totEgresos: 0, diferencia: 1700,
   })),
+  calcConsolidado: vi.fn(() => []),
+  calcConsolidadoConGasto: vi.fn(() => ({ rows: [], totals: { ingresos: 0, gastos: 0, diferencia: 0 } })),
   ensureFinanzas: vi.fn(),
   fmtUSD: vi.fn(v => `$${v}`),
 }))
@@ -455,6 +458,138 @@ describe('OperacionesView — sin sección Feedback', () => {
     expect(screen.getByText(/Solicitudes vs Entregados/i)).toBeInTheDocument()
     expect(screen.getByText(/Nº Pautas/i)).toBeInTheDocument()
     expect(screen.getByText(/Nº Piezas/i)).toBeInTheDocument()
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 4b. OperacionesView — Crecimiento de seguidores: editabilidad por campo
+// ══════════════════════════════════════════════════════════════════════════════
+
+const CRECIMIENTO_REPORT_DATA = {
+  ...MINIMAL_REPORT_DATA,
+  crecimiento: {
+    items: [
+      {
+        clienteId: 'c-1',
+        seguidoresGanados: null,
+        seguidoresActuales: null,
+        seguidoresGanadosPrev: null,
+        seguidoresBase: null,
+        meta: 50,
+      },
+    ],
+  },
+}
+
+const PREV_REPORT_CON_SEGUIDORES = {
+  data: {
+    data: {
+      ...MINIMAL_REPORT_DATA,
+      crecimiento: {
+        items: [
+          {
+            clienteId: 'c-1',
+            seguidoresGanados: 100,
+            seguidoresActuales: 1500,
+            seguidoresGanadosPrev: null,
+            seguidoresBase: null,
+            meta: 50,
+          },
+        ],
+      },
+    },
+  },
+  error: null,
+}
+
+const PREV_REPORT_SIN_SEGUIDORES = {
+  data: {
+    data: {
+      ...MINIMAL_REPORT_DATA,
+      crecimiento: {
+        items: [
+          {
+            clienteId: 'c-1',
+            seguidoresGanados: null,
+            seguidoresActuales: null,
+            seguidoresGanadosPrev: null,
+            seguidoresBase: null,
+            meta: 50,
+          },
+        ],
+      },
+    },
+  },
+  error: null,
+}
+
+describe('OperacionesView — Crecimiento seguidores: editabilidad por campo', () => {
+  beforeEach(() => {
+    mockLoadReport.mockResolvedValue({ data: { data: CRECIMIENTO_REPORT_DATA }, error: null })
+    mockLoadClients.mockResolvedValue({
+      data: [
+        { id: 'c-1', name: 'Pepsi', monthly_fee: 1500, payment_day: 5,
+          logo_url: null, line_id: 'l-1', contacts: [], social_links: [] },
+      ],
+      error: null,
+    })
+  })
+
+  it('muestra "Primer mes de uso" y permite editar cuando no hay reporte previo', async () => {
+    mockLoadPrevReport.mockResolvedValue({ data: null, error: null })
+    wrap(<OperacionesView line={MOCK_LINE} companyId="co-1" year={2026} month={6} />)
+    await waitFor(() => {
+      expect(screen.getByText(/Primer mes de uso/i)).toBeInTheDocument()
+    })
+    const ganSpan = screen.getByText(/Gan\. May/)
+    const ganInput = ganSpan.closest('div').querySelector('input')
+    expect(ganInput).not.toBeDisabled()
+    const totSpan = screen.getByText(/Tot\. May/)
+    const totInput = totSpan.closest('div').querySelector('input')
+    expect(totInput).not.toBeDisabled()
+  })
+
+  it('bloquea las columnas del mes anterior cuando el reporte previo tiene valores', async () => {
+    mockLoadPrevReport.mockResolvedValue(PREV_REPORT_CON_SEGUIDORES)
+    wrap(<OperacionesView line={MOCK_LINE} companyId="co-1" year={2026} month={6} />)
+    await waitFor(() => {
+      expect(screen.getByText(/Crecimiento de seguidores/i)).toBeInTheDocument()
+    })
+    expect(screen.queryByText(/algunos valores del mes anterior están vacíos/i)).not.toBeInTheDocument()
+    const ganSpan = screen.getByText(/Gan\. May/)
+    const ganInput = ganSpan.closest('div').querySelector('input')
+    expect(ganInput).toBeDisabled()
+    const totSpan = screen.getByText(/Tot\. May/)
+    const totInput = totSpan.closest('div').querySelector('input')
+    expect(totInput).toBeDisabled()
+  })
+
+  it('permite editar y muestra aviso cuando el reporte previo existe pero tiene seguidores vacíos', async () => {
+    mockLoadPrevReport.mockResolvedValue(PREV_REPORT_SIN_SEGUIDORES)
+    wrap(<OperacionesView line={MOCK_LINE} companyId="co-1" year={2026} month={6} />)
+    await waitFor(() => {
+      expect(screen.getByText(/algunos valores del mes anterior están vacíos/i)).toBeInTheDocument()
+    })
+    const ganSpan = screen.getByText(/Gan\. May/)
+    const ganInput = ganSpan.closest('div').querySelector('input')
+    expect(ganInput).not.toBeDisabled()
+    const totSpan = screen.getByText(/Tot\. May/)
+    const totInput = totSpan.closest('div').querySelector('input')
+    expect(totInput).not.toBeDisabled()
+  })
+
+  it('muestra el valor del mes anterior como valor por defecto cuando existe', async () => {
+    mockLoadPrevReport.mockResolvedValue(PREV_REPORT_CON_SEGUIDORES)
+    wrap(<OperacionesView line={MOCK_LINE} companyId="co-1" year={2026} month={6} />)
+    await waitFor(() => {
+      expect(screen.getByText(/Gan\. May/)).toBeInTheDocument()
+    })
+    const ganSpan = screen.getByText(/Gan\. May/)
+    const ganInput = ganSpan.closest('div').querySelector('input')
+    expect(ganInput.value).toBe('100')
+    const totSpan = screen.getByText(/Tot\. May/)
+    const totInput = totSpan.closest('div').querySelector('input')
+    expect(totInput.value).toBe('1500')
   })
 })
 

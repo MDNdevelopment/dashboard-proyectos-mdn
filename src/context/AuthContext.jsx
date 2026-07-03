@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { supabase } from '../supabase'
 import { canAccessModule } from '../lib/permissions'
 
@@ -11,7 +11,12 @@ export function AuthProvider({ children }) {
   const [modulePermissions, setModulePermissions] = useState({})
   const [permissionsLoaded, setPermissionsLoaded] = useState(false)
 
+  // Ref que guarda el userId cuyo perfil ya fue cargado. Evita re-fetches
+  // redundantes (TOKEN_REFRESHED al refocar la pestaña) que causarían remounts.
+  const loadedUserId = useRef(null)
+
   async function fetchUserProfile(userId) {
+    loadedUserId.current = userId
     const { data } = await supabase
       .from('users')
       .select('user_id, first_name, last_name, email, department_id, position_id, access_level, admin, company_id, avatar_url, receive_ticket_notifications, department:departments(department_name), position:positions(position_name)')
@@ -39,16 +44,28 @@ export function AuthProvider({ children }) {
   }
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // Await del perfil antes de bajar loading, para que RequireModule no
+    // evalúe can() con userProfile=null y redirija a '/' en carga fría.
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session)
-      if (session) fetchUserProfile(session.user.id)
+      if (session) await fetchUserProfile(session.user.id)
       setLoading(false)
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
-      if (session) fetchUserProfile(session.user.id)
-      else { setUserProfile(null); setModulePermissions({}); setPermissionsLoaded(true) }
+      if (session) {
+        // Solo re-fetchear si el usuario cambia (evita remounts por TOKEN_REFRESHED
+        // al refocar la pestaña, que desmontaría las vistas y perdería datos sin guardar).
+        if (session.user.id !== loadedUserId.current) {
+          fetchUserProfile(session.user.id)
+        }
+      } else {
+        loadedUserId.current = null
+        setUserProfile(null)
+        setModulePermissions({})
+        setPermissionsLoaded(true)
+      }
     })
 
     return () => subscription.unsubscribe()

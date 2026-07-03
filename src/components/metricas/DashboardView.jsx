@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import SectionTotal from "../common/SectionTotal";
 import { useAuth } from "../../context/AuthContext";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip,
@@ -197,6 +198,7 @@ export default function DashboardView({ companyId, lines }) {
               </button>
             ))}
           </div>
+          <SectionTotal label="líneas" count={ranking.length} />
         </div>
       )}
 
@@ -275,6 +277,7 @@ export default function DashboardView({ companyId, lines }) {
             </div>
           </>
         )}
+        <SectionTotal label="líneas" count={lines.length} />
       </div>
     </div>
   );

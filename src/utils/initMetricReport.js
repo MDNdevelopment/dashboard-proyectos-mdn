@@ -32,13 +32,13 @@ export function initMetricReport(prevReport, lineClients = [], lineMetas = {}, l
   if (prevReport) {
     base = {
       reuniones: {
-        realizadas: 0,
+        realizadas: null,
         meta: prevReport.reuniones?.meta ?? 15,
       },
       productividad: {
         tareas: (prevReport.productividad?.tareas ?? []).map(t => ({
           nombre: t.nombre,
-          realizado: 0,
+          realizado: null,
           meta: t.meta,
         })),
       },
@@ -52,15 +52,15 @@ export function initMetricReport(prevReport, lineClients = [], lineMetas = {}, l
           meta: i.meta,
         })),
       },
-      solicitudes: { solicitudes: 0, editadas: 0 },
+      solicitudes: { solicitudes: null, editadas: null },
       pautas: {
         items: (prevReport.pautas?.items ?? []).map(i => ({
           clienteId: i.clienteId,
-          realizadas: 0,
+          realizadas: null,
           meta: i.meta,
         })),
       },
-      piezas: { piezas: 0, editadas: 0 },
+      piezas: { piezas: null, editadas: null },
       feedback: {
         items: (prevReport.feedback?.items ?? []).map(i => ({
           clienteId: i.clienteId,
@@ -78,18 +78,18 @@ export function initMetricReport(prevReport, lineClients = [], lineMetas = {}, l
   } else {
     // Sin mes anterior: defaults
     base = {
-      reuniones: { realizadas: 0, meta: 15 },
+      reuniones: { realizadas: null, meta: 15 },
       productividad: {
-        tareas: DEFAULT_SUBTAREAS.map(s => ({ nombre: s.nombre, realizado: 0, meta: s.meta })),
+        tareas: DEFAULT_SUBTAREAS.map(s => ({ nombre: s.nombre, realizado: null, meta: s.meta })),
       },
       crecimiento: {
-        items: lineClients.map(c => ({ clienteId: c.id, seguidoresGanados: null, seguidoresGanadosPrev: null, seguidoresActuales: null, seguidoresBase: null, meta: 0 })),
+        items: lineClients.map(c => ({ clienteId: c.id, seguidoresGanados: null, seguidoresGanadosPrev: null, seguidoresActuales: null, seguidoresBase: null, meta: null })),
       },
-      solicitudes: { solicitudes: 0, editadas: 0 },
+      solicitudes: { solicitudes: null, editadas: null },
       pautas: {
-        items: lineClients.map(c => ({ clienteId: c.id, realizadas: 0, meta: 0 })),
+        items: lineClients.map(c => ({ clienteId: c.id, realizadas: null, meta: null })),
       },
-      piezas: { piezas: 0, editadas: 0 },
+      piezas: { piezas: null, editadas: null },
       feedback: {
         items: lineClients.map(c => ({ clienteId: c.id, score: null })),
       },
