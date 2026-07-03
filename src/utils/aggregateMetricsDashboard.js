@@ -38,7 +38,7 @@ export function aggregateMetricsDashboard(lines, reports, year, calcTotalFn, sum
   lines.forEach(line => {
     matrix[line.id] = Array.from({ length: 12 }, (_, i) => {
       const r = getReport(line.id, i + 1);
-      if (!r) return null;
+      if (!r || r.data?.incompleto) return null;
       const prev = getPrevReport(line.id, i + 1);
       const scores = calcTotalFn(r.data, prev?.data ?? null);
       return sumScoreFn(scores);

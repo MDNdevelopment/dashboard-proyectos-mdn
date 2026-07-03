@@ -27,39 +27,60 @@ export function calcProductividad(report) {
 /**
  * Evalúa el crecimiento de seguidores de un cliente individual.
  *
+ * Modelo nuevo (campo seguidoresGanados explícito): usa ese valor directamente.
+ * Fallback para reportes anteriores sin ese campo: calcula (actuales − base),
+ *   donde base = seguidoresActuales del mes previo o seguidoresBase manual.
+ *
  * @param {object} item        - Un elemento de crecimiento.items del mes actual.
  * @param {object|null} prevReport - Reporte del mes anterior o null.
- * @returns {{ crecimiento: number|null, cumple: boolean|null }}
- *   - crecimiento: delta (actuales − base), o null si faltan datos.
- *   - cumple: true/false si se pudo calcular, null si faltan datos.
+ * @returns {{ ganados: number|null, cumple: boolean|null, pct: number|null }}
+ *   - ganados: seguidores ganados en el mes, o null si faltan datos.
+ *   - cumple: true si ganados >= meta, false si no, null si faltan datos.
+ *   - pct: ganados / meta × 100 (% de cumplimiento de la meta), o null si meta es 0 o faltan datos.
  */
 export function crecimientoCliente(item, prevReport = null) {
-  let base = null;
-  if (prevReport) {
-    const prevItem = (prevReport.crecimiento?.items ?? [])
-      .find(i => i.clienteId === item.clienteId);
-    if (prevItem?.seguidoresActuales != null) base = prevItem.seguidoresActuales;
+  let ganados = null;
+
+  if (item.seguidoresGanados != null) {
+    // Modelo nuevo: campo explícito
+    ganados = Number(item.seguidoresGanados);
+  } else {
+    // Fallback para reportes históricos: derivar de actuales − base
+    let base = null;
+    if (prevReport) {
+      const prevItem = (prevReport.crecimiento?.items ?? [])
+        .find(i => i.clienteId === item.clienteId);
+      if (prevItem?.seguidoresActuales != null) base = prevItem.seguidoresActuales;
+    }
+    if (base == null && item.seguidoresBase != null) base = item.seguidoresBase;
+    if (item.seguidoresActuales != null && base != null) {
+      ganados = Number(item.seguidoresActuales) - Number(base);
+    }
   }
-  if (base == null && item.seguidoresBase != null) base = item.seguidoresBase;
-  if (item.seguidoresActuales == null || base == null) {
-    return { crecimiento: null, cumple: null };
+
+  if (ganados === null) {
+    return { ganados: null, cumple: null, pct: null };
   }
-  const crec = Number(item.seguidoresActuales) - Number(base);
-  return { crecimiento: crec, cumple: crec >= Number(item.meta ?? 0) };
+
+  const meta = Number(item.meta ?? 0);
+  const cumple = ganados >= meta;
+  const pct = meta > 0 ? (ganados / meta) * 100 : null;
+  return { ganados, cumple, pct };
 }
 
 /**
- * Crecimiento de seguidores — peso 15.
+ * Crecimiento de seguidores — peso 20.
  *
  * @param {object} report      - El reporte actual (tiene crecimiento.items).
- * @param {object|null} prevReport - Reporte del mes anterior (para leer seguidoresActuales
- *   como base) o null si no existe.
+ * @param {object|null} prevReport - Reporte del mes anterior (fallback para reportes
+ *   históricos sin seguidoresGanados explícito) o null si no existe.
  *
- * Para cada cliente se determina la base de seguidores:
- *   1. seguidoresActuales del mes anterior (si existe ese reporte y tiene el cliente).
- *   2. seguidoresBase manual del item actual (permite capturarlo cuando no hay mes anterior).
- *   3. Si ninguno está disponible, el cliente no cuenta (se omite).
- * Un cliente "cumple" si (seguidoresActuales − base) >= meta.
+ * Para cada cliente se determina cuántos seguidores ganó:
+ *   1. seguidoresGanados explícito del item actual (modelo nuevo, campo editable).
+ *   2. Fallback (reportes históricos): actuales − base, donde base es
+ *      seguidoresActuales del mes anterior, o seguidoresBase manual.
+ *   3. Si no hay datos suficientes, el cliente no cuenta (se omite del total).
+ * Un cliente "cumple" si ganados >= meta.
  */
 export function calcCrecimiento(report, prevReport = null) {
   const items = report.crecimiento?.items ?? [];

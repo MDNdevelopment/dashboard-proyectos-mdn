@@ -86,4 +86,30 @@ describe("aggregateMetricsDashboard", () => {
     expect(agg.finTotalesPorLinea["l1"].ingresos).toBe(2000);
     expect(agg.finTotalesPorLinea["l1"].nomina).toBe(800);
   });
+
+  it("meses marcados como incompletos quedan excluidos de matrix/promAnual/lider", () => {
+    // l1 mes 1 completo + mes 2 marcado incompleto; l2 mes 1 completo
+    const reports = [
+      { line_id: "l1", year, month: 1, data: makeReportData(100) },
+      { line_id: "l1", year, month: 2, data: { ...makeReportData(60), incompleto: true } },
+      { line_id: "l2", year, month: 1, data: makeReportData(80) },
+    ];
+    const agg = aggregateMetricsDashboard(LINES, reports, year, calcTotal, sumScore, calcFinanzas);
+
+    // l1 mes 1 cuenta, mes 2 incompleto → null en matrix
+    expect(agg.matrix["l1"][0]).not.toBeNull();
+    expect(agg.matrix["l1"][1]).toBeNull();
+
+    // l1 promedio debe ser solo del mes 1 (igual a sin mes 2)
+    const valsL1 = agg.matrix["l1"].filter(v => v != null);
+    expect(valsL1).toHaveLength(1);
+
+    // El lider no puede ser determinado por el mes incompleto de l1
+    // (ambas líneas tienen 1 mes válido cada una, l1 mes1 ≥ l2 mes1 por factor)
+    expect(agg.lider).not.toBeNull();
+    expect(agg.lider.line.id).toBe("l1");
+
+    // Las finanzas del mes incompleto SÍ se acumulan (el flag solo afecta la nota)
+    expect(agg.finTotalesPorLinea["l1"].ingresos).toBe(2000); // 2 meses de finanzas
+  });
 });

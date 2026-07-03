@@ -10,6 +10,7 @@ import { MONTHS, INDICATORS } from "./constants";
 export default function OperacionesView({ line, companyId, year, month }) {
   const { can = () => true } = useAuth();
   const [report, setReport] = useState(null);
+  const [prevReport, setPrevReport] = useState(null);
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -30,6 +31,9 @@ export default function OperacionesView({ line, companyId, year, month }) {
 
     const lineClients = clientsRes.data ?? [];
     setClients(lineClients);
+
+    // Guardar el reporte del mes anterior para mostrarlo en la sección de crecimiento
+    setPrevReport(prevRes.data?.data ?? null);
 
     if (reportRes.data) {
       // Sincronizar items con los clientes actuales de la línea
@@ -239,69 +243,156 @@ export default function OperacionesView({ line, companyId, year, month }) {
       </Section>
 
       {/* 3. CRECIMIENTO */}
-      <Section
-        title="3. Crecimiento de seguidores"
-        subtitle={`Peso: ${INDICATORS[2].peso} pts — cliente cumple si (actuales − base) ≥ meta`}
-        score={scores?.crecimiento}
-        max={INDICATORS[2].peso}
-      >
-        <div className="overflow-x-auto">
-        <div className="space-y-2">
-          {report.crecimiento.items.length === 0 ? (
-            <p className="text-[14px] text-[#bbb]">Sin clientes. Configurá la cartera en la pestaña Configuración.</p>
-          ) : (
-            report.crecimiento.items.map((item, idx) => {
-              const { crecimiento: delta, cumple } = crecimientoCliente(item);
-              return (
-                <div key={item.clienteId} className="grid grid-cols-[minmax(100px,1fr)_auto_auto_auto_auto] gap-2 items-center">
-                  <ClientLink clienteId={item.clienteId} />
-                  <div className="flex items-center gap-1">
-                    <span className="text-[11px] text-[#aaa] whitespace-nowrap">Base manual</span>
-                    <input type="number" className="input-base !w-24 flex-none text-[13px]"
-                      placeholder="—"
-                      value={item.seguidoresBase ?? ""}
-                      onChange={e => setItemField("crecimiento", idx, "seguidoresBase", e.target.value === "" ? null : e.target.value)}
-                    />
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <span className="text-[11px] text-[#aaa] whitespace-nowrap">Actuales</span>
-                    <input type="number" className="input-base !w-24 flex-none text-[13px]"
-                      placeholder="—"
-                      value={item.seguidoresActuales ?? ""}
-                      onChange={e => setItemField("crecimiento", idx, "seguidoresActuales", e.target.value === "" ? null : e.target.value)}
-                    />
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <span className="text-[11px] text-[#aaa] whitespace-nowrap">Meta de crecimiento</span>
-                    <input type="number" min="0" className="input-base !w-20 flex-none text-[13px]"
-                      value={item.meta ?? 0}
-                      onChange={e => setItemField("crecimiento", idx, "meta", e.target.value)}
-                    />
-                  </div>
-                  {/* Indicador de cumplimiento */}
-                  {cumple === null ? (
-                    <span
-                      className="text-[12px] text-[#bbb] font-mono w-24 text-center"
-                      title="Faltan datos de base o seguidores actuales"
-                    >—</span>
-                  ) : cumple ? (
-                    <span
-                      className="text-[12px] font-semibold text-green-700 bg-green-50 rounded-full px-2.5 py-0.5 whitespace-nowrap"
-                      title={delta !== null ? `+${delta} seguidores` : ""}
-                    >✓ Cumple</span>
-                  ) : (
-                    <span
-                      className="text-[12px] font-semibold text-[#a06a00] bg-[#fff6e0] rounded-full px-2.5 py-0.5 whitespace-nowrap"
-                      title={delta !== null ? `+${delta} seguidores` : ""}
-                    >Pendiente</span>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
-        </div>
-      </Section>
+      {(() => {
+        const prevMonth = month - 1 < 1 ? 12 : month - 1;
+        const prevMonthName = MONTHS[prevMonth - 1];
+        const currMonthName = MONTHS[month - 1];
+        // seedMode: no hay reporte previo → las columnas del periodo pasado se vuelven editables
+        const seedMode = !prevReport;
+        return (
+          <Section
+            title="3. Crecimiento de seguidores"
+            subtitle={`Peso: ${INDICATORS[2].peso} pts — cliente cumple si seguidores ganados ≥ meta`}
+            score={scores?.crecimiento}
+            max={INDICATORS[2].peso}
+          >
+            {seedMode && (
+              <p className="text-[12px] text-[#888] bg-[#faf9f3] border border-[#e8e4d8] rounded-lg px-3 py-2 mb-1">
+                Primer mes de uso: ingresá manualmente los seguidores del periodo anterior como línea base. A partir del próximo mes se auto-completará.
+              </p>
+            )}
+            <div className="overflow-x-auto">
+              <div className="min-w-[640px]">
+                {report.crecimiento.items.length === 0 ? (
+                  <p className="text-[14px] text-[#bbb]">Sin clientes. Configurá la cartera en la pestaña Configuración.</p>
+                ) : (
+                  <>
+                    {/* Fila de encabezados de columna */}
+                    <div className="grid grid-cols-[minmax(110px,1fr)_auto_auto_auto_auto] gap-x-3 gap-y-0 items-end mb-1">
+                      <div />
+                      {/* Título único mes anterior (centrado sobre las 2 columnas del grupo) */}
+                      <div className="text-center">
+                        <span className={`text-[11px] font-mono font-bold uppercase tracking-[0.08em] whitespace-nowrap ${seedMode ? "text-[#888]" : "text-[#bbb]"}`}>{prevMonthName}</span>
+                      </div>
+                      {/* Título único mes actual (centrado sobre las 2 columnas del grupo) */}
+                      <div className="text-center border-l border-[#e0ddd4] pl-2">
+                        <span className="text-[11px] font-mono font-bold uppercase tracking-[0.08em] text-[#555] whitespace-nowrap">{currMonthName}</span>
+                      </div>
+                      <div />
+                      <div />
+                    </div>
+                    {/* Filas por cliente */}
+                    <div className="space-y-2">
+                      {report.crecimiento.items.map((item, idx) => {
+                        const { ganados, cumple, pct } = crecimientoCliente(item);
+                        const prevItem = (prevReport?.crecimiento?.items ?? [])
+                          .find(i => i.clienteId === item.clienteId);
+                        // En seedMode: valores del propio reporte actual (bootstrap)
+                        const prevGanados = seedMode ? (item.seguidoresGanadosPrev ?? "") : (prevItem?.seguidoresGanados ?? "");
+                        const prevTotales = seedMode ? (item.seguidoresBase ?? "") : (prevItem?.seguidoresActuales ?? "");
+                        return (
+                          <div key={item.clienteId} className="grid grid-cols-[minmax(110px,1fr)_auto_auto_auto_auto] gap-x-3 items-center">
+                            <ClientLink clienteId={item.clienteId} />
+
+                            {/* Mes anterior — editable en seedMode, disabled en los demás */}
+                            <div className="flex gap-2 items-center">
+                              <div className="flex flex-col items-center gap-0.5">
+                                <span className={`text-[10px] whitespace-nowrap ${seedMode ? "text-[#777]" : "text-[#999]"}`}>Gan. {prevMonthName.slice(0,3)}</span>
+                                <input
+                                  type="number"
+                                  disabled={!seedMode}
+                                  readOnly={!seedMode}
+                                  className={`input-base !w-[92px] flex-none text-[13px] ${seedMode ? "" : "bg-[#f5f3ec] text-[#bbb] cursor-not-allowed"}`}
+                                  placeholder="—"
+                                  value={prevGanados}
+                                  onChange={seedMode ? e => setItemField("crecimiento", idx, "seguidoresGanadosPrev", e.target.value === "" ? null : e.target.value) : undefined}
+                                />
+                              </div>
+                              <div className="flex flex-col items-center gap-0.5">
+                                <span className={`text-[10px] whitespace-nowrap ${seedMode ? "text-[#777]" : "text-[#999]"}`}>Tot. {prevMonthName.slice(0,3)}</span>
+                                <input
+                                  type="number"
+                                  disabled={!seedMode}
+                                  readOnly={!seedMode}
+                                  className={`input-base !w-[92px] flex-none text-[13px] ${seedMode ? "" : "bg-[#f5f3ec] text-[#bbb] cursor-not-allowed"}`}
+                                  placeholder="—"
+                                  value={prevTotales}
+                                  onChange={seedMode ? e => setItemField("crecimiento", idx, "seguidoresBase", e.target.value === "" ? null : e.target.value) : undefined}
+                                />
+                              </div>
+                            </div>
+
+                            {/* Mes actual — editables */}
+                            <div className="flex gap-2 items-center border-l border-[#e0ddd4] pl-2">
+                              <div className="flex flex-col items-center gap-0.5">
+                                <span className="text-[10px] text-[#aaa] whitespace-nowrap">Gan. {currMonthName.slice(0,3)}</span>
+                                <input
+                                  type="number"
+                                  className="input-base !w-[92px] flex-none text-[13px]"
+                                  placeholder="—"
+                                  value={item.seguidoresGanados ?? ""}
+                                  onChange={e => setItemField("crecimiento", idx, "seguidoresGanados", e.target.value === "" ? null : e.target.value)}
+                                />
+                              </div>
+                              <div className="flex flex-col items-center gap-0.5">
+                                <span className="text-[10px] text-[#aaa] whitespace-nowrap">Tot. {currMonthName.slice(0,3)}</span>
+                                <input
+                                  type="number"
+                                  className="input-base !w-[92px] flex-none text-[13px]"
+                                  placeholder="—"
+                                  value={item.seguidoresActuales ?? ""}
+                                  onChange={e => setItemField("crecimiento", idx, "seguidoresActuales", e.target.value === "" ? null : e.target.value)}
+                                />
+                              </div>
+                            </div>
+
+                            {/* Meta */}
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className="text-[10px] text-[#aaa] whitespace-nowrap">Meta</span>
+                              <input
+                                type="number"
+                                min="0"
+                                className="input-base !w-20 flex-none text-[13px]"
+                                value={item.meta ?? 0}
+                                onChange={e => setItemField("crecimiento", idx, "meta", e.target.value)}
+                              />
+                            </div>
+
+                            {/* Indicador de cumplimiento + % */}
+                            <div className="flex flex-col items-center gap-0.5 min-w-[80px]">
+                              {cumple === null ? (
+                                <span
+                                  className="text-[12px] text-[#bbb] font-mono"
+                                  title="Faltan datos de seguidores ganados"
+                                >—</span>
+                              ) : cumple ? (
+                                <span
+                                  className="text-[12px] font-semibold text-green-700 bg-green-50 rounded-full px-2.5 py-0.5 whitespace-nowrap"
+                                  title={ganados !== null ? `+${ganados} seguidores ganados` : ""}
+                                >✓ Cumple</span>
+                              ) : (
+                                <span
+                                  className="text-[12px] font-semibold text-[#a06a00] bg-[#fff6e0] rounded-full px-2.5 py-0.5 whitespace-nowrap"
+                                  title={ganados !== null ? `${ganados} seguidores ganados` : ""}
+                                >Pendiente</span>
+                              )}
+                              {pct !== null && (
+                                <span className={`text-[11px] font-mono font-semibold ${cumple ? "text-green-600" : "text-red-500"}`}>
+                                  {Math.round(pct)}%
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </Section>
+        );
+      })()}
 
       {/* 4. SOLICITUDES */}
       <Section
@@ -386,7 +477,19 @@ export default function OperacionesView({ line, companyId, year, month }) {
       </Section>
 
       {/* Botón guardar */}
-      <div className="flex items-center justify-end pt-2 pb-6">
+      <div className="flex flex-col items-end gap-2 pt-2 pb-6">
+        {/* Checkbox mes incompleto */}
+        <label className="flex items-center gap-2 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={!!report.incompleto}
+            onChange={e => setField("incompleto", e.target.checked)}
+            className="w-4 h-4 rounded border-[#d0ccc0] accent-[#FAB51A] cursor-pointer"
+          />
+          <span className="text-[13px] text-[#888]">
+            Marcar mes como incompleto <span className="text-[#bbb]">(no contar en el promedio anual)</span>
+          </span>
+        </label>
         <button
           onClick={handleSave}
           disabled={saving}
