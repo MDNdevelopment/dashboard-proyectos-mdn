@@ -5,24 +5,25 @@
  * @param {Array}  projects     - Normalized project objects (with created_at field).
  * @param {Object} opts
  * @param {string} opts.search       - Free-text search (name, team, departments).
- * @param {string} opts.activeFilter - 'all' | status string | 'dept:<name>'.
+ * @param {string} opts.statusFilter - 'all' | status string ('En proceso', 'Pendiente', 'Completado').
+ * @param {string} opts.deptFilter   - 'all' | department name.
  * @param {string} opts.dateFrom     - 'YYYY-MM-DD' lower bound (inclusive, start of day).
  * @param {string} opts.dateTo       - 'YYYY-MM-DD' upper bound (inclusive, end of day).
  */
 export function filterProjects(
   projects,
-  { search = '', activeFilter = 'all', dateFrom = '', dateTo = '' } = {},
+  { search = '', statusFilter = 'all', deptFilter = 'all', dateFrom = '', dateTo = '' } = {},
 ) {
   return projects.filter(p => {
-    // Status or department filter
-    if (activeFilter && activeFilter !== 'all') {
-      if (activeFilter.startsWith('dept:')) {
-        const dept = activeFilter.slice(5)
-        const depts = p.departments ?? (p.department ? [p.department] : [])
-        if (!depts.includes(dept)) return false
-      } else {
-        if (p.status !== activeFilter) return false
-      }
+    // Status filter
+    if (statusFilter && statusFilter !== 'all') {
+      if (p.status !== statusFilter) return false
+    }
+
+    // Department filter
+    if (deptFilter && deptFilter !== 'all') {
+      const depts = p.departments ?? (p.department ? [p.department] : [])
+      if (!depts.includes(deptFilter)) return false
     }
 
     // Text search: name, team, or any department

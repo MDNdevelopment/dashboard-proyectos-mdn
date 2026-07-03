@@ -10,11 +10,11 @@ import PermisosView from '../components/empresa/PermisosView'
 
 const ALL_TABS = [
   { key: 'general',       label: 'Inicio',         path: '/empresa' },
+  { key: 'lineas',        label: 'Líneas',          path: '/empresa/lineas' },
   { key: 'departamentos', label: 'Departamentos',   path: '/empresa/departamentos' },
   { key: 'empleados',     label: 'Empleados',       path: '/empresa/empleados' },
   { key: 'preguntas',     label: 'Preguntas',       path: '/empresa/preguntas' },
   { key: 'clientes',      label: 'Clientes',        path: '/empresa/clientes' },
-  { key: 'lineas',        label: 'Líneas',          path: '/empresa/lineas' },
   { key: 'permisos',      label: 'Permisos',        path: '/empresa/permisos' },
 ]
 

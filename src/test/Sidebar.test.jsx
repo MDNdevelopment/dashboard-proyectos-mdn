@@ -9,13 +9,13 @@ vi.mock('../context/AuthContext', () => ({
 import { useAuth } from '../context/AuthContext'
 import Sidebar from '../components/Sidebar'
 
-function renderSidebar(userProfile, { projects = null, activeFilter = 'all', onFilterChange = () => {}, initialRoute = '/' } = {}) {
+function renderSidebar(userProfile, { initialRoute = '/' } = {}) {
   // permissionsLoaded + can abierto: simula permisos ya cargados sin reglas de exclusión,
   // el contrato de useAuth desde el fix del flash de módulos (21e5e2e).
   useAuth.mockReturnValue({ signOut: vi.fn(), userProfile, can: () => true, permissionsLoaded: true })
   return render(
     <MemoryRouter initialEntries={[initialRoute]}>
-      <Sidebar projects={projects} activeFilter={activeFilter} onFilterChange={onFilterChange} connected={true} />
+      <Sidebar />
     </MemoryRouter>
   )
 }
@@ -23,74 +23,88 @@ function renderSidebar(userProfile, { projects = null, activeFilter = 'all', onF
 const USER = { department_id: 1, access_level: 1, admin: false }
 
 describe('Sidebar — módulo Proyectos', () => {
-  // Render from /tareas so projectsOpen starts closed (no ambiguity with sub-item names)
-  it('muestra el botón desplegable Proyectos para todos los usuarios', () => {
+  it('muestra el enlace directo Proyectos (sin desplegable)', () => {
+    renderSidebar(USER)
+    expect(screen.getByRole('link', { name: /^proyectos$/i })).toBeInTheDocument()
+  })
+
+  it('el enlace Proyectos apunta a /', () => {
+    renderSidebar(USER)
+    expect(screen.getByRole('link', { name: /^proyectos$/i })).toHaveAttribute('href', '/')
+  })
+
+  it('no hay botón desplegable para Proyectos', () => {
     renderSidebar(USER, { initialRoute: '/tareas' })
-    expect(screen.getByRole('button', { name: /^proyectos$/i })).toBeInTheDocument()
+    // No debe existir un button (no un link) con el nombre Proyectos
+    expect(screen.queryByRole('button', { name: /^proyectos$/i })).not.toBeInTheDocument()
   })
 
-  it('muestra las vistas al abrir el desplegable', () => {
-    renderSidebar(USER, { initialRoute: '/tareas' })
-    fireEvent.click(screen.getByRole('button', { name: /^proyectos$/i }))
-    expect(screen.getByRole('button', { name: /todos los proyectos/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /en proceso/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /pendientes/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /completados/i })).toBeInTheDocument()
-  })
-
-  it('muestra los departamentos con proyectos al abrir el desplegable', () => {
-    const projects = [
-      { id: '1', status: 'En proceso', departments: ['Redes'] },
-      { id: '2', status: 'Pendiente', departments: ['Diseño'] },
-    ]
-    renderSidebar(USER, { projects, initialRoute: '/tareas' })
-    fireEvent.click(screen.getByRole('button', { name: /^proyectos$/i }))
-    expect(screen.getByRole('button', { name: /redes/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /diseño/i })).toBeInTheDocument()
-  })
-
-  it('llama a onFilterChange con la clave correcta al hacer clic en una vista', () => {
-    const onFilterChange = vi.fn()
-    renderSidebar(USER, { onFilterChange, initialRoute: '/tareas' })
-    fireEvent.click(screen.getByRole('button', { name: /^proyectos$/i }))
-    fireEvent.click(screen.getByRole('button', { name: /en proceso/i }))
-    expect(onFilterChange).toHaveBeenCalledWith('En proceso')
-  })
-
-  it('no muestra vistas cuando el desplegable está cerrado', () => {
-    renderSidebar(USER, { initialRoute: '/tareas' })
-    expect(screen.queryByRole('button', { name: /todos los proyectos/i })).not.toBeInTheDocument()
-  })
-
-  it('funciona sin error cuando projects es null', () => {
-    expect(() =>
-      renderSidebar(USER, { projects: null, initialRoute: '/tareas' })
-    ).not.toThrow()
+  it('funciona sin error cuando no hay userProfile', () => {
+    expect(() => renderSidebar(null)).not.toThrow()
   })
 })
 
-describe('Sidebar — enlace Gestión de Tareas', () => {
-  it('muestra el botón de Tareas QC / Cierre en la barra lateral', () => {
-    renderSidebar({ department_id: 1, access_level: 1, admin: false })
-    expect(screen.getByRole('button', { name: /tareas qc \/ cierre/i })).toBeInTheDocument()
+describe('Sidebar — módulo Campañas', () => {
+  it('muestra el enlace directo Campañas (sin desplegable)', () => {
+    renderSidebar(USER)
+    expect(screen.getByRole('link', { name: /^campañas$/i })).toBeInTheDocument()
+  })
+
+  it('el enlace Campañas apunta a /ads', () => {
+    renderSidebar(USER)
+    expect(screen.getByRole('link', { name: /^campañas$/i })).toHaveAttribute('href', '/ads')
   })
 })
 
-describe('Sidebar — sección Empresa', () => {
-  it('muestra el botón Empresa para todos los usuarios', () => {
-    renderSidebar({ department_id: 1, access_level: 1, admin: false })
-    expect(screen.getByRole('button', { name: /empresa/i })).toBeInTheDocument()
+describe('Sidebar — módulo Gestión de Tareas', () => {
+  it('muestra el enlace directo con el nuevo nombre "Gestión de Tareas"', () => {
+    renderSidebar(USER)
+    expect(screen.getByRole('link', { name: /gestión de tareas/i })).toBeInTheDocument()
   })
 
-  it('no muestra enlaces de gestión (Departamentos/Empleados/Preguntas) a no-admin', () => {
-    renderSidebar({ department_id: 1, access_level: 3, admin: false })
-    expect(screen.queryByRole('link', { name: /departamentos/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /empleados/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /preguntas/i })).not.toBeInTheDocument()
+  it('el enlace apunta a /tareas', () => {
+    renderSidebar(USER)
+    expect(screen.getByRole('link', { name: /gestión de tareas/i })).toHaveAttribute('href', '/tareas')
+  })
+
+  it('no aparece el nombre antiguo "Tareas QC / Cierre"', () => {
+    renderSidebar(USER)
+    expect(screen.queryByText(/tareas qc \/ cierre/i)).not.toBeInTheDocument()
   })
 })
 
-describe('Sidebar — sección Evaluaciones', () => {
+describe('Sidebar — módulo Empresa', () => {
+  it('muestra el enlace directo Empresa (sin desplegable)', () => {
+    renderSidebar(USER)
+    expect(screen.getByRole('link', { name: /^empresa$/i })).toBeInTheDocument()
+  })
+
+  it('el enlace Empresa apunta a /empresa', () => {
+    renderSidebar(USER)
+    expect(screen.getByRole('link', { name: /^empresa$/i })).toHaveAttribute('href', '/empresa')
+  })
+
+  it('no muestra sub-enlaces de Empresa en el sidebar (Departamentos/Empleados/etc.)', () => {
+    renderSidebar(USER)
+    expect(screen.queryByRole('link', { name: /^departamentos$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /^empleados$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /^permisos$/i })).not.toBeInTheDocument()
+  })
+})
+
+describe('Sidebar — módulo Reportes', () => {
+  it('muestra el enlace directo Reportes (sin desplegable)', () => {
+    renderSidebar(USER)
+    expect(screen.getByRole('link', { name: /^reportes$/i })).toBeInTheDocument()
+  })
+
+  it('el enlace Reportes apunta a /reportes', () => {
+    renderSidebar(USER)
+    expect(screen.getByRole('link', { name: /^reportes$/i })).toHaveAttribute('href', '/reportes')
+  })
+})
+
+describe('Sidebar — sección Evaluaciones (sigue siendo desplegable)', () => {
   it('es visible para usuarios con access_level >= 2', () => {
     renderSidebar({ department_id: 1, access_level: 2, admin: false })
     expect(screen.getByRole('button', { name: /evaluaciones/i })).toBeInTheDocument()
@@ -107,7 +121,7 @@ describe('Sidebar — sección Evaluaciones', () => {
   })
 })
 
-describe('Sidebar — enlace Notificaciones', () => {
+describe('Sidebar — enlace Notificaciones (dentro de Soporte Técnico)', () => {
   it('es visible para IT con access_level >= 3', () => {
     renderSidebar({ department_id: 0, access_level: 3, admin: false })
     expect(screen.getByRole('link', { name: /notificaciones/i })).toBeInTheDocument()

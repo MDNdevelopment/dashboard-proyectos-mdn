@@ -31,20 +31,38 @@ describe('filterProjects — search', () => {
   })
 })
 
-describe('filterProjects — activeFilter', () => {
+describe('filterProjects — statusFilter', () => {
   it('filters by status', () => {
-    const r = filterProjects(BASE, { activeFilter: 'Pendiente' })
+    const r = filterProjects(BASE, { statusFilter: 'Pendiente' })
     expect(r).toHaveLength(1)
     expect(r[0].id).toBe('2')
   })
 
-  it('filters by dept: prefix', () => {
-    const r = filterProjects(BASE, { activeFilter: 'dept:Diseño' })
+  it('"all" returns every project', () => {
+    expect(filterProjects(BASE, { statusFilter: 'all' })).toHaveLength(4)
+  })
+
+  it('default (no statusFilter) returns every project', () => {
+    expect(filterProjects(BASE, {})).toHaveLength(4)
+  })
+})
+
+describe('filterProjects — deptFilter', () => {
+  it('filters by department name', () => {
+    const r = filterProjects(BASE, { deptFilter: 'Diseño' })
     expect(r.map(p => p.id)).toEqual(expect.arrayContaining(['1', '2']))
+    expect(r).toHaveLength(2)
   })
 
   it('"all" returns every project', () => {
-    expect(filterProjects(BASE, { activeFilter: 'all' })).toHaveLength(4)
+    expect(filterProjects(BASE, { deptFilter: 'all' })).toHaveLength(4)
+  })
+
+  it('works with legacy p.department (single string)', () => {
+    const legacyProject = { id: '5', name: 'Legacy', team: 'T', status: 'Pendiente', department: 'Tecnología', departments: undefined, created_at: '2026-01-01T00:00:00Z' }
+    const r = filterProjects([...BASE, legacyProject], { deptFilter: 'Tecnología' })
+    expect(r).toHaveLength(1)
+    expect(r[0].id).toBe('5')
   })
 })
 
@@ -83,19 +101,26 @@ describe('filterProjects — date range', () => {
 })
 
 describe('filterProjects — combined filters', () => {
-  it('combines search and status filter', () => {
-    const r = filterProjects(BASE, { search: 'redes', activeFilter: 'En proceso' })
+  it('combines search and statusFilter', () => {
+    const r = filterProjects(BASE, { search: 'redes', statusFilter: 'En proceso' })
     expect(r.map(p => p.id)).toEqual(expect.arrayContaining(['1', '4']))
   })
 
-  it('combines dept filter and date range', () => {
-    const r = filterProjects(BASE, { activeFilter: 'dept:Redes', dateFrom: '2026-04-01' })
+  it('combines statusFilter and deptFilter (AND logic)', () => {
+    // id:1 is En proceso + Diseño, id:2 is Pendiente + Diseño
+    const r = filterProjects(BASE, { statusFilter: 'En proceso', deptFilter: 'Diseño' })
+    expect(r).toHaveLength(1)
+    expect(r[0].id).toBe('1')
+  })
+
+  it('combines deptFilter and date range', () => {
+    const r = filterProjects(BASE, { deptFilter: 'Redes', dateFrom: '2026-04-01' })
     expect(r).toHaveLength(1)
     expect(r[0].id).toBe('4')
   })
 
   it('returns empty when nothing matches combined filters', () => {
-    const r = filterProjects(BASE, { search: 'verano', activeFilter: 'Completado' })
+    const r = filterProjects(BASE, { search: 'verano', statusFilter: 'Completado' })
     expect(r).toHaveLength(0)
   })
 })

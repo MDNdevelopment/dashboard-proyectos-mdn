@@ -5,7 +5,6 @@ function App() {
   const {
     projects,
     loading,
-    activeFilter,
     onNewProject,
     onEditProject,
     onUpdateProject,
@@ -19,7 +18,6 @@ function App() {
     <Dashboard
       projects={projects}
       loading={loading}
-      activeFilter={activeFilter}
       onNewProject={onNewProject}
       onEditProject={onEditProject}
       onUpdateProject={onUpdateProject}

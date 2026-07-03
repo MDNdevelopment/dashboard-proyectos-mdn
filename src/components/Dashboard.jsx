@@ -5,12 +5,7 @@ import { filterProjects } from '../utils/filterProjects'
 
 const PAGE_SIZE = 30
 
-const FILTER_LABELS = {
-  all: 'Todos los proyectos',
-  'En proceso': 'En proceso',
-  'Pendiente': 'Pendientes',
-  'Completado': 'Completados',
-}
+const DEPARTMENTS = ['Redes', 'Diseño', 'Audiovisual', 'Tecnología']
 
 // ── Date-range picker (compact dropdown) ──────────────────────────────────────
 
@@ -106,8 +101,10 @@ function DateRangePicker({ dateFrom, dateTo, onChange }) {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
-function Dashboard({ projects, loading, activeFilter, onNewProject, onEditProject, onUpdateProject, onDeleteProject, onDuplicateProject, onMenuToggle, onExport }) {
+function Dashboard({ projects, loading, onNewProject, onEditProject, onUpdateProject, onDeleteProject, onDuplicateProject, onMenuToggle, onExport }) {
   const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [deptFilter, setDeptFilter] = useState('all')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [expandedMap, setExpandedMap] = useState({})
@@ -116,12 +113,12 @@ function Dashboard({ projects, loading, activeFilter, onNewProject, onEditProjec
 
   const toggleExpanded = id => setExpandedMap(prev => ({ ...prev, [id]: !prev[id] }))
 
-  const filtered = filterProjects(projects, { search, activeFilter, dateFrom, dateTo })
+  const filtered = filterProjects(projects, { search, statusFilter, deptFilter, dateFrom, dateTo })
 
   // Reset visible window when filters change
   useEffect(() => {
     setVisibleCount(PAGE_SIZE)
-  }, [search, activeFilter, dateFrom, dateTo])
+  }, [search, statusFilter, deptFilter, dateFrom, dateTo])
 
   // IntersectionObserver sentinel — loads the next batch when scrolled to bottom.
   // Guard against environments that don't support IntersectionObserver (e.g. test runners).
@@ -143,9 +140,7 @@ function Dashboard({ projects, loading, activeFilter, onNewProject, onEditProjec
 
   const { percent: avgProgress, doneTasks, totalTasks } = getGlobalProgress(projects)
 
-  const title = activeFilter.startsWith('dept:')
-    ? activeFilter.replace('dept:', '')
-    : (FILTER_LABELS[activeFilter] ?? 'Proyectos')
+  const title = 'Todos los proyectos'
 
   const metrics = [
     { label: 'Total proyectos',  value: projects.length,                                           color: '#111',    mono: false },
@@ -155,7 +150,7 @@ function Dashboard({ projects, loading, activeFilter, onNewProject, onEditProjec
     { label: 'Avance global',    value: `${avgProgress}%`,  sub: `${doneTasks} / ${totalTasks} tareas`, color: '#111', mono: true },
   ]
 
-  const hasFilters = search || dateFrom || dateTo
+  const hasFilters = search || dateFrom || dateTo || statusFilter !== 'all' || deptFilter !== 'all'
 
   return (
     <div className="main-bg min-h-screen">
@@ -173,18 +168,16 @@ function Dashboard({ projects, loading, activeFilter, onNewProject, onEditProjec
             </h1>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            {!activeFilter.startsWith('dept:') && (
-              <button
-                onClick={onExport}
-                className="flex items-center gap-2 bg-white border border-[#e0ddd4] text-[#111] text-[15px] font-semibold px-4 py-2.5 rounded-xl hover:bg-[#f5f3eb] transition-colors shadow-sm"
-              >
-                <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M7 1v8M4 6l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M1 10v1a2 2 0 002 2h8a2 2 0 002-2v-1" strokeLinecap="round"/>
-                </svg>
-                Exportar
-              </button>
-            )}
+            <button
+              onClick={onExport}
+              className="flex items-center gap-2 bg-white border border-[#e0ddd4] text-[#111] text-[15px] font-semibold px-4 py-2.5 rounded-xl hover:bg-[#f5f3eb] transition-colors shadow-sm"
+            >
+              <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M7 1v8M4 6l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M1 10v1a2 2 0 002 2h8a2 2 0 002-2v-1" strokeLinecap="round"/>
+              </svg>
+              Exportar
+            </button>
             <button
               onClick={onNewProject}
               className="flex items-center gap-2 bg-[#0d0d0d] text-white font-semibold rounded-xl hover:bg-[#222] transition-colors shadow-sm px-3 py-2.5 lg:px-4 lg:text-[15px]"
@@ -213,8 +206,8 @@ function Dashboard({ projects, loading, activeFilter, onNewProject, onEditProjec
           ))}
         </div>
 
-        {/* Search + date filter */}
-        <div className="flex items-center gap-2 mb-6">
+        {/* Search + filters */}
+        <div className="flex flex-wrap items-center gap-2 mb-6">
           <div className="relative flex-1 max-w-xs">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-[#999] pointer-events-none" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="6.5" cy="6.5" r="5"/>
@@ -227,6 +220,34 @@ function Dashboard({ projects, loading, activeFilter, onNewProject, onEditProjec
               className="w-full bg-white border border-[#e0ddd4] rounded-xl pl-9 pr-4 py-2.5 text-[15px] text-[#111] placeholder-[#bbb] outline-none focus:border-[#bbb] transition-colors shadow-sm font-sans"
             />
           </div>
+
+          <select
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+            className={`px-3 py-2.5 rounded-xl border text-[15px] font-medium transition-colors shadow-sm cursor-pointer outline-none focus:border-[#bbb] font-sans ${
+              statusFilter !== 'all'
+                ? 'bg-[#111] text-white border-[#111]'
+                : 'bg-white border-[#e0ddd4] text-[#555] hover:border-[#bbb]'
+            }`}
+          >
+            <option value="all">Estado</option>
+            <option value="En proceso">En proceso</option>
+            <option value="Pendiente">Pendiente</option>
+            <option value="Completado">Completado</option>
+          </select>
+
+          <select
+            value={deptFilter}
+            onChange={e => setDeptFilter(e.target.value)}
+            className={`px-3 py-2.5 rounded-xl border text-[15px] font-medium transition-colors shadow-sm cursor-pointer outline-none focus:border-[#bbb] font-sans ${
+              deptFilter !== 'all'
+                ? 'bg-[#111] text-white border-[#111]'
+                : 'bg-white border-[#e0ddd4] text-[#555] hover:border-[#bbb]'
+            }`}
+          >
+            <option value="all">Departamento</option>
+            {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
 
           <DateRangePicker
             dateFrom={dateFrom}

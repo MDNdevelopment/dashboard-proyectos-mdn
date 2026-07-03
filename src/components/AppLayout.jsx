@@ -18,7 +18,6 @@ export default function AppLayout() {
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
   const [connected, setConnected] = useState(false)
-  const [activeFilter, setActiveFilter] = useState('all')
   const [modalProject, setModalProject] = useState(undefined)
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
@@ -125,12 +124,7 @@ export default function AppLayout() {
       )}
 
       <div className={`fixed lg:sticky top-0 h-screen z-50 transition-transform duration-200 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-        <Sidebar
-          projects={projects}
-          activeFilter={activeFilter}
-          onFilterChange={(f) => { setActiveFilter(f); setSidebarOpen(false) }}
-          connected={connected}
-        />
+        <Sidebar />
       </div>
 
       <div className="flex-1 min-w-0 flex flex-col">
@@ -150,7 +144,6 @@ export default function AppLayout() {
         <Outlet context={{
           projects,
           loading,
-          activeFilter,
           onNewProject: () => setModalProject(null),
           onEditProject: (p) => setModalProject(p),
           onUpdateProject: updateProject,
