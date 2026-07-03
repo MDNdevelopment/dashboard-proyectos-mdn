@@ -16,6 +16,16 @@ import EmployeeInfoModal from "./EmployeeInfoModal";
 import { Avatar } from "../tareas/UserPickerSingle";
 import { useUnsavedChanges } from "../../hooks/useUnsavedChanges";
 
+/** Adapta un objeto cliente (logo_url) al shape que espera <Avatar> (avatar_url). */
+function clientAvatar(c) {
+  return {
+    first_name: c?.name ?? "",
+    last_name: "",
+    avatar_url: c?.logo_url ?? null,
+    user_id: c?.id,
+  };
+}
+
 function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
@@ -34,6 +44,7 @@ export default function FinanzasView({ line, companyId, year, month }) {
   const [report, setReport]           = useState(null);
   const [lineClients, setLineClients] = useState([]);
   const [lineEmployees, setLineEmployees] = useState([]);
+  const [companyEmployees, setCompanyEmployees] = useState([]);
   const [loading, setLoading]         = useState(true);
   const [saving, setSaving]           = useState(false);
   const [saved, setSaved]             = useState(false);
@@ -69,9 +80,12 @@ export default function FinanzasView({ line, companyId, year, month }) {
     const clients = clientsRes.data ?? [];
     setLineClients(clients);
 
+    // Lista completa de empleados de la empresa (para resolver apoyo_ids fuera de la línea)
+    const allEmployees = employeesRes.data ?? [];
+    setCompanyEmployees(allEmployees);
     // Filtrar empleados del team de esta línea (member_user_ids es un array jsonb)
     const memberIds = new Set(line.member_user_ids ?? []);
-    const employees = (employeesRes.data ?? []).filter(e => memberIds.has(e.user_id));
+    const employees = allEmployees.filter(e => memberIds.has(e.user_id));
     setLineEmployees(employees);
 
     if (reportRes.data) {
@@ -312,10 +326,11 @@ export default function FinanzasView({ line, companyId, year, month }) {
                         <button
                           type="button"
                           onClick={() => setCliModal(clientObj)}
-                          className="text-[13px] font-semibold text-[#333] truncate text-left hover:text-[#111] hover:underline transition-colors"
+                          className="flex items-center gap-1.5 text-[13px] font-semibold text-[#333] text-left hover:text-[#111] hover:underline transition-colors"
                           title={`Ver ficha de ${item.descripcion}`}
                         >
-                          {item.descripcion}
+                          <Avatar user={clientAvatar(clientObj)} size={18} />
+                          <span className="truncate">{item.descripcion}</span>
                         </button>
                       ) : isClientRow ? (
                         <span className="text-[13px] font-semibold text-[#333] truncate">{item.descripcion || "—"}</span>
@@ -433,15 +448,16 @@ export default function FinanzasView({ line, companyId, year, month }) {
                   return (
                     <div key={item.id ?? idx} className="flex items-center gap-2">
                       {isClientRow ? (
-                        /* Fila ligada a cliente: nombre solo-lectura; clickeable hacia ficha técnica */
+                        /* Fila ligada a cliente: avatar + nombre; clickeable hacia ficha técnica */
                         clientObj ? (
                           <button
                             type="button"
                             onClick={() => setCliModal(clientObj)}
-                            className="flex-1 min-w-0 text-[14px] text-[#333] px-2.5 py-2 bg-[#faf9f5] border border-[#e8e5db] rounded-lg truncate text-left hover:bg-[#f0ede3] hover:border-[#d0ccc0] transition-colors"
+                            className="flex-1 min-w-0 flex items-center gap-2 text-[14px] text-[#333] px-2.5 py-2 bg-[#faf9f5] border border-[#e8e5db] rounded-lg text-left hover:bg-[#f0ede3] hover:border-[#d0ccc0] transition-colors"
                             title={`Ver ficha de ${item.descripcion}`}
                           >
-                            {item.descripcion}
+                            <Avatar user={clientAvatar(clientObj)} size={22} />
+                            <span className="truncate">{item.descripcion}</span>
                           </button>
                         ) : (
                           <span className="flex-1 min-w-0 text-[14px] text-[#333] px-2.5 py-2 bg-[#faf9f5] border border-[#e8e5db] rounded-lg truncate">
@@ -567,9 +583,13 @@ export default function FinanzasView({ line, companyId, year, month }) {
                   </div>
                   {consolidadoRows.map(fila => {
                     const pos = fila.diferencia >= 0;
+                    const filaClient = lineClients.find(c => c.id === fila.id);
                     return (
                       <div key={fila.id} className="grid grid-cols-[1fr_auto_auto_auto] gap-3 items-center py-1.5">
-                        <span className="text-[14px] text-[#333] truncate">{fila.nombre}</span>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Avatar user={clientAvatar(filaClient ?? { name: fila.nombre, id: fila.id })} size={20} />
+                          <span className="text-[14px] text-[#333] truncate">{fila.nombre}</span>
+                        </div>
                         <span className="text-[13px] font-mono text-[#10B981] w-24 text-right tabular-nums">{fmtUSD(fila.ingresos)}</span>
                         <span className="text-[13px] font-mono text-[#F97316] w-24 text-right tabular-nums">{fmtUSD(fila.gastos)}</span>
                         <span className={`text-[13px] font-mono font-semibold w-24 text-right tabular-nums ${pos ? "text-green-600" : "text-red-500"}`}>
@@ -578,14 +598,12 @@ export default function FinanzasView({ line, companyId, year, month }) {
                       </div>
                     );
                   })}
-                  {/* Fila de totales */}
+                  {/* Fila de totales — solo Total de G. Oper. */}
                   <div className="grid grid-cols-[1fr_auto_auto_auto] gap-3 items-center pt-2 mt-1 border-t border-[#e0ddd4]">
-                    <span className="text-[13px] font-mono font-bold text-[#555]">Total</span>
-                    <span className="text-[13px] font-mono font-bold text-[#10B981] w-24 text-right tabular-nums">{fmtUSD(consolidadoTotals.ingresos)}</span>
+                    <span className="text-[13px] font-mono font-bold text-[#555]">Total G. Oper.</span>
+                    <span className="w-24" />
                     <span className="text-[13px] font-mono font-bold text-[#F97316] w-24 text-right tabular-nums">{fmtUSD(consolidadoTotals.gastos)}</span>
-                    <span className={`text-[13px] font-mono font-bold w-24 text-right tabular-nums ${consolidadoTotals.diferencia >= 0 ? "text-green-600" : "text-red-500"}`}>
-                      {consolidadoTotals.diferencia >= 0 ? "+" : ""}{fmtUSD(consolidadoTotals.diferencia)}
-                    </span>
+                    <span className="w-24" />
                   </div>
                   <SectionTotal label="marcas" count={consolidadoRows.length} />
                 </div>
@@ -627,6 +645,7 @@ export default function FinanzasView({ line, companyId, year, month }) {
           client={cliModal}
           line={line}
           onClose={() => setCliModal(null)}
+          employees={companyEmployees}
         />
       )}
 

@@ -257,6 +257,10 @@ const MOCK_CLIENT = {
   anniversary_date: '2019-04-01',
   mdn_since:        '2021-06-15',
   logo_url:         null,
+  social_manager_id: 'u-social',
+  designer_id:       'u-design',
+  audiovisual_ids:   ['u-av1'],
+  apoyo_ids:         [],
   contacts: [
     { name: 'Carlos Rodríguez', role: 'Marketing', birth_day: 10, birth_month: 3 },
   ],
@@ -265,6 +269,12 @@ const MOCK_CLIENT = {
     { red: 'TikTok',    link: 'https://tiktok.com/@pepsi' },
   ],
 }
+
+const MOCK_EMPLOYEES = [
+  { user_id: 'u-social', first_name: 'Ana',   last_name: 'García',   avatar_url: null, department_id: 1 },
+  { user_id: 'u-design', first_name: 'Pedro',  last_name: 'López',    avatar_url: null, department_id: 3 },
+  { user_id: 'u-av1',    first_name: 'Camila', last_name: 'Torres',   avatar_url: null, department_id: 2 },
+]
 
 describe('ClientFichaModal — ficha técnica del cliente (usuario privilegiado)', () => {
   // El mock global de useAuth tiene access_level: 4, admin: true → privileged = true
@@ -352,6 +362,39 @@ describe('ClientFichaModal — gating para usuarios sin privilegio (nivel < 4, n
     wrap(<ClientFichaModal client={MOCK_CLIENT} line={MOCK_LINE} onClose={vi.fn()} />)
     expect(screen.getByText('Pepsi')).toBeInTheDocument()
     expect(screen.getByText('Carlos Rodríguez')).toBeInTheDocument()
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ClientFichaModal — sección Equipo asignado
+// ══════════════════════════════════════════════════════════════════════════════
+
+describe('ClientFichaModal — equipo asignado (con lista de empleados)', () => {
+  it('muestra la sección Equipo asignado cuando se pasan empleados y el cliente tiene equipo', () => {
+    wrap(<ClientFichaModal client={MOCK_CLIENT} line={MOCK_LINE} onClose={vi.fn()} employees={MOCK_EMPLOYEES} />)
+    expect(screen.getByText('Equipo asignado')).toBeInTheDocument()
+  })
+
+  it('muestra el nombre del Social Asignado resuelto por user_id', () => {
+    wrap(<ClientFichaModal client={MOCK_CLIENT} line={MOCK_LINE} onClose={vi.fn()} employees={MOCK_EMPLOYEES} />)
+    expect(screen.getByText('Ana García')).toBeInTheDocument()
+  })
+
+  it('muestra el nombre del Diseñador Asignado resuelto por user_id', () => {
+    wrap(<ClientFichaModal client={MOCK_CLIENT} line={MOCK_LINE} onClose={vi.fn()} employees={MOCK_EMPLOYEES} />)
+    expect(screen.getByText('Pedro López')).toBeInTheDocument()
+  })
+
+  it('muestra el nombre del miembro audiovisual resuelto por user_id', () => {
+    wrap(<ClientFichaModal client={MOCK_CLIENT} line={MOCK_LINE} onClose={vi.fn()} employees={MOCK_EMPLOYEES} />)
+    expect(screen.getByText('Camila Torres')).toBeInTheDocument()
+  })
+})
+
+describe('ClientFichaModal — equipo asignado (sin lista de empleados)', () => {
+  it('NO muestra la sección Equipo asignado cuando no se pasan empleados', () => {
+    wrap(<ClientFichaModal client={MOCK_CLIENT} line={MOCK_LINE} onClose={vi.fn()} />)
+    expect(screen.queryByText('Equipo asignado')).not.toBeInTheDocument()
   })
 })
 

@@ -10,7 +10,7 @@ import ClientFichaContent from "./ClientFichaContent";
  *   line    — objeto de metric_lines (id, name, color) — la línea del cliente
  *   onClose — callback para cerrar
  */
-export default function ClientFichaModal({ client, line, onClose }) {
+export default function ClientFichaModal({ client, line, onClose, employees = [] }) {
   // Cerrar con Escape
   useEffect(() => {
     const fn = e => { if (e.key === "Escape") onClose(); };
@@ -33,7 +33,7 @@ export default function ClientFichaModal({ client, line, onClose }) {
           </svg>
         </button>
 
-        <ClientFichaContent client={client} line={line} onClose={onClose} />
+        <ClientFichaContent client={client} line={line} onClose={onClose} employees={employees} />
       </div>
     </div>
   );

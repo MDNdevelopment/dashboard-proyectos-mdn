@@ -22,6 +22,7 @@ export default function LineHubView({ line, companyId, year = CURRENT_YEAR }) {
   const [loading, setLoading] = useState(true);
   const [teamMembers, setTeamMembers] = useState([]);
   const [lineClients, setLineClients] = useState([]);
+  const [companyEmployees, setCompanyEmployees] = useState([]);
   const [empModal, setEmpModal] = useState(null); // null=cerrado, objeto=empleado
   const [cliModal, setCliModal] = useState(null); // null=cerrado, objeto=cliente
   const [empView, setEmpView] = useState("tarjetas"); // "lista" | "tarjetas" — tarjetas por defecto
@@ -36,8 +37,10 @@ export default function LineHubView({ line, companyId, year = CURRENT_YEAR }) {
       loadClients(companyId, line.id),
     ]);
     setReports((reportsData ?? []).filter(r => r.line_id === line.id));
+    const allEmployees = usersData ?? [];
+    setCompanyEmployees(allEmployees);
     const memberIds = line.member_user_ids ?? [];
-    setTeamMembers((usersData ?? []).filter(u => memberIds.includes(u.user_id)));
+    setTeamMembers(allEmployees.filter(u => memberIds.includes(u.user_id)));
     setLineClients(clientsData ?? []);
     setLoading(false);
   }, [companyId, line?.id, line?.member_user_ids, year]);
@@ -250,6 +253,7 @@ export default function LineHubView({ line, companyId, year = CURRENT_YEAR }) {
           client={cliModal}
           line={line}
           onClose={() => setCliModal(null)}
+          employees={companyEmployees}
         />
       )}
     </div>

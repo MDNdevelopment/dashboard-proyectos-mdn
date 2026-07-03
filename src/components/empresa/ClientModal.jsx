@@ -5,30 +5,10 @@ import AvatarUpload from './AvatarUpload'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import { useAuth } from '../../context/AuthContext'
 import { isFinancePrivileged } from '../../lib/permissions'
-import UserPickerSingle, { Avatar } from '../tareas/UserPickerSingle'
+import UserPickerSingle from '../tareas/UserPickerSingle'
 import UserPickerMulti from '../tareas/UserPickerMulti'
 import { teamMemberUsers } from '../../utils/lineFilters'
-
-// ── Helpers de visualización readonly ─────────────────────────────────────────
-function EmployeeChip({ user }) {
-  if (!user) return <span className="text-[13.5px] text-[#bbb]">—</span>
-  return (
-    <div className="flex items-center gap-1.5 bg-[#f5f3eb] rounded-lg px-2 py-1 w-fit">
-      <Avatar user={user} size={20} />
-      <span className="text-[13px] text-[#333]">{user.first_name} {user.last_name}</span>
-    </div>
-  )
-}
-
-function EmployeeChipList({ userIds = [], employees = [] }) {
-  const users = userIds.map(id => employees.find(u => u.user_id === id)).filter(Boolean)
-  if (!users.length) return <span className="text-[13.5px] text-[#bbb]">—</span>
-  return (
-    <div className="flex flex-wrap gap-2">
-      {users.map(u => <EmployeeChip key={u.user_id} user={u} />)}
-    </div>
-  )
-}
+import { EmployeeChip, EmployeeChipList } from '../common/EmployeeChip'
 
 /**
  * Modal crear/editar/ver cliente (marca).

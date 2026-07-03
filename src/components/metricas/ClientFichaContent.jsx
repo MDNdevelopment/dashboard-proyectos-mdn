@@ -3,6 +3,7 @@ import { useAuth } from "../../context/AuthContext";
 import { isFinancePrivileged } from "../../lib/permissions";
 import { fmtUSD } from "../../utils/metricsFinance";
 import { MONTHS } from "./constants";
+import { EmployeeChip, EmployeeChipList } from "../common/EmployeeChip";
 
 /**
  * Cuerpo embebible de la ficha técnica de un cliente (metric_clients).
@@ -14,13 +15,21 @@ import { MONTHS } from "./constants";
  *   line    — objeto de metric_lines (id, name, color) — la línea del cliente
  *   onClose — cierre total del modal contenedor (para acciones close-then-navigate)
  */
-export default function ClientFichaContent({ client, line, onClose }) {
+export default function ClientFichaContent({ client, line, onClose, employees = [] }) {
   const navigate = useNavigate();
   const { can = () => true, userProfile } = useAuth();
   const privileged = isFinancePrivileged(userProfile);
 
   const contacts = client.contacts ?? [];
   const socialLinks = client.social_links ?? [];
+
+  // Equipo asignado (resuelto contra la lista de empleados pasada por el padre)
+  const socialManagerUser = employees.find(u => u.user_id === client.social_manager_id) ?? null;
+  const designerUser      = employees.find(u => u.user_id === client.designer_id) ?? null;
+  const audiovisualIds    = client.audiovisual_ids ?? [];
+  const apoyoIds          = client.apoyo_ids ?? [];
+  const hasTeam = employees.length > 0 &&
+    (!!client.social_manager_id || !!client.designer_id || audiovisualIds.length > 0 || apoyoIds.length > 0);
 
   function fmtDate(dateStr) {
     if (!dateStr) return "—";
@@ -150,6 +159,37 @@ export default function ClientFichaContent({ client, line, onClose }) {
                 );
               })}
             </div>
+          </div>
+        )}
+
+        {/* Equipo asignado — visible solo si el padre pasó la lista de empleados */}
+        {hasTeam && (
+          <div className="space-y-3">
+            <p className="text-[11.5px] font-mono font-bold uppercase tracking-[0.12em] text-[#aaa]">
+              Equipo asignado
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-[11px] font-mono text-[#bbb] uppercase tracking-wide mb-1">Social</p>
+                <EmployeeChip user={socialManagerUser} />
+              </div>
+              <div>
+                <p className="text-[11px] font-mono text-[#bbb] uppercase tracking-wide mb-1">Diseñador</p>
+                <EmployeeChip user={designerUser} />
+              </div>
+            </div>
+            {audiovisualIds.length > 0 && (
+              <div>
+                <p className="text-[11px] font-mono text-[#bbb] uppercase tracking-wide mb-1">Audiovisual</p>
+                <EmployeeChipList userIds={audiovisualIds} employees={employees} />
+              </div>
+            )}
+            {apoyoIds.length > 0 && (
+              <div>
+                <p className="text-[11px] font-mono text-[#bbb] uppercase tracking-wide mb-1">Apoyo</p>
+                <EmployeeChipList userIds={apoyoIds} employees={employees} />
+              </div>
+            )}
           </div>
         )}
 

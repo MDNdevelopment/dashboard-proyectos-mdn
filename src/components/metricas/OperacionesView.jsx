@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { loadReport, loadPrevReport, loadClients, upsertReport } from "./metricsApi";
+import { loadReport, loadPrevReport, loadClients, upsertReport, loadCompanyEmployees } from "./metricsApi";
 import SectionTotal from "../common/SectionTotal";
 import ClientFichaModal from "./ClientFichaModal";
 import { initMetricReport } from "../../utils/initMetricReport";
@@ -8,12 +8,24 @@ import { syncReportClients } from "../../utils/syncReportClients";
 import { calcTotal, sumScore, crecimientoCliente } from "../../utils/metricsScore";
 import { MONTHS, INDICATORS } from "./constants";
 import { useUnsavedChanges } from "../../hooks/useUnsavedChanges";
+import { Avatar } from "../tareas/UserPickerSingle";
+
+/** Adapta un objeto cliente (logo_url) al shape que espera <Avatar> (avatar_url). */
+function clientAvatar(c) {
+  return {
+    first_name: c?.name ?? "",
+    last_name: "",
+    avatar_url: c?.logo_url ?? null,
+    user_id: c?.id,
+  };
+}
 
 export default function OperacionesView({ line, companyId, year, month }) {
   const { can = () => true } = useAuth();
   const [report, setReport] = useState(null);
   const [prevReport, setPrevReport] = useState(null);
   const [clients, setClients] = useState([]);
+  const [companyEmployees, setCompanyEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -29,14 +41,16 @@ export default function OperacionesView({ line, companyId, year, month }) {
     setLoading(true);
     setError(null);
 
-    const [reportRes, prevRes, clientsRes] = await Promise.all([
+    const [reportRes, prevRes, clientsRes, employeesRes] = await Promise.all([
       loadReport(line.id, year, month),
       loadPrevReport(line.id, year, month),
       loadClients(companyId, line.id),
+      loadCompanyEmployees(companyId),
     ]);
 
     const lineClients = clientsRes.data ?? [];
     setClients(lineClients);
+    setCompanyEmployees(employeesRes.data ?? []);
 
     // Guardar el reporte del mes anterior para mostrarlo en la sección de crecimiento
     setPrevReport(prevRes.data?.data ?? null);
@@ -78,7 +92,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
     return clients.find(c => c.id === clienteId)?.name ?? "[Cliente eliminado]";
   }
 
-  // Renderiza el nombre del cliente como botón que abre la ficha técnica.
+  // Renderiza el logo + nombre del cliente como botón que abre la ficha técnica.
   function ClientLink({ clienteId }) {
     const name = clientName(clienteId);
     const client = clients.find(c => c.id === clienteId);
@@ -87,9 +101,10 @@ export default function OperacionesView({ line, companyId, year, month }) {
         <button
           type="button"
           onClick={() => setCliModal(client)}
-          className="text-[14px] text-[#555] truncate hover:text-[#111] hover:underline text-left"
+          className="inline-flex items-center gap-1.5 text-[14px] text-[#555] hover:text-[#111] hover:underline text-left"
           title={`Ver ficha de ${name}`}
         >
+          <Avatar user={clientAvatar(client)} size={20} />
           {name}
         </button>
       );
@@ -548,6 +563,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
           client={cliModal}
           line={line}
           onClose={() => setCliModal(null)}
+          employees={companyEmployees}
         />
       )}
     </div>
