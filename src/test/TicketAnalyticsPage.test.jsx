@@ -12,7 +12,7 @@ vi.mock('../hooks/useTicketAnalytics', () => ({
 
 import { useAuth } from '../context/AuthContext'
 import { useTicketAnalytics } from '../hooks/useTicketAnalytics'
-import TicketAnalyticsPage from '../pages/TicketAnalyticsPage'
+import TicketAnalyticsPage from '../components/tickets/TicketAnalyticsView'
 
 const emptyMetrics = {
   total: 0, open: 0, inProgress: 0, resolved: 0, overdue: 0,
@@ -41,14 +41,14 @@ describe('TicketAnalyticsPage', () => {
     useAuth.mockReturnValue({ userProfile: { access_level: 3, admin: false } })
     useTicketAnalytics.mockReturnValue({ metrics: emptyMetrics, loading: false, error: null })
     renderPage()
-    expect(screen.getByText('Analiticas de soporte')).toBeInTheDocument()
+    expect(screen.queryByText('Acceso restringido')).not.toBeInTheDocument()
   })
 
   it('permite acceso a usuarios con admin=true', () => {
     useAuth.mockReturnValue({ userProfile: { access_level: 1, admin: true } })
     useTicketAnalytics.mockReturnValue({ metrics: emptyMetrics, loading: false, error: null })
     renderPage()
-    expect(screen.getByText('Analiticas de soporte')).toBeInTheDocument()
+    expect(screen.queryByText('Acceso restringido')).not.toBeInTheDocument()
   })
 
   it('muestra spinner mientras carga', () => {

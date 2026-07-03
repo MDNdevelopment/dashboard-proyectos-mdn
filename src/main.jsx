@@ -11,8 +11,6 @@ import LoginPage from './pages/LoginPage.jsx'
 import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx'
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx'
 import TicketsPage from './pages/TicketsPage.jsx'
-import NotificationPreferencesPage from './pages/NotificationPreferencesPage.jsx'
-import TicketAnalyticsPage from './pages/TicketAnalyticsPage.jsx'
 import AdsPage from './pages/AdsPage.jsx'
 import TareasPage from './pages/TareasPage.jsx'
 import EmpresaPage from './pages/EmpresaPage.jsx'
@@ -31,8 +29,8 @@ createRoot(document.getElementById('root')).render(
 
             {/* Soporte Técnico */}
             <Route path="/tickets" element={<RequireModule moduleKey="tickets"><TicketsPage /></RequireModule>} />
-            <Route path="/tickets/notificaciones" element={<RequireModule moduleKey="tickets"><NotificationPreferencesPage /></RequireModule>} />
-            <Route path="/tickets/analytics" element={<RequireModule moduleKey="tickets"><TicketAnalyticsPage /></RequireModule>} />
+            <Route path="/tickets/analytics" element={<RequireModule moduleKey="tickets"><TicketsPage /></RequireModule>} />
+            <Route path="/tickets/notificaciones" element={<RequireModule moduleKey="tickets"><TicketsPage /></RequireModule>} />
 
             {/* Campañas */}
             <Route path="/ads" element={<RequireModule moduleKey="ads"><AdsPage /></RequireModule>} />

@@ -39,16 +39,10 @@ function Sidebar() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [menuOpen])
 
-  const isITAdmin = userProfile?.department_id === 0 && (userProfile?.access_level >= 3 || userProfile?.admin === true)
-  const canAnalytics = userProfile?.access_level >= 3 || userProfile?.admin === true
   const location = useLocation()
 
   const isProjectsRoute = location.pathname === '/'
   const isTicketsRoute = location.pathname.startsWith('/tickets')
-  const ticketsActive = location.pathname === '/tickets'
-  const analyticsActive = location.pathname === '/tickets/analytics'
-  const notifActive = location.pathname === '/tickets/notificaciones'
-  const [ticketsOpen, setTicketsOpen] = useState(isTicketsRoute || isITAdmin)
 
   const isAdsRoute = location.pathname.startsWith('/ads')
   const isTareasRoute = location.pathname.startsWith('/tareas')
@@ -246,76 +240,19 @@ function Sidebar() {
       {/* Soporte Técnico — fijado al fondo, encima del perfil */}
       {canR('tickets') && (
         <div className="px-3 py-3 border-t border-[#ece9df]">
-          {/* Submenú renderizado antes del botón para que se expanda hacia arriba */}
-          {ticketsOpen && (
-            <div className="ml-3 pl-3 border-l-2 border-[#ece9df] space-y-0.5 mb-1">
-              <Link
-                to="/tickets"
-                className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
-                  ticketsActive
-                    ? 'bg-[#FFB800] text-[#111]'
-                    : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
-                }`}
-              >
-                <span className={`flex-shrink-0 ${ticketsActive ? 'text-[#111]' : 'text-[#666]'}`}>
-                  {TICKET_ICON}
-                </span>
-                <span className="flex-1">Lista de tickets</span>
-              </Link>
-              {canAnalytics && (
-                <Link
-                  to="/tickets/analytics"
-                  className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
-                    analyticsActive
-                      ? 'bg-[#FFB800] text-[#111]'
-                      : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
-                  }`}
-                >
-                  <span className={`flex-shrink-0 ${analyticsActive ? 'text-[#111]' : 'text-[#666]'}`}>
-                    {CHART_ICON}
-                  </span>
-                  <span className="flex-1">Analíticas</span>
-                </Link>
-              )}
-              {isITAdmin && (
-                <Link
-                  to="/tickets/notificaciones"
-                  className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
-                    notifActive
-                      ? 'bg-[#FFB800] text-[#111]'
-                      : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
-                  }`}
-                >
-                  <span className={`flex-shrink-0 ${notifActive ? 'text-[#111]' : 'text-[#666]'}`}>
-                    {BELL_ICON}
-                  </span>
-                  <span className="flex-1">Notificaciones</span>
-                </Link>
-              )}
-            </div>
-          )}
-
-          <button
-            onClick={() => setTicketsOpen(o => !o)}
+          <Link
+            to="/tickets"
             className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all text-left ${
-              isTicketsRoute && !ticketsOpen
+              isTicketsRoute
                 ? 'bg-[#FFB800] text-[#111]'
-                : isTicketsRoute
-                  ? 'text-[#111] bg-[#f5f3eb]'
-                  : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+                : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
             }`}
           >
             <span className={`flex-shrink-0 ${isTicketsRoute ? 'text-[#111]' : 'text-[#666]'}`}>
               {TICKET_ICON}
             </span>
             <span className="flex-1">Soporte Técnico</span>
-            <svg
-              width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8"
-              className={`flex-shrink-0 transition-transform duration-200 ${ticketsOpen ? 'rotate-180' : ''}`}
-            >
-              <path d="M2 3.5l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </button>
+          </Link>
         </div>
       )}
 

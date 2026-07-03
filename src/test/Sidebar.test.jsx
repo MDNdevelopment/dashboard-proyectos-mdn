@@ -121,29 +121,26 @@ describe('Sidebar — sección Evaluaciones (sigue siendo desplegable)', () => {
   })
 })
 
-describe('Sidebar — enlace Notificaciones (dentro de Soporte Técnico)', () => {
-  it('es visible para IT con access_level >= 3', () => {
+describe('Sidebar — Soporte Técnico (link único, sin desplegable)', () => {
+  it('muestra el enlace directo Soporte Técnico (sin desplegable)', () => {
+    renderSidebar(USER)
+    expect(screen.getByRole('link', { name: /soporte técnico/i })).toBeInTheDocument()
+  })
+
+  it('el enlace Soporte Técnico apunta a /tickets', () => {
+    renderSidebar(USER)
+    expect(screen.getByRole('link', { name: /soporte técnico/i })).toHaveAttribute('href', '/tickets')
+  })
+
+  it('no hay botón desplegable para Soporte Técnico', () => {
+    renderSidebar(USER)
+    expect(screen.queryByRole('button', { name: /soporte técnico/i })).not.toBeInTheDocument()
+  })
+
+  it('no muestra sub-enlaces en el sidebar (las secciones son tabs dentro de la página)', () => {
     renderSidebar({ department_id: 0, access_level: 3, admin: false })
-    expect(screen.getByRole('link', { name: /notificaciones/i })).toBeInTheDocument()
-  })
-
-  it('es visible para IT con admin=true aunque access_level sea 2', () => {
-    renderSidebar({ department_id: 0, access_level: 2, admin: true })
-    expect(screen.getByRole('link', { name: /notificaciones/i })).toBeInTheDocument()
-  })
-
-  it('no es visible para usuario no IT', () => {
-    renderSidebar({ department_id: 1, access_level: 3, admin: false })
-    expect(screen.queryByRole('link', { name: /notificaciones/i })).not.toBeInTheDocument()
-  })
-
-  it('no es visible para IT sin nivel admin ni flag admin', () => {
-    renderSidebar({ department_id: 0, access_level: 2, admin: false })
-    expect(screen.queryByRole('link', { name: /notificaciones/i })).not.toBeInTheDocument()
-  })
-
-  it('apunta a /tickets/notificaciones', () => {
-    renderSidebar({ department_id: 0, access_level: 3 })
-    expect(screen.getByRole('link', { name: /notificaciones/i })).toHaveAttribute('href', '/tickets/notificaciones')
+    expect(screen.queryByRole('link', { name: /^lista de tickets$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /^analíticas$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /^notificaciones$/i })).not.toBeInTheDocument()
   })
 })

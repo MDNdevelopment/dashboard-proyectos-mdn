@@ -217,11 +217,12 @@ Realtime habilitado en todas.
 | | |
 |---|---|
 | **Propósito** | Mesa de ayuda IT: crear/gestionar tickets, comentarios, SLA, analítica y preferencias de notificación. |
-| **Archivos principales** | `src/pages/TicketsPage.jsx` · `TicketAnalyticsPage.jsx` · `NotificationPreferencesPage.jsx` · `src/components/tickets/*` (TicketList, TicketForm, TicketDetail, TicketCard, TicketComments, slaUtils, constants) · `src/components/tickets/analytics/*` · `src/hooks/useTicketAnalytics.js` |
+| **Archivos principales** | `src/pages/TicketsPage.jsx` (host de tabs) · `src/components/tickets/TicketsListView.jsx` · `src/components/tickets/TicketAnalyticsView.jsx` · `src/components/tickets/NotificationPreferencesView.jsx` · `src/components/tickets/*` (TicketList, TicketForm, TicketDetail, TicketCard, TicketComments, slaUtils, constants) · `src/components/tickets/analytics/*` · `src/hooks/useTicketAnalytics.js` |
 | **Tablas** | `support_tickets` (`requester_id→users, assigned_to→users, title, description, category, priority, status, company_id`) · `ticket_comments` (`ticket_id, author_id→users, body`) · `users.receive_ticket_notifications` |
 | **Notificaciones** | Edge fn `express` (`supabase.functions.invoke('express')`) |
-| **Rutas** | `/tickets` · `/tickets/analytics` · `/tickets/notificaciones` |
-| **Permisos** | Rol IT: `department_id === 0` |
+| **Rutas** | `/tickets` · `/tickets/analytics` · `/tickets/notificaciones` — las tres apuntan al mismo componente host `TicketsPage`; la sección activa se determina por la URL (patrón tabs). |
+| **Navegación** | Un único link "Soporte Técnico" en el sidebar (fijado al fondo). Las secciones se acceden por tabs dentro de la página. |
+| **Permisos por tab** | Lista de tickets: todos los usuarios con acceso al módulo. Analíticas: `access_level ≥ 3` o `admin = true`. Notificaciones: `department_id = 0` AND (`access_level ≥ 3` OR `admin = true`). Acceder a una ruta sin permiso redirige a `/tickets`. |
 
 ### 2.8 Notificaciones
 

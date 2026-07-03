@@ -14,7 +14,7 @@ vi.mock('../context/AuthContext', () => ({
 
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../supabase'
-import NotificationPreferencesPage from '../pages/NotificationPreferencesPage'
+import NotificationPreferencesPage from '../components/tickets/NotificationPreferencesView'
 
 const itAdmin = { department_id: 0, access_level: 3, admin: false }
 const itAdminByFlag = { department_id: 0, access_level: 2, admin: true }

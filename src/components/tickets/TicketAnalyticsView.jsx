@@ -1,13 +1,13 @@
 import { useState } from 'react'
-import { useAuth } from '../context/AuthContext'
-import { useTicketAnalytics } from '../hooks/useTicketAnalytics'
-import TimeRangeSelector from '../components/tickets/analytics/TimeRangeSelector'
-import SummaryCards from '../components/tickets/analytics/SummaryCards'
-import TicketsOverTimeChart from '../components/tickets/analytics/TicketsOverTimeChart'
-import StatusPieChart from '../components/tickets/analytics/StatusPieChart'
-import CategoryBarChart from '../components/tickets/analytics/CategoryBarChart'
-import PriorityBarChart from '../components/tickets/analytics/PriorityBarChart'
-import StaffPerformanceTable from '../components/tickets/analytics/StaffPerformanceTable'
+import { useAuth } from '../../context/AuthContext'
+import { useTicketAnalytics } from '../../hooks/useTicketAnalytics'
+import TimeRangeSelector from './analytics/TimeRangeSelector'
+import SummaryCards from './analytics/SummaryCards'
+import TicketsOverTimeChart from './analytics/TicketsOverTimeChart'
+import StatusPieChart from './analytics/StatusPieChart'
+import CategoryBarChart from './analytics/CategoryBarChart'
+import PriorityBarChart from './analytics/PriorityBarChart'
+import StaffPerformanceTable from './analytics/StaffPerformanceTable'
 
 function defaultDateRange() {
   const end = new Date()
@@ -19,7 +19,7 @@ function defaultDateRange() {
   }
 }
 
-export default function TicketAnalyticsPage() {
+export default function TicketAnalyticsView() {
   const { userProfile } = useAuth()
   const canAccess = userProfile?.access_level >= 3 || userProfile?.admin === true
 
@@ -32,19 +32,18 @@ export default function TicketAnalyticsPage() {
 
   if (!canAccess) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex items-center justify-center py-24">
         <div className="text-center">
           <p className="text-[18px] font-bold text-[#111] mb-1">Acceso restringido</p>
-          <p className="text-[15px] text-[#888]">No tienes acceso a esta seccion.</p>
+          <p className="text-[15px] text-[#888]">No tienes acceso a esta sección.</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
-      <div className="flex items-center justify-between flex-wrap gap-4 mb-6">
-        <h1 className="text-[22px] font-bold text-[#111]">Analiticas de soporte</h1>
+    <div>
+      <div className="flex justify-end mb-6">
         <TimeRangeSelector
           startDate={range.start}
           endDate={range.end}
