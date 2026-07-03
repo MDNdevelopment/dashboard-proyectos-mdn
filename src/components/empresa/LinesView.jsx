@@ -1,46 +1,147 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../supabase'
 import {
   loadLines,
   updateLine,
   deleteLine,
-  loadCompanyUsers,
+  loadClients,
+  loadYearReports,
 } from '../metricas/metricsApi'
-import { assignMemberToLine, removeMemberFromLine } from '../../utils/lineMembers'
+import { useAuth } from '../../context/AuthContext'
+import { assignMemberToLine } from '../../utils/lineMembers'
+import { lastLineScore } from '../../utils/metricsScore'
+import { MONTHS } from '../metricas/constants'
+import ScoreDial, { scoreDialColor } from '../metricas/ScoreDial'
 import LineModal from './LineModal'
 import LineMetasModal from './LineMetasModal'
 import LineFichaModal from './LineFichaModal'
 import ConfirmDeleteDialog from '../common/ConfirmDeleteDialog'
 
+const CURRENT_YEAR = new Date().getFullYear()
+
+// ── Subcomponentes de la card ──────────────────────────────────────────────────
+
+const DIAL_SIZE = 84
+
+/**
+ * Dial radial de salud de la línea. Usa ScoreDial en tamaño chico.
+ * Si no hay datos (score null), muestra "Sin datos".
+ * Si recibe onClick, el dial (o el estado "Sin datos") se hace clickeable.
+ */
+function HealthDial({ score, month, onClick, lineName }) {
+  const monthLabel = month != null ? MONTHS[month - 1].slice(0, 3).toUpperCase() : null
+  const dialColor = score != null ? scoreDialColor(score) : '#d1cec7'
+
+  const inner = (
+    <div className="flex flex-col items-center flex-shrink-0">
+      {score != null ? (
+        <>
+          <ScoreDial score={score} color={dialColor} size={DIAL_SIZE} showScale={false} />
+          <p className="text-[10.5px] font-mono text-[#aaa] mt-1 uppercase tracking-wide text-center">
+            Salud{monthLabel ? ` · ${monthLabel}` : ''}
+          </p>
+        </>
+      ) : (
+        <div
+          className="flex flex-col items-center justify-center rounded-full border-4 border-[#f0ede3]"
+          style={{ width: DIAL_SIZE, height: DIAL_SIZE }}
+        >
+          <p className="text-[10px] font-mono text-[#ccc] uppercase tracking-wide text-center leading-tight">
+            Sin<br />datos
+          </p>
+        </div>
+      )}
+    </div>
+  )
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={`Ver reporte de ${lineName}`}
+        title={`Ver reporte de ${lineName}`}
+        className="hover:opacity-75 transition-opacity focus:outline-none"
+      >
+        {inner}
+      </button>
+    )
+  }
+  return inner
+}
+
+const LOGO_LIMIT = 5
+
+/**
+ * Fila de logos apilados de los clientes de la línea.
+ * Muestra hasta LOGO_LIMIT avatares con logo_url o inicial; el resto como chip "+N".
+ */
+function BrandLogos({ clients, color }) {
+  const visible = clients.slice(0, LOGO_LIMIT)
+  const overflow = clients.length - LOGO_LIMIT
+
+  // Genera un color de fondo semitransparente coherente con la línea
+  const fallbackBg = color + '22'
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <div className="flex -space-x-2">
+        {visible.map(c => (
+          <div
+            key={c.id}
+            title={c.name}
+            className="w-7 h-7 rounded-full border-2 border-white flex items-center justify-center overflow-hidden flex-shrink-0"
+            style={{ background: c.logo_url ? undefined : fallbackBg }}
+          >
+            {c.logo_url ? (
+              <img src={c.logo_url} alt={c.name} className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-[10px] font-bold" style={{ color }}>
+                {(c.name?.[0] ?? '?').toUpperCase()}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+      {overflow > 0 && (
+        <span className="text-[11px] font-mono text-[#aaa] ml-1">+{overflow}</span>
+      )}
+    </div>
+  )
+}
+
 /**
  * Gestión de líneas operativas y sus miembros (empleados).
  * Permite:
  *   - Crear / renombrar / eliminar líneas (LineModal + ConfirmDeleteDialog)
- *   - Asignar empleados a una línea (selector por línea)
- *   - Mover un empleado de línea (assignMemberToLine lo quita de la anterior)
- *   - Quitar un empleado de su línea
+ *   - Asignar / mover empleados desde la ficha de cada línea (LineFichaModal)
  */
 export default function LinesView({ companyId, canManage = true }) {
+  const navigate = useNavigate()
+  const { can = () => true } = useAuth()
   const [lines, setLines]     = useState([])
-  const [users, setUsers]     = useState([])
+  const [clients, setClients] = useState([])
+  const [reports, setReports] = useState([])
   const [loading, setLoading] = useState(true)
   const [lineModal, setLineModal]       = useState(undefined)   // undefined=cerrado, null=crear, obj=editar
   const [metasModal, setMetasModal]     = useState(null)        // null=cerrado, obj=línea a editar metas
-  const [fichaModal, setFichaModal]     = useState(null)        // null=cerrado, obj=línea cuya ficha se muestra
+  const [fichaModal, setFichaModal]     = useState(null)        // null=cerrado, lineId cuya ficha se muestra
   const [confirmDelete, setConfirmDelete] = useState(null)       // { id, name }
   const [deleting, setDeleting]         = useState(false)
-  const [savingLine, setSavingLine]     = useState(null)         // lineId que está guardando miembros
   const [error, setError]               = useState(null)
 
   // ── Carga ─────────────────────────────────────────────────────────────────────
   const fetchAll = useCallback(async () => {
     if (!companyId) return
-    const [linesRes, usersRes] = await Promise.all([
+    const [linesRes, clientsRes, reportsRes] = await Promise.all([
       loadLines(companyId),
-      loadCompanyUsers(companyId),
+      loadClients(companyId),
+      loadYearReports(companyId, CURRENT_YEAR),
     ])
     setLines(linesRes.data ?? [])
-    setUsers(usersRes.data ?? [])
+    setClients(clientsRes.data ?? [])
+    setReports(reportsRes.data ?? [])
   }, [companyId])
 
   useEffect(() => {
@@ -55,6 +156,8 @@ export default function LinesView({ companyId, canManage = true }) {
     const channel = supabase
       .channel('empresa-lineas')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'metric_lines' }, fetchAll)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'metric_clients' }, fetchAll)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'metric_reports' }, fetchAll)
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [companyId, fetchAll])
@@ -68,23 +171,12 @@ export default function LinesView({ companyId, canManage = true }) {
     }
   }
 
-  // ── Asignar empleado a una línea ──────────────────────────────────────────────
+  // ── Asignar empleado a una línea (llamado desde LineFichaModal) ───────────────
   async function handleAssignMember(lineId, userId) {
     if (!userId) return
-    setSavingLine(lineId)
     const { updated, changedIds } = assignMemberToLine(lines, lineId, userId)
     setLines(updated)
     await persistLines(changedIds, updated)
-    setSavingLine(null)
-  }
-
-  // ── Quitar empleado de una línea ──────────────────────────────────────────────
-  async function handleRemoveMember(lineId, userId) {
-    setSavingLine(lineId)
-    const { updated, changedIds } = removeMemberFromLine(lines, lineId, userId)
-    setLines(updated)
-    await persistLines(changedIds, updated)
-    setSavingLine(null)
   }
 
   // ── Estado optimista: líneas guardadas desde LineModal ────────────────────────
@@ -105,23 +197,6 @@ export default function LinesView({ companyId, canManage = true }) {
     if (err) { setError(err.message); setConfirmDelete(null); return }
     setLines(prev => prev.filter(l => l.id !== confirmDelete.id))
     setConfirmDelete(null)
-  }
-
-  // ── Helpers ───────────────────────────────────────────────────────────────────
-  function userOf(userId) {
-    return users.find(u => u.user_id === userId)
-  }
-
-  function fullName(u) {
-    if (!u) return userId => userId
-    return `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim()
-  }
-
-  // Empleados no asignados a la línea (para el selector)
-  function availableUsers(line) {
-    const members = line.member_user_ids ?? []
-    // Mostramos TODOS los usuarios en el selector para permitir mover entre líneas
-    return users.filter(u => !members.includes(u.user_id))
   }
 
   if (loading) {
@@ -166,28 +241,29 @@ export default function LinesView({ companyId, canManage = true }) {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           {lines.map(line => {
-            const members = line.member_user_ids ?? []
-            const available = availableUsers(line)
-            const isSaving = savingLine === line.id
+            const memberCount = (line.member_user_ids ?? []).length
+            const lineClients = clients.filter(c => c.line_id === line.id)
+            const clientCount = lineClients.length
+            const { score, month } = lastLineScore(reports.filter(r => r.line_id === line.id))
 
             return (
               <div
                 key={line.id}
                 className="bg-white rounded-2xl border border-[#e0ddd4] overflow-hidden cursor-pointer hover:border-[#d0ccc0] transition-colors"
                 onClick={e => {
-                  // Los controles de gestión (botones, select, links) no abren la ficha
+                  // Los controles de gestión (botones) no abren la ficha
                   if (e.target.closest('button, select, a, input')) return
-                  setFichaModal(line)
+                  setFichaModal(line.id)
                 }}
               >
-                {/* Card header */}
+                {/* Card header: nombre y color */}
                 <div
-                  className="px-5 py-3 flex items-center justify-between border-b border-[#f0ede3]"
+                  className="px-5 py-3 border-b border-[#f0ede3]"
                   style={{ background: line.color + '14' }}
                 >
                   <button
                     type="button"
-                    onClick={() => setFichaModal(line)}
+                    onClick={() => setFichaModal(line.id)}
                     aria-label={`Ver ficha de ${line.name}`}
                     className="flex items-center gap-2 min-w-0 text-left"
                   >
@@ -196,122 +272,62 @@ export default function LinesView({ companyId, canManage = true }) {
                       style={{ background: line.color }}
                     />
                     <span className="text-[15.5px] font-bold text-[#111] hover:underline decoration-[#ccc] underline-offset-2">{line.name}</span>
-                    <span className="text-[12px] font-mono text-[#aaa]">
-                      {members.length} {members.length !== 1 ? 'miembros' : 'miembro'}
-                    </span>
                   </button>
-                  {canManage && (
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => setMetasModal(line)}
-                        className="p-1.5 rounded-lg text-[#aaa] hover:text-[#555] hover:bg-white/60 transition-colors"
-                        title="Configurar metas"
-                        aria-label="Configurar metas"
-                      >
-                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
-                          <circle cx="8" cy="8" r="2.5"/>
-                          <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.42 1.42M11.53 11.53l1.42 1.42M3.05 12.95l1.42-1.42M11.53 4.47l1.42-1.42" strokeLinecap="round"/>
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => setLineModal(line)}
-                        className="p-1.5 rounded-lg text-[#aaa] hover:text-[#555] hover:bg-white/60 transition-colors"
-                        title="Editar línea"
-                        aria-label="Editar línea"
-                      >
-                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
-                          <path d="M11 2l3 3-8 8H3v-3L11 2Z" strokeLinejoin="round"/>
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => setConfirmDelete({ id: line.id, name: line.name })}
-                        className="p-1.5 rounded-lg text-[#aaa] hover:text-red-400 hover:bg-white/60 transition-colors"
-                        title="Eliminar línea"
-                        aria-label="Eliminar línea"
-                      >
-                        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
-                          <path d="M3 5h10M6 5V3h4v2M5 5l.5 8h5l.5-8" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                      </button>
-                    </div>
-                  )}
                 </div>
 
-                {/* Miembros */}
-                <div className="px-5 py-3 space-y-2">
-                  {members.length === 0 ? (
-                    <p className="text-[13.5px] text-[#bbb] py-1">Sin miembros asignados.</p>
-                  ) : (
-                    <div className="flex flex-wrap gap-2">
-                      {members.map(uid => {
-                        const u = userOf(uid)
-                        return (
-                          <div
-                            key={uid}
-                            className="flex items-center gap-1.5 pl-1 pr-2 py-1 bg-[#f5f3eb] rounded-full"
-                          >
-                            {/* Avatar o inicial */}
-                            {u?.avatar_url ? (
-                              <img
-                                src={u.avatar_url}
-                                alt=""
-                                className="w-5 h-5 rounded-full object-cover flex-shrink-0"
-                              />
-                            ) : (
-                              <div
-                                className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-[#111]"
-                                style={{ background: line.color + '44' }}
-                              >
-                                {u ? (u.first_name?.[0] ?? '') + (u.last_name?.[0] ?? '') : '?'}
-                              </div>
-                            )}
-                            <span className="text-[13px] font-medium text-[#333]">
-                              {u ? fullName(u) : uid}
-                            </span>
-                            {canManage && (
-                              <button
-                                onClick={() => handleRemoveMember(line.id, uid)}
-                                className="ml-0.5 text-[#ccc] hover:text-red-400 transition-colors"
-                                aria-label={`Quitar ${u ? fullName(u) : uid}`}
-                                disabled={isSaving}
-                              >
-                                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <path d="M2 2l6 6M8 2L2 8" strokeLinecap="round"/>
-                                </svg>
-                              </button>
-                            )}
-                          </div>
-                        )
-                      })}
+                {/* Cuerpo de la card */}
+                <div className="px-5 py-4 space-y-4">
+                  {/* Estadísticas: Empleados + Marcas + Dial de salud */}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex gap-6">
+                      <div>
+                        <p className="text-[28px] font-bold text-[#111] leading-none">{memberCount}</p>
+                        <p className="text-[12px] font-mono text-[#aaa] mt-1 uppercase tracking-wide">Empleados</p>
+                      </div>
+                      <div>
+                        <p className="text-[28px] font-bold text-[#111] leading-none">{clientCount}</p>
+                        <p className="text-[12px] font-mono text-[#aaa] mt-1 uppercase tracking-wide">Marcas</p>
+                      </div>
                     </div>
+                    <HealthDial
+                      score={score}
+                      month={month}
+                      lineName={line.name}
+                      onClick={can('reportes') ? () => navigate(`/reportes/linea/${line.id}?tab=hub`) : undefined}
+                    />
+                  </div>
+
+                  {/* Logos de marcas */}
+                  {lineClients.length > 0 && (
+                    <BrandLogos clients={lineClients} color={line.color} />
                   )}
 
-                  {/* Selector: agregar/mover empleado (solo si tiene permiso de modificar) */}
-                  {canManage && available.length > 0 && (
-                    <div className="flex items-center gap-2 pt-1">
-                      <select
-                        className="input-base flex-1 text-[13.5px]"
-                        defaultValue=""
-                        disabled={isSaving}
-                        onChange={e => {
-                          const uid = e.target.value
-                          if (uid) {
-                            handleAssignMember(line.id, uid)
-                            e.target.value = ''
-                          }
-                        }}
-                        aria-label={`Agregar empleado a ${line.name}`}
+                  {/* Acciones como links de texto (solo canManage) */}
+                  {canManage && (
+                    <div className="flex items-center gap-3 text-[13px] pt-1 border-t border-[#f5f3eb]">
+                      <button
+                        onClick={() => setMetasModal(line)}
+                        aria-label="Configurar metas"
+                        className="text-[#999] hover:text-[#111] transition-colors"
                       >
-                        <option value="" disabled>Agregar empleado…</option>
-                        {available.map(u => (
-                          <option key={u.user_id} value={u.user_id}>
-                            {fullName(u)}
-                          </option>
-                        ))}
-                      </select>
-                      {isSaving && (
-                        <div className="w-4 h-4 border-2 border-[#FFB800] border-t-transparent rounded-full animate-spin flex-shrink-0" />
-                      )}
+                        Configurar metas
+                      </button>
+                      <span className="text-[#ddd]">·</span>
+                      <button
+                        onClick={() => setLineModal(line)}
+                        aria-label="Editar línea"
+                        className="text-[#999] hover:text-[#111] transition-colors"
+                      >
+                        Editar
+                      </button>
+                      <span className="text-[#ddd]">·</span>
+                      <button
+                        onClick={() => setConfirmDelete({ id: line.id, name: line.name })}
+                        aria-label="Eliminar línea"
+                        className="text-[#999] hover:text-red-400 transition-colors"
+                      >
+                        Eliminar
+                      </button>
                     </div>
                   )}
                 </div>
@@ -332,14 +348,19 @@ export default function LinesView({ companyId, canManage = true }) {
         />
       )}
 
-      {/* Ficha de línea (read-only, con drill-down a empleado/cliente) */}
-      {fichaModal && (
-        <LineFichaModal
-          line={fichaModal}
-          companyId={companyId}
-          onClose={() => setFichaModal(null)}
-        />
-      )}
+      {/* Ficha de línea — pasa la línea fresca desde el estado */}
+      {fichaModal && (() => {
+        const freshLine = lines.find(l => l.id === fichaModal) ?? null
+        return freshLine ? (
+          <LineFichaModal
+            line={freshLine}
+            companyId={companyId}
+            canManage={canManage}
+            onAssignMember={userId => handleAssignMember(freshLine.id, userId)}
+            onClose={() => setFichaModal(null)}
+          />
+        ) : null
+      })()}
 
       {/* Modal metas de línea */}
       {metasModal && (

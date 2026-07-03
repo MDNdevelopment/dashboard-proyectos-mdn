@@ -143,3 +143,21 @@ export function sumScore(scores) {
     scores.solicitudes + scores.pautas + scores.piezas;
   return Math.min(100, raw);
 }
+
+/**
+ * Score (0–100) del mes cerrado más reciente de una línea + su nº de mes.
+ * `reports` debe venir ya filtrado por line_id (filas crudas de metric_reports).
+ * Descarta meses futuros y meses marcados como incompletos.
+ * @param {Array} reports - Filas de metric_reports filtradas por line_id.
+ * @returns {{ score: number|null, month: number|null }}
+ */
+export function lastLineScore(reports) {
+  const monthScores = Array.from({ length: 12 }, (_, i) => {
+    const r = reports.find(x => x.month === i + 1)
+    if (!r || r.data?.incompleto) return null
+    const prev = i > 0 ? reports.find(x => x.month === i) : null
+    return { month: i + 1, ...calcTotal(r.data, prev?.data ?? null) }
+  })
+  const last = [...monthScores].reverse().find(m => m != null)
+  return last ? { score: sumScore(last), month: last.month } : { score: null, month: null }
+}

@@ -632,6 +632,37 @@ describe('FinanzasView — Sueldos toggle Lista/Tarjetas y foto de perfil', () =
     })
   })
 
+  it('en vista tarjetas muestra el cargo debajo del nombre del empleado', async () => {
+    wrap(<FinanzasView line={MOCK_LINE} companyId="co-1" year={2026} month={6} />)
+    await waitFor(() => expect(screen.getByText('Sueldos / Nómina')).toBeInTheDocument())
+    // El nombre y el cargo deben ser visibles en la sección de sueldos (vista tarjetas default)
+    expect(screen.getByText('María González')).toBeInTheDocument()
+    expect(screen.getByText('Diseñadora')).toBeInTheDocument()
+  })
+
+  it('en vista lista el cargo sigue visible debajo del nombre', async () => {
+    wrap(<FinanzasView line={MOCK_LINE} companyId="co-1" year={2026} month={6} />)
+    await waitFor(() => expect(screen.getByText('Sueldos / Nómina')).toBeInTheDocument())
+    // Cambiar a vista Lista en la sección Sueldos (segundo toggle)
+    const listaButtons = screen.getAllByText('Lista')
+    await userEvent.click(listaButtons[1])
+    await waitFor(() => {
+      expect(screen.getByText('María González')).toBeInTheDocument()
+      expect(screen.getByText('Diseñadora')).toBeInTheDocument()
+    })
+  })
+
+  it('sin position_name no rompe: muestra solo el nombre', async () => {
+    mockLoadCompanyEmployees.mockResolvedValue({
+      data: [{ ...EMPLOYEE_WITH_AVATAR, position: null }],
+      error: null,
+    })
+    wrap(<FinanzasView line={MOCK_LINE} companyId="co-1" year={2026} month={6} />)
+    await waitFor(() => expect(screen.getByText('Sueldos / Nómina')).toBeInTheDocument())
+    expect(screen.getByText('María González')).toBeInTheDocument()
+    expect(screen.queryByText('Diseñadora')).not.toBeInTheDocument()
+  })
+
   it('sin avatar_url muestra iniciales en lugar de img', async () => {
     mockLoadCompanyEmployees.mockResolvedValue({
       data: [{ ...EMPLOYEE_WITH_AVATAR, avatar_url: null }],

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   calcReuniones, calcProductividad, calcCrecimiento,
   calcSolicitudes, calcPautas, calcPiezas,
-  calcTotal, sumScore, crecimientoCliente,
+  calcTotal, sumScore, crecimientoCliente, lastLineScore,
 } from "../utils/metricsScore";
 import { INDICATORS } from "../components/metricas/constants";
 
@@ -368,4 +368,71 @@ describe("calcTotal + sumScore", () => {
     expect(scores.pautas).toBe(20);
     expect(scores.piezas).toBe(10);
   });
+});
+
+// ─── lastLineScore ────────────────────────────────────────────────────────────
+// Helper de reports ya filtrados por line_id (filas crudas de metric_reports).
+
+function makeReportRow(month, dataOverrides = {}, extra = {}) {
+  return {
+    id: `r-${month}`,
+    line_id: 'line-1',
+    year: 2026,
+    month,
+    data: makeReport(dataOverrides),
+    ...extra,
+  }
+}
+
+describe("lastLineScore", () => {
+  it("retorna { score: null, month: null } cuando no hay reportes", () => {
+    expect(lastLineScore([])).toEqual({ score: null, month: null })
+  })
+
+  it("retorna el mes más reciente con datos", () => {
+    const reports = [
+      makeReportRow(3, { reuniones: { realizadas: 15, meta: 15 } }),
+      makeReportRow(5, { reuniones: { realizadas: 15, meta: 15 } }),
+    ]
+    const { month } = lastLineScore(reports)
+    expect(month).toBe(5)
+  })
+
+  it("ignora meses marcados como incompleto", () => {
+    const reports = [
+      makeReportRow(4, { reuniones: { realizadas: 15, meta: 15 } }),
+      makeReportRow(5, {}, { data: { ...makeReport(), incompleto: true } }),
+    ]
+    const { month } = lastLineScore(reports)
+    expect(month).toBe(4)
+  })
+
+  it("el score es 0 cuando todos los indicadores son 0", () => {
+    const reports = [makeReportRow(1)]
+    const { score } = lastLineScore(reports)
+    expect(score).toBe(0)
+  })
+
+  it("el score es 100 cuando todos los indicadores están al máximo", () => {
+    const reports = [
+      makeReportRow(2, {
+        reuniones:     { realizadas: 15, meta: 15 },
+        productividad: { tareas: [{ nombre: "T", realizado: 10, meta: 10 }] },
+        solicitudes:   { solicitudes: 10, editadas: 10 },
+        piezas:        { piezas: 10, editadas: 10 },
+        pautas:        { items: [{ clienteId: "c1", realizadas: 5, meta: 5 }] },
+        crecimiento:   { items: [{ clienteId: "c1", seguidoresGanados: 100, meta: 100 }] },
+      }),
+    ]
+    const { score } = lastLineScore(reports)
+    expect(score).toBe(100)
+  })
+
+  it("retorna { score: null, month: null } cuando todos los reportes son incompletos", () => {
+    const reports = [
+      makeReportRow(1, {}, { data: { ...makeReport(), incompleto: true } }),
+      makeReportRow(2, {}, { data: { ...makeReport(), incompleto: true } }),
+    ]
+    expect(lastLineScore(reports)).toEqual({ score: null, month: null })
+  })
 });

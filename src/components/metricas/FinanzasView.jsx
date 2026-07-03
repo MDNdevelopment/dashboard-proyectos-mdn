@@ -353,7 +353,12 @@ export default function FinanzasView({ line, companyId, year, month }) {
                           title={`Ver ficha de ${item.descripcion}`}
                         >
                           <Avatar user={employeeObj} size={28} />
-                          <span className="text-[13px] font-semibold text-[#333] truncate">{item.descripcion}</span>
+                          <span className="flex flex-col min-w-0">
+                            <span className="text-[13px] font-semibold text-[#333] truncate">{item.descripcion}</span>
+                            {employeeObj.position?.position_name && (
+                              <span className="text-[11px] text-[#999] truncate">{employeeObj.position.position_name}</span>
+                            )}
+                          </span>
                         </button>
                       ) : isEmployeeRow ? (
                         <span className="text-[13px] font-semibold text-[#333] truncate">{item.descripcion || "—"}</span>
@@ -430,7 +435,12 @@ export default function FinanzasView({ line, companyId, year, month }) {
                             title={`Ver ficha de ${item.descripcion}`}
                           >
                             <Avatar user={employeeObj} size={22} />
-                            <span className="truncate">{item.descripcion}</span>
+                            <span className="flex flex-col min-w-0 leading-tight">
+                              <span className="truncate">{item.descripcion}</span>
+                              {employeeObj.position?.position_name && (
+                                <span className="text-[11.5px] text-[#999] truncate">{employeeObj.position.position_name}</span>
+                              )}
+                            </span>
                           </button>
                         ) : (
                           <span className="flex-1 min-w-0 text-[14px] text-[#333] px-2.5 py-2 bg-[#faf9f5] border border-[#e8e5db] rounded-lg truncate">

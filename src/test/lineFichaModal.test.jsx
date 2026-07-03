@@ -64,6 +64,16 @@ const MOCK_EMPLOYEE = {
   hire_date: null, birth_date: null, access_level: 2, admin: false,
 }
 
+// Empleado NO asignado a MOCK_LINE — disponible para agregar desde la ficha
+const MOCK_EMPLOYEE_2 = {
+  user_id: 'u-3', first_name: 'Carlos', last_name: 'Pérez',
+  avatar_url: null,
+  position:   { position_name: 'Redactor', position_description: 'Escribe contenido', position_functions: [] },
+  department: { department_name: 'Redes' },
+  email: 'carlos@mdn.com', phone_number: null,
+  hire_date: null, birth_date: null, access_level: 1, admin: false,
+}
+
 const MOCK_CLIENT = {
   id: 'c-1', name: 'Pepsi', monthly_fee: 1500, payment_day: 5,
   logo_url: null, line_id: 'l-1', website: 'https://pepsi.com',
@@ -102,7 +112,7 @@ const mockLoadCompanyUsers     = vi.fn().mockResolvedValue({
   data: [{ user_id: 'u-2', first_name: 'María', last_name: 'González', avatar_url: null }],
   error: null,
 })
-const mockLoadCompanyEmployees = vi.fn().mockResolvedValue({ data: [MOCK_EMPLOYEE], error: null })
+const mockLoadCompanyEmployees = vi.fn().mockResolvedValue({ data: [MOCK_EMPLOYEE, MOCK_EMPLOYEE_2], error: null })
 const mockLoadClients          = vi.fn().mockResolvedValue({ data: [MOCK_CLIENT], error: null })
 const mockUpdateLine           = vi.fn().mockResolvedValue({ data: null, error: null })
 const mockDeleteLine           = vi.fn().mockResolvedValue({ error: null })
@@ -151,6 +161,8 @@ async function renderFicha(onClose = vi.fn()) {
 beforeEach(() => {
   mockLoadYearReports.mockClear()
   mockUpdateLine.mockClear()
+  mockLoadCompanyEmployees.mockClear()
+  mockLoadCompanyEmployees.mockResolvedValue({ data: [MOCK_EMPLOYEE, MOCK_EMPLOYEE_2], error: null })
 })
 
 afterEach(() => {
@@ -183,8 +195,8 @@ describe('LinesView — apertura de la ficha de línea', () => {
 
   it('el click en el cuerpo del card (fuera de controles) abre la ficha', async () => {
     await renderLines()
-    // El nombre en el chip de miembro no es un botón — el click burbujea al card
-    fireEvent.click(screen.getByText('María González'))
+    // "Marcas" es la etiqueta de la stat en la card — <p> sin interactividad, burbujea al card
+    fireEvent.click(screen.getByText('Marcas'))
     await waitFor(() => expect(screen.getByText('Miembros')).toBeInTheDocument())
     expect(screen.getByText('1 miembro · 1 cliente')).toBeInTheDocument()
   })
@@ -210,11 +222,38 @@ describe('LinesView — apertura de la ficha de línea', () => {
     expect(screen.queryByText('Miembros')).not.toBeInTheDocument()
   })
 
-  it('quitar un miembro NO abre la ficha', async () => {
+  it('el click en el label de stat "Empleados" abre la ficha', async () => {
     await renderLines()
-    await userEvent.click(screen.getByRole('button', { name: 'Quitar María González' }))
-    expect(screen.queryByText('Miembros')).not.toBeInTheDocument()
-    expect(mockUpdateLine).toHaveBeenCalled()
+    // "Empleados" es la etiqueta de la stat en la card — <p> sin interactividad, burbujea al card
+    fireEvent.click(screen.getByText('Empleados'))
+    await waitFor(() => expect(screen.getByText('Miembros')).toBeInTheDocument())
+    expect(screen.getByText('1 miembro · 1 cliente')).toBeInTheDocument()
+  })
+
+  it('la ficha muestra el selector "Agregar empleado" cuando canManage', async () => {
+    await renderLines()
+    await userEvent.click(screen.getByRole('button', { name: 'Ver ficha de Georgina' }))
+    await waitFor(() => expect(screen.getByText('Miembros')).toBeInTheDocument())
+    expect(screen.getByRole('combobox', { name: 'Agregar empleado a Georgina' })).toBeInTheDocument()
+  })
+
+  it('asignar empleado desde la ficha llama a updateLine con member_user_ids actualizado', async () => {
+    const user = userEvent.setup()
+    await renderLines()
+    await user.click(screen.getByRole('button', { name: 'Ver ficha de Georgina' }))
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Agregar empleado a Georgina' })).toBeInTheDocument())
+
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Agregar empleado a Georgina' }),
+      'u-3',
+    )
+
+    await waitFor(() => {
+      expect(mockUpdateLine).toHaveBeenCalledWith(
+        'l-1',
+        { member_user_ids: ['u-2', 'u-3'] },
+      )
+    })
   })
 })
 
@@ -294,6 +333,12 @@ describe('LineFichaModal — drill-down en un solo modal', () => {
     expect(screen.queryByText('$1500')).not.toBeInTheDocument()
     expect(screen.queryByText('día 5')).not.toBeInTheDocument()
   })
+
+  it('sin canManage el selector de agregar empleado NO aparece en la ficha', async () => {
+    // renderFicha no pasa canManage (default false)
+    await renderFicha()
+    expect(screen.queryByRole('combobox', { name: /Agregar empleado/ })).not.toBeInTheDocument()
+  })
 })
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -361,6 +406,64 @@ describe('LineFichaModal — resumen de finanzas del último período', () => {
     await userEvent.click(screen.getByTitle('Ver ficha de Pepsi'))
     expect(screen.queryByText('Ingresos brutos')).not.toBeInTheDocument()
   })
+
+  it('excluye meses futuros: si el mes más alto es futuro, muestra el último cerrado', async () => {
+    const CURRENT_MONTH_IN_TEST = new Date().getMonth() + 1
+    const FUTURE_MONTH = CURRENT_MONTH_IN_TEST + 1
+    // Si estamos en Diciembre (12), este test no es aplicable (no hay mes futuro en el año)
+    if (FUTURE_MONTH > 12) return
+
+    const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+    mockLoadYearReports.mockResolvedValueOnce({
+      data: [
+        {
+          id: 'r-fut', line_id: 'l-1', year: CURRENT_YEAR, month: FUTURE_MONTH,
+          data: { finanzas: { ingresos: [{ id: 'x', descripcion: 'Futuro', monto: 9999 }], gastosOperativos: [], sueldos: [], otrosGastos: [] } },
+        },
+        {
+          id: 'r-2', line_id: 'l-1', year: CURRENT_YEAR, month: 2,
+          data: { finanzas: { ingresos: [{ id: 'i-1', descripcion: 'Real', monto: 1000 }], gastosOperativos: [{ id: 'g-1', descripcion: 'x', monto: 123 }], sueldos: [], otrosGastos: [] } },
+        },
+      ],
+      error: null,
+    })
+    await renderFicha()
+    // Debe mostrar Febrero (mes 2), no el mes futuro
+    expect(screen.getByText(`Finanzas · Febrero ${CURRENT_YEAR}`)).toBeInTheDocument()
+    expect(screen.queryByText(`Finanzas · ${MONTHS_ES[FUTURE_MONTH - 1]} ${CURRENT_YEAR}`)).not.toBeInTheDocument()
+    // Los KPIs del mes futuro ($9999) no deben aparecer
+    expect(screen.queryByText('$9999')).not.toBeInTheDocument()
+  })
+
+  it('excluye meses marcados como incompletos: muestra el período anterior', async () => {
+    const CURRENT_MONTH_IN_TEST = new Date().getMonth() + 1
+    // Necesitamos al menos dos meses pasados para este test
+    if (CURRENT_MONTH_IN_TEST < 2) return
+
+    const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+    mockLoadYearReports.mockResolvedValueOnce({
+      data: [
+        {
+          id: 'r-incomp', line_id: 'l-1', year: CURRENT_YEAR, month: CURRENT_MONTH_IN_TEST,
+          data: {
+            incompleto: true,
+            finanzas: { ingresos: [{ id: 'y', descripcion: 'Incompleto', monto: 5000 }], gastosOperativos: [], sueldos: [], otrosGastos: [] },
+          },
+        },
+        {
+          id: 'r-prev', line_id: 'l-1', year: CURRENT_YEAR, month: CURRENT_MONTH_IN_TEST - 1,
+          data: { finanzas: { ingresos: [{ id: 'z', descripcion: 'Previo', monto: 2500 }], gastosOperativos: [{ id: 'g-2', descripcion: 'x', monto: 300 }], sueldos: [], otrosGastos: [] } },
+        },
+      ],
+      error: null,
+    })
+    await renderFicha()
+    // Debe mostrar el mes anterior al incompleto, no el mes incompleto
+    expect(screen.getByText(`Finanzas · ${MONTHS_ES[CURRENT_MONTH_IN_TEST - 2]} ${CURRENT_YEAR}`)).toBeInTheDocument()
+    expect(screen.queryByText(`Finanzas · ${MONTHS_ES[CURRENT_MONTH_IN_TEST - 1]} ${CURRENT_YEAR}`)).not.toBeInTheDocument()
+    // El valor único del mes incompleto ($5000) no debe aparecer
+    expect(screen.queryByText('$5000')).not.toBeInTheDocument()
+  })
 })
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -395,5 +498,73 @@ describe('LineFichaModal — navegación a la sección de Finanzas', () => {
     expect(screen.getByText('$1000')).toBeInTheDocument()
     expect(screen.queryByTitle('Ir a ingresos')).not.toBeInTheDocument()
     expect(screen.queryByTitle('Ir a gastos')).not.toBeInTheDocument()
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 6. LineFichaModal — botón "Ver reporte de la línea" → tab Resumen
+// ══════════════════════════════════════════════════════════════════════════════
+
+describe('LineFichaModal — botón Ver reporte → tab Resumen', () => {
+  it('con can("reportes") aparece el botón "Ver reporte de la línea"', async () => {
+    // renderFicha usa admin: true, can: () => true → incluye 'reportes'
+    await renderFicha()
+    expect(screen.getByRole('button', { name: /Ver reporte de la línea/i })).toBeInTheDocument()
+  })
+
+  it('click en el botón cierra el modal y navega a ?tab=hub', async () => {
+    const onClose = await renderFicha()
+    await userEvent.click(screen.getByRole('button', { name: /Ver reporte de la línea/i }))
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(screen.getByTestId('location').textContent)
+      .toBe('/reportes/linea/l-1?tab=hub')
+  })
+
+  it('sin can("reportes") el botón NO aparece', async () => {
+    vi.mocked(useAuth).mockReturnValue({
+      userProfile: { user_id: 'u-1', company_id: 'co-1', access_level: 4, admin: true },
+      can: k => k !== 'reportes',
+      signOut: vi.fn(),
+    })
+    await renderFicha()
+    expect(screen.queryByRole('button', { name: /Ver reporte de la línea/i })).not.toBeInTheDocument()
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 7. LinesView — círculo de salud clickeable → tab Resumen
+// ══════════════════════════════════════════════════════════════════════════════
+
+describe('LinesView — círculo de salud navega al reporte sin abrir la ficha', () => {
+  function renderLinesWithSpy() {
+    wrap(
+      <>
+        <LinesView companyId="co-1" canManage={true} />
+        <LocationSpy />
+      </>
+    )
+  }
+
+  it('click en el dial de salud navega a ?tab=hub y NO abre la ficha', async () => {
+    renderLinesWithSpy()
+    await waitFor(() => expect(screen.getByText('Georgina')).toBeInTheDocument())
+
+    const dialBtn = screen.getByRole('button', { name: 'Ver reporte de Georgina' })
+    await userEvent.click(dialBtn)
+
+    expect(screen.getByTestId('location').textContent)
+      .toBe('/reportes/linea/l-1?tab=hub')
+    expect(screen.queryByText('Miembros')).not.toBeInTheDocument()
+  })
+
+  it('sin can("reportes") el dial NO es un botón (no interactivo)', async () => {
+    vi.mocked(useAuth).mockReturnValue({
+      userProfile: { user_id: 'u-1', company_id: 'co-1', access_level: 4, admin: true },
+      can: k => k !== 'reportes',
+      signOut: vi.fn(),
+    })
+    renderLinesWithSpy()
+    await waitFor(() => expect(screen.getByText('Georgina')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: 'Ver reporte de Georgina' })).not.toBeInTheDocument()
   })
 })

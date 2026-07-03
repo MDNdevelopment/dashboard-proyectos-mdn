@@ -10,35 +10,43 @@ import ClientFichaContent from "../metricas/ClientFichaContent";
 import EntityGridList, { ViewToggle } from "../common/EntityGridList";
 
 const CURRENT_YEAR = new Date().getFullYear();
+const CURRENT_MONTH = new Date().getMonth() + 1;
 
 /**
- * Ficha de solo lectura de una línea operativa (metric_lines), con drill-down
- * en un solo modal: click en un miembro o cliente reemplaza el contenido por
- * su ficha (EmployeeFichaContent / ClientFichaContent) con botón "← Volver".
+ * Ficha de una línea operativa (metric_lines), con drill-down en un solo modal:
+ * click en un miembro o cliente reemplaza el contenido por su ficha con "← Volver".
  * Escape sube un nivel; en la raíz cierra. El botón X cierra desde cualquier nivel.
- * Miembros y clientes se muestran en vista tarjetas (default) o lista (ViewToggle).
- * Incluye resumen de finanzas del último período de la línea — visible solo para
- * nivel 4 / admin (isFinancePrivileged); sus KPIs navegan a la sección de
- * Finanzas del módulo Reportes si además can('reportes').
+ *
+ * Cuando se recibe canManage + onAssignMember, la sección Miembros muestra un
+ * selector para agregar/mover empleados sin cerrar el modal.
+ *
  * Props:
- *   line      — objeto de metric_lines (id, name, color, member_user_ids)
- *   companyId — uuid de la empresa
- *   onClose   — callback para cerrar
+ *   line            — objeto de metric_lines (id, name, color, member_user_ids)
+ *   companyId       — uuid de la empresa
+ *   canManage       — si el usuario puede gestionar miembros (default: false)
+ *   onAssignMember  — async (userId) → persiste el cambio en la línea
+ *   onClose         — callback para cerrar
  */
-export default function LineFichaModal({ line, companyId, onClose }) {
+export default function LineFichaModal({ line, companyId, canManage = false, onAssignMember, onClose }) {
   const navigate = useNavigate();
   const { userProfile, can = () => true } = useAuth();
   const privileged = isFinancePrivileged(userProfile);
 
-  const [members, setMembers] = useState(null);       // null = cargando
-  const [clients, setClients] = useState(null);       // null = cargando
-  const [finReports, setFinReports] = useState(null); // null = cargando, [] = sin datos
-  const [drill, setDrill] = useState(null);           // null | { type: 'employee'|'client', entity }
-  const [memberView, setMemberView] = useState("tarjetas"); // "lista" | "tarjetas"
-  const [clientView, setClientView] = useState("tarjetas"); // "lista" | "tarjetas"
+  const [allEmployees, setAllEmployees] = useState(null); // null = cargando
+  const [clients, setClients]           = useState(null); // null = cargando
+  const [finReports, setFinReports]     = useState(null); // null = cargando, [] = sin datos
+  const [drill, setDrill]       = useState(null);         // null | { type: 'employee'|'client', entity }
+  const [memberView, setMemberView] = useState("tarjetas");
+  const [clientView, setClientView] = useState("tarjetas");
+  const [saving, setSaving]     = useState(false);
 
-  // Carga on-mount: empleados con joins position/department + clientes de la línea.
-  // Los reportes del año (finanzas) solo se piden si el usuario puede verlos.
+  // Derivados por render (sin refetch al cambiar member_user_ids)
+  const memberIds = line.member_user_ids ?? [];
+  const members   = allEmployees?.filter(u => memberIds.includes(u.user_id)) ?? [];
+  const available = allEmployees?.filter(u => !memberIds.includes(u.user_id)) ?? [];
+
+  // Carga on-mount: todos los empleados de la empresa + clientes de la línea.
+  // No depende de member_user_ids para no refetchear al asignar.
   useEffect(() => {
     let cancelled = false;
     Promise.all([
@@ -47,13 +55,12 @@ export default function LineFichaModal({ line, companyId, onClose }) {
       privileged ? loadYearReports(companyId, CURRENT_YEAR) : Promise.resolve({ data: [] }),
     ]).then(([empRes, cliRes, repRes]) => {
       if (cancelled) return;
-      const memberIds = line.member_user_ids ?? [];
-      setMembers((empRes.data ?? []).filter(u => memberIds.includes(u.user_id)));
+      setAllEmployees(empRes.data ?? []);
       setClients(cliRes.data ?? []);
       setFinReports((repRes.data ?? []).filter(r => r.line_id === line.id));
     });
     return () => { cancelled = true; };
-  }, [companyId, line.id, line.member_user_ids, privileged]);
+  }, [companyId, line.id, privileged]);
 
   // Escape: en drill-down vuelve a la raíz; en la raíz cierra el modal
   useEffect(() => {
@@ -66,17 +73,24 @@ export default function LineFichaModal({ line, companyId, onClose }) {
     return () => document.removeEventListener("keydown", fn);
   }, [drill, onClose]);
 
-  const loading = members === null || clients === null;
+  const loading = allEmployees === null || clients === null;
 
-  // Último período con reporte de la línea (mes más alto del año actual)
-  const lastReport = (finReports ?? []).reduce(
-    (best, r) => (!best || r.month > best.month ? r : best),
-    null
-  );
+  // Último período "cerrado": descarta meses futuros y meses marcados como incompletos.
+  const lastReport = (finReports ?? [])
+    .filter(r => r.month <= CURRENT_MONTH && !r.data?.incompleto)
+    .reduce((best, r) => (!best || r.month > best.month ? r : best), null);
 
   function goFinanzas(section) {
     onClose();
     navigate(`/reportes/linea/${line.id}?tab=finanzas&section=${section}`);
+  }
+
+  // Agregar / mover empleado desde la ficha
+  async function handleAdd(userId) {
+    if (!userId || !onAssignMember) return;
+    setSaving(true);
+    await onAssignMember(userId);
+    setSaving(false);
   }
 
   return (
@@ -175,6 +189,35 @@ export default function LineFichaModal({ line, companyId, onClose }) {
                       onItemClick={u => setDrill({ type: "employee", entity: u })}
                     />
                   )}
+
+                  {/* Selector para agregar/mover empleado (solo canManage) */}
+                  {canManage && available.length > 0 && (
+                    <div className="flex items-center gap-2 mt-3">
+                      <select
+                        className="input-base flex-1 text-[13.5px]"
+                        defaultValue=""
+                        disabled={saving}
+                        onChange={e => {
+                          const uid = e.target.value;
+                          if (uid) {
+                            handleAdd(uid);
+                            e.target.value = "";
+                          }
+                        }}
+                        aria-label={`Agregar empleado a ${line.name}`}
+                      >
+                        <option value="" disabled>Agregar empleado…</option>
+                        {available.map(u => (
+                          <option key={u.user_id} value={u.user_id}>
+                            {`${u.first_name ?? ""} ${u.last_name ?? ""}`.trim()}
+                          </option>
+                        ))}
+                      </select>
+                      {saving && (
+                        <div className="w-4 h-4 border-2 border-[#FFB800] border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Clientes */}
@@ -246,6 +289,17 @@ export default function LineFichaModal({ line, companyId, onClose }) {
                       );
                     })()}
                   </div>
+                )}
+
+                {/* Acceso directo al reporte — disponible para todos con acceso a reportes */}
+                {can("reportes") && (
+                  <button
+                    type="button"
+                    onClick={() => { onClose(); navigate(`/reportes/linea/${line.id}?tab=hub`); }}
+                    className="w-full text-left px-4 py-2.5 rounded-xl bg-[#faf9f5] border border-[#ece9df] text-[13.5px] text-[#666] hover:bg-[#f5f3eb] hover:border-[#d8d4c6] hover:text-[#111] transition-colors"
+                  >
+                    Ver reporte de la línea →
+                  </button>
                 )}
               </div>
             )}
