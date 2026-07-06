@@ -117,6 +117,8 @@ const mockLoadClients          = vi.fn().mockResolvedValue({ data: [MOCK_CLIENT]
 const mockUpdateLine           = vi.fn().mockResolvedValue({ data: null, error: null })
 const mockDeleteLine           = vi.fn().mockResolvedValue({ error: null })
 const mockLoadYearReports      = vi.fn().mockResolvedValue({ data: MOCK_REPORTS, error: null })
+const mockAddLineMember        = vi.fn().mockResolvedValue({ data: null, error: null })
+const mockRemoveLineMember     = vi.fn().mockResolvedValue({ data: null, error: null })
 
 vi.mock('../components/metricas/metricsApi', () => ({
   loadLines:            (...a) => mockLoadLines(...a),
@@ -126,6 +128,8 @@ vi.mock('../components/metricas/metricsApi', () => ({
   updateLine:           (...a) => mockUpdateLine(...a),
   deleteLine:           (...a) => mockDeleteLine(...a),
   loadYearReports:      (...a) => mockLoadYearReports(...a),
+  addLineMember:        (...a) => mockAddLineMember(...a),
+  removeLineMember:     (...a) => mockRemoveLineMember(...a),
 }))
 
 // calcFinanzas real (suma los montos de los fixtures) + fmtUSD simplificado
@@ -237,7 +241,7 @@ describe('LinesView — apertura de la ficha de línea', () => {
     expect(screen.getByRole('combobox', { name: 'Agregar empleado a Georgina' })).toBeInTheDocument()
   })
 
-  it('asignar empleado desde la ficha llama a updateLine con member_user_ids actualizado', async () => {
+  it('asignar empleado desde la ficha llama a addLineMember', async () => {
     const user = userEvent.setup()
     await renderLines()
     await user.click(screen.getByRole('button', { name: 'Ver ficha de Georgina' }))
@@ -249,10 +253,20 @@ describe('LinesView — apertura de la ficha de línea', () => {
     )
 
     await waitFor(() => {
-      expect(mockUpdateLine).toHaveBeenCalledWith(
-        'l-1',
-        { member_user_ids: ['u-2', 'u-3'] },
-      )
+      expect(mockAddLineMember).toHaveBeenCalledWith('l-1', 'u-3')
+    })
+  })
+
+  it('quitar empleado desde la ficha llama a removeLineMember', async () => {
+    const user = userEvent.setup()
+    await renderLines()
+    await user.click(screen.getByRole('button', { name: 'Ver ficha de Georgina' }))
+    await waitFor(() => expect(screen.getByText('María González')).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: 'Quitar a María González de la línea' }))
+
+    await waitFor(() => {
+      expect(mockRemoveLineMember).toHaveBeenCalledWith('l-1', 'u-2')
     })
   })
 })

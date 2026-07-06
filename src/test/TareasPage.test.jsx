@@ -35,9 +35,10 @@ vi.mock('../context/AuthContext', () => ({
 }))
 
 // ── Test data ────────────────────────────────────────────────────────────────
+// Supabase retorna { members: [{user_id}] } desde metric_line_members; loadLines normaliza a member_user_ids
 const MOCK_TEAMS = [
-  { id: 'team-1', name: 'Georgina', company_id: 'co-1', created_at: '2026-01-01T00:00:00Z', member_user_ids: ['u1'] },
-  { id: 'team-2', name: 'Bianca',   company_id: 'co-1', created_at: '2026-01-02T00:00:00Z', member_user_ids: ['u1'] },
+  { id: 'team-1', name: 'Georgina', company_id: 'co-1', created_at: '2026-01-01T00:00:00Z', members: [{ user_id: 'u1' }] },
+  { id: 'team-2', name: 'Bianca',   company_id: 'co-1', created_at: '2026-01-02T00:00:00Z', members: [{ user_id: 'u1' }] },
 ]
 const MOCK_TASKS = [
   {

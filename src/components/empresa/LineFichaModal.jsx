@@ -24,10 +24,11 @@ const CURRENT_MONTH = new Date().getMonth() + 1;
  *   line            — objeto de metric_lines (id, name, color, member_user_ids)
  *   companyId       — uuid de la empresa
  *   canManage       — si el usuario puede gestionar miembros (default: false)
- *   onAssignMember  — async (userId) → persiste el cambio en la línea
+ *   onAssignMember  — async (userId) → agrega empleado a la línea
+ *   onRemoveMember  — async (userId) → quita empleado de la línea (solo cuando canManage)
  *   onClose         — callback para cerrar
  */
-export default function LineFichaModal({ line, companyId, canManage = false, onAssignMember, onClose }) {
+export default function LineFichaModal({ line, companyId, canManage = false, onAssignMember, onRemoveMember, onClose }) {
   const navigate = useNavigate();
   const { userProfile, can = () => true } = useAuth();
   const privileged = isFinancePrivileged(userProfile);
@@ -39,6 +40,7 @@ export default function LineFichaModal({ line, companyId, canManage = false, onA
   const [memberView, setMemberView] = useState("tarjetas");
   const [clientView, setClientView] = useState("tarjetas");
   const [saving, setSaving]     = useState(false);
+  const [removingId, setRemovingId] = useState(null);
 
   // Derivados por render (sin refetch al cambiar member_user_ids)
   const memberIds = line.member_user_ids ?? [];
@@ -91,6 +93,14 @@ export default function LineFichaModal({ line, companyId, canManage = false, onA
     setSaving(true);
     await onAssignMember(userId);
     setSaving(false);
+  }
+
+  // Quitar empleado de la línea
+  async function handleRemove(userId) {
+    if (!onRemoveMember) return;
+    setRemovingId(userId);
+    await onRemoveMember(userId);
+    setRemovingId(null);
   }
 
   return (
@@ -164,12 +174,61 @@ export default function LineFichaModal({ line, companyId, canManage = false, onA
                     <p className="text-[11.5px] font-mono font-bold uppercase tracking-[0.12em] text-[#aaa]">
                       Miembros
                     </p>
-                    {members.length > 0 && (
+                    {members.length > 0 && !onRemoveMember && (
                       <ViewToggle view={memberView} onChange={setMemberView} />
                     )}
                   </div>
                   {members.length === 0 ? (
                     <p className="text-[13.5px] text-[#bbb]">Sin miembros asignados.</p>
+                  ) : onRemoveMember ? (
+                    <div className="flex flex-wrap gap-2">
+                      {members.map(u => {
+                        const name = `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim();
+                        const isRemoving = removingId === u.user_id;
+                        return (
+                          <div
+                            key={u.user_id}
+                            className="flex items-center gap-2 pl-2 pr-1 py-1 rounded-xl bg-[#faf9f5] border border-[#ece9df] hover:border-[#d8d4c6] transition-colors"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => setDrill({ type: "employee", entity: u })}
+                              className="flex items-center gap-2 text-left"
+                              title={`Ver información de ${name}`}
+                            >
+                              <span
+                                className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 overflow-hidden"
+                                style={{ background: u.avatar_url ? undefined : line.color + "33" }}
+                              >
+                                {u.avatar_url ? (
+                                  <img src={u.avatar_url} alt={name} className="w-full h-full object-cover" />
+                                ) : (
+                                  <span style={{ color: line.color }}>
+                                    {`${u.first_name?.[0] ?? ""}${u.last_name?.[0] ?? ""}`.toUpperCase()}
+                                  </span>
+                                )}
+                              </span>
+                              <span className="text-[13px] font-medium text-[#333]">{name}</span>
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isRemoving || !!removingId}
+                              onClick={() => handleRemove(u.user_id)}
+                              aria-label={`Quitar a ${name} de la línea`}
+                              className="w-5 h-5 flex items-center justify-center rounded-lg text-[#bbb] hover:text-red-400 hover:bg-red-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+                            >
+                              {isRemoving ? (
+                                <div className="w-3 h-3 border border-[#FFB800] border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                                  <path d="M1 1l8 8M9 1L1 9"/>
+                                </svg>
+                              )}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
                   ) : (
                     <EntityGridList
                       items={members.map(u => {
