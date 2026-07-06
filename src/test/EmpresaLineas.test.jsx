@@ -45,6 +45,8 @@ const mockLoadCompanyUsers = vi.fn().mockResolvedValue({ data: MOCK_USERS, error
 const mockLoadClients      = vi.fn().mockResolvedValue({ data: MOCK_CLIENTS, error: null })
 const mockLoadYearReports  = vi.fn().mockResolvedValue({ data: MOCK_REPORTS, error: null })
 const mockSeedIfEmpty      = vi.fn().mockResolvedValue(null)
+const mockAddLineMember    = vi.fn().mockResolvedValue({ data: null, error: null })
+const mockRemoveLineMember = vi.fn().mockResolvedValue({ data: null, error: null })
 
 vi.mock('../components/metricas/metricsApi', () => ({
   loadLines:          (...a) => mockLoadLines(...a),
@@ -55,6 +57,8 @@ vi.mock('../components/metricas/metricsApi', () => ({
   loadClients:        (...a) => mockLoadClients(...a),
   loadYearReports:    (...a) => mockLoadYearReports(...a),
   seedMetricsIfEmpty: (...a) => mockSeedIfEmpty(...a),
+  addLineMember:      (...a) => mockAddLineMember(...a),
+  removeLineMember:   (...a) => mockRemoveLineMember(...a),
 }))
 
 // ── Mock supabase (realtime) ──────────────────────────────────────────────────

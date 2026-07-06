@@ -1,6 +1,6 @@
 /**
  * Utilidades puras para gestionar la relación empleado↔línea.
- * member_user_ids es un array jsonb en metric_lines: [user_id, ...]
+ * member_user_ids se reconstruye desde metric_line_members al cargar líneas.
  * Mover un empleado = quitar su id de la línea anterior, añadirlo a la nueva.
  */
 

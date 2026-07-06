@@ -8,11 +8,19 @@ import { SEED_LINES, SEED_CLIENTES } from "./constants";
 // ─── Líneas ───────────────────────────────────────────────────────────────────
 
 export async function loadLines(companyId) {
-  return supabase
+  const { data, error } = await supabase
     .from("metric_lines")
-    .select("*")
+    .select("*, members:metric_line_members(user_id)")
     .eq("company_id", companyId)
     .order("sort_order");
+  return {
+    data: (data ?? []).map(line => ({
+      ...line,
+      member_user_ids: (line.members ?? []).map(m => m.user_id),
+      members: undefined,
+    })),
+    error,
+  };
 }
 
 export async function createLine(companyId, { name, color, sort_order }) {
@@ -34,6 +42,20 @@ export async function updateLine(lineId, updates) {
 
 export async function deleteLine(lineId) {
   return supabase.from("metric_lines").delete().eq("id", lineId);
+}
+
+export async function addLineMember(lineId, userId) {
+  return supabase
+    .from("metric_line_members")
+    .insert({ line_id: lineId, user_id: userId });
+}
+
+export async function removeLineMember(lineId, userId) {
+  return supabase
+    .from("metric_line_members")
+    .delete()
+    .eq("line_id", lineId)
+    .eq("user_id", userId);
 }
 
 // ─── Clientes ─────────────────────────────────────────────────────────────────
