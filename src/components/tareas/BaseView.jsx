@@ -97,6 +97,100 @@ function StatusBadge({ task, onUpdated }) {
   )
 }
 
+// --- Direction multi-select filter ---
+
+function DirectionFilter({ directionUsers, selectedIds, onChange }) {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handleOutside(e) {
+      if (!containerRef.current?.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleOutside)
+    return () => document.removeEventListener('mousedown', handleOutside)
+  }, [open])
+
+  function toggle(userId) {
+    onChange(
+      selectedIds.includes(userId)
+        ? selectedIds.filter(id => id !== userId)
+        : [...selectedIds, userId],
+    )
+  }
+
+  function label() {
+    if (selectedIds.length === 0) return 'Apoyo dir.: todos'
+    const first = directionUsers.find(u => u.user_id === selectedIds[0])
+    const name = first ? first.first_name : 'Apoyo'
+    return selectedIds.length === 1 ? `Apoyo: ${name}` : `Apoyo: ${name} +${selectedIds.length - 1}`
+  }
+
+  const active = selectedIds.length > 0
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`w-full text-left flex items-center justify-between gap-1 px-3 py-2 text-[14.5px] border rounded-lg outline-none transition-colors ${
+          active
+            ? 'border-[#6366F1] bg-[#f0f0ff] text-[#4338ca] font-semibold'
+            : 'border-[#e0ddd4] bg-white text-[#555]'
+        }`}
+      >
+        <span className="truncate">{label()}</span>
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" className="flex-shrink-0">
+          <path d="M2 3.5l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+
+      {open && (
+        <div data-testid="direction-filter-panel" className="absolute z-50 top-full mt-1 left-0 right-0 bg-white border border-[#e0ddd4] rounded-xl shadow-lg overflow-hidden min-w-[180px]">
+          {directionUsers.length === 0 ? (
+            <p className="px-3 py-2 text-[13.5px] text-[#aaa]">Sin usuarios de dirección</p>
+          ) : (
+            <>
+              <div className="max-h-48 overflow-y-auto py-1">
+                {directionUsers.map(u => {
+                  const checked = selectedIds.includes(u.user_id)
+                  return (
+                    <button
+                      key={u.user_id}
+                      onClick={() => toggle(u.user_id)}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-[#f5f3eb] transition-colors text-left"
+                    >
+                      <div className="flex-shrink-0">
+                        <Avatar user={u} size={24} />
+                      </div>
+                      <span className="flex-1 text-[14px] text-[#333]">{u.first_name} {u.last_name}</span>
+                      {checked && (
+                        <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="#6366F1" strokeWidth="2.5">
+                          <path d="M2 6.5l3.5 3.5L11 3" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+              {active && (
+                <div className="border-t border-[#e0ddd4] px-3 py-1.5">
+                  <button
+                    onClick={() => { onChange([]); setOpen(false) }}
+                    className="text-[13px] font-semibold text-[#888] hover:text-[#111] transition-colors"
+                  >
+                    Limpiar
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // --- Main component ---
 
 export default function BaseView({ tasks, teams, team, usersMap, clientsById = new Map(), onOpenTask, onUpdated }) {
@@ -107,7 +201,7 @@ export default function BaseView({ tasks, teams, team, usersMap, clientsById = n
   const [fStatus, setFStatus] = useState(() => searchParams.get('status') ?? '')
   const [fClient, setFClient] = useState('')
   const [fClientId, setFClientId] = useState(() => searchParams.get('client') ?? '') // client_id desde Reportes
-  const [fSupport, setFSupport] = useState('')   // '' | 'with' | 'without'
+  const [fSupportIds, setFSupportIds] = useState([])  // user_id[] de personas de dirección
   const [fAlert, setFAlert] = useState(() => searchParams.get('fAlert') ?? '')  // '' | 'late' | 'drag' | 'ok'
   const [fAssignee, setFAssignee] = useState(() => searchParams.get('assignee') ?? '') // user_id | ''
 
@@ -123,13 +217,17 @@ export default function BaseView({ tasks, teams, team, usersMap, clientsById = n
       .sort((a, b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`))
   })()
 
+  // Usuarios de dirección: access_level >= 3 (pueden ser asignados como apoyo)
+  const directionUsers = Array.from(usersMap.values())
+    .filter(u => (u.access_level ?? 0) >= 3)
+    .sort((a, b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`))
+
   const filtered = baseTasks.filter(t => {
     const sq = q.toLowerCase()
     if (sq && !((t.client ?? '').toLowerCase().includes(sq) || (t.description ?? '').toLowerCase().includes(sq))) return false
     if (fStatus && t.status !== fStatus) return false
     if (fClient && t.client !== fClient) return false
-    if (fSupport === 'with' && !t.support_id) return false
-    if (fSupport === 'without' && t.support_id) return false
+    if (fSupportIds.length > 0 && !fSupportIds.includes(t.support_id)) return false
     if (fAlert === 'late' && !isLate(t)) return false
     if (fAlert === 'drag' && !isDragged(t)) return false
     if (fAlert === 'ok' && (isLate(t) || isDragged(t))) return false
@@ -138,8 +236,8 @@ export default function BaseView({ tasks, teams, team, usersMap, clientsById = n
     return true
   }).sort((a, b) => (b.request_date ?? '').localeCompare(a.request_date ?? ''))
 
-  const hasFilters = q || fStatus || fClient || fClientId || fSupport || fAlert || fAssignee
-  function clearFilters() { setQ(''); setFStatus(''); setFClient(''); setFClientId(''); setFSupport(''); setFAlert(''); setFAssignee('') }
+  const hasFilters = q || fStatus || fClient || fClientId || fSupportIds.length > 0 || fAlert || fAssignee
+  function clearFilters() { setQ(''); setFStatus(''); setFClient(''); setFClientId(''); setFSupportIds([]); setFAlert(''); setFAssignee('') }
 
   // Nombre del cliente filtrado por ID (para mostrar etiqueta cuando viene de Reportes)
   const activeClientName = fClientId ? clientsById.get(fClientId)?.name ?? null : null
@@ -189,11 +287,11 @@ export default function BaseView({ tasks, teams, team, usersMap, clientsById = n
             <option value="">Cliente: todos</option>
             {clientList.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
-          <select value={fSupport} onChange={e => setFSupport(e.target.value)} className="input-base text-[14.5px] py-2">
-            <option value="">Apoyo dir.: todos</option>
-            <option value="with">Con apoyo</option>
-            <option value="without">Sin apoyo</option>
-          </select>
+          <DirectionFilter
+            directionUsers={directionUsers}
+            selectedIds={fSupportIds}
+            onChange={setFSupportIds}
+          />
           <select value={fAlert} onChange={e => setFAlert(e.target.value)} className="input-base text-[14.5px] py-2">
             <option value="">Alerta: todas</option>
             <option value="late">Retrasadas</option>

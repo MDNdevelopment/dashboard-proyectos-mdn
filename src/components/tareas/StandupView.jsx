@@ -12,6 +12,7 @@ import { Avatar } from "./UserPickerSingle";
 
 const RED = "#E14848";
 const YELLOW = "#FFB800";
+const INDIGO = "#6366F1";
 
 function TaskItem({ task, why, color, usersMap, onOpen }) {
   const assignees = (task.assignee_ids ?? (task.assignee_id ? [task.assignee_id] : [])).map(id => usersMap.get(id)).filter(Boolean);
@@ -81,6 +82,7 @@ export default function StandupView({
   const all = tasks.filter((t) => t.team_id === team.id);
   const red = all.filter((t) => !isClosed(t) && taskLight(t) === "red");
   const yellow = all.filter((t) => !isClosed(t) && taskLight(t) === "yellow");
+  const direction = all.filter((t) => !isClosed(t) && t.support_id);
 
   function reason(t) {
     if (isBlocked(t)) return "Bloqueado";
@@ -109,7 +111,20 @@ export default function StandupView({
         );
       });
     }
-    if (!red.length && !yellow.length) {
+    if (direction.length) {
+      lines.push("");
+      lines.push(`📌 Apoyo de dirección (${direction.length}):`);
+      direction.forEach((t) => {
+        const supportUser = usersMap.get(t.support_id);
+        const supportName = supportUser
+          ? `${supportUser.first_name} ${supportUser.last_name}`
+          : "Dirección";
+        lines.push(
+          `  • ${t.client || "(sin cliente)"} — ${t.description} (apoyo: ${supportName})`,
+        );
+      });
+    }
+    if (!red.length && !yellow.length && !direction.length) {
       lines.push("");
       lines.push("✅ Sin puntos de atención este período.");
     }
@@ -219,6 +234,23 @@ export default function StandupView({
             </span>
           ))}
         </div>
+
+        {/* Separador */}
+        <div className="w-px h-5 bg-[#e0ddd4] mx-1 flex-shrink-0" />
+
+        {/* Dirección */}
+        <div className="flex items-center gap-2">
+          <span
+            className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+            style={{ background: INDIGO }}
+          />
+          <span className="text-[14.5px] font-bold text-[#111]">Dirección</span>
+        </div>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[14px] font-medium text-[#555] bg-[#f0eee6] px-2.5 py-0.5 rounded-full">
+            Apoyo solicitado
+          </span>
+        </div>
       </div>
 
       {/* Cards de semáforo */}
@@ -237,13 +269,13 @@ export default function StandupView({
               Pendientes — Por revisar ({yellow.length})
             </p>
           </div>
-          {yellow.length === 0 ? (
-            <p className="text-[14.5px] text-[#aaa] text-center py-4">
-              Sin tareas
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {yellow.map((t) => (
+          <div className="h-64 overflow-y-auto space-y-2 pr-0.5">
+            {yellow.length === 0 ? (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-[14.5px] text-[#aaa] text-center">Sin tareas</p>
+              </div>
+            ) : (
+              yellow.map((t) => (
                 <TaskItem
                   key={t.id}
                   task={t}
@@ -252,9 +284,9 @@ export default function StandupView({
                   usersMap={usersMap}
                   onOpen={onOpenTask}
                 />
-              ))}
-            </div>
-          )}
+              ))
+            )}
+          </div>
         </div>
 
         {/* Card Roja */}
@@ -271,13 +303,13 @@ export default function StandupView({
               Bloqueadas — Retrasadas ({red.length})
             </p>
           </div>
-          {red.length === 0 ? (
-            <p className="text-[14.5px] text-[#aaa] text-center py-4">
-              Sin tareas
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {red.map((t) => (
+          <div className="h-64 overflow-y-auto space-y-2 pr-0.5">
+            {red.length === 0 ? (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-[14.5px] text-[#aaa] text-center">Sin tareas</p>
+              </div>
+            ) : (
+              red.map((t) => (
                 <TaskItem
                   key={t.id}
                   task={t}
@@ -286,8 +318,46 @@ export default function StandupView({
                   usersMap={usersMap}
                   onOpen={onOpenTask}
                 />
-              ))}
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Card Dirección */}
+      <div
+        className="bg-white rounded-xl border p-4 space-y-2"
+        style={{ borderColor: INDIGO }}
+      >
+        <div className="flex items-center gap-2 mb-3">
+          <span
+            className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+            style={{ background: INDIGO }}
+          />
+          <p className="text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#555]">
+            Asignadas a dirección ({direction.length})
+          </p>
+        </div>
+        <div className="h-64 overflow-y-auto space-y-2 pr-0.5">
+          {direction.length === 0 ? (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-[14.5px] text-[#aaa] text-center">Sin tareas asignadas a dirección</p>
             </div>
+          ) : (
+            direction.map((t) => {
+              const supportUser = usersMap.get(t.support_id);
+              const supportName = supportUser ? supportUser.first_name : "Dirección";
+              return (
+                <TaskItem
+                  key={t.id}
+                  task={t}
+                  why={`Apoyo: ${supportName}`}
+                  color={INDIGO}
+                  usersMap={usersMap}
+                  onOpen={onOpenTask}
+                />
+              );
+            })
           )}
         </div>
       </div>
