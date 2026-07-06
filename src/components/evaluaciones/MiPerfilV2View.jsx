@@ -373,7 +373,7 @@ export default function MiPerfilV2View({ userId, companyId, userProfile, canEval
                     : undefined}
                 />
                 <StatChip
-                  label="Arrastradas"
+                  label="Atrasadas"
                   value={liveMetrics.arrastradas}
                   color={liveMetrics.arrastradas > 0 ? '#F0871F' : '#bbb'}
                   onClick={liveMetrics.arrastradas > 0

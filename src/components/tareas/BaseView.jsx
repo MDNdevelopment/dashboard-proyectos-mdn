@@ -295,7 +295,7 @@ export default function BaseView({ tasks, teams, team, usersMap, clientsById = n
           <select value={fAlert} onChange={e => setFAlert(e.target.value)} className="input-base text-[14.5px] py-2">
             <option value="">Alerta: todas</option>
             <option value="late">Retrasadas</option>
-            <option value="drag">Arrastradas (mes anterior)</option>
+            <option value="drag">Atrasadas (mes anterior)</option>
             <option value="ok">Al día</option>
           </select>
         </div>
@@ -386,7 +386,7 @@ export default function BaseView({ tasks, teams, team, usersMap, clientsById = n
                       </td>
                       <td className="px-4 py-3 text-[#333] max-w-[220px]">
                         <span className="line-clamp-2">{t.description}</span>
-                        {drag && !late && <span className="block text-[13px] text-[#F0871F] mt-0.5">Arrastrada</span>}
+                        {drag && !late && <span className="block text-[13px] text-[#F0871F] mt-0.5">Atrasada</span>}
                       </td>
                       <td className="px-4 py-3">
                         <StatusBadge task={t} onUpdated={onUpdated} />

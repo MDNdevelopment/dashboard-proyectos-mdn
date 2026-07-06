@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../../supabase'
 import { useAuth } from '../../context/AuthContext'
 import { ESTADOS } from './constants'
@@ -19,6 +19,7 @@ const EMPTY = {
   due_date: '',
   closed_date: '',
   status: 'En proceso',
+  blocked_reason: '',
 }
 
 export default function TaskModal({ task = null, teams = [], clients = [], users = [], defaultTeamId = null, onClose, onCreated, onUpdated }) {
@@ -43,6 +44,7 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
         due_date: task.due_date ?? '',
         closed_date: task.closed_date ?? '',
         status: task.status ?? 'En proceso',
+        blocked_reason: task.blocked_reason ?? '',
       }
     }
     // For new tasks, level-1 users are always an assignee (locked).
@@ -56,12 +58,33 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
   const { requestClose } = useUnsavedChanges({ value: form, baseline: initialForm.current, onClose })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+  const [comments, setComments] = useState([])
+  const [commentsLoading, setCommentsLoading] = useState(false)
+  const [newComment, setNewComment] = useState('')
+  const [sendingComment, setSendingComment] = useState(false)
 
   useEffect(() => {
     const fn = e => { if (e.key === 'Escape') requestClose() }
     document.addEventListener('keydown', fn)
     return () => document.removeEventListener('keydown', fn)
   }, [requestClose])
+
+  useEffect(() => {
+    if (!isEdit) return
+    let cancelled = false
+    setCommentsLoading(true)
+    ;(async () => {
+      const { data } = await supabase
+        .from('task_comments')
+        .select('*')
+        .eq('task_id', task.id)
+      if (cancelled) return
+      const sorted = (data ?? []).slice().sort((a, b) => a.created_at < b.created_at ? -1 : 1)
+      setComments(sorted)
+      setCommentsLoading(false)
+    })()
+    return () => { cancelled = true }
+  }, [task?.id, isEdit])
 
   function set(field, value) {
     setForm(f => ({ ...f, [field]: value }))
@@ -88,6 +111,7 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
       due_date: form.due_date || null,
       closed_date: form.closed_date || null,
       status: form.status,
+      blocked_reason: form.status === 'Bloqueado' ? (form.blocked_reason || null) : null,
     }
 
     if (isEdit) {
@@ -109,6 +133,25 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
       onCreated(data)
     }
     onClose()
+  }
+
+  async function handleAddComment() {
+    const content = newComment.trim()
+    if (!content) return
+    setSendingComment(true)
+    const { data } = await supabase
+      .from('task_comments')
+      .insert({
+        task_id: task.id,
+        company_id: userProfile?.company_id ?? '',
+        author_id: userProfile?.user_id ?? '',
+        content,
+      })
+      .select()
+      .single()
+    if (data) setComments(prev => [...prev, data])
+    setNewComment('')
+    setSendingComment(false)
   }
 
   async function handleDelete() {
@@ -307,11 +350,28 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
                   set('closed_date', new Date().toISOString().slice(0, 10))
                 }
                 if (val !== 'Terminado') set('closed_date', '')
+                if (val !== 'Bloqueado') set('blocked_reason', '')
               }}
             >
               {ESTADOS.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
+
+          {form.status === 'Bloqueado' && (
+            <div>
+              <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+                Razón del bloqueo
+                <span className="ml-1 font-normal normal-case text-[#bbb]">(opcional)</span>
+              </label>
+              <textarea
+                className="input-base"
+                rows={2}
+                placeholder="¿Por qué está bloqueada esta tarea?"
+                value={form.blocked_reason}
+                onChange={e => set('blocked_reason', e.target.value)}
+              />
+            </div>
+          )}
 
           {form.status === 'Terminado' && (
             <div>
@@ -336,6 +396,74 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
             </div>
           </div>
         </form>
+
+        {/* Sección de comentarios — solo en modo edición */}
+        {isEdit && (
+          <div className="px-6 pb-6 border-t border-[#ece9df] mt-1">
+            <p className="text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] pt-4 mb-3">
+              Comentarios
+            </p>
+
+            {commentsLoading ? (
+              <div className="flex justify-center py-4">
+                <div className="w-4 h-4 border-2 border-[#FFB800] border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : comments.length === 0 ? (
+              <p className="text-[13px] text-[#bbb] mb-3">Sin comentarios aún.</p>
+            ) : (
+              <div className="space-y-3 mb-4 max-h-[220px] overflow-y-auto pr-1">
+                {comments.map(c => {
+                  const author = users.find(u => u.user_id === c.author_id)
+                  const authorName = author
+                    ? [author.first_name, author.last_name].filter(Boolean).join(' ')
+                    : 'Usuario'
+                  const ts = new Date(c.created_at).toLocaleString('es-VE', {
+                    dateStyle: 'short',
+                    timeStyle: 'short',
+                  })
+                  return (
+                    <div key={c.id} className="flex gap-2.5">
+                      <div className="w-7 h-7 rounded-full bg-[#f0ede3] flex items-center justify-center flex-shrink-0 text-[11px] font-bold text-[#aaa] uppercase">
+                        {authorName[0] ?? '?'}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline gap-2 mb-0.5">
+                          <span className="text-[13px] font-semibold text-[#111]">{authorName}</span>
+                          <span className="text-[11px] font-mono text-[#bbb]">{ts}</span>
+                        </div>
+                        <p className="text-[14px] text-[#444] leading-snug whitespace-pre-wrap break-words">{c.content}</p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            <div className="flex gap-2 items-end">
+              <textarea
+                className="input-base flex-1 text-[14px] resize-none"
+                rows={2}
+                placeholder="Escribe un comentario..."
+                value={newComment}
+                onChange={e => setNewComment(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleAddComment()
+                }}
+              />
+              <button
+                type="button"
+                onClick={handleAddComment}
+                disabled={sendingComment || !newComment.trim()}
+                className="px-3 py-2 rounded-xl text-[14px] font-semibold bg-[#111] text-white hover:bg-[#222] transition-colors disabled:opacity-40 flex-shrink-0"
+              >
+                {sendingComment ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : 'Enviar'}
+              </button>
+            </div>
+            <p className="text-[11px] text-[#bbb] mt-1">Ctrl+Enter para enviar</p>
+          </div>
+        )}
       </div>
     </div>
   )
