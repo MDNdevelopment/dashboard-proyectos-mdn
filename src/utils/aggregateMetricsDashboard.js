@@ -10,7 +10,7 @@
  * @param {Function} calcFinanzasFn - calcFinanzas(report).
  * @returns {object} Objeto con toda la información para el Dashboard General.
  */
-export function aggregateMetricsDashboard(lines, reports, year, calcTotalFn, sumScoreFn, calcFinanzasFn) {
+export function aggregateMetricsDashboard(lines, reports, year, calcTotalFn, sumScoreFn, calcFinanzasFn, referenceMonth = null) {
   // Índice rápido: (lineId, month) → report
   const reportIndex = {};
   reports.forEach(r => {
@@ -31,7 +31,7 @@ export function aggregateMetricsDashboard(lines, reports, year, calcTotalFn, sum
   }
 
   const today = new Date();
-  const currentMonth = today.getFullYear() === year ? today.getMonth() + 1 : 12;
+  const currentMonth = referenceMonth ?? (today.getFullYear() === year ? today.getMonth() + 1 : 12);
 
   // Matriz línea × mes → score (null si no hay reporte)
   const matrix = {};
@@ -103,7 +103,7 @@ export function aggregateMetricsDashboard(lines, reports, year, calcTotalFn, sum
 
   return {
     matrix,
-    currentMonth,
+    currentMonth, // expuesto para tests y KPI label
     promAnual,
     promMesActual,
     lider,

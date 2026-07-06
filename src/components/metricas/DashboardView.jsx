@@ -13,12 +13,16 @@ import { aggregateMetricsDashboard } from "../../utils/aggregateMetricsDashboard
 import { MONTHS } from "./constants";
 
 const CURRENT_YEAR = new Date().getFullYear();
+const CURRENT_MONTH = new Date().getMonth() + 1;
+const PREV_MONTH = CURRENT_MONTH === 1 ? 12 : CURRENT_MONTH - 1;
+const DEFAULT_YEAR = CURRENT_MONTH === 1 ? CURRENT_YEAR - 1 : CURRENT_YEAR;
 const YEARS = Array.from({ length: 4 }, (_, i) => CURRENT_YEAR - i);
 
 export default function DashboardView({ companyId, lines }) {
   const navigate = useNavigate();
   const { can = () => true } = useAuth();
-  const [year, setYear] = useState(CURRENT_YEAR);
+  const [year, setYear] = useState(DEFAULT_YEAR);
+  const [selectedMonth, setSelectedMonth] = useState(PREV_MONTH);
   const [reports, setReports] = useState([]);
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -53,7 +57,7 @@ export default function DashboardView({ companyId, lines }) {
     );
   }
 
-  const agg = aggregateMetricsDashboard(lines, reports, year, calcTotal, sumScore, calcFinanzas);
+  const agg = aggregateMetricsDashboard(lines, reports, year, calcTotal, sumScore, calcFinanzas, selectedMonth);
   const {
     matrix, currentMonth, promMesActual, lider,
     ranking, rankingMonth, finTotalesPorLinea,
@@ -91,6 +95,14 @@ export default function DashboardView({ companyId, lines }) {
           Comparativa anual de las {lines.length} líneas operativas
         </p>
         <div className="flex items-center gap-2">
+          <span className="text-[13px] font-mono font-bold uppercase tracking-[0.1em] text-[#888]">Mes</span>
+          <select
+            className="input-base py-1 text-[15px]"
+            value={selectedMonth}
+            onChange={e => setSelectedMonth(Number(e.target.value))}
+          >
+            {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+          </select>
           <span className="text-[13px] font-mono font-bold uppercase tracking-[0.1em] text-[#888]">Año</span>
           <select
             className="input-base py-1 text-[15px]"

@@ -87,6 +87,20 @@ describe("aggregateMetricsDashboard", () => {
     expect(agg.finTotalesPorLinea["l1"].nomina).toBe(800);
   });
 
+  it("usa referenceMonth como currentMonth cuando se pasa como 7.° argumento", () => {
+    const reports = makeReports(year); // datos en meses 1 y 2
+    const agg = aggregateMetricsDashboard(LINES, reports, year, calcTotal, sumScore, calcFinanzas, 1);
+    expect(agg.currentMonth).toBe(1);
+    expect(agg.promMesActual).not.toBeNull();
+  });
+
+  it("sin referenceMonth usa el mes actual del sistema", () => {
+    const reports = makeReports(year);
+    const agg = aggregateMetricsDashboard(LINES, reports, year, calcTotal, sumScore, calcFinanzas);
+    const sysMonth = new Date().getFullYear() === year ? new Date().getMonth() + 1 : 12;
+    expect(agg.currentMonth).toBe(sysMonth);
+  });
+
   it("meses marcados como incompletos quedan excluidos de matrix/promAnual/lider", () => {
     // l1 mes 1 completo + mes 2 marcado incompleto; l2 mes 1 completo
     const reports = [

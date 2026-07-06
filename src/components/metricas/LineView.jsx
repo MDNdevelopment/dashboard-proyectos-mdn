@@ -10,6 +10,8 @@ const MONTHS = [
 
 const CURRENT_YEAR = new Date().getFullYear();
 const CURRENT_MONTH = new Date().getMonth() + 1;
+const PREV_MONTH = CURRENT_MONTH === 1 ? 12 : CURRENT_MONTH - 1;
+const DEFAULT_YEAR = CURRENT_MONTH === 1 ? CURRENT_YEAR - 1 : CURRENT_YEAR;
 const YEARS = Array.from({ length: 4 }, (_, i) => CURRENT_YEAR - i);
 
 const VALID_TABS = ["hub", "operaciones", "finanzas"];
@@ -22,11 +24,11 @@ export default function LineView({ line, companyId, onLinesChange }) {
   const subView = VALID_TABS.includes(rawTab) ? rawTab : "hub";
 
   const rawYear = Number(searchParams.get("year"));
-  const year = rawYear >= 2020 && rawYear <= 2099 ? rawYear : CURRENT_YEAR;
+  const year = rawYear >= 2020 && rawYear <= 2099 ? rawYear : DEFAULT_YEAR;
 
   const rawMonth = Number(searchParams.get("month"));
   // Clamp month: never allow a future month in the current year
-  const clampedMonth = rawMonth >= 1 && rawMonth <= 12 ? rawMonth : CURRENT_MONTH;
+  const clampedMonth = rawMonth >= 1 && rawMonth <= 12 ? rawMonth : PREV_MONTH;
   const month = (year === CURRENT_YEAR && clampedMonth > CURRENT_MONTH) ? CURRENT_MONTH : clampedMonth;
 
   function setParam(key, value) {
