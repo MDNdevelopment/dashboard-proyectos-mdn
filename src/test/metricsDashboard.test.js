@@ -79,12 +79,20 @@ describe("aggregateMetricsDashboard", () => {
     expect(agg.ranking).toHaveLength(0);
   });
 
-  it("finanzas por línea acumula ingresos y egresos del año", () => {
+  it("finanzas por línea muestra solo el mes seleccionado", () => {
     const reports = makeReports(year);
-    const agg = aggregateMetricsDashboard(LINES, reports, year, calcTotal, sumScore, calcFinanzas);
-    // l1 tiene 2 meses de datos financieros: ingresos 1000 cada uno = 2000
-    expect(agg.finTotalesPorLinea["l1"].ingresos).toBe(2000);
-    expect(agg.finTotalesPorLinea["l1"].nomina).toBe(800);
+    // Mes 1: l1 tiene datos, ingresos = 1000, nómina = 400
+    const agg1 = aggregateMetricsDashboard(LINES, reports, year, calcTotal, sumScore, calcFinanzas, 1);
+    expect(agg1.finTotalesPorLinea["l1"].ingresos).toBe(1000);
+    expect(agg1.finTotalesPorLinea["l1"].nomina).toBe(400);
+    // Mes 2: l1 tiene datos, ingresos = 1000, nómina = 400
+    const agg2 = aggregateMetricsDashboard(LINES, reports, year, calcTotal, sumScore, calcFinanzas, 2);
+    expect(agg2.finTotalesPorLinea["l1"].ingresos).toBe(1000);
+    expect(agg2.finTotalesPorLinea["l1"].nomina).toBe(400);
+    // Mes 3: l1 sin datos → todo 0
+    const agg3 = aggregateMetricsDashboard(LINES, reports, year, calcTotal, sumScore, calcFinanzas, 3);
+    expect(agg3.finTotalesPorLinea["l1"].ingresos).toBe(0);
+    expect(agg3.finTotalesPorLinea["l1"].egresos).toBe(0);
   });
 
   it("usa referenceMonth como currentMonth cuando se pasa como 7.° argumento", () => {
@@ -123,7 +131,11 @@ describe("aggregateMetricsDashboard", () => {
     expect(agg.lider).not.toBeNull();
     expect(agg.lider.line.id).toBe("l1");
 
-    // Las finanzas del mes incompleto SÍ se acumulan (el flag solo afecta la nota)
-    expect(agg.finTotalesPorLinea["l1"].ingresos).toBe(2000); // 2 meses de finanzas
+    // Finanzas del mes 1 (completo): ingresos = 1000
+    const aggM1 = aggregateMetricsDashboard(LINES, reports, year, calcTotal, sumScore, calcFinanzas, 1);
+    expect(aggM1.finTotalesPorLinea["l1"].ingresos).toBe(1000);
+    // Finanzas del mes 2 (incompleto en score pero con datos financieros): ingresos = 1000
+    const aggM2 = aggregateMetricsDashboard(LINES, reports, year, calcTotal, sumScore, calcFinanzas, 2);
+    expect(aggM2.finTotalesPorLinea["l1"].ingresos).toBe(1000);
   });
 });

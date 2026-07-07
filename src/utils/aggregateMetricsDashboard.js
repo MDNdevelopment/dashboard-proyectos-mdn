@@ -89,16 +89,13 @@ export function aggregateMetricsDashboard(lines, reports, year, calcTotalFn, sum
     finanzasPorLinea[line.id] = meses;
   });
 
-  // Totales financieros por línea para el año
+  // Totales financieros por línea para el mes seleccionado
   const finTotalesPorLinea = {};
   lines.forEach(line => {
-    const meses = finanzasPorLinea[line.id].filter(Boolean);
-    finTotalesPorLinea[line.id] = {
-      ingresos:  meses.reduce((a, m) => a + m.totIngresos, 0),
-      egresos:   meses.reduce((a, m) => a + m.totEgresos, 0),
-      diferencia: meses.reduce((a, m) => a + m.diferencia, 0),
-      nomina:    meses.reduce((a, m) => a + m.totSueldos, 0),
-    };
+    const m = finanzasPorLinea[line.id][currentMonth - 1];
+    finTotalesPorLinea[line.id] = m
+      ? { ingresos: m.totIngresos, egresos: m.totEgresos, diferencia: m.diferencia, nomina: m.totSueldos }
+      : { ingresos: 0, egresos: 0, diferencia: 0, nomina: 0 };
   });
 
   return {
