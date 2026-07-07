@@ -13,8 +13,10 @@
  */
 export function notifIcon(type) {
   const icons = {
-    task_assigned:           '📋',
-    project_added:           '📁',
+    task_assigned:               '📋',
+    task_comment:                '💬',
+    checklist_item_assigned:     '☑️',
+    project_added:               '📁',
     client_anniversary:      '🎂',
     client_mdn_anniversary:  '🤝',
     client_contact_birthday: '🎂',
@@ -31,8 +33,10 @@ export function notifIcon(type) {
  */
 export function notifLabel(type) {
   const labels = {
-    task_assigned:           'Tarea asignada',
-    project_added:           'Proyecto',
+    task_assigned:               'Tarea asignada',
+    task_comment:                'Comentario en tarea',
+    checklist_item_assigned:     'Ítem asignado',
+    project_added:               'Proyecto',
     client_anniversary:      'Aniversario de cliente',
     client_mdn_anniversary:  'Aniversario MDN',
     client_contact_birthday: 'Cumpleaños de contacto',
@@ -52,7 +56,7 @@ export function notifLabel(type) {
 export function notifRoute(notif) {
   const { type, entity_type, entity_id } = notif
 
-  if (type === 'task_assigned') return '/tareas'
+  if (type === 'task_assigned' || type === 'task_comment' || type === 'checklist_item_assigned') return '/tareas'
   if (type === 'project_added') {
     // Deep-link to the project modal via ?projectId=uuid (AppLayout reads this param)
     if (entity_id) return `/?projectId=${entity_id}`

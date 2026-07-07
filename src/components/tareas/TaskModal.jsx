@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../../supabase'
 import { useAuth } from '../../context/AuthContext'
-import { ESTADOS } from './constants'
+import { ESTADOS, COL_META } from './constants'
+import { newChecklistItem, clampItemDueDate, checklistProgress } from './taskChecklist'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import UserPickerSingle from './UserPickerSingle'
 import UserPickerMulti from './UserPickerMulti'
@@ -20,6 +21,7 @@ const EMPTY = {
   closed_date: '',
   status: 'En proceso',
   blocked_reason: '',
+  checklist: [],
 }
 
 export default function TaskModal({ task = null, teams = [], clients = [], users = [], defaultTeamId = null, onClose, onCreated, onUpdated }) {
@@ -45,6 +47,7 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
         closed_date: task.closed_date ?? '',
         status: task.status ?? 'En proceso',
         blocked_reason: task.blocked_reason ?? '',
+        checklist: task.checklist ?? [],
       }
     }
     // For new tasks, level-1 users are always an assignee (locked).
@@ -112,6 +115,7 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
       closed_date: form.closed_date || null,
       status: form.status,
       blocked_reason: form.status === 'Bloqueado' ? (form.blocked_reason || null) : null,
+      checklist: form.checklist,
     }
 
     if (isEdit) {
@@ -164,6 +168,22 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
 
   // IDs bloqueados: nivel-1 no puede quitarse a sí mismo
   const lockedAssigneeIds = privileged ? [] : (userProfile?.user_id ? [userProfile.user_id] : [])
+
+  const { done: checkDone, total: checkTotal } = checklistProgress(form.checklist)
+
+  // Actualiza un ítem del checklist de forma inmutable
+  function setChecklistItem(id, patch) {
+    setForm(f => ({
+      ...f,
+      checklist: f.checklist.map(item => item.id === id ? { ...item, ...patch } : item),
+    }))
+  }
+  function addChecklistItem() {
+    setForm(f => ({ ...f, checklist: [...f.checklist, newChecklistItem()] }))
+  }
+  function removeChecklistItem(id) {
+    setForm(f => ({ ...f, checklist: f.checklist.filter(item => item.id !== id) }))
+  }
 
   return (
     <div
@@ -396,6 +416,102 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
             </div>
           </div>
         </form>
+
+        {/* Sección de checklist — disponible en creación y edición */}
+        <div className="px-6 pb-4 border-t border-[#ece9df] mt-1">
+          <div className="flex items-center justify-between pt-4 mb-3">
+            <p className="text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">
+              Actividades{form.checklist.length > 0 ? ` (${checkDone}/${checkTotal})` : ''}
+            </p>
+            <button
+              type="button"
+              onClick={addChecklistItem}
+              className="flex items-center gap-1 text-[13px] font-semibold text-[#555] hover:text-[#111] transition-colors"
+            >
+              <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.8">
+                <path d="M6 1v10M1 6h10" strokeLinecap="round"/>
+              </svg>
+              Agregar ítem
+            </button>
+          </div>
+
+          {form.checklist.length === 0 ? (
+            <p className="text-[13px] text-[#bbb]">Sin ítems. Agrega pasos con el botón de arriba.</p>
+          ) : (
+            <div className="space-y-2">
+              {form.checklist.map(item => {
+                const selectedTeam = teams.find(t => t.id === form.team_id)
+                const teamMembers = teamMemberUsers(users, selectedTeam)
+                // Incluir usuarios de dirección (nivel ≥ 3) que no sean ya miembros del team
+                const directionExtras = users.filter(u =>
+                  (u.access_level ?? 0) >= 3 && !teamMembers.some(m => m.user_id === u.user_id)
+                )
+                const checklistAssigneeOptions = [...teamMembers, ...directionExtras]
+                const clamped = item.due_date && clampItemDueDate(item.due_date, form) !== item.due_date
+                return (
+                  <div key={item.id} className="rounded-xl border border-[#ece9df] bg-[#fafaf8] p-3 space-y-2">
+                    {/* Fila superior: checkbox + título + quitar */}
+                    <div className="flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        checked={item.done}
+                        onChange={e => setChecklistItem(item.id, { done: e.target.checked })}
+                        className="mt-1 w-4 h-4 rounded accent-[#111] flex-shrink-0 cursor-pointer"
+                      />
+                      <input
+                        type="text"
+                        value={item.title}
+                        onChange={e => setChecklistItem(item.id, { title: e.target.value })}
+                        placeholder="Descripción del ítem..."
+                        className={`flex-1 text-[15px] bg-transparent border-none outline-none placeholder-[#ccc] ${item.done ? 'line-through text-[#aaa]' : 'text-[#333]'}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeChecklistItem(item.id)}
+                        className="text-[#ccc] hover:text-red-400 transition-colors flex-shrink-0 mt-0.5"
+                        aria-label="Quitar ítem"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round"/>
+                        </svg>
+                      </button>
+                    </div>
+                    {/* Fila inferior: encargado + fecha */}
+                    <div className="flex items-center gap-2 pl-6">
+                      <div className="w-[190px] flex-shrink-0">
+                        <label className="block text-[11px] font-mono font-bold tracking-[0.1em] uppercase text-[#aaa] mb-0.5">Encargado</label>
+                        <UserPickerSingle
+                          users={checklistAssigneeOptions}
+                          selectedId={item.assignee_id}
+                          onChange={id => setChecklistItem(item.id, { assignee_id: id })}
+                          placeholder="Encargado..."
+                          clearable
+                        />
+                      </div>
+                      <div className="flex-shrink-0">
+                        <label className="block text-[11px] font-mono font-bold tracking-[0.1em] uppercase text-[#aaa] mb-0.5">Fecha de entrega</label>
+                        <input
+                          type="date"
+                          value={item.due_date}
+                          min={form.request_date || undefined}
+                          max={form.due_date || undefined}
+                          onChange={e => {
+                            const clamped = clampItemDueDate(e.target.value, form)
+                            setChecklistItem(item.id, { due_date: clamped })
+                          }}
+                          className="input-base text-[13px] py-1 px-2 w-[140px]"
+                        />
+                        {clamped && (
+                          <p className="text-[11px] text-[#F0871F] mt-0.5">Fecha ajustada al rango de la tarea</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
 
         {/* Sección de comentarios — solo en modo edición */}
         {isEdit && (

@@ -1,4 +1,5 @@
 import { isLate, fmtShort, ESTADOS, COL_META } from './constants'
+import { checklistProgress } from './taskChecklist'
 import { Avatar } from './UserPickerSingle'
 import { updateTaskStatus } from './taskStatus'
 
@@ -28,7 +29,16 @@ function KanbanCard({ task, usersMap, clientsById, onOpen, onChangeStatus }) {
           <p className="text-[14.5px] font-bold text-[#111] leading-tight"><span className="text-[#bbb] font-normal">Sin cliente</span></p>
         )}
       </div>
-      <p className="text-[14px] text-[#555] line-clamp-2 mb-2">{task.description}</p>
+      <p className="text-[14px] text-[#555] line-clamp-2 mb-1">{task.description}</p>
+      {(() => {
+        const { done, total } = checklistProgress(task.checklist)
+        if (total === 0) return null
+        return (
+          <span className="inline-flex items-center gap-1 mb-2 text-[11px] font-mono text-[#999]">
+            Actividades: {done}/{total}
+          </span>
+        )
+      })()}
       {support && (
         <p className="text-[13px] text-[#888] mb-2">
           🤝 {support.first_name} {support.last_name}

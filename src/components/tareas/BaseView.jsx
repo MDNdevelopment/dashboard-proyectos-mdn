@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
 import { isLate, isDragged, isClosed, fmtShort, ESTADOS, COL_META } from './constants'
+import { checklistProgress } from './taskChecklist'
 import { Avatar } from './UserPickerSingle'
 import { teamMemberUsers } from '../../utils/lineFilters'
 import { updateTaskStatus } from './taskStatus'
@@ -133,7 +134,7 @@ function DirectionFilter({ directionUsers, selectedIds, onChange }) {
     <div ref={containerRef} className="relative">
       <button
         onClick={() => setOpen(o => !o)}
-        className={`w-full text-left flex items-center justify-between gap-1 px-3 py-2 text-[14.5px] border rounded-lg outline-none transition-colors ${
+        className={`w-full text-left flex items-center justify-between gap-1 px-3 py-[10px] text-[14.5px] border rounded-lg outline-none transition-colors ${
           active
             ? 'border-[#6366F1] bg-[#f0f0ff] text-[#4338ca] font-semibold'
             : 'border-[#e0ddd4] bg-white text-[#555]'
@@ -268,7 +269,7 @@ export default function BaseView({ tasks, teams, team, usersMap, clientsById = n
               value={q}
               onChange={e => setQ(e.target.value)}
               placeholder="Buscar tarea o cliente..."
-              className="w-full pl-8 pr-3 py-2 text-[14.5px] bg-white border border-[#e0ddd4] rounded-lg outline-none focus:border-[#bbb] transition-colors"
+              className="w-full pl-8 pr-3 py-[10px] text-[14.5px] bg-white border border-[#e0ddd4] rounded-lg outline-none focus:border-[#bbb] transition-colors"
             />
           </div>
           <select value={fAssignee} onChange={e => setFAssignee(e.target.value)} className="input-base text-[14.5px] py-2">
@@ -387,6 +388,15 @@ export default function BaseView({ tasks, teams, team, usersMap, clientsById = n
                       <td className="px-4 py-3 text-[#333] max-w-[220px]">
                         <span className="line-clamp-2">{t.description}</span>
                         {drag && !late && <span className="block text-[13px] text-[#F0871F] mt-0.5">Atrasada</span>}
+                        {(() => {
+                          const { done, total } = checklistProgress(t.checklist)
+                          if (total === 0) return null
+                          return (
+                            <span className="inline-flex items-center gap-1 mt-1 text-[11px] font-mono text-[#999]">
+                              Actividades: {done}/{total}
+                            </span>
+                          )
+                        })()}
                       </td>
                       <td className="px-4 py-3">
                         <StatusBadge task={t} onUpdated={onUpdated} />

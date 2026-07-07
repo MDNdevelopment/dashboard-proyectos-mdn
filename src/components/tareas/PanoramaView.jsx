@@ -1,4 +1,4 @@
-import { fmtMonth, lightOf, teamMonthStats } from "./constants";
+import { fmtMonth, lightOf, teamMonthStats, ESTADOS, COL_META } from "./constants";
 
 const TEAM_PALETTES = [
   { bg: "#e9e3f8", fg: "#6A5A9E" },
@@ -139,16 +139,15 @@ export default function PanoramaView({ teams, tasks, monthIdx, onSelectTeam }) {
           {ranked.map((s, i) => {
             const lg = lightOf(s.pct, s.total);
             const isLead = withMov.length > 0 && i === 0 && s.total > 0;
+            const teamTasks = tasks.filter((t) => t.team_id === s.team.id);
+            const tot = teamTasks.length;
+            const counts = ESTADOS.map((e) => ({ e, n: teamTasks.filter((t) => t.status === e).length }));
             return (
               <button
                 key={s.team.id}
                 onClick={() => onSelectTeam(s.team.id)}
                 className="bg-white rounded-xl border border-[#e0ddd4] p-4 text-left hover:border-[#FFB800] hover:shadow-md transition-all group"
               >
-                <div
-                  className="h-1.5 rounded-full mb-3"
-                  style={{ background: isLead ? "#FFB800" : s.palette.bg }}
-                />
                 <div className="flex items-center gap-2.5 mb-3">
                   <div
                     className="w-9 h-9 rounded-full flex items-center justify-center text-[16px] font-bold flex-shrink-0"
@@ -168,9 +167,6 @@ export default function PanoramaView({ teams, tasks, monthIdx, onSelectTeam }) {
                       {isLead ? "⭐ Líder del mes" : "Línea operativa"}
                     </p>
                   </div>
-                  <span className="ml-auto text-[13px] font-mono text-[#888]">
-                    #{i + 1}
-                  </span>
                 </div>
                 <div className="mb-2">
                   <span
@@ -185,21 +181,36 @@ export default function PanoramaView({ teams, tasks, monthIdx, onSelectTeam }) {
                       : "sin movimiento"}
                   </span>
                 </div>
-                <div className="h-1.5 rounded-full bg-[#f0ede3] mb-3 overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all"
-                    style={{ width: `${s.pct}%`, background: lg.color }}
-                  />
-                </div>
-                <div className="flex items-center justify-between text-[13.5px] text-[#888]">
-                  <span>
-                    <b className="text-[#111]">{s.bloqueados}</b> bloq.
-                  </span>
-                  <span>
-                    <b className="text-[#111]">{s.retrasados}</b> atraso
-                  </span>
-                  <SemLight light={lg} />
-                </div>
+                {tot > 0 && (
+                  <>
+                    <div className="flex rounded-full overflow-hidden h-1.5 mb-2">
+                      {counts.filter((c) => c.n > 0).map((c) => (
+                        <div
+                          key={c.e}
+                          style={{ width: `${(c.n / tot) * 100}%`, background: COL_META[c.e]?.color ?? "#ccc" }}
+                          title={`${c.e}: ${c.n}`}
+                        />
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap gap-x-2 gap-y-1 mb-3">
+                      {counts.filter((c) => c.n > 0).map((c) => (
+                        <span key={c.e} className="flex items-center gap-1 text-[12px] text-[#555]">
+                          <span
+                            style={{
+                              width: 7,
+                              height: 7,
+                              borderRadius: "50%",
+                              background: COL_META[c.e]?.color ?? "#ccc",
+                              display: "inline-block",
+                              flexShrink: 0,
+                            }}
+                          />
+                          <b className="text-[#111]">{c.n}</b> {c.e}
+                        </span>
+                      ))}
+                    </div>
+                  </>
+                )}
               </button>
             );
           })}

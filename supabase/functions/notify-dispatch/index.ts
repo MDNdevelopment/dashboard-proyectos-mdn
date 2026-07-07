@@ -39,8 +39,10 @@ interface NotificationRecord {
 
 function buildEmailHtml(notif: NotificationRecord, firstName: string): string {
   const typeLabels: Record<string, string> = {
-    task_assigned:          'tarea',
-    project_added:          'proyecto',
+    task_assigned:               'tarea',
+    task_comment:                'comentario en tarea',
+    checklist_item_assigned:     'ítem de checklist',
+    project_added:               'proyecto',
     client_anniversary:     'aniversario de cliente',
     client_mdn_anniversary: 'aniversario MDN de cliente',
     client_contact_birthday:'cumpleaños de contacto',
@@ -50,8 +52,10 @@ function buildEmailHtml(notif: NotificationRecord, firstName: string): string {
   const typeLabel = typeLabels[notif.type] ?? 'notificación'
 
   const introLines: Record<string, string> = {
-    task_assigned: `Has sido asignado/a a una nueva <strong>tarea</strong>:<br><em>${notif.body}</em>`,
-    project_added: `Fuiste incluido/a en el proyecto <strong>"${notif.body}"</strong>.`,
+    task_assigned:           `Has sido asignado/a a una nueva <strong>tarea</strong>:<br><em>${notif.body}</em>`,
+    task_comment:            `Hay un nuevo comentario en una tarea asignada a ti:<br><em>${notif.body}</em>`,
+    checklist_item_assigned: `Te asignaron un ítem del checklist:<br><em>${notif.body}</em>`,
+    project_added:           `Fuiste incluido/a en el proyecto <strong>"${notif.body}"</strong>.`,
   }
   const intro = introLines[notif.type]
     ?? `Tienes una nueva notificación de <strong>${typeLabel}</strong>: ${notif.body}`
@@ -96,8 +100,10 @@ function buildEmailHtml(notif: NotificationRecord, firstName: string): string {
 
 function subjectForType(type: string, body: string): string {
   const subjects: Record<string, string> = {
-    task_assigned: `Nueva tarea asignada: ${body.slice(0, 60)}`,
-    project_added: `Te incluyeron en el proyecto: ${body.slice(0, 60)}`,
+    task_assigned:           `Nueva tarea asignada: ${body.slice(0, 60)}`,
+    task_comment:            `Nuevo comentario en tarea: ${body.slice(0, 60)}`,
+    checklist_item_assigned: `Ítem del checklist asignado: ${body.slice(0, 60)}`,
+    project_added:           `Te incluyeron en el proyecto: ${body.slice(0, 60)}`,
   }
   return subjects[type] ?? `Nueva notificación MDN: ${body.slice(0, 80)}`
 }
