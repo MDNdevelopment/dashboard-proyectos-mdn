@@ -5,9 +5,10 @@ import { isFinancePrivileged } from "../../lib/permissions";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LabelList,
 } from "recharts";
-import { loadReport, loadPrevReport, upsertReport, loadClients, loadCompanyEmployees } from "./metricsApi";
+import { loadReport, loadPrevReport, upsertReport, loadClients, loadCompanyEmployees, updateEmployeeSalaries } from "./metricsApi";
 import { initMetricReport } from "../../utils/initMetricReport";
 import { syncReportClients } from "../../utils/syncReportClients";
+import { pickSalaryUpdates } from "../../utils/salaryWriteback";
 import { calcFinanzas, calcConsolidado, calcConsolidadoConGasto, ensureFinanzas, fmtUSD } from "../../utils/metricsFinance";
 import SectionTotal from "../common/SectionTotal";
 import { MONTHS } from "./constants";
@@ -129,6 +130,26 @@ export default function FinanzasView({ line, companyId, year, month }) {
     const { error: err } = await upsertReport(companyId, line.id, year, month, report);
     setSaving(false);
     if (err) { setError(err.message); return; }
+
+    // Write-back: persistir sueldos editados al sueldo maestro del empleado (users.monthly_salary).
+    // Solo para usuarios privilegiados, solo montos > 0 que difieran del maestro actual.
+    if (privileged) {
+      const salaryUpdates = pickSalaryUpdates(report.finanzas?.sueldos, lineEmployees);
+      if (salaryUpdates.length) {
+        const { error: salErr } = await updateEmployeeSalaries(salaryUpdates);
+        if (salErr) {
+          // El reporte ya se guardó; informar pero no bloquear
+          setError(`Reporte guardado. Error al actualizar sueldos maestros: ${salErr.message}`);
+        } else {
+          // Reflejar nuevo maestro en memoria para evitar re-disparar updates en el próximo save
+          setLineEmployees(prev => prev.map(e => {
+            const u = salaryUpdates.find(x => x.user_id === e.user_id);
+            return u ? { ...e, monthly_salary: u.monto } : e;
+          }));
+        }
+      }
+    }
+
     // Actualizar baseline para que el aviso desaparezca tras guardar
     baselineRef.current = report;
     setSaved(true);

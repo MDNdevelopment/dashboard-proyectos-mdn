@@ -177,6 +177,22 @@ export async function upsertReport(companyId, lineId, year, month, data) {
     .single();
 }
 
+/**
+ * Persiste los montos de sueldo del reporte al sueldo maestro (users.monthly_salary).
+ * Recibe filas ya filtradas [{ user_id, monto }] — se hace un UPDATE por empleado.
+ * @returns {{ error: Error|null }}
+ */
+export async function updateEmployeeSalaries(rows) {
+  for (const { user_id, monto } of rows) {
+    const { error } = await supabase
+      .from("users")
+      .update({ monthly_salary: monto })
+      .eq("user_id", user_id);
+    if (error) return { error };
+  }
+  return { error: null };
+}
+
 // ─── Seed ─────────────────────────────────────────────────────────────────────
 
 /**
