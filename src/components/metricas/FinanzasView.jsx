@@ -83,7 +83,8 @@ export default function FinanzasView({ line, companyId, year, month }) {
     // Lista completa de empleados de la empresa (para resolver apoyo_ids fuera de la línea)
     const allEmployees = employeesRes.data ?? [];
     setCompanyEmployees(allEmployees);
-    // Filtrar empleados del team de esta línea (member_user_ids es un array jsonb)
+    // Filtrar empleados del team de esta línea (member_user_ids es un array reconstruido
+    // en loadLines a partir de la tabla relacional metric_line_members)
     const memberIds = new Set(line.member_user_ids ?? []);
     const employees = allEmployees.filter(e => memberIds.has(e.user_id));
     setLineEmployees(employees);

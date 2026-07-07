@@ -10,9 +10,14 @@
  * @param {object} reportData     - Objeto data del reporte (mutación en copia).
  * @param {Array}  lineClients    - Array de { id, name } de la cartera actual.
  * @param {Array}  lineEmployees  - Array de empleados (de users) filtrados para la línea.
+ *                                  Si se omite (no se pasa el argumento), las filas de empleado
+ *                                  existentes en el reporte se conservan intactas como blindaje
+ *                                  ante errores del llamador. Para representar un team sin
+ *                                  miembros, pasar explícitamente [].
  * @returns {object} - Nueva copia del reportData con los items sincronizados.
  */
-export function syncReportClients(reportData, lineClients, lineEmployees = []) {
+const _UNSET = Symbol("unset");
+export function syncReportClients(reportData, lineClients, lineEmployees = _UNSET) {
   const data = structuredClone(reportData);
   const clientIds = new Set(lineClients.map(c => c.id));
 
@@ -98,20 +103,26 @@ export function syncReportClients(reportData, lineClients, lineEmployees = []) {
   //   - Agrega empleados nuevos con su monthly_salary como monto por defecto.
   //   - Descarta empleados que ya no están en la línea.
   // Las filas manuales (empleadoId == null) se conservan intactas.
+  // Blindaje: si el argumento lineEmployees se OMITE (no pasado por el llamador),
+  // las filas de empleado existentes se conservan intactas para evitar borrar la
+  // nómina por un descuido del llamador. Para representar un team sin miembros,
+  // pasar explícitamente []; en ese caso se descartan las filas de empleado.
   {
     const existing = data.finanzas?.sueldos ?? [];
     const manual = existing.filter(i => i.empleadoId == null);
-    const byEmployee = Object.fromEntries(
-      existing.filter(i => i.empleadoId != null).map(i => [i.empleadoId, i])
-    );
-    const employeeRows = lineEmployees.map(emp =>
-      byEmployee[emp.user_id] ?? {
-        id: 'sue-' + emp.user_id,
-        empleadoId: emp.user_id,
-        descripcion: `${emp.first_name ?? ''} ${emp.last_name ?? ''}`.trim(),
-        monto: Number(emp.monthly_salary) || 0,
-      }
-    );
+    const existingEmployeeRows = existing.filter(i => i.empleadoId != null);
+    const byEmployee = Object.fromEntries(existingEmployeeRows.map(i => [i.empleadoId, i]));
+    const employees = lineEmployees === _UNSET ? null : lineEmployees;
+    const employeeRows = employees === null
+      ? existingEmployeeRows   // argumento omitido: blindaje, conservar filas existentes
+      : employees.map(emp =>
+          byEmployee[emp.user_id] ?? {
+            id: 'sue-' + emp.user_id,
+            empleadoId: emp.user_id,
+            descripcion: `${emp.first_name ?? ''} ${emp.last_name ?? ''}`.trim(),
+            monto: Number(emp.monthly_salary) || 0,
+          }
+        );
     data.finanzas = {
       ...data.finanzas,
       sueldos: [...employeeRows, ...manual],

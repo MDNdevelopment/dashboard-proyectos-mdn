@@ -50,26 +50,33 @@ export default function OperacionesView({ line, companyId, year, month }) {
 
     const lineClients = clientsRes.data ?? [];
     setClients(lineClients);
-    setCompanyEmployees(employeesRes.data ?? []);
+
+    const allEmployees = employeesRes.data ?? [];
+    setCompanyEmployees(allEmployees);
+    // Filtrar solo los empleados miembros de esta línea para sincronizar sueldos,
+    // igual que FinanzasView. Sin este filtro, syncReportClients recibe [] y borra
+    // las filas de nómina del team al guardar desde esta vista.
+    const memberIds = new Set(line.member_user_ids ?? []);
+    const lineEmployees = allEmployees.filter(e => memberIds.has(e.user_id));
 
     // Guardar el reporte del mes anterior para mostrarlo en la sección de crecimiento
     setPrevReport(prevRes.data?.data ?? null);
 
     if (reportRes.data) {
-      // Sincronizar items con los clientes actuales de la línea
-      const synced = syncReportClients(reportRes.data.data, lineClients);
+      // Sincronizar items con los clientes y empleados actuales de la línea
+      const synced = syncReportClients(reportRes.data.data, lineClients, lineEmployees);
       setReport(synced);
       baselineRef.current = synced;
     } else {
       // Inicializar con carry-forward y metas de la línea
       const lineMetas = line?.metas ?? {};
       const fresh = initMetricReport(prevRes.data?.data ?? null, lineClients, lineMetas);
-      const synced = syncReportClients(fresh, lineClients);
+      const synced = syncReportClients(fresh, lineClients, lineEmployees);
       setReport(synced);
       baselineRef.current = synced;
     }
     setLoading(false);
-  }, [line?.id, companyId, year, month]);
+  }, [line?.id, line?.member_user_ids, companyId, year, month]);
 
   useEffect(() => { load(); }, [load]);
 

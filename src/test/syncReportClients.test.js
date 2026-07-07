@@ -309,13 +309,43 @@ describe("syncReportClients — sueldos (auto-generación por empleado)", () => 
     expect(synced.finanzas.sueldos[0].monto).toBe(0);
   });
 
-  it("retro-compatibilidad: llamada con 2 args no siembra sueldos", () => {
+  it("retro-compatibilidad: llamada con 2 args no siembra sueldos si el reporte no tiene ninguno", () => {
     const report = makeReport();
     const synced = syncReportClients(report, CLIENTS);
 
-    // Sin employees, los sueldos se quedan como array vacío (el bloque queda sin fila de empleado)
+    // Sin employees y sin filas previas, los sueldos quedan vacíos
     const empRows = synced.finanzas.sueldos.filter(i => i.empleadoId != null);
     expect(empRows).toHaveLength(0);
+  });
+
+  // Regresión: bug donde OperacionesView omitía el argumento lineEmployees y al guardar
+  // se borraban todos los sueldos del team (solo sobrevivía la fila manual).
+  it("blindaje: llamada sin lineEmployees conserva filas de empleado ya existentes", () => {
+    const report = makeReport({
+      finanzas: {
+        ingresos: [],
+        gastosOperativos: [],
+        sueldos: [
+          { id: "sue-u1", empleadoId: "u1", descripcion: "Juan Pérez",   monto: 750 },
+          { id: "sue-u2", empleadoId: "u2", descripcion: "María Gómez",  monto: 600 },
+          { id: "m1",     empleadoId: null,  descripcion: "Liz Luzardo", monto: 400 },
+        ],
+        otrosGastos: [],
+      },
+    });
+    // Llamada de 2 argumentos (sin lineEmployees): simula el bug de OperacionesView
+    const synced = syncReportClients(report, CLIENTS);
+
+    // Las filas de empleado se conservan intactas (blindaje activado)
+    const empRows = synced.finanzas.sueldos.filter(i => i.empleadoId != null);
+    expect(empRows).toHaveLength(2);
+    expect(empRows.find(r => r.empleadoId === "u1").monto).toBe(750);
+    expect(empRows.find(r => r.empleadoId === "u2").monto).toBe(600);
+
+    // La fila manual (Liz Luzardo) también se conserva
+    const manualRows = synced.finanzas.sueldos.filter(i => i.empleadoId == null);
+    expect(manualRows).toHaveLength(1);
+    expect(manualRows[0].monto).toBe(400);
   });
 
   it("con team vacío solo conserva filas manuales de sueldos", () => {
