@@ -34,6 +34,7 @@ export function initMetricReport(prevReport, lineClients = [], lineMetas = {}, l
       reuniones: {
         realizadas: null,
         meta: prevReport.reuniones?.meta ?? 15,
+        comentario: null,
       },
       productividad: {
         tareas: (prevReport.productividad?.tareas ?? []).map(t => ({
@@ -78,7 +79,7 @@ export function initMetricReport(prevReport, lineClients = [], lineMetas = {}, l
   } else {
     // Sin mes anterior: defaults
     base = {
-      reuniones: { realizadas: null, meta: 15 },
+      reuniones: { realizadas: null, meta: 15, comentario: null },
       productividad: {
         tareas: DEFAULT_SUBTAREAS.map(s => ({ nombre: s.nombre, realizado: null, meta: s.meta })),
       },

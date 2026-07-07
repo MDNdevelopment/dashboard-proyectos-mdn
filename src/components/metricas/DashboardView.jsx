@@ -125,7 +125,7 @@ export default function DashboardView({ companyId, lines }) {
         <KpiCard
           label="Línea líder"
           value={lider?.line.name ?? "—"}
-          sub={lider ? `${lider.prom.toFixed(1)} prom. anual` : "Sin datos aún"}
+          sub={lider ? "Team líder del año" : "Sin datos aún"}
           color="text-[#111]"
           onClick={lider ? () => navigate(`/reportes/linea/${lider.line.id}`) : undefined}
         />

@@ -15,6 +15,7 @@ import EntityGridList, { ViewToggle } from "../common/EntityGridList";
 
 const CURRENT_YEAR = new Date().getFullYear();
 const CURRENT_MONTH = new Date().getMonth() + 1;
+const PREV_MONTH = CURRENT_MONTH === 1 ? 12 : CURRENT_MONTH - 1;
 
 export default function LineHubView({ line, companyId, year = CURRENT_YEAR }) {
   const { can = () => true } = useAuth();
@@ -63,10 +64,10 @@ export default function LineHubView({ line, companyId, year = CURRENT_YEAR }) {
     return { month: i + 1, ...calcTotal(r.data, prev?.data ?? null), r };
   });
 
-  // Mes más reciente con datos
-  const lastMonthData = [...monthScores].reverse().find(m => m != null);
+  // Mes calendario anterior al actual
+  const lastMonthData = monthScores[PREV_MONTH - 1] ?? null;
   const lastScore = lastMonthData ? sumScore(lastMonthData) : null;
-  const lastMonth = lastMonthData?.month ?? null;
+  const lastMonth = lastMonthData ? PREV_MONTH : null;
 
   // LineChart data
   const lineChartData = monthScores.map((m, i) => ({

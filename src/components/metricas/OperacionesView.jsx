@@ -224,6 +224,15 @@ export default function OperacionesView({ line, companyId, year, month }) {
             />
           </Field>
         </div>
+        <Field label="Comentario (opcional)">
+          <textarea
+            className="input-base w-full resize-none"
+            rows={2}
+            placeholder="Notas u observaciones sobre las reuniones del mes"
+            value={report.reuniones.comentario ?? ""}
+            onChange={e => setField("reuniones.comentario", e.target.value)}
+          />
+        </Field>
       </Section>
 
       {/* 2. PRODUCTIVIDAD */}
