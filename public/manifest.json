@@ -3,7 +3,7 @@
   "short_name": "MDN",
   "description": "Dashboard de proyectos MDN Publicidad",
   "start_url": "/",
-  "display": "standalone",
+  "display": "browser",
   "background_color": "#f2f0e8",
   "theme_color": "#0d0d0d",
   "icons": [
