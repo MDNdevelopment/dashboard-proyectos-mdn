@@ -3,6 +3,7 @@ import {
   lineOfMember,
   assignMemberToLine,
   removeMemberFromLine,
+  visibleLinesForUser,
 } from '../utils/lineMembers'
 
 const LINES = [
@@ -66,6 +67,44 @@ describe('assignMemberToLine', () => {
     const { updated, changedIds } = assignMemberToLine(lines, 'l1', 'u-1')
     expect(updated[0].member_user_ids).toContain('u-1')
     expect(changedIds).toEqual(['l1'])
+  })
+})
+
+describe('visibleLinesForUser', () => {
+  it('nivel 4 ve todas las líneas', () => {
+    const profile = { access_level: 4, admin: false, tasks_view_all: false, user_id: 'u-x' }
+    expect(visibleLinesForUser(LINES, profile)).toEqual(LINES)
+  })
+
+  it('admin ve todas las líneas independientemente del nivel', () => {
+    const profile = { access_level: 1, admin: true, tasks_view_all: false, user_id: 'u-x' }
+    expect(visibleLinesForUser(LINES, profile)).toEqual(LINES)
+  })
+
+  it('tasks_view_all=true en nivel 3 ve todas las líneas', () => {
+    const profile = { access_level: 3, admin: false, tasks_view_all: true, user_id: 'u-x' }
+    expect(visibleLinesForUser(LINES, profile)).toEqual(LINES)
+  })
+
+  it('nivel 3 sin tasks_view_all y sin membresías no ve ninguna línea', () => {
+    const profile = { access_level: 3, admin: false, tasks_view_all: false, user_id: 'u-x' }
+    expect(visibleLinesForUser(LINES, profile)).toEqual([])
+  })
+
+  it('nivel 3 sin tasks_view_all ve solo sus líneas', () => {
+    const profile = { access_level: 3, admin: false, tasks_view_all: false, user_id: 'u-a' }
+    const result = visibleLinesForUser(LINES, profile)
+    expect(result).toHaveLength(1)
+    expect(result[0].id).toBe('line-1')
+  })
+
+  it('devuelve [] si lines es null', () => {
+    const profile = { access_level: 4, admin: false, tasks_view_all: false, user_id: 'u-a' }
+    expect(visibleLinesForUser(null, profile)).toEqual([])
+  })
+
+  it('devuelve [] si userProfile es null', () => {
+    expect(visibleLinesForUser(LINES, null)).toEqual([])
   })
 })
 
