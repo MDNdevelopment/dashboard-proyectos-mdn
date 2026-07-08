@@ -15,20 +15,24 @@ import { renderHook, act, waitFor } from '@testing-library/react'
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 
 // ── vi.hoisted permite usar estos mocks dentro del factory de vi.mock ────────
-const { mockGetSession, mockUserSingle, mockOnAuthStateChange, mockFrom } =
+const { mockGetSession, mockGetUser, mockUserSingle, mockOnAuthStateChange, mockFrom, mockSignOut } =
   vi.hoisted(() => {
     const mockGetSession        = vi.fn()
+    const mockGetUser           = vi.fn()
     const mockUserSingle        = vi.fn()
     const mockOnAuthStateChange = vi.fn()
     const mockFrom              = vi.fn()
-    return { mockGetSession, mockUserSingle, mockOnAuthStateChange, mockFrom }
+    const mockSignOut           = vi.fn()
+    return { mockGetSession, mockGetUser, mockUserSingle, mockOnAuthStateChange, mockFrom, mockSignOut }
   })
 
 vi.mock('../supabase', () => ({
   supabase: {
     auth: {
       getSession:        mockGetSession,
+      getUser:           mockGetUser,
       onAuthStateChange: mockOnAuthStateChange,
+      signOut:           mockSignOut,
     },
     from: mockFrom,
     channel: vi.fn(() => ({ on: vi.fn().mockReturnThis(), subscribe: vi.fn() })),
@@ -65,6 +69,10 @@ beforeEach(() => {
   mockOnAuthStateChange.mockReturnValue({
     data: { subscription: { unsubscribe: vi.fn() } },
   })
+  // getUser devuelve éxito por defecto (sesión válida en servidor)
+  mockGetUser.mockResolvedValue({ data: { user: { id: 'u-1' } }, error: null })
+  // signOut no hace nada por defecto
+  mockSignOut.mockResolvedValue({ error: null })
 })
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -210,5 +218,79 @@ describe('AuthContext — deduplicación de refetch por user.id', () => {
       authCallback('SIGNED_IN', { user: { id: 'u-2' } })
     })
     await waitFor(() => expect(mockFrom).toHaveBeenCalled())
+  })
+})
+
+// ════════════════════════════════════════════════════════════════════════════
+// 3. Recuperación de sesión expirada / token inválido en servidor
+// ════════════════════════════════════════════════════════════════════════════
+describe('AuthContext — recuperación automática de sesión expirada', () => {
+  it('si getUser() falla con 401 al arrancar → sessionExpired=true, session=null, loading=false', async () => {
+    mockGetSession.mockResolvedValue({
+      data: { session: { user: { id: 'u-1' } } },
+    })
+    mockGetUser.mockResolvedValue({ data: null, error: { status: 401, message: 'JWT expired' } })
+
+    const { result } = renderHook(useAuth, { wrapper })
+
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.session).toBeNull()
+    expect(result.current.sessionExpired).toBe(true)
+    expect(result.current.userProfile).toBeNull()
+    // Debe llamar a signOut para limpiar el token corrupto de localStorage
+    expect(mockSignOut).toHaveBeenCalled()
+    // No debe haber intentado cargar el perfil
+    expect(mockFrom).not.toHaveBeenCalled()
+  })
+
+  it('si getSession() rechaza inesperadamente → loading baja a false (no spinner infinito)', async () => {
+    mockGetSession.mockRejectedValue(new Error('network error'))
+
+    const { result } = renderHook(useAuth, { wrapper })
+
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.session).toBeNull()
+  })
+
+  it('si fetchUserProfile devuelve error 401 → sessionExpired=true', async () => {
+    mockGetSession.mockResolvedValue({
+      data: { session: { user: { id: 'u-1' } } },
+    })
+    // getUser pasa (el token era válido en ese instante)
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'u-1' } }, error: null })
+    // Pero la query al perfil devuelve 401 (puede ocurrir con latencia)
+    mockFrom.mockReturnValue(
+      makeFromChain(vi.fn().mockResolvedValue({ data: null, error: { status: 401, message: 'JWT expired' } }))
+    )
+
+    const { result } = renderHook(useAuth, { wrapper })
+
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.sessionExpired).toBe(true)
+    expect(result.current.session).toBeNull()
+    expect(mockSignOut).toHaveBeenCalled()
+  })
+
+  it('un nuevo login tras expiración limpia sessionExpired', async () => {
+    let authCallback = null
+    mockOnAuthStateChange.mockImplementation((cb) => {
+      authCallback = cb
+      return { data: { subscription: { unsubscribe: vi.fn() } } }
+    })
+    mockGetSession.mockResolvedValue({ data: { session: null } })
+
+    const { result } = renderHook(useAuth, { wrapper })
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    // Simular que estaba expirada antes (estado manual para el test)
+    // Luego un SIGNED_IN debe limpiarlo
+    mockFrom.mockReturnValue(
+      makeFromChain(vi.fn().mockResolvedValue({ data: MOCK_USER_DATA, error: null }))
+    )
+    await act(async () => {
+      authCallback('SIGNED_IN', { user: { id: 'u-1' } })
+    })
+
+    await waitFor(() => expect(result.current.sessionExpired).toBe(false))
   })
 })

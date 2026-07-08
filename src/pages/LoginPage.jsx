@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import MDNLogo from '../components/MDNLogo'
 
 export default function LoginPage() {
-  const { session, signIn } = useAuth()
+  const { session, signIn, sessionExpired } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -28,6 +28,12 @@ export default function LoginPage() {
           <MDNLogo size={48} />
           <p className="text-[15px] font-medium text-[#888] mt-3">MDN Publicidad</p>
         </div>
+
+        {sessionExpired && (
+          <div className="mb-5 bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 text-[14px] text-amber-800 font-medium">
+            Tu sesión expiró. Vuelve a iniciar sesión para continuar.
+          </div>
+        )}
 
         <h1 className="text-[20px] font-bold text-[#111] mb-1">Iniciar sesión</h1>
         <p className="text-[15px] text-[#888] mb-6">Ingresa tus credenciales para continuar</p>

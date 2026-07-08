@@ -54,8 +54,22 @@ describe('LoginPage', () => {
   })
 
   it('no muestra el formulario si ya hay sesión activa', () => {
-    useAuth.mockReturnValue({ session: { user: { id: '1' } }, signIn: vi.fn() })
+    useAuth.mockReturnValue({ session: { user: { id: '1' } }, signIn: vi.fn(), sessionExpired: false })
     renderPage()
     expect(screen.queryByPlaceholderText('Correo electrónico')).not.toBeInTheDocument()
+  })
+
+  it('muestra el banner de sesión expirada cuando sessionExpired es true', () => {
+    useAuth.mockReturnValue({ session: null, signIn: vi.fn(), sessionExpired: true })
+    renderPage()
+    expect(screen.getByText(/Tu sesión expiró/)).toBeInTheDocument()
+    // El formulario sigue visible para que el usuario pueda volver a ingresar
+    expect(screen.getByPlaceholderText('Correo electrónico')).toBeInTheDocument()
+  })
+
+  it('no muestra el banner cuando sessionExpired es false', () => {
+    useAuth.mockReturnValue({ session: null, signIn: vi.fn(), sessionExpired: false })
+    renderPage()
+    expect(screen.queryByText(/Tu sesión expiró/)).not.toBeInTheDocument()
   })
 })
