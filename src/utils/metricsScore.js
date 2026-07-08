@@ -161,3 +161,18 @@ export function lastLineScore(reports) {
   const last = [...monthScores].reverse().find(m => m != null)
   return last ? { score: sumScore(last), month: last.month } : { score: null, month: null }
 }
+
+/**
+ * Score (0–100) de un mes concreto de una línea + su nº de mes.
+ * Estricta: si el mes no existe o está marcado incompleto, devuelve nulls
+ * (no cae a otro mes). `reports` debe venir filtrado por line_id.
+ * @param {Array} reports - Filas de metric_reports filtradas por line_id.
+ * @param {number} month - Número de mes objetivo (1–12).
+ * @returns {{ score: number|null, month: number|null }}
+ */
+export function monthLineScore(reports, month) {
+  const r = reports.find(x => x.month === month)
+  if (!r || r.data?.incompleto) return { score: null, month: null }
+  const prev = reports.find(x => x.month === month - 1)
+  return { score: sumScore(calcTotal(r.data, prev?.data ?? null)), month }
+}

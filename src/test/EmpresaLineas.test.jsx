@@ -20,10 +20,15 @@ const MOCK_CLIENTS = [
   { id: 'c-3', company_id: 'co-1', line_id: 'line-2', name: 'Marca C' },
 ]
 
-// ── Reporte cerrado de prueba (line-1, mes 3) ──────────────────────────────
+// ── Reporte cerrado de prueba (line-1, mes anterior al actual) ────────────────
+// Dinámico para que coincida con la lógica de LinesView (mes anterior = PREV_MONTH).
+const _testNow = new Date();
+const _testPrevDate = new Date(_testNow.getFullYear(), _testNow.getMonth() - 1, 1);
 const MOCK_REPORTS = [
   {
-    id: 'r-1', line_id: 'line-1', year: 2026, month: 3,
+    id: 'r-1', line_id: 'line-1',
+    year: _testPrevDate.getFullYear(),
+    month: _testPrevDate.getMonth() + 1,
     data: {
       reuniones:     { realizadas: 15, meta: 15 },
       productividad: { tareas: [] },

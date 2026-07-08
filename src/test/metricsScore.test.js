@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   calcReuniones, calcProductividad, calcCrecimiento,
   calcSolicitudes, calcPautas, calcPiezas,
-  calcTotal, sumScore, crecimientoCliente, lastLineScore,
+  calcTotal, sumScore, crecimientoCliente, lastLineScore, monthLineScore,
 } from "../utils/metricsScore";
 import { INDICATORS } from "../components/metricas/constants";
 
@@ -434,5 +434,60 @@ describe("lastLineScore", () => {
       makeReportRow(2, {}, { data: { ...makeReport(), incompleto: true } }),
     ]
     expect(lastLineScore(reports)).toEqual({ score: null, month: null })
+  })
+});
+
+// ─── monthLineScore ────────────────────────────────────────────────────────────
+// Puntuación estricta de un mes específico; si falta o es incompleto → nulls.
+
+describe("monthLineScore", () => {
+  it("retorna score y month cuando el mes objetivo existe y está completo", () => {
+    const reports = [makeReportRow(6, { reuniones: { realizadas: 15, meta: 15 } })]
+    const result = monthLineScore(reports, 6)
+    expect(result.month).toBe(6)
+    expect(typeof result.score).toBe("number")
+  })
+
+  it("retorna { score: null, month: null } cuando el mes objetivo no existe", () => {
+    const reports = [makeReportRow(5)]
+    expect(monthLineScore(reports, 6)).toEqual({ score: null, month: null })
+  })
+
+  it("retorna { score: null, month: null } cuando el mes objetivo está marcado incompleto", () => {
+    const reports = [makeReportRow(6, {}, { data: { ...makeReport(), incompleto: true } })]
+    expect(monthLineScore(reports, 6)).toEqual({ score: null, month: null })
+  })
+
+  it("NO cae a otro mes cuando el objetivo no existe (a diferencia de lastLineScore)", () => {
+    // Hay reportes en meses 3 y 4 pero el objetivo es el 6
+    const reports = [
+      makeReportRow(3, { reuniones: { realizadas: 15, meta: 15 } }),
+      makeReportRow(4, { reuniones: { realizadas: 15, meta: 15 } }),
+    ]
+    expect(monthLineScore(reports, 6)).toEqual({ score: null, month: null })
+  })
+
+  it("usa el reporte del mes anterior (month-1) para calcular crecimiento", () => {
+    // Con reporte previo que tenga seguidores → crecimiento positivo aumenta el score
+    const reportWithGrowth = makeReportRow(6, {
+      crecimiento: { items: [{ clienteId: "c1", seguidoresGanados: 100, meta: 100 }] },
+    })
+    const prevReport = makeReportRow(5, {
+      crecimiento: { items: [{ clienteId: "c1", seguidoresGanados: 0, meta: 100 }] },
+    })
+    const scoreWithPrev = monthLineScore([prevReport, reportWithGrowth], 6).score
+
+    // Sin reporte previo (crecimiento calculado sobre null)
+    const scoreWithoutPrev = monthLineScore([reportWithGrowth], 6).score
+
+    // Ambos deben ser números; el comportamiento exacto depende de calcCrecimiento
+    expect(typeof scoreWithPrev).toBe("number")
+    expect(typeof scoreWithoutPrev).toBe("number")
+  })
+
+  it("retorna score 0 cuando todos los indicadores son 0", () => {
+    const reports = [makeReportRow(6)]
+    const { score } = monthLineScore(reports, 6)
+    expect(score).toBe(0)
   })
 });

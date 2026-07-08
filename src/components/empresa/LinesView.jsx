@@ -12,7 +12,7 @@ import {
 } from "../metricas/metricsApi";
 import { useAuth } from "../../context/AuthContext";
 import { assignMemberToLine, lineOfMember, removeMemberFromLine } from "../../utils/lineMembers";
-import { lastLineScore } from "../../utils/metricsScore";
+import { monthLineScore } from "../../utils/metricsScore";
 import { MONTHS } from "../metricas/constants";
 import ScoreDial, { scoreDialColor } from "../metricas/ScoreDial";
 import LineModal from "./LineModal";
@@ -20,7 +20,10 @@ import LineMetasModal from "./LineMetasModal";
 import LineFichaModal from "./LineFichaModal";
 import ConfirmDeleteDialog from "../common/ConfirmDeleteDialog";
 
-const CURRENT_YEAR = new Date().getFullYear();
+const _now = new Date();
+const PREV_MONTH_DATE = new Date(_now.getFullYear(), _now.getMonth() - 1, 1);
+const PREV_YEAR  = PREV_MONTH_DATE.getFullYear();   // año anterior cuando estamos en enero
+const PREV_MONTH = PREV_MONTH_DATE.getMonth() + 1;  // 1–12
 
 // ── Subcomponentes de la card ──────────────────────────────────────────────────
 
@@ -153,7 +156,7 @@ export default function LinesView({ companyId, canManage = true }) {
     const [linesRes, clientsRes, reportsRes] = await Promise.all([
       loadLines(companyId),
       loadClients(companyId),
-      loadYearReports(companyId, CURRENT_YEAR),
+      loadYearReports(companyId, PREV_YEAR),
     ]);
     setLines(linesRes.data ?? []);
     setClients(clientsRes.data ?? []);
@@ -296,8 +299,9 @@ export default function LinesView({ companyId, canManage = true }) {
             const memberCount = (line.member_user_ids ?? []).length;
             const lineClients = clients.filter((c) => c.line_id === line.id);
             const clientCount = lineClients.length;
-            const { score, month } = lastLineScore(
+            const { score, month } = monthLineScore(
               reports.filter((r) => r.line_id === line.id),
+              PREV_MONTH,
             );
 
             return (
