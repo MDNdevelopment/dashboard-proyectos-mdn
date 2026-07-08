@@ -10,6 +10,7 @@ vi.mock('../supabase', () => {
   const makeQuery = (result = []) => ({
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
+    is: vi.fn().mockReturnThis(),
     order: vi.fn().mockResolvedValue({ data: result, error: null }),
   })
 

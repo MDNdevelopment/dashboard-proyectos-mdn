@@ -60,14 +60,14 @@ export async function removeLineMember(lineId, userId) {
 
 // ─── Clientes ─────────────────────────────────────────────────────────────────
 
-export async function loadClients(companyId, lineId = null) {
+export async function loadClients(companyId, lineId = null, { includeArchived = false } = {}) {
   let q = supabase
     .from("metric_clients")
     .select("*")
-    .eq("company_id", companyId)
-    .order("created_at");
+    .eq("company_id", companyId);
   if (lineId) q = q.eq("line_id", lineId);
-  return q;
+  if (!includeArchived) q = q.is("deleted_at", null);
+  return q.order("created_at");
 }
 
 export async function createClient(companyId, fields) {
@@ -121,7 +121,17 @@ export async function loadCompanyEmployees(companyId) {
 }
 
 export async function deleteClient(clientId) {
-  return supabase.from("metric_clients").delete().eq("id", clientId);
+  return supabase
+    .from("metric_clients")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", clientId);
+}
+
+export async function restoreClient(clientId) {
+  return supabase
+    .from("metric_clients")
+    .update({ deleted_at: null })
+    .eq("id", clientId);
 }
 
 // ─── Reportes ─────────────────────────────────────────────────────────────────

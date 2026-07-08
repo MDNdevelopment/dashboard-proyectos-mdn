@@ -75,11 +75,14 @@ export default function FinanzasView({ line, companyId, year, month }) {
     const [reportRes, prevRes, clientsRes, employeesRes] = await Promise.all([
       loadReport(line.id, year, month),
       loadPrevReport(line.id, year, month),
-      loadClients(companyId, line.id),
+      loadClients(companyId, line.id, { includeArchived: true }),
       loadCompanyEmployees(companyId),
     ]);
-    const clients = clientsRes.data ?? [];
-    setLineClients(clients);
+    // Todos (incl. archivados) para resolver nombres en reportes guardados;
+    // solo activos para syncReportClients (no re-agregar archivados al reporte actual).
+    const allClients = clientsRes.data ?? [];
+    const activeClients = allClients.filter(c => !c.deleted_at);
+    setLineClients(allClients);
 
     // Lista completa de empleados de la empresa (para resolver apoyo_ids fuera de la línea)
     const allEmployees = employeesRes.data ?? [];
@@ -93,13 +96,13 @@ export default function FinanzasView({ line, companyId, year, month }) {
     if (reportRes.data) {
       const d = reportRes.data.data;
       ensureFinanzas(d);
-      const synced = syncReportClients(d, clients, employees);
+      const synced = syncReportClients(d, activeClients, employees);
       setReport(synced);
       baselineRef.current = synced;
     } else {
-      const fresh = initMetricReport(prevRes.data?.data ?? null, clients, {}, employees);
+      const fresh = initMetricReport(prevRes.data?.data ?? null, activeClients, {}, employees);
       ensureFinanzas(fresh);
-      const synced = syncReportClients(fresh, clients, employees);
+      const synced = syncReportClients(fresh, activeClients, employees);
       setReport(synced);
       baselineRef.current = synced;
     }

@@ -44,12 +44,15 @@ export default function OperacionesView({ line, companyId, year, month }) {
     const [reportRes, prevRes, clientsRes, employeesRes] = await Promise.all([
       loadReport(line.id, year, month),
       loadPrevReport(line.id, year, month),
-      loadClients(companyId, line.id),
+      loadClients(companyId, line.id, { includeArchived: true }),
       loadCompanyEmployees(companyId),
     ]);
 
-    const lineClients = clientsRes.data ?? [];
-    setClients(lineClients);
+    // Todos (incl. archivados) para resolver nombres en reportes guardados;
+    // solo activos para syncReportClients (no re-agregar archivados al reporte actual).
+    const allLineClients = clientsRes.data ?? [];
+    const activeLineClients = allLineClients.filter(c => !c.deleted_at);
+    setClients(allLineClients);
 
     const allEmployees = employeesRes.data ?? [];
     setCompanyEmployees(allEmployees);
@@ -63,15 +66,15 @@ export default function OperacionesView({ line, companyId, year, month }) {
     setPrevReport(prevRes.data?.data ?? null);
 
     if (reportRes.data) {
-      // Sincronizar items con los clientes y empleados actuales de la línea
-      const synced = syncReportClients(reportRes.data.data, lineClients, lineEmployees);
+      // Sincronizar items con los clientes activos y empleados actuales de la línea
+      const synced = syncReportClients(reportRes.data.data, activeLineClients, lineEmployees);
       setReport(synced);
       baselineRef.current = synced;
     } else {
       // Inicializar con carry-forward y metas de la línea
       const lineMetas = line?.metas ?? {};
-      const fresh = initMetricReport(prevRes.data?.data ?? null, lineClients, lineMetas);
-      const synced = syncReportClients(fresh, lineClients, lineEmployees);
+      const fresh = initMetricReport(prevRes.data?.data ?? null, activeLineClients, lineMetas);
+      const synced = syncReportClients(fresh, activeLineClients, lineEmployees);
       setReport(synced);
       baselineRef.current = synced;
     }
