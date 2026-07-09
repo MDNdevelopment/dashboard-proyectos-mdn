@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import { isLate, fmtShort, ESTADOS, COL_META } from './constants'
 import { checklistProgress } from './taskChecklist'
 import { Avatar } from './UserPickerSingle'
 import { updateTaskStatus } from './taskStatus'
+import { tasksForVisibleLines } from '../../utils/lineFilters'
 
-function KanbanCard({ task, usersMap, clientsById, onOpen, onChangeStatus }) {
+function KanbanCard({ task, usersMap, clientsById, lineName, onOpen, onChangeStatus }) {
   const late = isLate(task)
   const assignees = (task.assignee_ids ?? (task.assignee_id ? [task.assignee_id] : [])).map(id => usersMap.get(id)).filter(Boolean)
   const support = task.support_id ? usersMap.get(task.support_id) : null
@@ -14,6 +16,11 @@ function KanbanCard({ task, usersMap, clientsById, onOpen, onChangeStatus }) {
       className={`bg-white border rounded-xl p-3 cursor-pointer hover:shadow-md transition-all group ${late ? 'border-red-200' : 'border-[#e0ddd4]'}`}
       onClick={() => onOpen(task)}
     >
+      {lineName && (
+        <span className="inline-block mb-1 px-1.5 py-0.5 rounded text-[10.5px] font-mono font-bold tracking-wide uppercase text-[#888] bg-[#f0ede3]">
+          {lineName}
+        </span>
+      )}
       <div className="flex items-center gap-1.5 mb-1">
         {late && <span className="text-red-400 flex-shrink-0">⚠</span>}
         {task.client ? (
@@ -80,8 +87,10 @@ function KanbanCard({ task, usersMap, clientsById, onOpen, onChangeStatus }) {
   )
 }
 
-export default function KanbanView({ team, tasks, usersMap, clientsById = new Map(), onOpenTask, onUpdated }) {
-  if (!team) {
+export default function KanbanView({ team, teams = [], allLines = false, tasks, usersMap, clientsById = new Map(), onOpenTask, onUpdated }) {
+  const [fLine, setFLine] = useState('')
+
+  if (!team && !allLines) {
     return (
       <div className="bg-white rounded-xl border border-[#e0ddd4] p-10 text-center">
         <p className="text-[16px] font-medium text-[#888]">Selecciona un team para ver el Kanban</p>
@@ -89,7 +98,9 @@ export default function KanbanView({ team, tasks, usersMap, clientsById = new Ma
     )
   }
 
-  const teamTasks = tasks.filter(t => t.team_id === team.id)
+  const teamTasks = allLines
+    ? tasksForVisibleLines(tasks, teams).filter(t => !fLine || t.team_id === fLine)
+    : tasks.filter(t => t.team_id === team.id)
 
   async function handleChangeStatus(task, newStatus) {
     const { data, error } = await updateTaskStatus(task.id, newStatus)
@@ -97,7 +108,14 @@ export default function KanbanView({ team, tasks, usersMap, clientsById = new Ma
   }
 
   return (
-    <div className="overflow-x-auto pb-2">
+    <div className="space-y-3">
+      {allLines && (
+        <select value={fLine} onChange={e => setFLine(e.target.value)} className="input-base text-[14.5px] py-2 w-full sm:w-64">
+          <option value="">Línea: todas</option>
+          {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </select>
+      )}
+      <div className="overflow-x-auto pb-2">
       <div className="flex gap-4 min-w-max">
         {ESTADOS.map(status => {
           const col = COL_META[status]
@@ -123,6 +141,7 @@ export default function KanbanView({ team, tasks, usersMap, clientsById = new Ma
                       task={t}
                       usersMap={usersMap}
                       clientsById={clientsById}
+                      lineName={allLines ? teams.find(tm => tm.id === t.team_id)?.name : null}
                       onOpen={onOpenTask}
                       onChangeStatus={handleChangeStatus}
                     />
@@ -132,6 +151,7 @@ export default function KanbanView({ team, tasks, usersMap, clientsById = new Ma
             </div>
           )
         })}
+      </div>
       </div>
     </div>
   )

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { useAuth } from '../context/AuthContext'
 import PanoramaView from '../components/tareas/PanoramaView'
@@ -12,16 +12,14 @@ import { loadLines, loadClients } from '../components/metricas/metricsApi'
 import { currentMonthIndex, fmtMonth } from '../components/tareas/constants'
 import { visibleLinesForUser } from '../utils/lineMembers'
 
+const ALL_TEAMS = '__all__'
+
 const VIEWS = [
-  {
-    key: 'panorama',
-    label: 'Panorama',
-    desc: 'Esta sección es la cartelera general de los 4 teams. Aquí ves de un vistazo cómo va la agencia esta semana: el porcentaje de cierre de cada team, quién lidera y los números globales. Úsala para detectar rápido dónde hace falta apoyar.',
-  },
   {
     key: 'team',
     label: 'Dashboard',
     desc: 'Esta sección es la lupa sobre un team específico. Aquí revisas su semáforo por cliente, el estado de su pipeline y sus cifras. Úsala para entender a fondo cómo va un equipo en particular.',
+    descAll: 'Esta sección es la cartelera general de todos los teams. Aquí ves de un vistazo cómo va la agencia esta semana: el porcentaje de cierre de cada team, quién lidera y los números globales. Úsala para detectar rápido dónde hace falta apoyar.',
   },
   {
     key: 'base',
@@ -43,6 +41,8 @@ const VIEWS = [
 export default function TareasPage() {
   const { userProfile, can = () => true } = useAuth()
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const location = useLocation()
   const [teams, setTeams] = useState([])
   const [tasks, setTasks] = useState([])
   const [clients, setClients] = useState([])
@@ -55,9 +55,11 @@ export default function TareasPage() {
   // Sin reglas configuradas → acceso libre (mismo default del sistema).
   const visibleViews = VIEWS.filter(v => can(`tareas.${v.key}`))
   const canManage = can('tareas.manage')
+  // "Todos" (ver todas las líneas combinadas) es exclusivo de nivel 4 / admin.
+  const canViewAll = userProfile?.access_level >= 4 || userProfile?.admin === true
 
   const [activeView, setActiveView] = useState(
-    () => searchParams.get('view') === 'base' ? 'base' : 'panorama',
+    () => searchParams.get('view') === 'base' ? 'base' : 'team',
   )
 
   // Cuando cargan los permisos, redirigir si la vista activa no está disponible.
@@ -67,14 +69,34 @@ export default function TareasPage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userProfile, activeView])
+
+  // Sincroniza la vista activa con el historial del navegador: cuando una card del
+  // dashboard navega a Base se empuja una entrada de historial (ver goToBaseWithFilter);
+  // al presionar "atrás" el navegador dispara este efecto (vía cambio de location) en
+  // lugar de sacar al usuario de la página de Tareas.
+  useEffect(() => {
+    const st = location.state
+    if (st?.tareasView) {
+      setActiveView(st.tareasView)
+      setPendingBaseFilter(st.baseFilter ?? null)
+    } else {
+      setActiveView(searchParams.get('view') === 'base' ? 'base' : 'team')
+      setPendingBaseFilter(null)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key])
   const [activeTeamId, setActiveTeamId] = useState(
     () => searchParams.get('team') ?? null,
   )
   const [monthIdx, setMonthIdx] = useState(currentMonthIndex())
   // null = closed, undefined = new task, object = edit existing
   const [taskModal, setTaskModal] = useState(null)
+  // Filtro pendiente a aplicar al entrar a Base desde una card del dashboard.
+  // { status?: string, alert?: string } | null
+  const [pendingBaseFilter, setPendingBaseFilter] = useState(null)
 
-  const activeTeam = teams.find(t => t.id === activeTeamId) ?? null
+  const isAll = activeTeamId === ALL_TEAMS
+  const activeTeam = isAll ? null : teams.find(t => t.id === activeTeamId) ?? null
 
   const loadAll = useCallback(async () => {
     if (!userProfile?.company_id) return
@@ -100,9 +122,9 @@ export default function TareasPage() {
     setAllUsers(users)
     setUsersMap(new Map(users.map(u => [u.user_id, u])))
 
-    setActiveTeamId(prev => prev ?? (fetchedTeams[0]?.id ?? null))
+    setActiveTeamId(prev => prev ?? (canViewAll ? ALL_TEAMS : (fetchedTeams[0]?.id ?? null)))
     setLoading(false)
-  }, [userProfile?.company_id])
+  }, [userProfile?.company_id, canViewAll])
 
   useEffect(() => {
     loadAll()
@@ -151,7 +173,14 @@ export default function TareasPage() {
 
   function selectTeam(teamId) {
     setActiveTeamId(teamId)
-    if (activeView === 'panorama') setActiveView('team')
+  }
+
+  function goToBaseWithFilter(filter) {
+    // Empuja una entrada de historial (misma URL, distinto state) para que el botón
+    // "atrás" del navegador regrese al Dashboard en vez de salir de Tareas.
+    navigate(location.pathname + location.search, {
+      state: { tareasView: 'base', baseFilter: filter ?? null },
+    })
   }
 
   return (
@@ -179,9 +208,20 @@ export default function TareasPage() {
           </div>
 
           <div className="flex flex-col gap-3 mb-6">
-            {teams.length > 0 && (
+            {(teams.length > 0 || canViewAll) && (
               <div className="flex flex-wrap gap-1.5 items-center">
-                <span className="text-[12.5px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] mr-1">Team</span>
+                {canViewAll && (
+                  <button
+                    onClick={() => setActiveTeamId(ALL_TEAMS)}
+                    className={`px-3 py-1 rounded-full text-[14.5px] font-semibold transition-all ${
+                      isAll
+                        ? 'bg-[#FFB800] text-[#111]'
+                        : 'bg-white border border-[#e0ddd4] text-[#555] hover:border-[#FFB800] hover:text-[#111]'
+                    }`}
+                  >
+                    Todos
+                  </button>
+                )}
                 {teams.map(t => (
                   <button
                     key={t.id}
@@ -202,7 +242,10 @@ export default function TareasPage() {
                 {visibleViews.map(v => (
                   <button
                     key={v.key}
-                    onClick={() => setActiveView(v.key)}
+                    onClick={() => {
+                      setActiveView(v.key)
+                      if (v.key === 'base') setPendingBaseFilter(null)
+                    }}
                     className={`flex-1 sm:flex-none px-2.5 sm:px-4 py-1.5 rounded-lg text-[14.5px] font-semibold transition-all ${
                       activeView === v.key
                         ? 'bg-[#111] text-white'
@@ -213,7 +256,7 @@ export default function TareasPage() {
                   </button>
                 ))}
               </div>
-              {['panorama', 'team', 'standup'].includes(activeView) && (
+              {['team', 'standup'].includes(activeView) && (
                 <div className="flex items-center gap-1 bg-white border border-[#e0ddd4] rounded-xl px-1 py-1 w-full sm:w-auto">
                   <button
                     onClick={() => setMonthIdx(i => i - 1)}
@@ -246,13 +289,17 @@ export default function TareasPage() {
             </div>
           </div>
 
-          {VIEWS.find(v => v.key === activeView)?.desc && (
-            <p className="text-[14.5px] text-[#888] leading-relaxed -mt-2 mb-2 max-w-2xl">
-              {VIEWS.find(v => v.key === activeView).desc}
-            </p>
-          )}
+          {(() => {
+            const v = VIEWS.find(v => v.key === activeView)
+            const desc = activeView === 'team' && isAll ? v?.descAll : v?.desc
+            return desc && (
+              <p className="text-[14.5px] text-[#888] leading-relaxed -mt-2 mb-2 max-w-2xl">
+                {desc}
+              </p>
+            )
+          })()}
 
-          {!loading && teams.length === 0 && (
+          {!loading && teams.length === 0 && !canViewAll && (
             <div className="bg-white rounded-xl border border-[#e0ddd4] p-10 text-center mb-4">
               <p className="text-[17px] font-semibold text-[#888] mb-1">No hay líneas creadas</p>
               <p className="text-[15px] text-[#bbb]">Crea las líneas desde <strong>Empresa → Líneas</strong> para empezar a gestionar tareas</p>
@@ -265,20 +312,19 @@ export default function TareasPage() {
             </div>
           ) : (
             <>
-              {activeView === 'panorama' && (
-                <PanoramaView teams={teams} tasks={tasks} monthIdx={monthIdx} onSelectTeam={selectTeam} />
-              )}
               {activeView === 'team' && (
-                <TeamView team={activeTeam} tasks={tasks} usersMap={usersMap} monthIdx={monthIdx} clientsById={clientsById} onOpenTask={openEditTask} />
+                isAll
+                  ? <PanoramaView teams={teams} tasks={tasks} monthIdx={monthIdx} onSelectTeam={selectTeam} onNavigateToBase={goToBaseWithFilter} />
+                  : <TeamView team={activeTeam} tasks={tasks} usersMap={usersMap} monthIdx={monthIdx} clientsById={clientsById} onOpenTask={openEditTask} />
               )}
               {activeView === 'base' && (
-                <BaseView tasks={tasks} teams={teams} team={activeTeam} usersMap={usersMap} clientsById={clientsById} onOpenTask={openEditTask} onUpdated={handleUpdated} />
+                <BaseView tasks={tasks} teams={teams} team={activeTeam} allLines={isAll} usersMap={usersMap} clientsById={clientsById} onOpenTask={openEditTask} onUpdated={handleUpdated} initialFilter={pendingBaseFilter} />
               )}
               {activeView === 'kanban' && (
-                <KanbanView team={activeTeam} tasks={tasks} usersMap={usersMap} clientsById={clientsById} onOpenTask={openEditTask} onUpdated={handleUpdated} />
+                <KanbanView team={activeTeam} teams={teams} allLines={isAll} tasks={tasks} usersMap={usersMap} clientsById={clientsById} onOpenTask={openEditTask} onUpdated={handleUpdated} />
               )}
               {activeView === 'standup' && (
-                <StandupView team={activeTeam} tasks={tasks} teams={teams} usersMap={usersMap} monthIdx={monthIdx} onOpenTask={openEditTask} />
+                <StandupView team={activeTeam} allLines={isAll} tasks={tasks} teams={teams} usersMap={usersMap} monthIdx={monthIdx} onOpenTask={openEditTask} />
               )}
             </>
           )}
@@ -291,7 +337,7 @@ export default function TareasPage() {
           teams={teams}
           clients={clients}
           users={allUsers}
-          defaultTeamId={activeTeamId}
+          defaultTeamId={isAll ? null : activeTeamId}
           onClose={closeTaskModal}
           onCreated={handleCreated}
           onUpdated={handleUpdated}

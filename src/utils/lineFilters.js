@@ -20,3 +20,18 @@ export function teamMemberUsers(users, team, currentUserId = null) {
     u => memberIds.includes(u.user_id) || (currentUserId != null && u.user_id === currentUserId),
   )
 }
+
+/**
+ * Devuelve las tareas cuyo team_id pertenece a alguna de las líneas visibles.
+ * Usado por las vistas de Tareas (Base, Kanban, Stand-up) en modo "Todos",
+ * para combinar todas las líneas que el usuario puede ver sin incluir tareas
+ * de líneas fuera de su alcance.
+ *
+ * @param {Array} tasks - Lista de tareas con team_id
+ * @param {Array} teams - Líneas visibles para el usuario actual
+ * @returns {Array} Tareas filtradas
+ */
+export function tasksForVisibleLines(tasks, teams) {
+  const visibleIds = new Set(teams.map(t => t.id))
+  return tasks.filter(t => visibleIds.has(t.team_id))
+}

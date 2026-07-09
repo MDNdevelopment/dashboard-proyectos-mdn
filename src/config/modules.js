@@ -53,7 +53,6 @@ export const MODULES = [
     routePrefix: '/tareas',
     description: 'Gestión de tareas de control de calidad',
     tabs: [
-      { key: 'panorama', label: 'Panorama' },
       { key: 'team',     label: 'Dashboard' },
       { key: 'base',     label: 'Base' },
       { key: 'kanban',   label: 'Kanban' },

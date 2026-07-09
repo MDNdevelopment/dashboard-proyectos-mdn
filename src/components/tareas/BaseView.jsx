@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import { isLate, isDragged, isClosed, fmtShort, ESTADOS, COL_META } from './constants'
 import { checklistProgress } from './taskChecklist'
 import { Avatar } from './UserPickerSingle'
-import { teamMemberUsers } from '../../utils/lineFilters'
+import { teamMemberUsers, tasksForVisibleLines } from '../../utils/lineFilters'
 import { updateTaskStatus } from './taskStatus'
 
 // --- Status dropdown (portal-based to escape overflow:hidden table containers) ---
@@ -194,28 +194,31 @@ function DirectionFilter({ directionUsers, selectedIds, onChange }) {
 
 // --- Main component ---
 
-export default function BaseView({ tasks, teams, team, usersMap, clientsById = new Map(), onOpenTask, onUpdated }) {
+export default function BaseView({ tasks, teams, team, allLines = false, usersMap, clientsById = new Map(), onOpenTask, onUpdated, initialFilter = null }) {
   const [searchParams] = useSearchParams()
 
-  // Inicializar filtros desde URL params (solo en el primer render)
+  // Inicializar filtros desde initialFilter (cards del dashboard) o URL params (Reportes), en ese orden
   const [q, setQ] = useState('')
-  const [fStatus, setFStatus] = useState(() => searchParams.get('status') ?? '')
+  const [fStatus, setFStatus] = useState(() => initialFilter?.status ?? searchParams.get('status') ?? '')
   const [fClient, setFClient] = useState('')
   const [fClientId, setFClientId] = useState(() => searchParams.get('client') ?? '') // client_id desde Reportes
   const [fSupportIds, setFSupportIds] = useState([])  // user_id[] de personas de dirección
-  const [fAlert, setFAlert] = useState(() => searchParams.get('fAlert') ?? '')  // '' | 'late' | 'drag' | 'ok'
+  const [fAlert, setFAlert] = useState(() => initialFilter?.alert ?? searchParams.get('fAlert') ?? '')  // '' | 'late' | 'drag' | 'ok'
   const [fAssignee, setFAssignee] = useState(() => searchParams.get('assignee') ?? '') // user_id | ''
+  const [fLine, setFLine] = useState('')  // team_id | '' (solo en modo allLines)
 
-  // Solo tareas del team seleccionado
-  const baseTasks = team ? tasks.filter(t => t.team_id === team.id) : []
+  // Tareas del team seleccionado, o de todas las líneas visibles en modo "Todos"
+  const baseTasks = allLines
+    ? tasksForVisibleLines(tasks, teams).filter(t => !fLine || t.team_id === fLine)
+    : (team ? tasks.filter(t => t.team_id === team.id) : [])
 
   const clientList = [...new Set(baseTasks.map(t => t.client).filter(Boolean))].sort()
 
-  // Responsable: solo miembros del team seleccionado
+  // Responsable: miembros del team seleccionado, o todos los usuarios en modo "Todos"
   const usersList = (() => {
     const allUsers = Array.from(usersMap.values())
-    return teamMemberUsers(allUsers, team)
-      .sort((a, b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`))
+    const list = allLines ? allUsers : teamMemberUsers(allUsers, team)
+    return list.sort((a, b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`))
   })()
 
   // Usuarios de dirección: access_level >= 3 (pueden ser asignados como apoyo)
@@ -237,8 +240,8 @@ export default function BaseView({ tasks, teams, team, usersMap, clientsById = n
     return true
   }).sort((a, b) => (b.request_date ?? '').localeCompare(a.request_date ?? ''))
 
-  const hasFilters = q || fStatus || fClient || fClientId || fSupportIds.length > 0 || fAlert || fAssignee
-  function clearFilters() { setQ(''); setFStatus(''); setFClient(''); setFClientId(''); setFSupportIds([]); setFAlert(''); setFAssignee('') }
+  const hasFilters = q || fStatus || fClient || fClientId || fSupportIds.length > 0 || fAlert || fAssignee || fLine
+  function clearFilters() { setQ(''); setFStatus(''); setFClient(''); setFClientId(''); setFSupportIds([]); setFAlert(''); setFAssignee(''); setFLine('') }
 
   // Nombre del cliente filtrado por ID (para mostrar etiqueta cuando viene de Reportes)
   const activeClientName = fClientId ? clientsById.get(fClientId)?.name ?? null : null
@@ -248,7 +251,7 @@ export default function BaseView({ tasks, teams, team, usersMap, clientsById = n
     return u ? { name: `${u.first_name} ${u.last_name}`, user: u } : null
   }
 
-  if (!team) {
+  if (!team && !allLines) {
     return (
       <div className="bg-white rounded-xl border border-[#e0ddd4] p-10 text-center">
         <p className="text-[16px] font-medium text-[#888]">Selecciona un team para ver su base de tareas</p>
@@ -260,7 +263,7 @@ export default function BaseView({ tasks, teams, team, usersMap, clientsById = n
     <div className="space-y-4">
       {/* Filter bar */}
       <div className="space-y-1.5">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+        <div className={`grid grid-cols-2 sm:grid-cols-3 gap-2 ${allLines ? 'lg:grid-cols-7' : 'lg:grid-cols-6'}`}>
           <div className="relative col-span-2 sm:col-span-1">
             <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#999] pointer-events-none" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="6.5" cy="6.5" r="5"/><path d="M10.5 10.5L14 14" strokeLinecap="round"/>
@@ -272,6 +275,12 @@ export default function BaseView({ tasks, teams, team, usersMap, clientsById = n
               className="w-full pl-8 pr-3 py-[10px] text-[14.5px] bg-white border border-[#e0ddd4] rounded-lg outline-none focus:border-[#bbb] transition-colors"
             />
           </div>
+          {allLines && (
+            <select value={fLine} onChange={e => setFLine(e.target.value)} className="input-base text-[14.5px] py-2">
+              <option value="">Línea: todas</option>
+              {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          )}
           <select value={fAssignee} onChange={e => setFAssignee(e.target.value)} className="input-base text-[14.5px] py-2">
             <option value="">Responsable: todos</option>
             {usersList.map(u => (
@@ -343,6 +352,7 @@ export default function BaseView({ tasks, teams, team, usersMap, clientsById = n
             <table className="w-full text-[15px]">
               <thead>
                 <tr className="border-b border-[#ece9df] text-left bg-[#faf9f5]">
+                  {allLines && <th className="px-4 py-3 text-[12.5px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">Línea</th>}
                   <th className="px-4 py-3 text-[12.5px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">Cliente</th>
                   <th className="px-4 py-3 text-[12.5px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] max-w-[220px]">Tarea</th>
                   <th className="px-4 py-3 text-[12.5px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">Estatus</th>
@@ -365,6 +375,11 @@ export default function BaseView({ tasks, teams, team, usersMap, clientsById = n
                       className={`border-b border-[#f5f3eb] last:border-0 hover:bg-[#faf9f5] cursor-pointer transition-colors ${late ? 'bg-red-50/50' : ''}`}
                       onClick={() => onOpenTask(t)}
                     >
+                      {allLines && (
+                        <td className="px-4 py-3 text-[13.5px] text-[#666]">
+                          {teams.find(tm => tm.id === t.team_id)?.name ?? '—'}
+                        </td>
+                      )}
                       <td className="px-4 py-3 font-medium text-[#111] max-w-[140px]">
                         <div className="flex items-center gap-1.5 min-w-0">
                           {late && <span className="text-red-500 flex-shrink-0">⚠</span>}

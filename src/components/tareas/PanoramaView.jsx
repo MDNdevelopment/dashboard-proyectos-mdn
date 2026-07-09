@@ -14,9 +14,15 @@ function initial(name) {
   return (name ?? "?").trim().charAt(0).toUpperCase();
 }
 
-function KpiCard({ label, value, sub, color }) {
+function KpiCard({ label, value, sub, color, onClick }) {
+  const Tag = onClick ? "button" : "div";
   return (
-    <div className="bg-white rounded-xl border border-[#e0ddd4] px-4 py-3.5">
+    <Tag
+      onClick={onClick}
+      className={`bg-white rounded-xl border border-[#e0ddd4] px-4 py-3.5 text-left w-full ${
+        onClick ? "hover:border-[#FFB800] hover:shadow-md transition-all cursor-pointer" : ""
+      }`}
+    >
       <p className="text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1">
         {label}
       </p>
@@ -27,7 +33,7 @@ function KpiCard({ label, value, sub, color }) {
         {value}
       </p>
       {sub && <p className="text-[13.5px] text-[#888] mt-1">{sub}</p>}
-    </div>
+    </Tag>
   );
 }
 
@@ -51,7 +57,7 @@ function SemLight({ light }) {
   );
 }
 
-export default function PanoramaView({ teams, tasks, monthIdx, onSelectTeam }) {
+export default function PanoramaView({ teams, tasks, monthIdx, onSelectTeam, onNavigateToBase }) {
   const stats = teams.map((t, i) => ({
     ...teamMonthStats(t.id, tasks, monthIdx),
     team: t,
@@ -90,12 +96,14 @@ export default function PanoramaView({ teams, tasks, monthIdx, onSelectTeam }) {
           label="Tareas del mes"
           value={gTotal}
           sub={fmtMonth(monthIdx)}
+          onClick={() => onNavigateToBase(null)}
         />
         <KpiCard
           label="Cerradas"
           value={`${gCer} / ${gTotal}`}
           sub="Procesos completados"
           color="#16A34A"
+          onClick={() => onNavigateToBase({ status: "Terminado" })}
         />
         <KpiCard
           label="Cumplimiento"
@@ -110,18 +118,21 @@ export default function PanoramaView({ teams, tasks, monthIdx, onSelectTeam }) {
           color={
             gPct >= 90 ? "#16A34A" : gPct < 70 && gTotal ? "#E14848" : "#F0871F"
           }
+          onClick={() => onNavigateToBase(null)}
         />
         <KpiCard
           label="Bloqueados"
           value={gBloq}
           sub={gBloq ? "Cuellos de botella" : "Sin bloqueos"}
           color={gBloq ? "#E14848" : undefined}
+          onClick={() => onNavigateToBase({ status: "Bloqueado" })}
         />
         <KpiCard
           label="Retrasados"
           value={gRet}
           sub="Entregas vencidas"
           color={gRet ? "#E14848" : undefined}
+          onClick={() => onNavigateToBase({ alert: "late" })}
         />
       </div>
 
@@ -173,12 +184,17 @@ export default function PanoramaView({ teams, tasks, monthIdx, onSelectTeam }) {
                     className="text-[30px] font-bold leading-none"
                     style={{ color: lg.color }}
                   >
-                    {s.total ? `${s.pct}%` : "—"}
+                    {s.total ? `${s.cerradas}/${s.total}` : "—"}
                   </span>
-                  <span className="text-[13.5px] text-[#888] ml-2">
-                    {s.total
-                      ? `${s.cerradas}/${s.total} tareas`
-                      : "sin movimiento"}
+                  <span className="text-[13.5px] ml-2">
+                    {s.total ? (
+                      <>
+                        <span style={{ color: lg.color }}>tareas</span>
+                        <span className="text-[#888]">{` · ${s.pct}%`}</span>
+                      </>
+                    ) : (
+                      <span className="text-[#888]">sin movimiento</span>
+                    )}
                   </span>
                 </div>
                 {tot > 0 && (

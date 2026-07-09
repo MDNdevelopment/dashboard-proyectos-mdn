@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { vi } from 'vitest'
 
@@ -17,6 +18,13 @@ const MOCK_TASKS = [
     status: 'En proceso', assignee_id: null, support_id: null,
     request_date: '2026-06-01', due_date: '2026-06-30', closed_date: null,
     source: null, created_by: null, created_at: '2026-06-01T00:00:00Z',
+  },
+  {
+    id: 'task-2', company_id: 'co-1', team_id: 'line-2',
+    client: 'Farmacia Salud', description: 'Editar reel',
+    status: 'Pendiente', assignee_id: null, support_id: null,
+    request_date: '2026-06-02', due_date: '2026-06-28', closed_date: null,
+    source: null, created_by: null, created_at: '2026-06-02T00:00:00Z',
   },
 ]
 
@@ -168,5 +176,46 @@ describe('TareasPage — líneas desde metric_lines', () => {
     expect(screen.getByText(/Empresa → Líneas/)).toBeInTheDocument()
     // No hay botón de "Crear primer team" en el estado vacío
     expect(screen.queryByRole('button', { name: /crear primer team/i })).not.toBeInTheDocument()
+  })
+
+  // ── Modo "Todos" (nivel 4 / admin) ──────────────────────────────────────────
+  describe('modo "Todos"', () => {
+    it('Base combina tareas de todas las líneas y el filtro de línea acota', async () => {
+      const user = userEvent.setup()
+      renderPage({ access_level: 4, admin: false, user_id: 'u-otro' })
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Todos' })).toBeInTheDocument()
+      })
+
+      await user.click(screen.getByRole('button', { name: 'Base' }))
+
+      // Ambas tareas (de line-1 y line-2) visibles combinadas
+      await waitFor(() => {
+        expect(screen.getByText('Diseñar banner')).toBeInTheDocument()
+      })
+      expect(screen.getByText('Editar reel')).toBeInTheDocument()
+
+      // Filtrar por línea acota a una sola
+      const lineFilter = screen.getByDisplayValue('Línea: todas')
+      await user.selectOptions(lineFilter, 'line-1')
+
+      expect(screen.getByText('Diseñar banner')).toBeInTheDocument()
+      expect(screen.queryByText('Editar reel')).not.toBeInTheDocument()
+    })
+
+    it('Kanban combina tareas de todas las líneas visibles', async () => {
+      const user = userEvent.setup()
+      renderPage({ access_level: 4, admin: false, user_id: 'u-otro' })
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Todos' })).toBeInTheDocument()
+      })
+
+      await user.click(screen.getByRole('button', { name: 'Kanban' }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Banco Exterior')).toBeInTheDocument()
+      })
+      expect(screen.getByText('Farmacia Salud')).toBeInTheDocument()
+    })
   })
 })

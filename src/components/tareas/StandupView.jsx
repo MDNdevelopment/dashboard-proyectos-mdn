@@ -9,6 +9,7 @@ import {
   COL_META,
 } from "./constants";
 import { Avatar } from "./UserPickerSingle";
+import { tasksForVisibleLines } from "../../utils/lineFilters";
 
 const RED = "#E14848";
 const YELLOW = "#FFB800";
@@ -62,14 +63,17 @@ function TaskItem({ task, why, color, usersMap, onOpen }) {
 
 export default function StandupView({
   team,
+  teams = [],
+  allLines = false,
   tasks,
   usersMap,
   monthIdx,
   onOpenTask,
 }) {
   const [copied, setCopied] = useState(false);
+  const [fLine, setFLine] = useState("");
 
-  if (!team) {
+  if (!team && !allLines) {
     return (
       <div className="bg-white rounded-xl border border-[#e0ddd4] p-10 text-center">
         <p className="text-[16px] font-medium text-[#888]">
@@ -79,10 +83,16 @@ export default function StandupView({
     );
   }
 
-  const all = tasks.filter((t) => t.team_id === team.id);
+  const all = allLines
+    ? tasksForVisibleLines(tasks, teams).filter((t) => !fLine || t.team_id === fLine)
+    : tasks.filter((t) => t.team_id === team.id);
   const red = all.filter((t) => !isClosed(t) && taskLight(t) === "red");
   const yellow = all.filter((t) => !isClosed(t) && taskLight(t) === "yellow");
   const direction = all.filter((t) => !isClosed(t) && t.support_id);
+
+  const scopeName = allLines
+    ? (fLine ? teams.find((t) => t.id === fLine)?.name ?? "Todos los teams" : "Todos los teams")
+    : team.name;
 
   function reason(t) {
     if (isBlocked(t)) return "Bloqueado";
@@ -92,7 +102,7 @@ export default function StandupView({
 
   function buildReport() {
     const lines = [];
-    lines.push(`📋 Stand-up ${team.name} — ${fmtMonth(monthIdx)}`);
+    lines.push(`📋 Stand-up ${scopeName} — ${fmtMonth(monthIdx)}`);
     if (red.length) {
       lines.push("");
       lines.push(`🔴 Rojo — Bloqueadas / Retrasadas (${red.length}):`);
@@ -141,13 +151,27 @@ export default function StandupView({
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-[19px] font-bold text-[#111]">
-            Stand-up · {team.name}
+            Stand-up · {scopeName}
           </h2>
           <p className="text-[14.5px] text-[#888]">{fmtMonth(monthIdx)}</p>
         </div>
+        {allLines && (
+          <select
+            value={fLine}
+            onChange={(e) => setFLine(e.target.value)}
+            className="input-base text-[14.5px] py-2 w-full sm:w-56"
+          >
+            <option value="">Línea: todas</option>
+            {teams.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        )}
         <button
           onClick={copyReport}
           className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[#e0ddd4] text-[15px] font-semibold text-[#555] hover:bg-[#f5f3eb] hover:text-[#111] transition-colors"
