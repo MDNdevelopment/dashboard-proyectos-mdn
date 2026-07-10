@@ -114,7 +114,7 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
       due_date: form.due_date || null,
       closed_date: form.closed_date || null,
       status: form.status,
-      blocked_reason: form.status === 'Bloqueado' ? (form.blocked_reason || null) : null,
+      blocked_reason: form.status === 'Paralizado' ? (form.blocked_reason || null) : null,
       checklist: form.checklist,
     }
 
@@ -370,23 +370,23 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
                   set('closed_date', new Date().toISOString().slice(0, 10))
                 }
                 if (val !== 'Terminado') set('closed_date', '')
-                if (val !== 'Bloqueado') set('blocked_reason', '')
+                if (val !== 'Paralizado') set('blocked_reason', '')
               }}
             >
               {ESTADOS.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
 
-          {form.status === 'Bloqueado' && (
+          {form.status === 'Paralizado' && (
             <div>
               <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
-                Razón del bloqueo
+                Razón de la paralización
                 <span className="ml-1 font-normal normal-case text-[#bbb]">(opcional)</span>
               </label>
               <textarea
                 className="input-base"
                 rows={2}
-                placeholder="¿Por qué está bloqueada esta tarea?"
+                placeholder="¿Por qué está paralizada esta tarea?"
                 value={form.blocked_reason}
                 onChange={e => set('blocked_reason', e.target.value)}
               />

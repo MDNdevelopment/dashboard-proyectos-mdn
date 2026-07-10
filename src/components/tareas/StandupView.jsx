@@ -95,7 +95,7 @@ export default function StandupView({
     : team.name;
 
   function reason(t) {
-    if (isBlocked(t)) return "Bloqueado";
+    if (isBlocked(t)) return "Paralizado";
     if (isLate(t)) return `Retrasado (${fmtShort(t.due_date)})`;
     return t.status; // 'Por revisar' | 'Pendiente'
   }
@@ -105,7 +105,7 @@ export default function StandupView({
     lines.push(`📋 Stand-up ${scopeName} — ${fmtMonth(monthIdx)}`);
     if (red.length) {
       lines.push("");
-      lines.push(`🔴 Rojo — Bloqueadas / Retrasadas (${red.length}):`);
+      lines.push(`🔴 Rojo — Paralizadas / Retrasadas (${red.length}):`);
       red.forEach((t) => {
         lines.push(
           `  • ${t.client || "(sin cliente)"} — ${t.description} (${reason(t)})`,
@@ -227,7 +227,7 @@ export default function StandupView({
           <span className="text-[14.5px] font-bold text-[#111]">Rojo</span>
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
-          {["Bloqueado", "Retrasado"].map((label) => (
+          {["Paralizado", "Retrasado"].map((label) => (
             <span
               key={label}
               className="text-[14px] font-medium text-[#555] bg-[#f0eee6] px-2.5 py-0.5 rounded-full"
@@ -324,7 +324,7 @@ export default function StandupView({
               style={{ background: RED }}
             />
             <p className="text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#555]">
-              Bloqueadas — Retrasadas ({red.length})
+              Paralizadas — Retrasadas ({red.length})
             </p>
           </div>
           <div className="h-64 overflow-y-auto space-y-2 pr-0.5">

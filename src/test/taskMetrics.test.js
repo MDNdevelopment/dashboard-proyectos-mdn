@@ -149,8 +149,8 @@ describe('aggregateTaskMetrics', () => {
 
   it('contabiliza bloqueadas correctamente', () => {
     const tasks = [
-      task({ status: 'Bloqueado' }),
-      task({ status: 'Bloqueado' }),
+      task({ status: 'Paralizado' }),
+      task({ status: 'Paralizado' }),
       task({ status: 'En proceso' }),
     ]
     const m = aggregateTaskMetrics(tasks, USER_A)
@@ -186,12 +186,12 @@ describe('aggregateTaskMetrics', () => {
       task({ status: 'En proceso' }),
       task({ status: 'En proceso' }),
       task({ status: 'Terminado', closed_date: '2026-02-01', request_date: '2026-01-01' }),
-      task({ status: 'Bloqueado' }),
+      task({ status: 'Paralizado' }),
     ]
     const m = aggregateTaskMetrics(tasks, USER_A)
     expect(m.byStatus['En proceso']).toBe(2)
     expect(m.byStatus['Terminado']).toBe(1)
-    expect(m.byStatus['Bloqueado']).toBe(1)
+    expect(m.byStatus['Paralizado']).toBe(1)
     expect(m.byStatus['Pendiente']).toBeUndefined()
   })
 })

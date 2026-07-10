@@ -1,4 +1,10 @@
-import { fmtMonth, lightOf, teamMonthStats, ESTADOS, COL_META } from "./constants";
+import {
+  fmtMonth,
+  lightOf,
+  teamMonthStats,
+  ESTADOS,
+  COL_META,
+} from "./constants";
 
 const TEAM_PALETTES = [
   { bg: "#e9e3f8", fg: "#6A5A9E" },
@@ -20,7 +26,9 @@ function KpiCard({ label, value, sub, color, onClick }) {
     <Tag
       onClick={onClick}
       className={`bg-white rounded-xl border border-[#e0ddd4] px-4 py-3.5 text-left w-full ${
-        onClick ? "hover:border-[#FFB800] hover:shadow-md transition-all cursor-pointer" : ""
+        onClick
+          ? "hover:border-[#FFB800] hover:shadow-md transition-all cursor-pointer"
+          : ""
       }`}
     >
       <p className="text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1">
@@ -57,7 +65,13 @@ function SemLight({ light }) {
   );
 }
 
-export default function PanoramaView({ teams, tasks, monthIdx, onSelectTeam, onNavigateToBase }) {
+export default function PanoramaView({
+  teams,
+  tasks,
+  monthIdx,
+  onSelectTeam,
+  onNavigateToBase,
+}) {
   const stats = teams.map((t, i) => ({
     ...teamMonthStats(t.id, tasks, monthIdx),
     team: t,
@@ -121,11 +135,11 @@ export default function PanoramaView({ teams, tasks, monthIdx, onSelectTeam, onN
           onClick={() => onNavigateToBase(null)}
         />
         <KpiCard
-          label="Bloqueados"
+          label="Paralizados"
           value={gBloq}
-          sub={gBloq ? "Cuellos de botella" : "Sin bloqueos"}
+          sub={gBloq ? "Cuellos de botella" : "Sin paralizaciones"}
           color={gBloq ? "#E14848" : undefined}
-          onClick={() => onNavigateToBase({ status: "Bloqueado" })}
+          onClick={() => onNavigateToBase({ status: "Paralizado" })}
         />
         <KpiCard
           label="Retrasados"
@@ -152,7 +166,10 @@ export default function PanoramaView({ teams, tasks, monthIdx, onSelectTeam, onN
             const isLead = withMov.length > 0 && i === 0 && s.total > 0;
             const teamTasks = tasks.filter((t) => t.team_id === s.team.id);
             const tot = teamTasks.length;
-            const counts = ESTADOS.map((e) => ({ e, n: teamTasks.filter((t) => t.status === e).length }));
+            const counts = ESTADOS.map((e) => ({
+              e,
+              n: teamTasks.filter((t) => t.status === e).length,
+            }));
             return (
               <button
                 key={s.team.id}
@@ -190,7 +207,7 @@ export default function PanoramaView({ teams, tasks, monthIdx, onSelectTeam, onN
                     {s.total ? (
                       <>
                         <span style={{ color: lg.color }}>tareas</span>
-                        <span className="text-[#888]">{` · ${s.pct}%`}</span>
+                        <span className="text-[#888]">{` · ${s.pct}% completadas`}</span>
                       </>
                     ) : (
                       <span className="text-[#888]">sin movimiento</span>
@@ -200,30 +217,40 @@ export default function PanoramaView({ teams, tasks, monthIdx, onSelectTeam, onN
                 {tot > 0 && (
                   <>
                     <div className="flex rounded-full overflow-hidden h-1.5 mb-2">
-                      {counts.filter((c) => c.n > 0).map((c) => (
-                        <div
-                          key={c.e}
-                          style={{ width: `${(c.n / tot) * 100}%`, background: COL_META[c.e]?.color ?? "#ccc" }}
-                          title={`${c.e}: ${c.n}`}
-                        />
-                      ))}
+                      {counts
+                        .filter((c) => c.n > 0)
+                        .map((c) => (
+                          <div
+                            key={c.e}
+                            style={{
+                              width: `${(c.n / tot) * 100}%`,
+                              background: COL_META[c.e]?.color ?? "#ccc",
+                            }}
+                            title={`${c.e}: ${c.n}`}
+                          />
+                        ))}
                     </div>
                     <div className="flex flex-wrap gap-x-2 gap-y-1 mb-3">
-                      {counts.filter((c) => c.n > 0).map((c) => (
-                        <span key={c.e} className="flex items-center gap-1 text-[12px] text-[#555]">
+                      {counts
+                        .filter((c) => c.n > 0)
+                        .map((c) => (
                           <span
-                            style={{
-                              width: 7,
-                              height: 7,
-                              borderRadius: "50%",
-                              background: COL_META[c.e]?.color ?? "#ccc",
-                              display: "inline-block",
-                              flexShrink: 0,
-                            }}
-                          />
-                          <b className="text-[#111]">{c.n}</b> {c.e}
-                        </span>
-                      ))}
+                            key={c.e}
+                            className="flex items-center gap-1 text-[12px] text-[#555]"
+                          >
+                            <span
+                              style={{
+                                width: 7,
+                                height: 7,
+                                borderRadius: "50%",
+                                background: COL_META[c.e]?.color ?? "#ccc",
+                                display: "inline-block",
+                                flexShrink: 0,
+                              }}
+                            />
+                            <b className="text-[#111]">{c.n}</b> {c.e}
+                          </span>
+                        ))}
                     </div>
                   </>
                 )}

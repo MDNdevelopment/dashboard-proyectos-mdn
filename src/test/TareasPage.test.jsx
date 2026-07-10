@@ -185,11 +185,11 @@ describe('TareasPage', () => {
       expect(screen.getByDisplayValue('Terminado')).toBeInTheDocument()
     })
 
-    it('"Bloqueados" opens Base filtered by Estatus: Bloqueado', async () => {
+    it('"Paralizados" opens Base filtered by Estatus: Paralizado', async () => {
       const user = await goToPanorama()
-      await user.click(screen.getByText('Bloqueados'))
+      await user.click(screen.getByText('Paralizados'))
       expect(screen.getByRole('button', { name: 'Base' })).toHaveClass('bg-[#111]')
-      expect(screen.getByDisplayValue('Bloqueado')).toBeInTheDocument()
+      expect(screen.getByDisplayValue('Paralizado')).toBeInTheDocument()
     })
 
     it('"Retrasados" opens Base filtered by Alerta: Retrasadas', async () => {
@@ -209,8 +209,8 @@ describe('TareasPage', () => {
 
     it('clicking the Base tab directly after a card click clears the pending filter', async () => {
       const user = await goToPanorama()
-      await user.click(screen.getByText('Bloqueados'))
-      expect(screen.getByDisplayValue('Bloqueado')).toBeInTheDocument()
+      await user.click(screen.getByText('Paralizados'))
+      expect(screen.getByDisplayValue('Paralizado')).toBeInTheDocument()
       await user.click(screen.getByRole('button', { name: 'Dashboard' }))
       await user.click(screen.getByRole('button', { name: 'Base' }))
       expect(screen.getByDisplayValue('Estatus: todos')).toBeInTheDocument()
@@ -222,7 +222,7 @@ describe('TareasPage', () => {
       await waitFor(() => {
         expect(screen.getByText('Cumplimiento')).toBeInTheDocument()
       })
-      await user.click(screen.getByText('Bloqueados'))
+      await user.click(screen.getByText('Paralizados'))
       expect(screen.getByRole('button', { name: 'Base' })).toHaveClass('bg-[#111]')
 
       await user.click(screen.getByRole('button', { name: 'Volver (test)' }))

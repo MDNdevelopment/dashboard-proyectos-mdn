@@ -13,6 +13,7 @@ import {
   isClosed,
   isLate,
   isDragged,
+  isContinuous,
   isBlocked,
   taskLight,
   lightOf,
@@ -112,7 +113,7 @@ describe('isClosed', () => {
   })
 
   it('returns false for other statuses', () => {
-    for (const s of ['En proceso', 'Por revisar', 'Bloqueado', 'Pendiente']) {
+    for (const s of ['En proceso', 'Por revisar', 'Paralizado', 'Pendiente']) {
       expect(isClosed({ status: s })).toBe(false)
     }
   })
@@ -139,8 +140,8 @@ describe('isLate', () => {
 
 // ─── isBlocked ───────────────────────────────────────────────────────────────
 describe('isBlocked', () => {
-  it('returns true only for Bloqueado status', () => {
-    expect(isBlocked({ status: 'Bloqueado' })).toBe(true)
+  it('returns true only for Paralizado status', () => {
+    expect(isBlocked({ status: 'Paralizado' })).toBe(true)
     expect(isBlocked({ status: 'En proceso' })).toBe(false)
     expect(isBlocked({ status: 'Pendiente' })).toBe(false)
   })
@@ -165,6 +166,33 @@ describe('isDragged', () => {
 
   it('returns false when request_date is missing', () => {
     expect(isDragged({ status: 'En proceso', request_date: null })).toBe(false)
+  })
+})
+
+// ─── isContinuous ─────────────────────────────────────────────────────────────
+describe('isContinuous', () => {
+  it('returns false when request_date and due_date are in the same month', () => {
+    expect(isContinuous({ request_date: '2026-06-01', due_date: '2026-06-28' })).toBe(false)
+  })
+
+  it('returns true when the task spans two different months', () => {
+    expect(isContinuous({ request_date: '2026-06-20', due_date: '2026-07-05' })).toBe(true)
+  })
+
+  it('returns true across a year boundary', () => {
+    expect(isContinuous({ request_date: '2026-12-20', due_date: '2027-01-05' })).toBe(true)
+  })
+
+  it('returns false when due_date is missing', () => {
+    expect(isContinuous({ request_date: '2026-06-20', due_date: null })).toBe(false)
+  })
+
+  it('returns false when request_date is missing', () => {
+    expect(isContinuous({ request_date: null, due_date: '2026-07-05' })).toBe(false)
+  })
+
+  it('returns false when due_date is an earlier day but same month', () => {
+    expect(isContinuous({ request_date: '2026-06-20', due_date: '2026-06-05' })).toBe(false)
   })
 })
 
@@ -276,8 +304,8 @@ describe('taskLight', () => {
   const future = '2099-12-31'
   const past   = '2020-01-01'
 
-  it('returns red for Bloqueado status', () => {
-    expect(taskLight({ status: 'Bloqueado', due_date: future })).toBe('red')
+  it('returns red for Paralizado status', () => {
+    expect(taskLight({ status: 'Paralizado', due_date: future })).toBe('red')
   })
 
   it('returns red for open task with past due_date (Retrasado), overriding yellow status', () => {
@@ -316,13 +344,13 @@ describe('teamMonthStats', () => {
   const JUN = 2026 * 12 + 5  // June 2026
 
   // task-1: started and closed in June
-  // task-2: started in June, Bloqueado, not closed, with support — also appears in Jun
+  // task-2: started in June, Paralizado, not closed, with support — also appears in Jun
   // task-3: started in June, En proceso, late due_date — appears in Jun
   // task-4: different team — must not count
   // task-5: started in July — must NOT appear in June
   const tasks = [
     { id: '1', team_id: TEAM_ID, status: 'Terminado',  request_date: '2026-06-01', closed_date: '2026-06-15', due_date: '2099-12-31', support_id: null },
-    { id: '2', team_id: TEAM_ID, status: 'Bloqueado',  request_date: '2026-06-10', closed_date: null,          due_date: '2099-12-31', support_id: 'u1' },
+    { id: '2', team_id: TEAM_ID, status: 'Paralizado', request_date: '2026-06-10', closed_date: null,          due_date: '2099-12-31', support_id: 'u1' },
     { id: '3', team_id: TEAM_ID, status: 'En proceso', request_date: '2026-06-20', closed_date: null,          due_date: '2020-01-01', support_id: null },
     { id: '4', team_id: 'other', status: 'Terminado',  request_date: '2026-06-01', closed_date: '2026-06-30',  due_date: null,         support_id: null },
     { id: '5', team_id: TEAM_ID, status: 'Pendiente',  request_date: '2026-07-01', closed_date: null,          due_date: '2099-12-31', support_id: null },
@@ -341,7 +369,7 @@ describe('teamMonthStats', () => {
     expect(teamMonthStats(TEAM_ID, tasks, JUN).pct).toBe(33)
   })
 
-  it('bloqueados counts Bloqueado across all team tasks (not month-scoped)', () => {
+  it('bloqueados counts Paralizado across all team tasks (not month-scoped)', () => {
     expect(teamMonthStats(TEAM_ID, tasks, JUN).bloqueados).toBe(1)
   })
 

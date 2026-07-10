@@ -1,10 +1,10 @@
 // ─── Statuses ───────────────────────────────────────────────────────────────
-export const ESTADOS = ['En proceso', 'Por revisar', 'Bloqueado', 'Pendiente', 'Terminado']
+export const ESTADOS = ['En proceso', 'Por revisar', 'Paralizado', 'Pendiente', 'Terminado']
 
 export const COL_META = {
   'En proceso':  { color: '#FFB800', textColor: '#111' },
   'Por revisar': { color: '#3B6FE0', textColor: '#fff' },
-  'Bloqueado':   { color: '#E14848', textColor: '#fff' },
+  'Paralizado':  { color: '#E14848', textColor: '#fff' },
   'Pendiente':   { color: '#F0871F', textColor: '#fff' },
   'Terminado':   { color: '#16A34A', textColor: '#fff' },
 }
@@ -115,14 +115,25 @@ export function isDragged(task) {
   return start !== null && start < currentMonthIndex()
 }
 
+/**
+ * Una tarea es "continua" cuando comienza en un mes y termina en otro:
+ * request_date y due_date caen en meses (calendario) distintos.
+ */
+export function isContinuous(task) {
+  const start = parseD(task.request_date)
+  const end = parseD(task.due_date)
+  if (!start || !end) return false
+  return monthIndex(end) > monthIndex(start)
+}
+
 export function isBlocked(task) {
-  return task.status === 'Bloqueado'
+  return task.status === 'Paralizado'
 }
 
 // ─── Semáforo por tarea ──────────────────────────────────────────────────────
 /**
  * Returns a per-task traffic-light color: 'red' | 'yellow' | 'green'.
- *   red    = Bloqueado OR fecha de entrega vencida (isLate)
+ *   red    = Paralizado OR fecha de entrega vencida (isLate)
  *   yellow = Por revisar | Pendiente (and not red)
  *   green  = En proceso | Terminado ("no se discute")
  */

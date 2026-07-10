@@ -6,7 +6,7 @@ import { fmtDate } from '../utils/formatDate'
 const STATUS = {
   'Pendiente':  { text: '#92400e', bg: '#fef9ee', border: '#fde68a', line: '#f59e0b', label: 'Pendiente'  },
   'En proceso': { text: '#1e40af', bg: '#eff6ff', border: '#bfdbfe', line: '#3b82f6', label: 'En proceso' },
-  'Bloqueado':  { text: '#991b1b', bg: '#fff1f1', border: '#fecaca', line: '#ef4444', label: 'Bloqueado'  },
+  'Paralizado': { text: '#991b1b', bg: '#fff1f1', border: '#fecaca', line: '#ef4444', label: 'Paralizado' },
   'Completado': { text: '#14532d', bg: '#f0fdf4', border: '#bbf7d0', line: '#22c55e', label: 'Completado' },
 }
 

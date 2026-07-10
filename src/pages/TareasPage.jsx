@@ -29,7 +29,7 @@ const VIEWS = [
   {
     key: 'kanban',
     label: 'Kanban',
-    desc: 'Esta sección es el flujo de trabajo visual. Aquí mueves cada tarea por sus estados —En proceso, Por revisar, Bloqueado, Pendiente, Terminado— hasta cerrarla. Úsala para ver en qué punto está cada cosa y empujarla al cierre.',
+    desc: 'Esta sección es el flujo de trabajo visual. Aquí mueves cada tarea por sus estados —En proceso, Por revisar, Paralizado, Pendiente, Terminado— hasta cerrarla. Úsala para ver en qué punto está cada cosa y empujarla al cierre.',
   },
   {
     key: 'standup',

@@ -10,7 +10,7 @@ describe('statusUpdatePatch', () => {
   })
 
   it('clears closed_date for any non-Terminado status', () => {
-    for (const status of ['En proceso', 'Por revisar', 'Bloqueado', 'Pendiente']) {
+    for (const status of ['En proceso', 'Por revisar', 'Paralizado', 'Pendiente']) {
       const patch = statusUpdatePatch(status)
       expect(patch.status).toBe(status)
       expect(patch.closed_date).toBeNull()

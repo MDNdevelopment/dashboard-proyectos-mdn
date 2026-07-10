@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
-import { isLate, isDragged, isClosed, fmtShort, ESTADOS, COL_META } from './constants'
+import { isLate, isDragged, isContinuous, isClosed, fmtShort, ESTADOS, COL_META } from './constants'
 import { checklistProgress } from './taskChecklist'
 import { Avatar } from './UserPickerSingle'
 import { teamMemberUsers, tasksForVisibleLines } from '../../utils/lineFilters'
@@ -203,7 +203,7 @@ export default function BaseView({ tasks, teams, team, allLines = false, usersMa
   const [fClient, setFClient] = useState('')
   const [fClientId, setFClientId] = useState(() => searchParams.get('client') ?? '') // client_id desde Reportes
   const [fSupportIds, setFSupportIds] = useState([])  // user_id[] de personas de dirección
-  const [fAlert, setFAlert] = useState(() => initialFilter?.alert ?? searchParams.get('fAlert') ?? '')  // '' | 'late' | 'drag' | 'ok'
+  const [fAlert, setFAlert] = useState(() => initialFilter?.alert ?? searchParams.get('fAlert') ?? '')  // '' | 'late' | 'drag' | 'cont' | 'ok'
   const [fAssignee, setFAssignee] = useState(() => searchParams.get('assignee') ?? '') // user_id | ''
   const [fLine, setFLine] = useState('')  // team_id | '' (solo en modo allLines)
 
@@ -234,6 +234,7 @@ export default function BaseView({ tasks, teams, team, allLines = false, usersMa
     if (fSupportIds.length > 0 && !fSupportIds.includes(t.support_id)) return false
     if (fAlert === 'late' && !isLate(t)) return false
     if (fAlert === 'drag' && !isDragged(t)) return false
+    if (fAlert === 'cont' && !isContinuous(t)) return false
     if (fAlert === 'ok' && (isLate(t) || isDragged(t))) return false
     if (fAssignee && !(t.assignee_ids ?? (t.assignee_id ? [t.assignee_id] : [])).includes(fAssignee)) return false
     if (fClientId && t.client_id !== fClientId) return false
@@ -306,6 +307,7 @@ export default function BaseView({ tasks, teams, team, allLines = false, usersMa
             <option value="">Alerta: todas</option>
             <option value="late">Retrasadas</option>
             <option value="drag">Atrasadas (mes anterior)</option>
+            <option value="cont">Continuas</option>
             <option value="ok">Al día</option>
           </select>
         </div>
@@ -368,7 +370,6 @@ export default function BaseView({ tasks, teams, team, allLines = false, usersMa
                   const resps = (t.assignee_ids ?? (t.assignee_id ? [t.assignee_id] : [])).map(id => usersMap.get(id)).filter(Boolean)
                   const support = userDisplay(t.support_id)
                   const late = isLate(t)
-                  const drag = isDragged(t)
                   return (
                     <tr
                       key={t.id}
@@ -402,7 +403,9 @@ export default function BaseView({ tasks, teams, team, allLines = false, usersMa
                       </td>
                       <td className="px-4 py-3 text-[#333] max-w-[220px]">
                         <span className="line-clamp-2">{t.description}</span>
-                        {drag && !late && <span className="block text-[13px] text-[#F0871F] mt-0.5">Atrasada</span>}
+                        {late
+                          ? <span className="block text-[13px] text-[#E14848] font-semibold mt-0.5">atrasada</span>
+                          : isContinuous(t) && <span className="block text-[13px] text-[#F0871F] mt-0.5">Tarea continua</span>}
                         {(() => {
                           const { done, total } = checklistProgress(t.checklist)
                           if (total === 0) return null
