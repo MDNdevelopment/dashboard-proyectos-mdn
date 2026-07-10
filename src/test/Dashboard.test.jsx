@@ -34,6 +34,7 @@ function renderDashboard(onExport = vi.fn()) {
       loading={false}
       onNewProject={vi.fn()}
       onEditProject={vi.fn()}
+      onViewProject={vi.fn()}
       onUpdateProject={vi.fn()}
       onDeleteProject={vi.fn()}
       onMenuToggle={vi.fn()}
@@ -105,6 +106,46 @@ describe('Dashboard — filtros de estado y departamento', () => {
     fireEvent.change(statusSelect, { target: { value: 'all' } })
     expect(screen.getByText('Campaña verano')).toBeInTheDocument()
     expect(screen.getByText('Rediseño logo')).toBeInTheDocument()
+  })
+})
+
+describe('Dashboard — tarjetas superiores filtran el grid', () => {
+  it('clic en la tarjeta "Pendientes" deja visibles solo los proyectos Pendiente', () => {
+    renderDashboard()
+    fireEvent.click(screen.getByText('Pendientes'))
+    expect(screen.getByText('Rediseño logo')).toBeInTheDocument()
+    expect(screen.queryByText('Campaña verano')).not.toBeInTheDocument()
+  })
+
+  it('clic en "Total proyectos" después de filtrar vuelve a mostrar todos', () => {
+    renderDashboard()
+    fireEvent.click(screen.getByText('Pendientes'))
+    fireEvent.click(screen.getByText('Total proyectos'))
+    expect(screen.getByText('Campaña verano')).toBeInTheDocument()
+    expect(screen.getByText('Rediseño logo')).toBeInTheDocument()
+  })
+
+  it('clic en "Avance global" no cambia el filtro (no es clickeable)', () => {
+    renderDashboard()
+    fireEvent.click(screen.getByText('Avance global'))
+    expect(screen.getByText('Campaña verano')).toBeInTheDocument()
+    expect(screen.getByText('Rediseño logo')).toBeInTheDocument()
+  })
+
+  it('la tarjeta "Avance global" no es un botón y muestra el ratio de tareas', () => {
+    renderDashboard()
+    const label = screen.getByText('Avance global')
+    expect(label.closest('button')).toBeNull()
+    // sampleProjects no tienen tareas (phases: []) → 0 / 0
+    expect(screen.getByText('0 / 0')).toBeInTheDocument()
+  })
+
+  it('el select de Estado refleja el filtro aplicado desde la tarjeta', () => {
+    renderDashboard()
+    // 'En proceso' también aparece como texto de <option>, así que se acota al <p> de la tarjeta
+    fireEvent.click(screen.getByText('En proceso', { selector: 'p' }))
+    const statusSelect = screen.getByDisplayValue('En proceso')
+    expect(statusSelect).toBeInTheDocument()
   })
 })
 

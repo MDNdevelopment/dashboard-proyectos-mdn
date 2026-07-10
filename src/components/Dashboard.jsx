@@ -101,17 +101,14 @@ function DateRangePicker({ dateFrom, dateTo, onChange }) {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
-function Dashboard({ projects, loading, onNewProject, onEditProject, onUpdateProject, onDeleteProject, onDuplicateProject, onMenuToggle, onExport }) {
+function Dashboard({ projects, loading, onNewProject, onEditProject, onViewProject, onDeleteProject, onDuplicateProject, onMenuToggle, onExport }) {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [deptFilter, setDeptFilter] = useState('all')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
-  const [expandedMap, setExpandedMap] = useState({})
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const sentinelRef = useRef(null)
-
-  const toggleExpanded = id => setExpandedMap(prev => ({ ...prev, [id]: !prev[id] }))
 
   const filtered = filterProjects(projects, { search, statusFilter, deptFilter, dateFrom, dateTo })
 
@@ -143,11 +140,10 @@ function Dashboard({ projects, loading, onNewProject, onEditProject, onUpdatePro
   const title = 'Todos los proyectos'
 
   const metrics = [
-    { label: 'Total proyectos',  value: projects.length,                                           color: '#111',    mono: false },
-    { label: 'En proceso',       value: projects.filter(p => p.status === 'En proceso').length,    color: '#2563eb', mono: false },
-    { label: 'Pendientes',       value: projects.filter(p => p.status === 'Pendiente').length,     color: '#d97706', mono: false },
-    { label: 'Completados',      value: projects.filter(p => p.status === 'Completado').length,    color: '#16a34a', mono: false },
-    { label: 'Avance global',    value: `${avgProgress}%`,  sub: `${doneTasks} / ${totalTasks} tareas`, color: '#111', mono: true },
+    { label: 'Total proyectos',  value: projects.length,                                           color: '#111',    mono: false, filter: 'all' },
+    { label: 'En proceso',       value: projects.filter(p => p.status === 'En proceso').length,    color: '#2563eb', mono: false, filter: 'En proceso' },
+    { label: 'Pendientes',       value: projects.filter(p => p.status === 'Pendiente').length,     color: '#d97706', mono: false, filter: 'Pendiente' },
+    { label: 'Completados',      value: projects.filter(p => p.status === 'Completado').length,    color: '#16a34a', mono: false, filter: 'Completado' },
   ]
 
   const hasFilters = search || dateFrom || dateTo || statusFilter !== 'all' || deptFilter !== 'all'
@@ -191,19 +187,38 @@ function Dashboard({ projects, loading, onNewProject, onEditProject, onUpdatePro
         </div>
 
         {/* Metrics */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-7">
-          {metrics.map(m => (
-            <div key={m.label} className="bg-white rounded-2xl border border-[#e8e5db] p-4 shadow-sm">
-              <p
-                className={`leading-none mb-2 ${m.mono ? 'font-mono text-[28px] font-semibold' : 'font-mono text-[30px] font-semibold'}`}
-                style={{ color: m.color }}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-[repeat(4,1fr)_1.5fr] gap-3 mb-7">
+          {metrics.map(m => {
+            const isActive = m.filter && statusFilter === m.filter
+            return (
+              <button
+                key={m.label}
+                type="button"
+                onClick={() => setStatusFilter(m.filter)}
+                className={`bg-white rounded-2xl border p-4 shadow-sm text-left w-full cursor-pointer hover:shadow-md transition-all duration-200 ${isActive ? 'border-[#FFB800] ring-1 ring-[#FFB800]' : 'border-[#e8e5db]'}`}
               >
-                {m.value}
-              </p>
-              <p className="text-[14px] font-medium text-[#666]">{m.label}</p>
-              {m.sub && <p className="text-[13px] font-mono text-[#777] mt-1">{m.sub}</p>}
+                <p className="font-mono text-[30px] font-semibold leading-none mb-2" style={{ color: m.color }}>
+                  {m.value}
+                </p>
+                <p className="text-[14px] font-medium text-[#666]">{m.label}</p>
+              </button>
+            )
+          })}
+
+          {/* Avance global — dark display card, not clickable */}
+          <div className="bg-[#0d0d0d] rounded-2xl p-4 text-white">
+            <div className="flex items-end justify-between gap-2">
+              <p className="text-[30px] font-mono font-semibold leading-none">{avgProgress}%</p>
+              <p className="text-[11px] font-mono text-white/55">{doneTasks} / {totalTasks}</p>
             </div>
-          ))}
+            <p className="text-[13px] text-white/70 mt-2.5 mb-3">Avance global</p>
+            <div className="h-1.5 bg-white/15 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-[#FFB800] rounded-full transition-all duration-500"
+                style={{ width: `${avgProgress}%` }}
+              />
+            </div>
+          </div>
         </div>
 
         {/* Search + filters */}
@@ -285,10 +300,8 @@ function Dashboard({ projects, loading, onNewProject, onEditProject, onUpdatePro
                 <ProjectCard
                   key={project.id}
                   project={project}
-                  expanded={!!expandedMap[project.id]}
-                  onToggleExpand={() => toggleExpanded(project.id)}
+                  onView={() => onViewProject(project)}
                   onEdit={() => onEditProject(project)}
-                  onUpdate={u => onUpdateProject(project.id, u)}
                   onDelete={() => onDeleteProject(project.id)}
                   onDuplicate={() => onDuplicateProject(project)}
                 />

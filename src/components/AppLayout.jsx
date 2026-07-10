@@ -4,6 +4,7 @@ import { supabase } from '../supabase'
 import { useAuth } from '../context/AuthContext'
 import Sidebar from './Sidebar'
 import ProjectModal from './ProjectModal'
+import ProjectDetailModal from './ProjectDetailModal'
 import MDNLogo from './MDNLogo'
 import InstallBanner from './InstallBanner'
 import NotificationBell from './notifications/NotificationBell'
@@ -19,7 +20,9 @@ export default function AppLayout() {
   const [loading, setLoading] = useState(true)
   const [connected, setConnected] = useState(false)
   const [modalProject, setModalProject] = useState(undefined)
+  const [detailId, setDetailId] = useState(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const detailProject = detailId ? projects.find(p => p.id === detailId) : null
 
   useEffect(() => { setSidebarOpen(false) }, [location.pathname])
 
@@ -146,6 +149,7 @@ export default function AppLayout() {
           loading,
           onNewProject: () => setModalProject(null),
           onEditProject: (p) => setModalProject(p),
+          onViewProject: (p) => setDetailId(p.id),
           onUpdateProject: updateProject,
           onDeleteProject: deleteProject,
           onDuplicateProject: duplicateProject,
@@ -155,6 +159,15 @@ export default function AppLayout() {
       </div>
 
       <InstallBanner />
+
+      {detailProject && (
+        <ProjectDetailModal
+          project={detailProject}
+          onClose={() => setDetailId(null)}
+          onUpdate={(u) => updateProject(detailProject.id, u)}
+          onEdit={() => { setDetailId(null); setModalProject(detailProject) }}
+        />
+      )}
 
       {modalProject !== undefined && (
         <ProjectModal

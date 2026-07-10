@@ -7,6 +7,7 @@ function App() {
     loading,
     onNewProject,
     onEditProject,
+    onViewProject,
     onUpdateProject,
     onDeleteProject,
     onDuplicateProject,
@@ -20,6 +21,7 @@ function App() {
       loading={loading}
       onNewProject={onNewProject}
       onEditProject={onEditProject}
+      onViewProject={onViewProject}
       onUpdateProject={onUpdateProject}
       onDeleteProject={onDeleteProject}
       onDuplicateProject={onDuplicateProject}

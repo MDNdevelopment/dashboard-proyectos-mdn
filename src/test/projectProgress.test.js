@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { getProjectTasks, getProjectProgress, getGlobalProgress } from '../utils/projectProgress'
+import { getProjectTasks, getProjectProgress, getGlobalProgress, deriveProjectStatus } from '../utils/projectProgress'
 
 const makeProject = (tasks) => ({
   phases: [{ id: 'ph-1', name: 'Fase', tasks }],
 })
+
+const makePhases = (tasks) => [{ id: 'ph-1', name: 'Fase', tasks }]
 
 describe('getProjectTasks', () => {
   it('returns flat task list across all phases', () => {
@@ -88,5 +90,48 @@ describe('getGlobalProgress', () => {
     const result = getGlobalProgress([p1, p2])
     expect(result.doneTasks).toBe(3)
     expect(result.totalTasks).toBe(4)
+  })
+})
+
+describe('deriveProjectStatus', () => {
+  it('returns the fallback when there are no tasks', () => {
+    expect(deriveProjectStatus([], 'Pendiente')).toBe('Pendiente')
+    expect(deriveProjectStatus([{ id: 'ph-1', name: 'Fase', tasks: [] }], 'En proceso')).toBe('En proceso')
+  })
+
+  it('returns "Completado" when every task is completada', () => {
+    const phases = makePhases([
+      { id: '1', status: 'completada' },
+      { id: '2', status: 'completada' },
+    ])
+    expect(deriveProjectStatus(phases, 'En proceso')).toBe('Completado')
+  })
+
+  it('returns "Pendiente" when every task is pendiente', () => {
+    const phases = makePhases([
+      { id: '1', status: 'pendiente' },
+      { id: '2', status: 'pendiente' },
+    ])
+    expect(deriveProjectStatus(phases, 'Completado')).toBe('Pendiente')
+  })
+
+  it('returns "En proceso" when completada and pendiente are mixed, even with no en_proceso/pausada task', () => {
+    // Bug reportado: muchas completadas + muchas pendientes (sin nada "en curso") debe ser
+    // "En proceso", no "Pendiente" — ya hay avance parcial.
+    const phases = makePhases([
+      { id: '1', status: 'completada' },
+      { id: '2', status: 'completada' },
+      { id: '3', status: 'pendiente' },
+      { id: '4', status: 'pendiente' },
+    ])
+    expect(deriveProjectStatus(phases, 'Pendiente')).toBe('En proceso')
+  })
+
+  it('returns "En proceso" when any task is en_proceso or pausada', () => {
+    const phases = makePhases([
+      { id: '1', status: 'pendiente' },
+      { id: '2', status: 'en_proceso' },
+    ])
+    expect(deriveProjectStatus(phases, 'Pendiente')).toBe('En proceso')
   })
 })
