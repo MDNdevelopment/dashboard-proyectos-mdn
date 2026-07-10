@@ -102,9 +102,9 @@ export default function TeamView({
           color={semColor}
         />
         <KpiCard
-          label="Bloqueados"
+          label="Paralizados"
           value={blocked}
-          sub={blocked ? "Este mes" : "Sin bloqueos"}
+          sub={blocked ? "Este mes" : "Sin paralizaciones"}
           color={blocked ? "#E14848" : undefined}
         />
         <KpiCard

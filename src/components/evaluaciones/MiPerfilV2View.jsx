@@ -101,7 +101,7 @@ function StatChip({ label, value, color = '#888', onClick }) {
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
-const STATUS_ORDER = ['En proceso', 'Por revisar', 'Pendiente', 'Bloqueado', 'Terminado']
+const STATUS_ORDER = ['En proceso', 'Por revisar', 'Pendiente', 'Paralizado', 'Terminado']
 const PROJECT_STATUS_META = {
   Pendiente:    { color: '#F0871F', bg: '#FEF3E2' },
   'En proceso': { color: '#b45309', bg: '#FEF9C3' },
@@ -365,11 +365,11 @@ export default function MiPerfilV2View({ userId, companyId, userProfile, canEval
                     : undefined}
                 />
                 <StatChip
-                  label="Bloqueadas"
+                  label="Paralizadas"
                   value={liveMetrics.bloqueadas}
                   color={liveMetrics.bloqueadas > 0 ? '#E14848' : '#bbb'}
                   onClick={liveMetrics.bloqueadas > 0
-                    ? () => navigate(`/tareas?view=base&assignee=${targetId}&status=Bloqueado`)
+                    ? () => navigate(`/tareas?view=base&assignee=${targetId}&status=Paralizado`)
                     : undefined}
                 />
                 <StatChip
