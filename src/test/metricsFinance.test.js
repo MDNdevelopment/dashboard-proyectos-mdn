@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calcFinanzas, calcConsolidado, calcConsolidadoConGasto, fmtUSD, ensureFinanzas } from "../utils/metricsFinance";
+import { calcFinanzas, calcConsolidado, calcConsolidadoConGasto, fmtUSD, ensureFinanzas, lastNMonths, buildFinanceTrend } from "../utils/metricsFinance";
 
 function makeReport(overrides = {}) {
   return {
@@ -226,6 +226,69 @@ describe("calcConsolidadoConGasto", () => {
     expect(totals.ingresos).toBe(0);
     expect(totals.gastos).toBe(0);
     expect(totals.diferencia).toBe(0);
+  });
+});
+
+describe("lastNMonths", () => {
+  it("devuelve los 5 meses terminando en el mes dado, sin cruzar año", () => {
+    expect(lastNMonths(2026, 7)).toEqual([
+      { year: 2026, month: 3 },
+      { year: 2026, month: 4 },
+      { year: 2026, month: 5 },
+      { year: 2026, month: 6 },
+      { year: 2026, month: 7 },
+    ]);
+  });
+
+  it("cruza el límite de año hacia atrás correctamente", () => {
+    expect(lastNMonths(2026, 2)).toEqual([
+      { year: 2025, month: 10 },
+      { year: 2025, month: 11 },
+      { year: 2025, month: 12 },
+      { year: 2026, month: 1 },
+      { year: 2026, month: 2 },
+    ]);
+  });
+
+  it("respeta un n distinto de 5", () => {
+    expect(lastNMonths(2026, 3, 2)).toEqual([
+      { year: 2026, month: 2 },
+      { year: 2026, month: 3 },
+    ]);
+  });
+});
+
+describe("buildFinanceTrend", () => {
+  it("calcula ingresos/egresos por mes y deja en 0 los meses sin reporte", () => {
+    const reports = [
+      { year: 2026, month: 5, data: { finanzas: { ingresos: [{ monto: 1000 }], gastosOperativos: [{ monto: 200 }], sueldos: [], otrosGastos: [] } } },
+      { year: 2026, month: 7, data: { finanzas: { ingresos: [{ monto: 800 }], gastosOperativos: [], sueldos: [{ monto: 300 }], otrosGastos: [] } } },
+    ];
+    const trend = buildFinanceTrend(reports, 2026, 7);
+    expect(trend).toHaveLength(5);
+    expect(trend.map(t => t.label)).toEqual(["Mar", "Abr", "May", "Jun", "Jul"]);
+
+    const marzo = trend.find(t => t.month === 3);
+    expect(marzo.ingresos).toBe(0);
+    expect(marzo.egresos).toBe(0);
+    expect(marzo.diferencia).toBe(0);
+
+    const mayo = trend.find(t => t.month === 5);
+    expect(mayo.ingresos).toBe(1000);
+    expect(mayo.egresos).toBe(200);
+    expect(mayo.diferencia).toBe(800);
+
+    const julio = trend.find(t => t.month === 7);
+    expect(julio.ingresos).toBe(800);
+    expect(julio.egresos).toBe(300);
+    expect(julio.diferencia).toBe(500);
+  });
+
+  it("mantiene el orden del más antiguo al más reciente", () => {
+    const trend = buildFinanceTrend([], 2026, 1);
+    expect(trend.map(t => `${t.year}-${t.month}`)).toEqual([
+      "2025-9", "2025-10", "2025-11", "2025-12", "2026-1",
+    ]);
   });
 });
 

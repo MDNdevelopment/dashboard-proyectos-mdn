@@ -89,6 +89,7 @@ vi.mock('../components/metricas/metricsApi', () => ({
   loadClients:          (...a) => mockLoadClients(...a),
   loadReport:           (...a) => mockLoadReport(...a),
   loadPrevReport:       (...a) => mockLoadPrevReport(...a),
+  loadRecentReports:    vi.fn().mockResolvedValue({ data: [], error: null }),
   upsertReport:         (...a) => mockUpsertReport(...a),
   loadCompanyUsers:     vi.fn().mockResolvedValue({ data: [], error: null }),
   seedMetricsIfEmpty:   vi.fn().mockResolvedValue(null),
@@ -104,6 +105,8 @@ vi.mock('../utils/metricsFinance', () => ({
   calcConsolidadoConGasto: vi.fn(() => ({ rows: [], totals: { ingresos: 0, gastos: 0, diferencia: 0 } })),
   ensureFinanzas: vi.fn(),
   fmtUSD: vi.fn(v => `$${v}`),
+  lastNMonths: vi.fn(() => []),
+  buildFinanceTrend: vi.fn(() => []),
 }))
 
 vi.mock('../utils/initMetricReport', () => ({

@@ -3,13 +3,13 @@ import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { isFinancePrivileged } from "../../lib/permissions";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LabelList,
+  LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid,
 } from "recharts";
-import { loadReport, loadPrevReport, upsertReport, loadClients, loadCompanyEmployees, updateEmployeeSalaries } from "./metricsApi";
+import { loadReport, loadPrevReport, upsertReport, loadClients, loadCompanyEmployees, updateEmployeeSalaries, loadRecentReports } from "./metricsApi";
 import { initMetricReport } from "../../utils/initMetricReport";
 import { syncReportClients } from "../../utils/syncReportClients";
 import { pickSalaryUpdates } from "../../utils/salaryWriteback";
-import { calcFinanzas, calcConsolidado, calcConsolidadoConGasto, ensureFinanzas, fmtUSD } from "../../utils/metricsFinance";
+import { calcFinanzas, calcConsolidado, calcConsolidadoConGasto, ensureFinanzas, fmtUSD, buildFinanceTrend } from "../../utils/metricsFinance";
 import SectionTotal from "../common/SectionTotal";
 import { MONTHS } from "./constants";
 import ClientFichaModal from "./ClientFichaModal";
@@ -43,6 +43,7 @@ export default function FinanzasView({ line, companyId, year, month }) {
   const privileged = isFinancePrivileged(userProfile);
 
   const [report, setReport]           = useState(null);
+  const [recentReports, setRecentReports] = useState([]);
   const [lineClients, setLineClients] = useState([]);
   const [lineEmployees, setLineEmployees] = useState([]);
   const [companyEmployees, setCompanyEmployees] = useState([]);
@@ -72,12 +73,14 @@ export default function FinanzasView({ line, companyId, year, month }) {
     if (!line?.id || !companyId) return;
     setLoading(true);
     setError(null);
-    const [reportRes, prevRes, clientsRes, employeesRes] = await Promise.all([
+    const [reportRes, prevRes, clientsRes, employeesRes, recentRes] = await Promise.all([
       loadReport(line.id, year, month),
       loadPrevReport(line.id, year, month),
       loadClients(companyId, line.id, { includeArchived: true }),
       loadCompanyEmployees(companyId),
+      loadRecentReports(line.id, year, month),
     ]);
+    setRecentReports(recentRes.data ?? []);
     // Todos (incl. archivados) para resolver nombres en reportes guardados;
     // solo activos para syncReportClients (no re-agregar archivados al reporte actual).
     const allClients = clientsRes.data ?? [];
@@ -197,14 +200,8 @@ export default function FinanzasView({ line, companyId, year, month }) {
   const f = calcFinanzas(report);
   const positivo = f.diferencia >= 0;
 
-  // Chart data
-  const chartData = [
-    { name: "Ingresos",  valor: f.totIngresos },
-    { name: "G. Oper.",  valor: f.totGastosOperativos },
-    { name: "Sueldos",   valor: f.totSueldos },
-    { name: "Otros",     valor: f.totOtrosGastos },
-    { name: "Diferencia", valor: f.diferencia },
-  ];
+  // Tendencia de ingresos vs egresos de los últimos 5 meses (incluye el seleccionado)
+  const trendData = buildFinanceTrend(recentReports, year, month);
 
   // Secciones visibles (sueldos solo para privilegiados)
   const seccionesVisibles = SECCIONES.filter(
@@ -242,36 +239,30 @@ export default function FinanzasView({ line, companyId, year, month }) {
       {/* Chart */}
       <div className="bg-white rounded-2xl border border-[#e0ddd4] px-5 py-4">
         <p className="text-[13px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] mb-3">
-          Resumen financiero
+          Ingresos, egresos y diferencia · últimos 5 meses
         </p>
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={chartData} margin={{ top: 28, right: 16, left: 0, bottom: 4 }}>
+        <ResponsiveContainer width="100%" height={240}>
+          <LineChart data={trendData} margin={{ top: 8, right: 140, left: 0, bottom: 4 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0ede3" />
-            <XAxis dataKey="name" tick={{ fontSize: 11, fontFamily: "DM Mono, monospace", fill: "#555" }} />
+            <XAxis dataKey="label" tick={{ fontSize: 11, fontFamily: "DM Mono, monospace", fill: "#555" }} />
             <YAxis tick={{ fontSize: 10, fontFamily: "DM Mono, monospace", fill: "#888" }}
-              tickFormatter={v => v >= 1000 ? `$${(v/1000).toFixed(0)}k` : `$${v}`}
+              tickFormatter={v => Math.abs(v) >= 1000 ? `$${(v/1000).toFixed(0)}k` : `$${v}`}
             />
             <Tooltip
               contentStyle={{ fontSize: 12, fontFamily: "DM Mono, monospace", borderRadius: 8, border: "1px solid #e0ddd4" }}
               formatter={(val) => fmtUSD(val)}
             />
-            <Bar dataKey="valor" fill="#FAB51A" radius={[4, 4, 0, 0]}
-              cell={[
-                { fill: "#10B981" },
-                { fill: "#F97316" },
-                { fill: "#EF4444" },
-                { fill: "#8B5CF6" },
-                { fill: positivo ? "#10B981" : "#EF4444" },
-              ]}
-            >
-              <LabelList
-                dataKey="valor"
-                position="top"
-                formatter={(v) => fmtUSD(v)}
-                style={{ fontSize: 10, fontFamily: "DM Mono, monospace", fill: "#555" }}
-              />
-            </Bar>
-          </BarChart>
+            <Legend
+              layout="vertical"
+              align="right"
+              verticalAlign="middle"
+              itemSorter={item => ["Ingresos", "Egresos", "Diferencia"].indexOf(item.value)}
+              wrapperStyle={{ fontSize: 12, fontFamily: "DM Mono, monospace", paddingLeft: 24 }}
+            />
+            <Line type="monotone" dataKey="ingresos" name="Ingresos" stroke="#10B981" strokeWidth={2} dot={{ r: 3 }} />
+            <Line type="monotone" dataKey="egresos" name="Egresos" stroke="#EF4444" strokeWidth={2} dot={{ r: 3 }} />
+            <Line type="monotone" dataKey="diferencia" name="Diferencia" stroke="#FAB51A" strokeWidth={2} dot={{ r: 3 }} />
+          </LineChart>
         </ResponsiveContainer>
       </div>
 

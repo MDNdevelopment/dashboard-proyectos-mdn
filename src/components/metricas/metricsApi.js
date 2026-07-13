@@ -4,6 +4,7 @@
  */
 import { supabase } from "../../supabase";
 import { SEED_LINES, SEED_CLIENTES } from "./constants";
+import { lastNMonths } from "../../utils/metricsFinance";
 
 // ─── Líneas ───────────────────────────────────────────────────────────────────
 
@@ -158,6 +159,22 @@ export async function loadPrevReport(lineId, year, month) {
     .eq("year", y)
     .eq("month", m)
     .maybeSingle();
+}
+
+/**
+ * Carga los reportes de una línea que caen dentro de los últimos n meses
+ * terminando en (endYear, endMonth). Trae por rango de año(es) involucrados
+ * y deja el recorte fino a los n pares (year, month) exactos a cargo del
+ * caller (ver buildFinanceTrend en utils/metricsFinance.js).
+ */
+export async function loadRecentReports(lineId, endYear, endMonth, n = 5) {
+  const months = lastNMonths(endYear, endMonth, n);
+  const years = [...new Set(months.map(m => m.year))];
+  return supabase
+    .from("metric_reports")
+    .select("year, month, data")
+    .eq("line_id", lineId)
+    .in("year", years);
 }
 
 /**

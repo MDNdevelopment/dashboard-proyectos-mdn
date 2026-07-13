@@ -2,6 +2,7 @@
  * Cálculo de métricas financieras.
  * Portado verbatim desde calcFinanzas() del prototipo HTML original.
  */
+import { MONTHS } from "../components/metricas/constants";
 
 /**
  * Calcula los totales financieros de un reporte.
@@ -94,6 +95,52 @@ export function calcConsolidadoConGasto(report, lineClients = []) {
     { ingresos: 0, gastos: 0, diferencia: 0 },
   );
   return { rows, totals };
+}
+
+/**
+ * Devuelve los n pares { year, month } que terminan en (endYear, endMonth),
+ * ordenados del más antiguo al más reciente. Cruza el límite de año igual
+ * que loadPrevReport() en metricsApi.js.
+ * @param {number} endYear
+ * @param {number} endMonth - 1-12
+ * @param {number} n
+ * @returns {Array<{ year, month }>}
+ */
+export function lastNMonths(endYear, endMonth, n = 5) {
+  const out = [];
+  let y = endYear, m = endMonth;
+  for (let i = 0; i < n; i++) {
+    out.unshift({ year: y, month: m });
+    m--;
+    if (m < 1) { m = 12; y--; }
+  }
+  return out;
+}
+
+/**
+ * Arma la serie de tendencia (ingresos, egresos y diferencia) para los últimos n meses
+ * terminando en (endYear, endMonth), a partir de filas crudas de metric_reports.
+ * Meses sin reporte quedan en 0.
+ * @param {Array<{year:number, month:number, data:object}>} reports
+ * @param {number} endYear
+ * @param {number} endMonth
+ * @param {number} n
+ * @returns {Array<{ year, month, label, ingresos, egresos, diferencia }>}
+ */
+export function buildFinanceTrend(reports, endYear, endMonth, n = 5) {
+  const months = lastNMonths(endYear, endMonth, n);
+  return months.map(({ year, month }) => {
+    const row = reports.find(r => r.year === year && r.month === month);
+    const { totIngresos, totEgresos } = row ? calcFinanzas(row.data ?? {}) : { totIngresos: 0, totEgresos: 0 };
+    return {
+      year,
+      month,
+      label: MONTHS[month - 1].slice(0, 3),
+      ingresos: totIngresos,
+      egresos: totEgresos,
+      diferencia: totIngresos - totEgresos,
+    };
+  });
 }
 
 /**
