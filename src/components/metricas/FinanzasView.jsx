@@ -251,6 +251,7 @@ export default function FinanzasView({ line, companyId, year, month }) {
             <Tooltip
               contentStyle={{ fontSize: 12, fontFamily: "DM Mono, monospace", borderRadius: 8, border: "1px solid #e0ddd4" }}
               formatter={(val) => fmtUSD(val)}
+              itemSorter={item => ["Ingresos", "Egresos", "Diferencia"].indexOf(item.name)}
             />
             <Legend
               layout="vertical"
