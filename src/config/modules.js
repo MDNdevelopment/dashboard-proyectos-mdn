@@ -20,7 +20,7 @@ export const MODULES = [
   {
     key: 'proyectos',
     label: 'Proyectos',
-    routePrefix: '/',
+    routePrefix: '/proyectos',
     description: 'Gestión de proyectos y fases',
     tabs: [],
     manageActions: [
@@ -49,7 +49,7 @@ export const MODULES = [
   },
   {
     key: 'tareas',
-    label: 'Tareas QC / Cierre',
+    label: 'Gestión de Tareas',
     routePrefix: '/tareas',
     description: 'Gestión de tareas de control de calidad',
     tabs: [

@@ -1,6 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import './index.css'
 import App from './App.jsx'
 import AppLayout from './components/AppLayout.jsx'
@@ -10,6 +10,7 @@ import RequireModule from './components/RequireModule.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx'
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx'
+import HomePage from './pages/HomePage.jsx'
 import TicketsPage from './pages/TicketsPage.jsx'
 import AdsPage from './pages/AdsPage.jsx'
 import TareasPage from './pages/TareasPage.jsx'
@@ -27,6 +28,9 @@ createRoot(document.getElementById('root')).render(
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
 
+            {/* Inicio */}
+            <Route index element={<HomePage />} />
+
             {/* Soporte Técnico */}
             <Route path="/tickets" element={<RequireModule moduleKey="tickets"><TicketsPage /></RequireModule>} />
             <Route path="/tickets/analytics" element={<RequireModule moduleKey="tickets"><TicketsPage /></RequireModule>} />
@@ -35,7 +39,7 @@ createRoot(document.getElementById('root')).render(
             {/* Campañas */}
             <Route path="/ads" element={<RequireModule moduleKey="ads"><AdsPage /></RequireModule>} />
 
-            {/* Tareas QC / Cierre */}
+            {/* Gestión de Tareas */}
             <Route path="/tareas" element={<RequireModule moduleKey="tareas"><TareasPage /></RequireModule>} />
 
             {/* Empresa */}
@@ -58,8 +62,11 @@ createRoot(document.getElementById('root')).render(
             <Route path="/reportes" element={<RequireModule moduleKey="reportes"><MetricasPage /></RequireModule>} />
             <Route path="/reportes/linea/:lineId" element={<RequireModule moduleKey="reportes"><MetricasPage /></RequireModule>} />
 
-            {/* Proyectos — catch-all */}
-            <Route path="/*" element={<App />} />
+            {/* Proyectos */}
+            <Route path="/proyectos" element={<App />} />
+
+            {/* Rutas desconocidas → Inicio */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
       </AuthProvider>

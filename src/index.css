@@ -41,3 +41,12 @@ select option { background: #fff; color: #111; }
 @media (max-width: 768px) {
   .input-base { font-size: 18px; }
 }
+
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.rise-in {
+  opacity: 0;
+  animation: rise-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

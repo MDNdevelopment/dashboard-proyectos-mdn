@@ -28,9 +28,9 @@ describe('Sidebar — módulo Proyectos', () => {
     expect(screen.getByRole('link', { name: /^proyectos$/i })).toBeInTheDocument()
   })
 
-  it('el enlace Proyectos apunta a /', () => {
+  it('el enlace Proyectos apunta a /proyectos', () => {
     renderSidebar(USER)
-    expect(screen.getByRole('link', { name: /^proyectos$/i })).toHaveAttribute('href', '/')
+    expect(screen.getByRole('link', { name: /^proyectos$/i })).toHaveAttribute('href', '/proyectos')
   })
 
   it('no hay botón desplegable para Proyectos', () => {
@@ -41,6 +41,28 @@ describe('Sidebar — módulo Proyectos', () => {
 
   it('funciona sin error cuando no hay userProfile', () => {
     expect(() => renderSidebar(null)).not.toThrow()
+  })
+})
+
+describe('Sidebar — Inicio', () => {
+  it('muestra el enlace directo Inicio como primer ítem', () => {
+    renderSidebar(USER)
+    expect(screen.getByRole('link', { name: /^inicio$/i })).toBeInTheDocument()
+  })
+
+  it('el enlace Inicio apunta a /', () => {
+    renderSidebar(USER)
+    expect(screen.getByRole('link', { name: /^inicio$/i })).toHaveAttribute('href', '/')
+  })
+
+  it('es siempre visible, sin gate de permisos (incluso si can() deniega todo)', () => {
+    useAuth.mockReturnValue({ signOut: vi.fn(), userProfile: USER, can: () => false, permissionsLoaded: true })
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <Sidebar />
+      </MemoryRouter>
+    )
+    expect(screen.getByRole('link', { name: /^inicio$/i })).toBeInTheDocument()
   })
 })
 

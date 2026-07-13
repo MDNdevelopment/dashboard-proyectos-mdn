@@ -6,6 +6,7 @@ import MDNLogo from './MDNLogo'
 import AvatarUpload from './empresa/AvatarUpload'
 import NotificationBell from './notifications/NotificationBell'
 
+const HOME_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M2 7.5 8 2l6 5.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M3.5 6.5V13a1 1 0 0 0 1 1H6a.5.5 0 0 0 .5-.5V10a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v3.5a.5.5 0 0 0 .5.5h1.5a1 1 0 0 0 1-1V6.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
 const PROJECTS_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="1" y="1" width="6" height="6" rx="1.5"/><rect x="9" y="1" width="6" height="6" rx="1.5"/><rect x="1" y="9" width="6" height="6" rx="1.5"/><rect x="9" y="9" width="6" height="6" rx="1.5"/></svg>
 const TICKET_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="1" y="3" width="14" height="10" rx="1.5"/><path d="M1 6h14" strokeLinecap="round"/><path d="M5 10h6" strokeLinecap="round"/></svg>
 const BELL_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M8 1.5a4.5 4.5 0 0 1 4.5 4.5c0 2.5.8 3.5 1.5 4.5H2c.7-1 1.5-2 1.5-4.5A4.5 4.5 0 0 1 8 1.5Z" strokeLinecap="round" strokeLinejoin="round"/><path d="M6.5 13a1.5 1.5 0 0 0 3 0" strokeLinecap="round"/></svg>
@@ -41,7 +42,8 @@ function Sidebar() {
 
   const location = useLocation()
 
-  const isProjectsRoute = location.pathname === '/'
+  const isHomeRoute = location.pathname === '/'
+  const isProjectsRoute = location.pathname === '/proyectos'
   const isTicketsRoute = location.pathname.startsWith('/tickets')
 
   const isAdsRoute = location.pathname.startsWith('/ads')
@@ -71,6 +73,21 @@ function Sidebar() {
           Herramientas
         </p>
         <div className="space-y-0.5">
+
+          {/* Inicio — botón directo */}
+          <Link
+            to="/"
+            className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all ${
+              isHomeRoute
+                ? 'bg-[#FFB800] text-[#111]'
+                : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+            }`}
+          >
+            <span className={`flex-shrink-0 ${isHomeRoute ? 'text-[#111]' : 'text-[#666]'}`}>
+              {HOME_ICON}
+            </span>
+            <span className="flex-1">Inicio</span>
+          </Link>
 
           {/* Empresa — botón directo */}
           {canR('empresa') && (
@@ -125,7 +142,7 @@ function Sidebar() {
 
           {/* Proyectos — botón directo */}
           <Link
-            to="/"
+            to="/proyectos"
             className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all ${
               isProjectsRoute
                 ? 'bg-[#FFB800] text-[#111]'

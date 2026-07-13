@@ -124,7 +124,7 @@ usuarios, tickets y campañas **preexisten en una base compartida** y no tienen 
 su esquema está documentado en `docs/MIGRATION_EVALUACION.md`.
 
 RLS en tablas de migración: patrón uniforme permisivo (`true`) para rol `authenticated`, **excepto
-`tasks`** (policies por nivel, §2.3), **`metric_reports`** (policies por nivel y team, §2.4), y
+`tasks`** (policies por nivel, §2.4), **`metric_reports`** (policies por nivel y team, §2.5), y
 **`projects`, `metric_lines`, `metric_clients`** (escrituras gated por `user_can()`, ver §Modelo de permisos).
 Realtime habilitado en todas.
 
@@ -143,7 +143,17 @@ Realtime habilitado en todas.
 | **Rutas** | `/login` · `/forgot-password` · `/reset-password` |
 | **Permisos** | Público (sin sesión) |
 
-### 2.2 Proyectos / Dashboard
+### 2.2 Inicio (Home)
+
+| | |
+|---|---|
+| **Propósito** | Landing personal al loguearse: saludo + nivel del usuario, "Mis tareas" (responsable), "Apoyo de dirección" y "Resumen general" (solo nivel 4/admin) con enlaces a Reportes/Tareas/Empresa, y accesos rápidos a los módulos habilitados. Sin tabla propia — lee de `tasks`, `users` y `metric_clients`, y reutiliza `projects` del outlet context de `AppLayout`. |
+| **Archivos principales** | `src/pages/HomePage.jsx` · `src/components/common/KpiCard.jsx` (card KPI compartida, extraída del patrón repetido en AdsStats/SummaryCards) |
+| **Rutas** | `/` (ruta índice dentro de `AppLayout`) |
+| **Permisos** | Página visible a cualquier autenticado (sin `RequireModule`); cada widget se gatea individualmente con `can()` y `access_level`: "Mis tareas" → `can('tareas')`; "Apoyo de dirección" y "Resumen general" → `access_level >= 4 \|\| admin`; accesos rápidos → `can(modulo.key)` por módulo de `MODULES`. |
+| **Convenciones** | "Apoyo de dirección" = tareas activas donde `support_id === userProfile.user_id` (ver §2.4). Reutiliza `isLate`/`isClosed` de `src/components/tareas/constants.js` para atrasadas/activas. |
+
+### 2.3 Proyectos / Dashboard
 
 | | |
 |---|---|
@@ -151,12 +161,12 @@ Realtime habilitado en todas.
 | **Archivos principales** | `src/App.jsx` · `src/components/AppLayout.jsx` (state owner + realtime) · `src/components/Dashboard.jsx` · `src/components/ProjectCard.jsx` · `src/components/ProjectDetailModal.jsx` (detalle de solo lectura, incluye encargados) · `src/components/ProjectModal.jsx` (edición completa) · `src/components/Avatar.jsx` (avatar compartido por iniciales/color determinístico o `avatar_url`) · `src/constants/projectStatus.js` (mapas de color/label de estado, compartidos) · `src/utils/projectProgress.js` · `src/utils/exportProjectsToMarkdown.js` |
 | **Tablas** | `projects` (`id, name, team, requirements, status, departments[], phases jsonb, members[], created_at`) |
 | **jsonb `phases`** | `[{ id, name, tasks: [{ id, name, status }] }]` — status de tarea: `"pendiente" \| "en_proceso" \| "pausada" \| "completada"` |
-| **Rutas** | `/*` (catch-all dentro de AppLayout) · deeplink `?projectId=<uuid>` abre ProjectModal |
+| **Rutas** | `/proyectos` (la ruta índice `/` ahora es Inicio, ver §2.2) · deeplink `?projectId=<uuid>` abre ProjectModal (funciona desde cualquier ruta dentro de `AppLayout`, incluida Inicio, porque la lógica vive en `AppLayout`) · cualquier ruta no reconocida redirige a `/` |
 | **Permisos** | Cualquier usuario autenticado |
 | **Convenciones** | Status de proyecto: title-case (`"Pendiente" \| "En proceso" \| "Completado"`). Modal de edición: `undefined`=cerrado, `null`=crear, objeto=editar (`modalProject` en AppLayout). Modal de detalle: `detailId` (uuid \| null) en AppLayout; derivado del array `projects` (no copia congelada) para reflejar cambios en vivo. **Clic en la card** (fuera de los botones del footer) → abre `ProjectDetailModal` (solo lectura, salvo estado del proyecto y estado de cada tarea, ambos editables vía `<select>` nativo — sin añadir/renombrar/eliminar fases o tareas; también muestra los **encargados** del proyecto, resueltos de `project.members` contra `users` filtrado por `company_id`, igual que el `MemberPicker` de `ProjectModal`). Botón **"Editar"** (en la card y en el detalle) → abre `ProjectModal` completo. `deriveProjectStatus(phases, fallback)` en `projectProgress.js`: todas las tareas completadas → `Completado`; todas pendientes → `Pendiente`; cualquier otra mezcla (incluye completadas+pendientes sin nada "en curso") → `En proceso`. |
 | **Filtrado / scroll** | `Dashboard.jsx` aplica filtrado client-side usando `src/utils/filterProjects.js` (search + activeFilter + rango de fechas por `created_at`). Windowing de 30 proyectos por tanda con `IntersectionObserver` nativo (`sentinelRef`). |
 
-### 2.3 Tareas / Teams
+### 2.4 Tareas / Teams
 
 | | |
 |---|---|
@@ -165,13 +175,13 @@ Realtime habilitado en todas.
 | **Tablas** | `tasks` (`id, company_id, team_id→metric_lines, client_id→metric_clients, description, source, assignee_ids text[] (múltiples responsables), assignee_id (DEPRECATED), support_id, created_by, request_date, due_date, closed_date, status, blocked_reason, checklist jsonb, created_at`) |
 | **Status de tarea** | `"En proceso" \| "Por revisar" \| "Paralizado" \| "Pendiente" \| "Terminado"` |
 | **Checklist (JSONB)** | `tasks.checklist jsonb not null default '[]'`. Cada ítem: `{ id, title, assignee_id, due_date, done }`. Añadido en `20260712000000_task_checklist.sql`. **El status de la tarea es siempre manual** — el checklist no lo modifica; el chip "N/M hechos" es informativo. **Fechas de ítems** recortadas al rango `[request_date, due_date]` de la tarea vía trigger `trg_a_clamp_checklist_item_dates`. **Notificaciones** al asignar encargado de ítem: trigger `trg_notify_checklist_assignees` inserta en `notifications` tipo `checklist_item_assigned` (diff OLD→NEW por id del ítem). **RLS** — política adicional `tasks_select_checklist_assignee` para que el encargado de un ítem pueda ver la tarea. Helpers JS: `src/components/tareas/taskChecklist.js` (`newChecklistItem`, `clampItemDueDate`, `checklistProgress`). |
-| **Rutas** | `/tareas` (vistas por estado interno; `?view=base` fuerza la vista Base) |
+| **Rutas** | `/tareas` (vistas por estado interno; `?view=base` fuerza la vista Base). Deep-links de filtro leídos por `BaseView` desde la URL: `?assignee=<userId>` (responsable), `?support=<userId>` (apoyo de dirección), `?status=`, `?fAlert=late\|drag\|cont\|ok`, `?client=<id>`. Usados por **Inicio** (§2.2) para enlazar sus cards de "Mis tareas"/"Apoyo de dirección" directo a Base filtrada. |
 | **Permisos (RLS)** | Visibilidad scoped por nivel. **Nivel 4 / admin:** ven y operan todas las tareas. **Nivel 2 y 3:** SELECT/INSERT/UPDATE sobre tareas donde `task_user_in_line(team_id)` (pertenecen a `metric_lines.member_user_ids`); DELETE permitido. **Nivel 1:** SELECT/UPDATE solo sobre tareas donde `auth.uid()::text = any(assignee_ids)`, `support_id` o `created_by`; INSERT requiere `auth.uid()::text = any(assignee_ids)`; DELETE denegado. Política adicional: `tasks_select_checklist_assignee` permite SELECT a quien esté asignado a un ítem del checklist. Helpers SECURITY DEFINER: `public.task_user_view_all()`, `public.task_user_access_level()`, `public.task_user_in_line(p_team_id)`. Migración activa: `20260709000000_tasks_line_scoped_rls.sql` (reemplaza `20260702000002_tasks_multi_assignee_rls.sql`). |
 | **Permisos (UI)** | Nivel 1 solo ve vistas **Base** y **Kanban** (Dashboard/Stand-up ocultos). En TaskModal, el nivel 1 siempre aparece como responsable fijo (chip bloqueado en `UserPickerMulti`) pero puede agregar a otros miembros del team. Botón Eliminar oculto para nivel 1. **Visibilidad de líneas en UI:** `TareasPage.jsx` aplica `visibleLinesForUser(lines, userProfile)` (`src/utils/lineMembers.js`) tras cargar `metric_lines`: nivel 4/admin ven todas las líneas; nivel 2/3 ven solo las líneas donde aparecen en `member_user_ids`; nivel 1 ídem (solo ve líneas a las que pertenece, y dentro de ellas solo sus propias tareas por RLS). **Botón "Todos"** (selector de línea): predicado propio `access_level >= 4 \|\| admin === true`, independiente de `visibleLinesForUser`/`tasks_view_all` (un nivel 3 con `tasks_view_all` ve todas las líneas como botones pero no tiene el atajo "Todos"; su default sigue siendo su primera línea). |
 | **Status badge rápido** | En la vista Base (`BaseView.jsx`) el badge de estado es un botón que abre un dropdown (portal via `createPortal`) para cambiar el estado sin abrir el modal. Lógica compartida en `taskStatus.js` (`statusUpdatePatch` + `updateTaskStatus`). |
 | **Nota FK** | `team_id` apunta a `metric_lines.id` por convención (sin FK formal; las tablas `teams`/`team_members` quedaron inertes tras migración `20260627000000_tareas_use_metric_lines.sql`) |
 
-### 2.4 Métricas
+### 2.5 Métricas
 
 | | |
 |---|---|
@@ -188,7 +198,7 @@ Realtime habilitado en todas.
 | **UX — Resumen (LineHubView)** | Siempre renderiza aunque no haya reportes del año (banner de aviso en vez de early-return). Sección "Equipo de la línea" con dos columnas (Empleados | Marcas), cada una con toggle Lista/Tarjetas (`ViewToggle` + `EntityGridList` de `src/components/common/EntityGridList.jsx`, compartidos con `LineFichaModal` de Empresa). Carga empleados completos con `loadCompanyEmployees(companyId)` (select canónico con joins position+department). Sin "Promedio anual" ni "Radar de indicadores". |
 | **UX — Finanzas (FinanzasView)** | Sección Ingresos tiene toggle Lista/Tarjetas; **la vista por defecto es Tarjetas** y el monto es editable inline (el nombre del cliente en la tarjeta abre `ClientFichaModal`). Sección Sueldos auto-genera una fila por empleado del team (mismo patrón sembrar-y-editar que Ingresos): valores conservados mes a mes, empleados que salen del team se descartan, filas manuales se conservan. Las filas de sueldo son clickeables → abre `EmployeeInfoModal`. **La sección Sueldos solo es visible para nivel 4 y admin** (`isFinancePrivileged`). KPIs "Ingresos brutos" y "Total egresos" son botones con scroll a su sección. |
 
-### 2.5 Empresa
+### 2.6 Empresa
 
 | | |
 |---|---|
@@ -201,7 +211,7 @@ Realtime habilitado en todas.
 | **UX — Clientes (ClientsView)** | Vista en `/empresa/clientes`. Carga todos los clientes incl. archivados (`loadClients({ includeArchived: true })`). **Modo Actual** (default): muestra solo activos (`deleted_at IS NULL`). Toggle "Ver archivados" muestra los archivados con botón Restaurar. Archivar cliente = soft delete (marca `deleted_at`, no borra el registro). **Modo histórico**: selector mes/año filtra con `clientInMonth(client, year, month)` (`src/utils/clientInMonth.js`): alta ≤ fin de mes Y (baja nula O baja ≥ inicio de mes); usa `mdn_since ?? created_at` como fecha de alta. La vista histórica es informativa: sin botones "Nuevo" ni "Archivar"; los ya archivados llevan chip "archivado". |
 | **UX — ficha de línea** | Clic en el card de una línea en `LinesView` (título o cuerpo, excluyendo controles de gestión) abre `LineFichaModal`: ficha con nombre, color, contadores, y sección Miembros y Clientes. Cuando `canManage`, los miembros se muestran como chips con botón × para quitar al empleado de la línea (`removeLineMember` → `metric_line_members`), y hay un selector para agregar/mover empleados (`addLineMember`). Sin `canManage`, los miembros usan `EntityGridList` con toggle tarjetas/lista. Miembros y clientes son clickeables con **drill-down en un solo modal**: el contenido se reemplaza por `EmployeeFichaContent` / `ClientFichaContent` con botón "← Volver a {línea}". Escape sube un nivel (en la raíz cierra); el botón X cierra desde cualquier nivel. Incluye resumen de **Finanzas del último período** (mes más alto con reporte del año actual, `calcFinanzas`): visible solo para nivel 4 / admin (`isFinancePrivileged`); los reportes solo se cargan si el usuario es privilegiado. Carga sus datos on-mount (`loadCompanyEmployees` + `loadClients` + `loadYearReports` de `metricsApi`). |
 
-### 2.6 Evaluaciones
+### 2.7 Evaluaciones
 
 | | |
 |---|---|
@@ -213,7 +223,7 @@ Realtime habilitado en todas.
 | **Permisos** | Evaluar: `access_level ≥ 2` o admin. Sin permiso: solo vista del perfil propio. |
 | **Cruce con otros módulos** | `MiPerfilView`/`MiPerfilV2View` leen métricas reales de `tasks` vía `src/utils/aggregateTaskMetrics.js` (completadas, a tiempo, días promedio). Deeplink `?projectId=` abre `ProjectModal` en AppLayout. |
 
-### 2.7 Tickets / Soporte IT
+### 2.8 Tickets / Soporte IT
 
 | | |
 |---|---|
@@ -225,7 +235,7 @@ Realtime habilitado en todas.
 | **Navegación** | Un único link "Soporte Técnico" en el sidebar (fijado al fondo). Las secciones se acceden por tabs dentro de la página. |
 | **Permisos por tab** | Lista de tickets: todos los usuarios con acceso al módulo. Analíticas: `access_level ≥ 3` o `admin = true`. Notificaciones: `department_id = 0` AND (`access_level ≥ 3` OR `admin = true`). Acceder a una ruta sin permiso redirige a `/tickets`. |
 
-### 2.8 Notificaciones
+### 2.9 Notificaciones
 
 | | |
 |---|---|
@@ -242,7 +252,7 @@ Realtime habilitado en todas.
 | **Permisos** | Cualquier usuario autenticado ve sus propias notificaciones (RLS). Los INSERTs los hacen únicamente los triggers y funciones SECURITY DEFINER. |
 | **Setup manual** | Configurar un Database Webhook en Supabase dashboard: tabla `notifications`, evento INSERT, URL `{SUPABASE_URL}/functions/v1/notify-dispatch`, header `Authorization: Bearer {SERVICE_ROLE_KEY}`. Habilitar extensión `pg_cron` vía Supabase dashboard → Extensions. |
 
-### 2.9 Ads / Campañas
+### 2.10 Ads / Campañas
 
 | | |
 |---|---|

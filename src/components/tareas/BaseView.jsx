@@ -202,7 +202,11 @@ export default function BaseView({ tasks, teams, team, allLines = false, usersMa
   const [fStatus, setFStatus] = useState(() => initialFilter?.status ?? searchParams.get('status') ?? '')
   const [fClient, setFClient] = useState('')
   const [fClientId, setFClientId] = useState(() => searchParams.get('client') ?? '') // client_id desde Reportes
-  const [fSupportIds, setFSupportIds] = useState([])  // user_id[] de personas de dirección
+  // user_id[] de personas de dirección; precargable desde Home vía ?support=<userId>
+  const [fSupportIds, setFSupportIds] = useState(() => {
+    const s = searchParams.get('support')
+    return s ? [s] : []
+  })
   const [fAlert, setFAlert] = useState(() => initialFilter?.alert ?? searchParams.get('fAlert') ?? '')  // '' | 'late' | 'drag' | 'cont' | 'ok'
   const [fAssignee, setFAssignee] = useState(() => searchParams.get('assignee') ?? '') // user_id | ''
   const [fLine, setFLine] = useState('')  // team_id | '' (solo en modo allLines)
