@@ -9,10 +9,13 @@ import KanbanView from '../components/tareas/KanbanView'
 import StandupView from '../components/tareas/StandupView'
 import TaskModal from '../components/tareas/TaskModal'
 import { loadLines, loadClients } from '../components/metricas/metricsApi'
-import { currentMonthIndex, fmtMonth } from '../components/tareas/constants'
+import { currentMonthIndex } from '../components/tareas/constants'
+import { MONTHS } from '../components/metricas/constants'
 import { visibleLinesForUser } from '../utils/lineMembers'
 
 const ALL_TEAMS = '__all__'
+const CURRENT_YEAR = Math.floor(currentMonthIndex() / 12)
+const YEARS = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2, CURRENT_YEAR - 3]
 
 const VIEWS = [
   {
@@ -256,34 +259,29 @@ export default function TareasPage() {
                   </button>
                 ))}
               </div>
-              {['team', 'standup'].includes(activeView) && (
-                <div className="flex items-center gap-1 bg-white border border-[#e0ddd4] rounded-xl px-1 py-1 w-full sm:w-auto">
-                  <button
-                    onClick={() => setMonthIdx(i => i - 1)}
-                    className="px-2.5 py-1 rounded-lg text-[16px] text-[#555] hover:bg-[#f5f3eb] hover:text-[#111] transition-colors"
-                    aria-label="Mes anterior"
-                  >
-                    ‹
-                  </button>
-                  <span className="flex-1 text-center text-[14.5px] font-semibold text-[#111] min-w-[120px]">
-                    {fmtMonth(monthIdx)}
+              {activeView !== 'standup' && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[12px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] mr-1">
+                    Período
                   </span>
-                  <button
-                    onClick={() => setMonthIdx(i => i + 1)}
-                    className="px-2.5 py-1 rounded-lg text-[16px] text-[#555] hover:bg-[#f5f3eb] hover:text-[#111] transition-colors"
-                    aria-label="Mes siguiente"
+                  <select
+                    value={monthIdx % 12}
+                    onChange={e => setMonthIdx(Math.floor(monthIdx / 12) * 12 + Number(e.target.value))}
+                    className="text-[13.5px] border border-[#e0ddd4] rounded-lg px-2 py-1.5 bg-white text-[#333] focus:outline-none focus:border-[#FFB800]"
                   >
-                    ›
-                  </button>
-                  {monthIdx !== currentMonthIndex() && (
-                    <button
-                      onClick={() => setMonthIdx(currentMonthIndex())}
-                      className="px-2.5 py-1 rounded-lg text-[13.5px] font-semibold text-[#888] hover:bg-[#f5f3eb] hover:text-[#111] transition-colors border-l border-[#e0ddd4] ml-0.5"
-                      aria-label="Volver al mes actual"
-                    >
-                      Hoy
-                    </button>
-                  )}
+                    {MONTHS.map((name, i) => (
+                      <option key={i} value={i}>{name}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={Math.floor(monthIdx / 12)}
+                    onChange={e => setMonthIdx(Number(e.target.value) * 12 + (monthIdx % 12))}
+                    className="text-[13.5px] border border-[#e0ddd4] rounded-lg px-2 py-1.5 bg-white text-[#333] focus:outline-none focus:border-[#FFB800]"
+                  >
+                    {YEARS.map(y => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
                 </div>
               )}
             </div>
@@ -318,13 +316,13 @@ export default function TareasPage() {
                   : <TeamView team={activeTeam} tasks={tasks} usersMap={usersMap} monthIdx={monthIdx} clientsById={clientsById} onOpenTask={openEditTask} />
               )}
               {activeView === 'base' && (
-                <BaseView tasks={tasks} teams={teams} team={activeTeam} allLines={isAll} usersMap={usersMap} clientsById={clientsById} onOpenTask={openEditTask} onUpdated={handleUpdated} initialFilter={pendingBaseFilter} />
+                <BaseView tasks={tasks} teams={teams} team={activeTeam} allLines={isAll} usersMap={usersMap} clientsById={clientsById} monthIdx={monthIdx} onOpenTask={openEditTask} onUpdated={handleUpdated} initialFilter={pendingBaseFilter} />
               )}
               {activeView === 'kanban' && (
-                <KanbanView team={activeTeam} teams={teams} allLines={isAll} tasks={tasks} usersMap={usersMap} clientsById={clientsById} onOpenTask={openEditTask} onUpdated={handleUpdated} />
+                <KanbanView team={activeTeam} teams={teams} allLines={isAll} tasks={tasks} usersMap={usersMap} clientsById={clientsById} monthIdx={monthIdx} onOpenTask={openEditTask} onUpdated={handleUpdated} />
               )}
               {activeView === 'standup' && (
-                <StandupView team={activeTeam} allLines={isAll} tasks={tasks} teams={teams} usersMap={usersMap} monthIdx={monthIdx} onOpenTask={openEditTask} />
+                <StandupView team={activeTeam} allLines={isAll} tasks={tasks} teams={teams} usersMap={usersMap} monthIdx={currentMonthIndex()} onOpenTask={openEditTask} />
               )}
             </>
           )}

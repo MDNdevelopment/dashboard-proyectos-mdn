@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { isLate, fmtShort, ESTADOS, COL_META } from './constants'
+import { isLate, fmtShort, ESTADOS, COL_META, taskInMonth, currentMonthIndex } from './constants'
 import { checklistProgress } from './taskChecklist'
 import { Avatar } from './UserPickerSingle'
 import { updateTaskStatus } from './taskStatus'
@@ -87,7 +87,7 @@ function KanbanCard({ task, usersMap, clientsById, lineName, onOpen, onChangeSta
   )
 }
 
-export default function KanbanView({ team, teams = [], allLines = false, tasks, usersMap, clientsById = new Map(), onOpenTask, onUpdated }) {
+export default function KanbanView({ team, teams = [], allLines = false, tasks, usersMap, clientsById = new Map(), monthIdx = currentMonthIndex(), onOpenTask, onUpdated }) {
   const [fLine, setFLine] = useState('')
 
   if (!team && !allLines) {
@@ -98,9 +98,11 @@ export default function KanbanView({ team, teams = [], allLines = false, tasks, 
     )
   }
 
-  const teamTasks = allLines
+  // Tareas activas en el mes seleccionado (incluye arrastradas y en curso)
+  const teamTasks = (allLines
     ? tasksForVisibleLines(tasks, teams).filter(t => !fLine || t.team_id === fLine)
     : tasks.filter(t => t.team_id === team.id)
+  ).filter(t => taskInMonth(t, monthIdx))
 
   async function handleChangeStatus(task, newStatus) {
     const { data, error } = await updateTaskStatus(task.id, newStatus)

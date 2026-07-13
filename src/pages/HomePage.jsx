@@ -249,7 +249,7 @@ export default function HomePage() {
                   accent={mySupportLateTasks.length > 0 ? '#E14848' : '#111'}
                   icon={ICON_SUPPORT}
                   iconColor={mySupportLateTasks.length > 0 ? '#E14848' : '#FFB800'}
-                  to={`/tareas?view=base&support=${myUserId}`}
+                  to={`/tareas?view=base&support=${myUserId}&hideDone=1`}
                   linkLabel="Ver apoyo"
                 />
               )}
@@ -329,7 +329,7 @@ export default function HomePage() {
                   accent={!loadingTasks && companyLateTasks.length > 0 ? '#E14848' : '#111'}
                   icon={ICON_COMPANY_TASKS}
                   iconColor={!loadingTasks && companyLateTasks.length > 0 ? '#E14848' : '#FFB800'}
-                  to="/tareas?view=base"
+                  to="/tareas?view=base&hideDone=1"
                   linkLabel="Ver tareas"
                 />
               )}

@@ -6,7 +6,6 @@ import {
   isBlocked,
   fmtShort,
   taskLight,
-  COL_META,
 } from "./constants";
 import { Avatar } from "./UserPickerSingle";
 import { tasksForVisibleLines } from "../../utils/lineFilters";
@@ -70,7 +69,6 @@ export default function StandupView({
   monthIdx,
   onOpenTask,
 }) {
-  const [copied, setCopied] = useState(false);
   const [fLine, setFLine] = useState("");
 
   if (!team && !allLines) {
@@ -100,54 +98,6 @@ export default function StandupView({
     return t.status; // 'Por revisar' | 'Pendiente'
   }
 
-  function buildReport() {
-    const lines = [];
-    lines.push(`📋 Stand-up ${scopeName} — ${fmtMonth(monthIdx)}`);
-    if (red.length) {
-      lines.push("");
-      lines.push(`🔴 Rojo — Paralizadas / Retrasadas (${red.length}):`);
-      red.forEach((t) => {
-        lines.push(
-          `  • ${t.client || "(sin cliente)"} — ${t.description} (${reason(t)})`,
-        );
-      });
-    }
-    if (yellow.length) {
-      lines.push("");
-      lines.push(`🟡 Amarillo — Pendientes / Por revisar (${yellow.length}):`);
-      yellow.forEach((t) => {
-        lines.push(
-          `  • ${t.client || "(sin cliente)"} — ${t.description} (${t.status})`,
-        );
-      });
-    }
-    if (direction.length) {
-      lines.push("");
-      lines.push(`📌 Apoyo de dirección (${direction.length}):`);
-      direction.forEach((t) => {
-        const supportUser = usersMap.get(t.support_id);
-        const supportName = supportUser
-          ? `${supportUser.first_name} ${supportUser.last_name}`
-          : "Dirección";
-        lines.push(
-          `  • ${t.client || "(sin cliente)"} — ${t.description} (apoyo: ${supportName})`,
-        );
-      });
-    }
-    if (!red.length && !yellow.length && !direction.length) {
-      lines.push("");
-      lines.push("✅ Sin puntos de atención este período.");
-    }
-    return lines.join("\n");
-  }
-
-  function copyReport() {
-    navigator.clipboard.writeText(buildReport()).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    });
-  }
-
   return (
     <div className="space-y-5">
       {/* Header */}
@@ -172,48 +122,6 @@ export default function StandupView({
             ))}
           </select>
         )}
-        <button
-          onClick={copyReport}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl border border-[#e0ddd4] text-[15px] font-semibold text-[#555] hover:bg-[#f5f3eb] hover:text-[#111] transition-colors"
-        >
-          {copied ? (
-            <>
-              <svg
-                width="14"
-                height="14"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="#16A34A"
-                strokeWidth={2.5}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
-              ¡Copiado!
-            </>
-          ) : (
-            <>
-              <svg
-                width="14"
-                height="14"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                />
-              </svg>
-              Copiar para WhatsApp
-            </>
-          )}
-        </button>
       </div>
 
       {/* Leyenda */}
@@ -385,24 +293,6 @@ export default function StandupView({
           )}
         </div>
       </div>
-
-      {/* Reporte para WhatsApp */}
-      <section className="bg-[#faf9f5] border border-[#e0ddd4] rounded-xl overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#e0ddd4] bg-white">
-          <p className="text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">
-            Reporte para WhatsApp
-          </p>
-          <button
-            onClick={copyReport}
-            className="text-[13.5px] font-semibold text-[#888] hover:text-[#111] transition-colors"
-          >
-            {copied ? "✓ Copiado" : "Copiar"}
-          </button>
-        </div>
-        <pre className="px-4 py-3 text-[14px] text-[#555] whitespace-pre-wrap font-mono leading-relaxed overflow-x-auto">
-          {buildReport()}
-        </pre>
-      </section>
     </div>
   );
 }

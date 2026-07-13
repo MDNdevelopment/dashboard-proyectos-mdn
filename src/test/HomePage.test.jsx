@@ -217,19 +217,19 @@ describe('HomePage — nivel 4 (dirección)', () => {
     expect(screen.getByText(/resumen general/i)).toBeInTheDocument()
   })
 
-  it('la card "Apoyo de dirección" es un enlace clickeable a Base filtrado por apoyo', async () => {
+  it('la card "Apoyo de dirección" es un enlace clickeable a Base filtrado por apoyo, con completadas ocultas por defecto', async () => {
     renderPage({ access_level: 4 })
     await waitFor(() => {
       expect(screen.getByRole('link', { name: /apoyo de dirección/i }))
-        .toHaveAttribute('href', '/tareas?view=base&support=u1')
+        .toHaveAttribute('href', '/tareas?view=base&support=u1&hideDone=1')
     })
   })
 
-  it('la card "Tareas de la empresa" es un enlace clickeable a Base y dice "Ver tareas"', async () => {
+  it('la card "Tareas de la empresa" es un enlace clickeable a Base con completadas ocultas por defecto y dice "Ver tareas"', async () => {
     renderPage({ access_level: 4 })
     await waitFor(() => {
       const link = screen.getByRole('link', { name: /tareas de la empresa/i })
-      expect(link).toHaveAttribute('href', '/tareas?view=base')
+      expect(link).toHaveAttribute('href', '/tareas?view=base&hideDone=1')
       expect(link).toHaveTextContent(/ver tareas/i)
     })
   })

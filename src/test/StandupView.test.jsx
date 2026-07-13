@@ -99,40 +99,4 @@ describe('StandupView — contenedor "Asignadas a dirección"', () => {
     )
     expect(screen.getByText(/sin tareas asignadas a dirección/i)).toBeInTheDocument()
   })
-
-  it('el reporte de WhatsApp incluye sección "Apoyo de dirección" cuando hay tareas', () => {
-    const tasks = [
-      task({ description: 'Ejecutivo', client: 'Marca Y', support_id: 'u-dir' }),
-    ]
-    render(
-      <StandupView
-        team={TEAM}
-        tasks={tasks}
-        usersMap={USERS_MAP}
-        monthIdx={2026 * 12 + 0}
-        onOpenTask={noop}
-      />,
-    )
-    const pre = document.querySelector('pre')
-    expect(pre.textContent).toMatch(/apoyo de dirección/i)
-    expect(pre.textContent).toMatch(/ejecutivo/i)
-    expect(pre.textContent).toMatch(/Ana Ruiz/)
-  })
-
-  it('el reporte de WhatsApp NO incluye sección de dirección cuando no hay tareas', () => {
-    const tasks = [
-      task({ status: 'En proceso' }),
-    ]
-    render(
-      <StandupView
-        team={TEAM}
-        tasks={tasks}
-        usersMap={USERS_MAP}
-        monthIdx={2026 * 12 + 0}
-        onOpenTask={noop}
-      />,
-    )
-    const pre = document.querySelector('pre')
-    expect(pre.textContent).not.toMatch(/apoyo de dirección/i)
-  })
 })

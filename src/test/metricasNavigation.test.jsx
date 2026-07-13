@@ -377,11 +377,14 @@ describe('DashboardView — KPIs eliminados (Promedio anual y Cobertura)', () =>
 
 import BaseView from '../components/tareas/BaseView'
 
+// Las 3 tareas caen en el mismo mes (junio 2026) para que este suite, enfocado en el
+// filtro ?client=, sea independiente del filtro por mes que aplica BaseView.
 const MOCK_TASKS = [
   { id: 't-1', team_id: 'l-1', client: 'Pepsi',    client_id: 'c-1', description: 'Tarea A', status: 'En proceso', request_date: '2026-06-01', assignee_ids: [] },
   { id: 't-2', team_id: 'l-1', client: 'Coca-Cola', client_id: 'c-2', description: 'Tarea B', status: 'Pendiente',  request_date: '2026-06-02', assignee_ids: [] },
-  { id: 't-3', team_id: 'l-1', client: 'Pepsi',    client_id: 'c-1', description: 'Tarea C', status: 'Terminado',  request_date: '2026-05-01', assignee_ids: [] },
+  { id: 't-3', team_id: 'l-1', client: 'Pepsi',    client_id: 'c-1', description: 'Tarea C', status: 'Terminado',  request_date: '2026-06-01', closed_date: '2026-06-15', assignee_ids: [] },
 ]
+const MOCK_TASKS_MONTH_IDX = 2026 * 12 + 5 // junio 2026 (0-based: mayo=4, junio=5)
 
 const MOCK_TEAM = { id: 'l-1', name: 'Georgina', color: '#FAB51A', member_user_ids: [] }
 
@@ -398,6 +401,7 @@ function renderBaseView(initialEntry = '/tareas') {
       team={MOCK_TEAM}
       usersMap={new Map()}
       clientsById={MOCK_CLIENTS_MAP}
+      monthIdx={MOCK_TASKS_MONTH_IDX}
       onOpenTask={vi.fn()}
       onUpdated={vi.fn()}
     />,

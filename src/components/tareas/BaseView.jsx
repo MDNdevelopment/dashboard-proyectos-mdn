@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
-import { isLate, isDragged, isContinuous, isClosed, fmtShort, ESTADOS, COL_META } from './constants'
+import { isLate, isDragged, isContinuous, isClosed, fmtShort, ESTADOS, COL_META, taskInMonth, currentMonthIndex } from './constants'
 import { checklistProgress } from './taskChecklist'
 import { Avatar } from './UserPickerSingle'
 import { teamMemberUsers, tasksForVisibleLines } from '../../utils/lineFilters'
@@ -194,7 +194,7 @@ function DirectionFilter({ directionUsers, selectedIds, onChange }) {
 
 // --- Main component ---
 
-export default function BaseView({ tasks, teams, team, allLines = false, usersMap, clientsById = new Map(), onOpenTask, onUpdated, initialFilter = null }) {
+export default function BaseView({ tasks, teams, team, allLines = false, usersMap, clientsById = new Map(), monthIdx = currentMonthIndex(), onOpenTask, onUpdated, initialFilter = null }) {
   const [searchParams] = useSearchParams()
 
   // Inicializar filtros desde initialFilter (cards del dashboard) o URL params (Reportes), en ese orden
@@ -210,11 +210,15 @@ export default function BaseView({ tasks, teams, team, allLines = false, usersMa
   const [fAlert, setFAlert] = useState(() => initialFilter?.alert ?? searchParams.get('fAlert') ?? '')  // '' | 'late' | 'drag' | 'cont' | 'ok'
   const [fAssignee, setFAssignee] = useState(() => searchParams.get('assignee') ?? '') // user_id | ''
   const [fLine, setFLine] = useState('')  // team_id | '' (solo en modo allLines)
+  // Oculta tareas Terminado; precargable desde Home (nivel 4) vía ?hideDone=1
+  const [hideCompleted, setHideCompleted] = useState(() => searchParams.get('hideDone') === '1')
 
-  // Tareas del team seleccionado, o de todas las líneas visibles en modo "Todos"
-  const baseTasks = allLines
+  // Tareas del team seleccionado, o de todas las líneas visibles en modo "Todos",
+  // acotadas al mes seleccionado (activas en el mes: incluye arrastradas y en curso)
+  const baseTasks = (allLines
     ? tasksForVisibleLines(tasks, teams).filter(t => !fLine || t.team_id === fLine)
     : (team ? tasks.filter(t => t.team_id === team.id) : [])
+  ).filter(t => taskInMonth(t, monthIdx))
 
   const clientList = [...new Set(baseTasks.map(t => t.client).filter(Boolean))].sort()
 
@@ -242,11 +246,12 @@ export default function BaseView({ tasks, teams, team, allLines = false, usersMa
     if (fAlert === 'ok' && (isLate(t) || isDragged(t))) return false
     if (fAssignee && !(t.assignee_ids ?? (t.assignee_id ? [t.assignee_id] : [])).includes(fAssignee)) return false
     if (fClientId && t.client_id !== fClientId) return false
+    if (hideCompleted && isClosed(t)) return false
     return true
   }).sort((a, b) => (b.request_date ?? '').localeCompare(a.request_date ?? ''))
 
-  const hasFilters = q || fStatus || fClient || fClientId || fSupportIds.length > 0 || fAlert || fAssignee || fLine
-  function clearFilters() { setQ(''); setFStatus(''); setFClient(''); setFClientId(''); setFSupportIds([]); setFAlert(''); setFAssignee(''); setFLine('') }
+  const hasFilters = q || fStatus || fClient || fClientId || fSupportIds.length > 0 || fAlert || fAssignee || fLine || hideCompleted
+  function clearFilters() { setQ(''); setFStatus(''); setFClient(''); setFClientId(''); setFSupportIds([]); setFAlert(''); setFAssignee(''); setFLine(''); setHideCompleted(false) }
 
   // Nombre del cliente filtrado por ID (para mostrar etiqueta cuando viene de Reportes)
   const activeClientName = fClientId ? clientsById.get(fClientId)?.name ?? null : null
@@ -332,6 +337,15 @@ export default function BaseView({ tasks, teams, team, allLines = false, usersMa
                 </button>
               </span>
             )}
+            <label className="flex items-center gap-1.5 text-[14px] text-[#555] cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={hideCompleted}
+                onChange={e => setHideCompleted(e.target.checked)}
+                className="w-3.5 h-3.5 accent-[#FFB800] cursor-pointer"
+              />
+              Ocultar completadas
+            </label>
           </div>
           {hasFilters && (
             <button onClick={clearFilters} className="text-[14px] font-semibold text-[#888] hover:text-[#111] transition-colors">

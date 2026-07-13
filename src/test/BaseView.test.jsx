@@ -149,3 +149,104 @@ describe('BaseView — filtro de apoyo de dirección', () => {
     expect(screen.getByText('Apoyo Diana')).toBeInTheDocument()
   })
 })
+
+describe('BaseView — filtro por mes (monthIdx)', () => {
+  // Enero 2026 = 2026*12 + 0 ; Marzo 2026 = 2026*12 + 2
+  const JAN_2026 = 2026 * 12 + 0
+  const MAR_2026 = 2026 * 12 + 2
+
+  const MONTH_TASKS = [
+    makeTask({ id: 'jan-open', description: 'Iniciada en enero, abierta', request_date: '2026-01-05', status: 'En proceso' }),
+    makeTask({ id: 'jan-closed', description: 'Cerrada en enero', request_date: '2026-01-05', due_date: '2026-01-20', closed_date: '2026-01-20', status: 'Terminado' }),
+    makeTask({ id: 'mar-new', description: 'Nace en marzo', request_date: '2026-03-02', status: 'Pendiente' }),
+  ]
+
+  function renderBaseWithMonth(monthIdx) {
+    return render(
+      <MemoryRouter>
+        <BaseView
+          tasks={MONTH_TASKS}
+          teams={[TEAM]}
+          team={TEAM}
+          usersMap={USERS_MAP}
+          clientsById={new Map()}
+          monthIdx={monthIdx}
+          onOpenTask={() => {}}
+          onUpdated={() => {}}
+        />
+      </MemoryRouter>,
+    )
+  }
+
+  it('en enero muestra las tareas activas ese mes y oculta las que aún no nacen', () => {
+    renderBaseWithMonth(JAN_2026)
+    expect(screen.getByText('Iniciada en enero, abierta')).toBeInTheDocument()
+    expect(screen.getByText('Cerrada en enero')).toBeInTheDocument()
+    expect(screen.queryByText('Nace en marzo')).not.toBeInTheDocument()
+  })
+
+  it('en marzo sigue mostrando la tarea arrastrada abierta y oculta la ya cerrada en enero', () => {
+    renderBaseWithMonth(MAR_2026)
+    expect(screen.getByText('Iniciada en enero, abierta')).toBeInTheDocument()
+    expect(screen.getByText('Nace en marzo')).toBeInTheDocument()
+    expect(screen.queryByText('Cerrada en enero')).not.toBeInTheDocument()
+  })
+})
+
+describe('BaseView — checkbox "Ocultar completadas"', () => {
+  // done-1 se cierra en el mes actual real (BaseView filtra también por monthIdx, que por
+  // defecto es el mes de hoy) para que este suite sea independiente de ese otro filtro.
+  const TODAY_MONTH_TASK_DATE = new Date().toISOString().slice(0, 10)
+  const COMPLETED_TASKS = [
+    makeTask({ id: 'open-1', description: 'Tarea abierta', status: 'En proceso' }),
+    makeTask({ id: 'done-1', description: 'Tarea terminada', status: 'Terminado', request_date: TODAY_MONTH_TASK_DATE, closed_date: TODAY_MONTH_TASK_DATE }),
+  ]
+
+  function renderBaseAt(initialEntry) {
+    return render(
+      <MemoryRouter initialEntries={[initialEntry]}>
+        <BaseView
+          tasks={COMPLETED_TASKS}
+          teams={[TEAM]}
+          team={TEAM}
+          usersMap={USERS_MAP}
+          clientsById={new Map()}
+          onOpenTask={() => {}}
+          onUpdated={() => {}}
+        />
+      </MemoryRouter>,
+    )
+  }
+
+  it('por defecto (sin ?hideDone=1) el checkbox está desmarcado y se ven las completadas', () => {
+    renderBaseAt('/tareas?view=base')
+    const checkbox = screen.getByRole('checkbox', { name: /ocultar completadas/i })
+    expect(checkbox).not.toBeChecked()
+    expect(screen.getByText('Tarea terminada')).toBeInTheDocument()
+  })
+
+  it('marcar el checkbox oculta las tareas Terminado y conserva el resto', async () => {
+    const user = userEvent.setup()
+    renderBaseAt('/tareas?view=base')
+    await user.click(screen.getByRole('checkbox', { name: /ocultar completadas/i }))
+    expect(screen.queryByText('Tarea terminada')).not.toBeInTheDocument()
+    expect(screen.getByText('Tarea abierta')).toBeInTheDocument()
+  })
+
+  it('con ?hideDone=1 en la URL el checkbox arranca marcado y las completadas no aparecen', () => {
+    renderBaseAt('/tareas?view=base&hideDone=1')
+    const checkbox = screen.getByRole('checkbox', { name: /ocultar completadas/i })
+    expect(checkbox).toBeChecked()
+    expect(screen.queryByText('Tarea terminada')).not.toBeInTheDocument()
+    expect(screen.getByText('Tarea abierta')).toBeInTheDocument()
+  })
+
+  it('"Limpiar filtros" desmarca el checkbox y vuelve a mostrar las completadas', async () => {
+    const user = userEvent.setup()
+    renderBaseAt('/tareas?view=base&hideDone=1')
+    expect(screen.queryByText('Tarea terminada')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /limpiar filtros/i }))
+    expect(screen.getByRole('checkbox', { name: /ocultar completadas/i })).not.toBeChecked()
+    expect(screen.getByText('Tarea terminada')).toBeInTheDocument()
+  })
+})

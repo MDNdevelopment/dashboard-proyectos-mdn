@@ -168,6 +168,25 @@ describe('TareasPage', () => {
     expect(screen.getByText('Cumplimiento')).toBeInTheDocument()
   })
 
+  it('shows the period selector on Dashboard/Base/Kanban but not on Stand-up', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Georgina' })).toBeInTheDocument()
+    })
+    // Dashboard (default view)
+    expect(screen.getByText('Período')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Base' }))
+    expect(screen.getByText('Período')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Kanban' }))
+    expect(screen.getByText('Período')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Stand-up' }))
+    expect(screen.queryByText('Período')).not.toBeInTheDocument()
+  })
+
   describe('dashboard KPI cards navigate to Base', () => {
     async function goToPanorama() {
       const user = userEvent.setup()
