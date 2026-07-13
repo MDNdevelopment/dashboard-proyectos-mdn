@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "../../supabase";
 import {
   loadLines,
@@ -22,11 +23,13 @@ const YEARS = [
 ];
 
 export default function ClientsView({ companyId, canManage = true }) {
+  // Deep-link desde Inicio ("Clientes de mi línea"): ?line=<lineId> preselecciona el filtro.
+  const [searchParams] = useSearchParams();
   const [lines, setLines] = useState([]);
   const [clients, setClients] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filterLine, setFilterLine] = useState("all");
+  const [filterLine, setFilterLine] = useState(() => searchParams.get("line") ?? "all");
   const [modal, setModal] = useState(undefined);
   const [readOnly, setReadOnly] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);

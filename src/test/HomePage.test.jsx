@@ -7,15 +7,16 @@ vi.mock('../supabase', () => {
   const makeQuery = (result = []) => ({
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
-    is: vi.fn().mockResolvedValue({ data: result, error: null }),
+    is: vi.fn().mockReturnThis(),
+    order: vi.fn().mockResolvedValue({ data: result, error: null }),
     then: (resolve) => resolve({ data: result, error: null }),
   })
 
   const mockFrom = vi.fn()
   mockFrom.mockImplementation(table => {
-    if (table === 'tasks') return makeQuery(MOCK_TASKS)
+    if (table === 'tasks') return makeQuery(globalThis.__MOCK_TASKS_OVERRIDE__ ?? MOCK_TASKS)
     if (table === 'users') return makeQuery(MOCK_EMPLOYEES)
-    if (table === 'metric_clients') return makeQuery(MOCK_CLIENTS)
+    if (table === 'metric_clients') return makeQuery(globalThis.__MOCK_CLIENTS_OVERRIDE__ ?? MOCK_CLIENTS)
     if (table === 'metric_lines') return makeQuery(globalThis.__MOCK_METRIC_LINES__ ?? [])
     if (table === 'metric_reports') return makeQuery(globalThis.__MOCK_METRIC_REPORTS__ ?? [])
     return makeQuery([])
@@ -63,6 +64,25 @@ const MOCK_METRIC_REPORTS = [{
     piezas: { piezas: 1, editadas: 1 },
   },
 }]
+
+// Fixtures para las pruebas de "Mi línea" (nivel 3): u1 lidera la línea l1.
+const MOCK_LINE_WITH_MEMBER = [
+  { id: 'l1', name: 'Línea Redes', company_id: 'co-1', sort_order: 1, members: [{ user_id: 'u1' }] },
+]
+const MOCK_LINE_TASKS = [
+  // De la línea l1, activa, atrasada
+  { id: 'lt1', company_id: 'co-1', team_id: 'l1', assignee_ids: ['u9'], support_id: null, status: 'En proceso', due_date: TODAY_PAST },
+  // De la línea l1, activa, no atrasada
+  { id: 'lt2', company_id: 'co-1', team_id: 'l1', assignee_ids: ['u9'], support_id: null, status: 'En proceso', due_date: TODAY_FUTURE },
+  // De otra línea — no debe contar para "Mi línea"
+  { id: 'lt3', company_id: 'co-1', team_id: 'l2', assignee_ids: ['u9'], support_id: null, status: 'En proceso', due_date: TODAY_FUTURE },
+]
+// 2 clientes de l1, 1 de otra línea — no debe contar para "Mi línea"
+const MOCK_LINE_CLIENTS = [
+  { id: 'lc1', company_id: 'co-1', line_id: 'l1' },
+  { id: 'lc2', company_id: 'co-1', line_id: 'l1' },
+  { id: 'lc3', company_id: 'co-1', line_id: 'l2' },
+]
 
 import { useAuth } from '../context/AuthContext'
 import HomePage from '../pages/HomePage'
@@ -242,6 +262,74 @@ describe('HomePage — nivel 4 (dirección)', () => {
     })
     expect(screen.getByRole('link', { name: /^empleados/i })).toHaveAttribute('href', '/empresa/empleados')
     expect(screen.getByRole('link', { name: /^líneas/i })).toHaveAttribute('href', '/empresa/lineas')
+  })
+})
+
+describe('HomePage — Mi línea (nivel 3)', () => {
+  afterEach(() => {
+    globalThis.__MOCK_METRIC_LINES__ = undefined
+    globalThis.__MOCK_METRIC_REPORTS__ = undefined
+    globalThis.__MOCK_TASKS_OVERRIDE__ = undefined
+    globalThis.__MOCK_CLIENTS_OVERRIDE__ = undefined
+  })
+
+  it('muestra las tareas y la salud de la línea que lidera, y conserva sus cards personales', async () => {
+    globalThis.__MOCK_METRIC_LINES__ = MOCK_LINE_WITH_MEMBER
+    globalThis.__MOCK_METRIC_REPORTS__ = MOCK_METRIC_REPORTS
+    globalThis.__MOCK_TASKS_OVERRIDE__ = MOCK_LINE_TASKS
+    globalThis.__MOCK_CLIENTS_OVERRIDE__ = MOCK_LINE_CLIENTS
+    renderPage({ access_level: 3 })
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: /^mi línea$/i })).toBeInTheDocument())
+    // lt1 y lt2 son de l1 y están activas; lt3 es de otra línea → no cuenta
+    expect(screen.getByRole('link', { name: /tareas de mi línea/i })).toHaveTextContent('2')
+    expect(screen.getByText('1 atrasada(s)')).toBeInTheDocument()
+    // Los 6 indicadores al 100% → score 100.0
+    expect(screen.getByText(/salud de mi línea/i)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /salud de mi línea/i })).toHaveTextContent('100.0')
+
+    // lc1 y lc2 son de l1; lc3 es de otra línea → no cuenta
+    expect(screen.getByRole('link', { name: /clientes de mi línea/i })).toHaveTextContent('2')
+    // Solo u1 es miembro de l1
+    expect(screen.getByRole('link', { name: /empleados de mi línea/i })).toHaveTextContent('1')
+
+    // Conserva sus cards personales de "Mis tareas"
+    expect(screen.getByText(/asignadas activas/i)).toBeInTheDocument()
+    expect(screen.getByText(/^atrasadas/i)).toBeInTheDocument()
+
+    // NO ve el resumen general (eso es solo para dirección)
+    expect(screen.queryByText(/resumen general/i)).not.toBeInTheDocument()
+  })
+
+  it('la card de salud de la línea enlaza a /reportes/linea/:id cuando el usuario tiene acceso a reportes', async () => {
+    globalThis.__MOCK_METRIC_LINES__ = MOCK_LINE_WITH_MEMBER
+    globalThis.__MOCK_METRIC_REPORTS__ = MOCK_METRIC_REPORTS
+    globalThis.__MOCK_TASKS_OVERRIDE__ = MOCK_LINE_TASKS
+    renderPage({ access_level: 3 })
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: /salud de mi línea/i })).toHaveAttribute('href', '/reportes/linea/l1')
+    })
+  })
+
+  it('las cards de Clientes y Empleados de la línea enlazan a Empresa con la línea preseleccionada', async () => {
+    globalThis.__MOCK_METRIC_LINES__ = MOCK_LINE_WITH_MEMBER
+    globalThis.__MOCK_METRIC_REPORTS__ = MOCK_METRIC_REPORTS
+    globalThis.__MOCK_TASKS_OVERRIDE__ = MOCK_LINE_TASKS
+    globalThis.__MOCK_CLIENTS_OVERRIDE__ = MOCK_LINE_CLIENTS
+    renderPage({ access_level: 3 })
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: /clientes de mi línea/i })).toHaveAttribute('href', '/empresa/clientes?line=l1')
+    })
+    expect(screen.getByRole('link', { name: /empleados de mi línea/i })).toHaveAttribute('href', '/empresa/lineas?line=l1')
+  })
+
+  it('NO muestra "Mi línea" para un usuario de nivel 2', async () => {
+    globalThis.__MOCK_METRIC_LINES__ = MOCK_LINE_WITH_MEMBER
+    globalThis.__MOCK_METRIC_REPORTS__ = MOCK_METRIC_REPORTS
+    globalThis.__MOCK_TASKS_OVERRIDE__ = MOCK_LINE_TASKS
+    renderPage({ access_level: 2 })
+    await waitFor(() => expect(screen.getByText(/asignadas activas/i)).toBeInTheDocument())
+    expect(screen.queryByRole('heading', { name: /^mi línea$/i })).not.toBeInTheDocument()
   })
 })
 

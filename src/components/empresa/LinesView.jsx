@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "../../supabase";
 import {
   loadLines,
@@ -138,6 +138,8 @@ function BrandLogos({ clients, color }) {
  */
 export default function LinesView({ companyId, canManage = true }) {
   const navigate = useNavigate();
+  // Deep-link desde Inicio ("Empleados de mi línea"): ?line=<lineId> abre su ficha automáticamente.
+  const [searchParams] = useSearchParams();
   const { can = () => true } = useAuth();
   const [lines, setLines] = useState([]);
   const [clients, setClients] = useState([]);
@@ -145,7 +147,7 @@ export default function LinesView({ companyId, canManage = true }) {
   const [loading, setLoading] = useState(true);
   const [lineModal, setLineModal] = useState(undefined); // undefined=cerrado, null=crear, obj=editar
   const [metasModal, setMetasModal] = useState(null); // null=cerrado, obj=línea a editar metas
-  const [fichaModal, setFichaModal] = useState(null); // null=cerrado, lineId cuya ficha se muestra
+  const [fichaModal, setFichaModal] = useState(() => searchParams.get("line") ?? null); // null=cerrado, lineId cuya ficha se muestra
   const [confirmDelete, setConfirmDelete] = useState(null); // { id, name }
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState(null);

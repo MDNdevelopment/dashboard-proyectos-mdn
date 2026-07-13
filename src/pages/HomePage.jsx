@@ -1,16 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import { useOutletContext, Link } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { useAuth } from '../context/AuthContext'
 import { MODULES } from '../config/modules'
 import { isLate, isClosed } from '../components/tareas/constants'
 import KpiCard from '../components/common/KpiCard'
-import { loadYearReports } from '../components/metricas/metricsApi'
-import { calcTotal, sumScore } from '../utils/metricsScore'
+import { loadLines, loadYearReports, loadClients } from '../components/metricas/metricsApi'
+import { calcTotal, sumScore, monthLineScore } from '../utils/metricsScore'
 import { calcFinanzas } from '../utils/metricsFinance'
 import { aggregateMetricsDashboard } from '../utils/aggregateMetricsDashboard'
 import { scoreDialColor } from '../components/metricas/ScoreDial'
 import { MONTHS } from '../components/metricas/constants'
+import { visibleLinesForUser } from '../utils/lineMembers'
 
 // Íconos simples reutilizados por los accesos rápidos (mismo estilo que Sidebar).
 const MODULE_ICON = {
@@ -55,13 +56,16 @@ export default function HomePage() {
 
   const [tasks, setTasks] = useState([])
   const [loadingTasks, setLoadingTasks] = useState(true)
-  const [companyCounts, setCompanyCounts] = useState({ empleados: null, clientes: null, lineas: null })
-  const [metricLineIds, setMetricLineIds] = useState([])
+  const [companyCounts, setCompanyCounts] = useState({ empleados: null })
+  const [lines, setLines] = useState([])
   const [metricReports, setMetricReports] = useState([])
+  const [clients, setClients] = useState([])
 
   const isDirector = userProfile?.access_level >= 4 || userProfile?.admin === true
   // A nivel 4 no se le asignan tareas directamente, solo se le pone como apoyo de dirección.
   const isLevel4 = userProfile?.access_level >= 4
+  // Nivel 3 no-admin: lidera una línea, ve tareas y salud de su línea (pero no el resumen de empresa).
+  const isLineLead = userProfile?.access_level === 3 && !isDirector
   const showTareas = can('tareas')
   const showReportes = can('reportes')
   const showEmpresa = can('empresa')
@@ -87,23 +91,32 @@ export default function HomePage() {
   useEffect(() => {
     if (!userProfile?.company_id || !isDirector) return
     let cancelled = false
-    Promise.all([
-      supabase.from('users').select('user_id').eq('company_id', userProfile.company_id),
-      supabase.from('metric_clients').select('id').eq('company_id', userProfile.company_id).is('deleted_at', null),
-      supabase.from('metric_lines').select('id').eq('company_id', userProfile.company_id),
-      loadYearReports(userProfile.company_id, HEALTH_YEAR),
-    ]).then(([empRes, cliRes, lineRes, reportsRes]) => {
-      if (cancelled) return
-      setCompanyCounts({
-        empleados: empRes.data?.length ?? null,
-        clientes: cliRes.data?.length ?? null,
-        lineas: lineRes.data?.length ?? null,
+    supabase.from('users').select('user_id').eq('company_id', userProfile.company_id)
+      .then(({ data }) => {
+        if (cancelled) return
+        setCompanyCounts({ empleados: data?.length ?? null })
       })
-      setMetricLineIds((lineRes.data ?? []).map(l => l.id))
-      setMetricReports(reportsRes.data ?? [])
-    })
     return () => { cancelled = true }
   }, [userProfile?.company_id, isDirector])
+
+  // Líneas + reportes + clientes del año: los usa el director (salud/conteos de empresa) y el
+  // nivel 3 (salud/conteos de su línea). Para nivel 3, loadYearReports ya viene filtrado por RLS
+  // a los reportes de su propia línea; clientes y líneas se filtran client-side por line_id.
+  useEffect(() => {
+    if (!userProfile?.company_id || !(isDirector || isLineLead)) return
+    let cancelled = false
+    Promise.all([
+      loadLines(userProfile.company_id),
+      loadYearReports(userProfile.company_id, HEALTH_YEAR),
+      loadClients(userProfile.company_id),
+    ]).then(([linesRes, reportsRes, clientsRes]) => {
+      if (cancelled) return
+      setLines(linesRes.data ?? [])
+      setMetricReports(reportsRes.data ?? [])
+      setClients(clientsRes.data ?? [])
+    })
+    return () => { cancelled = true }
+  }, [userProfile?.company_id, isDirector, isLineLead])
 
   const myUserId = userProfile?.user_id
   const activeTasks = tasks.filter(t => !isClosed(t))
@@ -122,9 +135,9 @@ export default function HomePage() {
   const quickAccessModules = MODULES.filter(m => can(m.key))
 
   // Salud de la empresa del mes cerrado más reciente, promediada entre todas las líneas.
-  const health = metricLineIds.length
+  const health = lines.length
     ? aggregateMetricsDashboard(
-        metricLineIds.map(id => ({ id })),
+        lines,
         metricReports,
         HEALTH_YEAR,
         calcTotal,
@@ -133,6 +146,27 @@ export default function HomePage() {
         HEALTH_PREV_MONTH,
       ).promMesActual
     : null
+
+  // Línea(s) que lidera un nivel 3: tareas activas, salud del mes cerrado, clientes y empleados de la línea.
+  const myLines = isLineLead ? visibleLinesForUser(lines, userProfile) : []
+  const lineSummary = myLines.map(line => {
+    const lineTasks = activeTasks.filter(t => t.team_id === line.id)
+    const lineLate = lineTasks.filter(isLate)
+    const { score } = monthLineScore(
+      metricReports.filter(r => r.line_id === line.id),
+      HEALTH_PREV_MONTH,
+    )
+    const lineClients = clients.filter(c => c.line_id === line.id)
+    const lineEmployees = line.member_user_ids ?? []
+    return {
+      line,
+      count: lineTasks.length,
+      late: lineLate.length,
+      score,
+      clientCount: lineClients.length,
+      employeeCount: lineEmployees.length,
+    }
+  })
 
   return (
     <div className="main-bg min-h-screen">
@@ -224,6 +258,60 @@ export default function HomePage() {
           </section>
         )}
 
+        {/* Mi línea — solo nivel 3 (líder de línea) */}
+        {isLineLead && lineSummary.length > 0 && (
+          <section className="mb-8 rise-in" style={{ animationDelay: '110ms' }}>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-1.5 h-4 rounded-full bg-[#ccc]" aria-hidden="true" />
+              <h2 className="text-[13px] font-mono font-bold tracking-[0.14em] uppercase text-[#888]">
+                Mi línea
+              </h2>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {lineSummary.map(({ line, count, late, score, clientCount, employeeCount }) => (
+                <Fragment key={line.id}>
+                  <KpiCard
+                    label={lineSummary.length > 1 ? `Tareas · ${line.name}` : 'Tareas de mi línea'}
+                    value={loadingTasks ? '—' : count}
+                    sub={!loadingTasks ? `${late} atrasada(s)` : undefined}
+                    accent={!loadingTasks && late > 0 ? '#E14848' : '#111'}
+                    icon={ICON_COMPANY_TASKS}
+                    iconColor={!loadingTasks && late > 0 ? '#E14848' : '#FFB800'}
+                    to="/tareas?view=base"
+                    linkLabel="Ver tareas"
+                  />
+                  <KpiCard
+                    label={lineSummary.length > 1 ? `Salud · ${line.name}` : 'Salud de mi línea'}
+                    value={score != null ? score.toFixed(1) : '—'}
+                    sub={`Salud de ${MONTHS[HEALTH_PREV_MONTH - 1]} · /100`}
+                    accent={score != null ? scoreDialColor(score) : '#111'}
+                    icon={ICON_REPORTS}
+                    {...(showReportes ? { to: `/reportes/linea/${line.id}`, linkLabel: 'Ver reportes' } : {})}
+                  />
+                  {showEmpresa && showEmpresaClientes && (
+                    <KpiCard
+                      label={lineSummary.length > 1 ? `Clientes · ${line.name}` : 'Clientes de mi línea'}
+                      value={clientCount}
+                      icon={ICON_CLIENTS}
+                      to={`/empresa/clientes?line=${line.id}`}
+                      linkLabel="Ver clientes"
+                    />
+                  )}
+                  {showEmpresa && showEmpresaEmpleados && (
+                    <KpiCard
+                      label={lineSummary.length > 1 ? `Empleados · ${line.name}` : 'Empleados de mi línea'}
+                      value={employeeCount}
+                      icon={ICON_EMPLOYEES}
+                      to={`/empresa/lineas?line=${line.id}`}
+                      linkLabel="Ver equipo"
+                    />
+                  )}
+                </Fragment>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* Resumen general — solo nivel 4 / admin */}
         {isDirector && (
           <section className="mb-8 rise-in" style={{ animationDelay: '140ms' }}>
@@ -260,7 +348,7 @@ export default function HomePage() {
               {showEmpresa && showEmpresaClientes && (
                 <KpiCard
                   label="Clientes activos"
-                  value={companyCounts.clientes ?? '—'}
+                  value={clients.length || '—'}
                   icon={ICON_CLIENTS}
                   to="/empresa/clientes"
                   linkLabel="Ver clientes"
@@ -278,7 +366,7 @@ export default function HomePage() {
               {showEmpresa && showEmpresaLineas && (
                 <KpiCard
                   label="Líneas"
-                  value={companyCounts.lineas ?? '—'}
+                  value={lines.length || '—'}
                   icon={ICON_LINES}
                   to="/empresa/lineas"
                   linkLabel="Ver líneas"
