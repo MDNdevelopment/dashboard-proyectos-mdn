@@ -114,9 +114,10 @@ describe('HomePage — encabezado personal', () => {
     expect(screen.getByText(/hola, georgina/i)).toBeInTheDocument()
   })
 
-  it('muestra el cargo/departamento y el nivel', () => {
+  it('muestra el cargo/departamento pero no el nivel de acceso', () => {
     renderPage()
-    expect(screen.getByText(/diseño · diseñadora · nivel 1/i)).toBeInTheDocument()
+    expect(screen.getByText(/diseño · diseñadora/i)).toBeInTheDocument()
+    expect(screen.queryByText(/nivel 1/i)).not.toBeInTheDocument()
   })
 
   it('muestra las iniciales cuando el usuario no tiene avatar_url', () => {

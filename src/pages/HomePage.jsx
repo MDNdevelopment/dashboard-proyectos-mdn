@@ -33,8 +33,6 @@ const ICON_CLIENTS = <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
 const ICON_EMPLOYEES = <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="8" cy="5" r="2.5"/><path d="M3 14c0-2.8 2.2-5 5-5s5 2.2 5 5" strokeLinecap="round" strokeLinejoin="round"/></svg>
 const ICON_LINES = <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M2 4h7M2 8h10M2 12h5" strokeLinecap="round"/></svg>
 
-const ACCESS_LABELS = { 1: 'Nivel 1', 2: 'Nivel 2', 3: 'Nivel 3', 4: 'Nivel 4' }
-
 // Salud de la empresa: se muestra el mes cerrado más reciente (el anterior al actual),
 // igual convención que el dashboard de reportes (DashboardView.jsx).
 const HEALTH_CURRENT_MONTH = new Date().getMonth() + 1
@@ -129,7 +127,6 @@ export default function HomePage() {
   const greetingName = userProfile?.first_name ?? ''
   const roleLine = [userProfile?.department?.department_name, userProfile?.position?.position_name]
     .filter(Boolean).join(' · ')
-  const levelLabel = userProfile?.admin ? 'Admin' : ACCESS_LABELS[userProfile?.access_level] ?? ''
   const initials = ((userProfile?.first_name?.[0] ?? '') + (userProfile?.last_name?.[0] ?? '')).toUpperCase() || '?'
 
   const quickAccessModules = MODULES.filter(m => can(m.key))
@@ -205,9 +202,11 @@ export default function HomePage() {
               <h1 className="text-[26px] sm:text-[30px] font-bold text-white leading-tight truncate">
                 Hola, {greetingName || 'de nuevo'} 👋
               </h1>
-              <p className="text-[14px] text-[#bbb] mt-1">
-                {[roleLine, levelLabel].filter(Boolean).join(' · ')}
-              </p>
+              {roleLine && (
+                <p className="text-[14px] text-[#bbb] mt-1">
+                  {roleLine}
+                </p>
+              )}
             </div>
           </div>
         </div>
