@@ -37,9 +37,14 @@ export function assignMemberToLine(lines, lineId, userId) {
       return { ...line, member_user_ids: [...members, userId] }
     }
     if (!isTarget && hasMember) {
-      // Quitar de cualquier otra línea
+      // Quitar de cualquier otra línea — el liderazgo no viaja con el traslado
+      // (en la BD la fila con is_lead se borra al quitarla de la línea anterior).
       changedIds.push(line.id)
-      return { ...line, member_user_ids: members.filter(id => id !== userId) }
+      return {
+        ...line,
+        member_user_ids: members.filter(id => id !== userId),
+        lead_user_id: line.lead_user_id === userId ? null : line.lead_user_id,
+      }
     }
     return line
   })
@@ -81,7 +86,11 @@ export function removeMemberFromLine(lines, lineId, userId) {
     const members = line.member_user_ids ?? []
     if (!members.includes(userId)) return line
     changedIds.push(line.id)
-    return { ...line, member_user_ids: members.filter(id => id !== userId) }
+    return {
+      ...line,
+      member_user_ids: members.filter(id => id !== userId),
+      lead_user_id: line.lead_user_id === userId ? null : line.lead_user_id,
+    }
   })
   return { updated, changedIds }
 }

@@ -1,24 +1,7 @@
-import { STATUS, PRIORITY, STATUS_CYCLE } from "./constants";
-
-function dateColor(dateStr) {
-  if (!dateStr) return "";
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const d = new Date(dateStr + "T00:00:00");
-  const diff = Math.ceil((d - today) / (1000 * 60 * 60 * 24));
-  if (diff < 0) return "text-red-600 font-semibold";
-  if (diff <= 3) return "text-[#f57f17] font-semibold";
-  return "text-[#333]";
-}
-
-function fmtDate(dateStr) {
-  if (!dateStr) return "—";
-  return new Date(dateStr + "T00:00:00").toLocaleDateString("es-VE", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
+import { STATUS, STATUSES, PRIORITY } from "./constants";
+import StatusPill from "../common/StatusPill";
+import ClientCell from "./ClientCell";
+import { fmtDate, dateColor } from "./campaignSpendApi";
 
 export default function AdsCard({
   campaign,
@@ -27,7 +10,7 @@ export default function AdsCard({
   usersMap,
   clientsById,
   onSelect,
-  onStatusCycle,
+  onStatusChange,
   onEdit,
   onDelete,
   inlineEditId,
@@ -36,21 +19,15 @@ export default function AdsCard({
   onInlineEditChange,
   onInlineEditSave,
 }) {
-  const status = STATUS[campaign.status];
   const priority = PRIORITY[campaign.priority];
-
-  function handleStatusClick(e) {
-    e.stopPropagation();
-    if (!canManage) return;
-    const idx = STATUS_CYCLE.indexOf(campaign.status);
-    const next = STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
-    onStatusCycle(campaign.id, next);
-  }
 
   const isInlineEditing = inlineEditId === campaign.id;
 
   return (
-    <tr className="border-b border-[#f0ede3] hover:bg-[#fafaf7] transition-colors group">
+    <tr
+      onClick={() => onSelect(campaign)}
+      className="border-b border-[#f0ede3] hover:bg-[#fafaf7] transition-colors group cursor-pointer"
+    >
       {/* # */}
       <td className="px-3 py-2.5 text-[13px] font-mono text-[#aaa]">
         {index + 1}
@@ -101,24 +78,10 @@ export default function AdsCard({
 
       {/* Client */}
       <td className="px-3 py-2.5 text-[14px] text-[#444] whitespace-nowrap">
-        {campaign.client ? (
-          <div className="flex items-center gap-1.5">
-            {(() => {
-              const logo = campaign.client_id ? clientsById?.get(campaign.client_id)?.logo_url : null
-              const name = campaign.client
-              return logo ? (
-                <img src={logo} alt={name} className="w-5 h-5 rounded-full object-cover flex-shrink-0 border border-[#e0ddd4]" />
-              ) : (
-                <span className="w-5 h-5 rounded-full bg-[#f0ede3] flex items-center justify-center flex-shrink-0 text-[10px] font-bold text-[#aaa] uppercase">
-                  {name[0]}
-                </span>
-              )
-            })()}
-            <span>{campaign.client}</span>
-          </div>
-        ) : (
-          <span className="text-[#bbb]">—</span>
-        )}
+        <ClientCell
+          name={campaign.client}
+          logoUrl={campaign.client_id ? clientsById?.get(campaign.client_id)?.logo_url : null}
+        />
       </td>
 
       {/* Assignee */}
@@ -143,17 +106,16 @@ export default function AdsCard({
         </span>
       </td>
 
-      {/* Status — clickable badge */}
-      <td className="px-3 py-2.5">
-        <button
-          onClick={handleStatusClick}
-          title={canManage ? "Clic para avanzar estado" : undefined}
-          className={`text-[13px] font-mono font-bold px-2.5 py-1 rounded-lg whitespace-nowrap transition-opacity ${
-            status?.bg ?? "bg-[#f5f3eb]"
-          } ${status?.text ?? "text-[#555]"} ${canManage ? "hover:opacity-75 cursor-pointer" : "cursor-default"}`}
-        >
-          {status?.label ?? campaign.status}
-        </button>
+      {/* Status */}
+      <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+        <StatusPill
+          value={campaign.status}
+          meta={STATUS}
+          options={STATUSES}
+          editable={canManage}
+          onChange={(next) => onStatusChange(campaign.id, next)}
+          size="sm"
+        />
       </td>
 
       {/* Actions */}

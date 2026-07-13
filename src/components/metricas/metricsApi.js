@@ -11,13 +11,14 @@ import { lastNMonths } from "../../utils/metricsFinance";
 export async function loadLines(companyId) {
   const { data, error } = await supabase
     .from("metric_lines")
-    .select("*, members:metric_line_members(user_id)")
+    .select("*, members:metric_line_members(user_id, is_lead)")
     .eq("company_id", companyId)
     .order("sort_order");
   return {
     data: (data ?? []).map(line => ({
       ...line,
       member_user_ids: (line.members ?? []).map(m => m.user_id),
+      lead_user_id: (line.members ?? []).find(m => m.is_lead)?.user_id ?? null,
       members: undefined,
     })),
     error,
@@ -59,6 +60,35 @@ export async function removeLineMember(lineId, userId) {
     .eq("user_id", userId);
 }
 
+/**
+ * Marca a un miembro como jefa/líder de la línea. Solo puede haber una líder
+ * por línea, así que primero se limpia el flag de cualquier otra miembro.
+ */
+export async function setLineLeader(lineId, userId) {
+  const { error: clearErr } = await supabase
+    .from("metric_line_members")
+    .update({ is_lead: false })
+    .eq("line_id", lineId)
+    .neq("user_id", userId);
+  if (clearErr) return { error: clearErr };
+  return supabase
+    .from("metric_line_members")
+    .update({ is_lead: true })
+    .eq("line_id", lineId)
+    .eq("user_id", userId)
+    .select()
+    .single();
+}
+
+/** Quita el liderazgo de una miembro sin asignárselo a nadie más. */
+export async function removeLineLeader(lineId, userId) {
+  return supabase
+    .from("metric_line_members")
+    .update({ is_lead: false })
+    .eq("line_id", lineId)
+    .eq("user_id", userId);
+}
+
 // ─── Clientes ─────────────────────────────────────────────────────────────────
 
 export async function loadClients(companyId, lineId = null, { includeArchived = false } = {}) {
@@ -78,6 +108,7 @@ export async function createClient(companyId, fields) {
     website = null,
     payment_day = null,
     monthly_fee = null,
+    campaign_budget = null,
     social_links = [],
     logo_url = null,
     contacts = [],
@@ -90,7 +121,7 @@ export async function createClient(companyId, fields) {
   } = fields
   return supabase
     .from("metric_clients")
-    .insert({ company_id: companyId, name, line_id, website, payment_day, monthly_fee, social_links, logo_url, contacts, anniversary_date, mdn_since, social_manager_id, designer_id, audiovisual_ids, apoyo_ids })
+    .insert({ company_id: companyId, name, line_id, website, payment_day, monthly_fee, campaign_budget, social_links, logo_url, contacts, anniversary_date, mdn_since, social_manager_id, designer_id, audiovisual_ids, apoyo_ids })
     .select()
     .single();
 }

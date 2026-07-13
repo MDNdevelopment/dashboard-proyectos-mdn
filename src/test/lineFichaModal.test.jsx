@@ -53,7 +53,7 @@ vi.mock('../components/common/ConfirmDeleteDialog', () => ({
 
 // ── Fixtures ───────────────────────────────────────────────────────────────────
 
-const MOCK_LINE = { id: 'l-1', name: 'Georgina', color: '#FAB51A', member_user_ids: ['u-2'], sort_order: 0 }
+const MOCK_LINE = { id: 'l-1', name: 'Georgina', color: '#FAB51A', member_user_ids: ['u-2'], lead_user_id: null, sort_order: 0 }
 
 const MOCK_EMPLOYEE = {
   user_id: 'u-2', first_name: 'María', last_name: 'González',
@@ -119,6 +119,8 @@ const mockDeleteLine           = vi.fn().mockResolvedValue({ error: null })
 const mockLoadYearReports      = vi.fn().mockResolvedValue({ data: MOCK_REPORTS, error: null })
 const mockAddLineMember        = vi.fn().mockResolvedValue({ data: null, error: null })
 const mockRemoveLineMember     = vi.fn().mockResolvedValue({ data: null, error: null })
+const mockSetLineLeader        = vi.fn().mockResolvedValue({ data: null, error: null })
+const mockRemoveLineLeader     = vi.fn().mockResolvedValue({ data: null, error: null })
 
 vi.mock('../components/metricas/metricsApi', () => ({
   loadLines:            (...a) => mockLoadLines(...a),
@@ -130,6 +132,8 @@ vi.mock('../components/metricas/metricsApi', () => ({
   loadYearReports:      (...a) => mockLoadYearReports(...a),
   addLineMember:        (...a) => mockAddLineMember(...a),
   removeLineMember:     (...a) => mockRemoveLineMember(...a),
+  setLineLeader:        (...a) => mockSetLineLeader(...a),
+  removeLineLeader:     (...a) => mockRemoveLineLeader(...a),
 }))
 
 // calcFinanzas real (suma los montos de los fixtures) + fmtUSD simplificado
@@ -269,6 +273,35 @@ describe('LinesView — apertura de la ficha de línea', () => {
       expect(mockRemoveLineMember).toHaveBeenCalledWith('l-1', 'u-2')
     })
   })
+
+  it('marcar a un miembro como jefa de línea llama a setLineLeader', async () => {
+    const user = userEvent.setup()
+    await renderLines()
+    await user.click(screen.getByRole('button', { name: 'Ver ficha de Georgina' }))
+    await waitFor(() => expect(screen.getByText('María González')).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: 'Marcar a María González como jefa de línea' }))
+
+    await waitFor(() => {
+      expect(mockSetLineLeader).toHaveBeenCalledWith('l-1', 'u-2')
+    })
+    // Tras marcarla, el botón cambia a la variante "quitar"
+    expect(screen.getByRole('button', { name: 'Quitar a María González como jefa de línea' })).toBeInTheDocument()
+  })
+
+  it('quitar el liderazgo de la jefa actual llama a removeLineLeader', async () => {
+    const user = userEvent.setup()
+    mockLoadLines.mockResolvedValueOnce({ data: [{ ...MOCK_LINE, lead_user_id: 'u-2' }], error: null })
+    await renderLines()
+    await user.click(screen.getByRole('button', { name: 'Ver ficha de Georgina' }))
+    await waitFor(() => expect(screen.getByText('María González')).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: 'Quitar a María González como jefa de línea' }))
+
+    await waitFor(() => {
+      expect(mockRemoveLineLeader).toHaveBeenCalledWith('l-1', 'u-2')
+    })
+  })
 })
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -352,6 +385,21 @@ describe('LineFichaModal — drill-down en un solo modal', () => {
     // renderFicha no pasa canManage (default false)
     await renderFicha()
     expect(screen.queryByRole('combobox', { name: /Agregar empleado/ })).not.toBeInTheDocument()
+  })
+
+  it('sin onSetLeader/onRemoveLeader, el toggle de jefa de línea NO aparece (aunque sí se pueda quitar miembros)', async () => {
+    wrap(
+      <LineFichaModal
+        line={MOCK_LINE}
+        companyId="co-1"
+        canManage={true}
+        onRemoveMember={vi.fn()}
+        onClose={vi.fn()}
+      />
+    )
+    await waitFor(() => expect(screen.getByText('María González')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /jefa de línea/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Quitar a María González de la línea' })).toBeInTheDocument()
   })
 })
 

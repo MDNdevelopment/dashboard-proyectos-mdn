@@ -256,12 +256,18 @@ Realtime habilitado en todas.
 
 | | |
 |---|---|
-| **Propósito** | Gestión de campañas publicitarias y tácticas; estadísticas. |
-| **Archivos principales** | `src/pages/AdsPage.jsx` · `src/components/ads/AdsList.jsx` · `AdsCard.jsx` · `AdsForm.jsx` · `AdsDetail.jsx` · `AdsStats.jsx` · `constants.js` |
-| **Tablas** | `campaigns` (`id, name, client_id→metric_clients, assignee→users, priority, status, notes, start_date, end_date, created_by→users, updated_at`) |
-| **Notificaciones** | Edge fn `supabase/functions/notify-campaign-assignee/index.ts` → Resend email al asignar campaña |
-| **Rutas** | `/ads` |
-| **Permisos** | Ver: cualquier autenticado. Editar/crear: `access_level ≥ 3` o admin. |
+| **Propósito** | Gestión de campañas publicitarias/tácticas orgánicas y de pauta pagada (Ads), con tracking de inversión vs. presupuesto mensual por cliente. |
+| **Archivos principales** | `src/pages/AdsPage.jsx` (host con **tabs internas por estado local**, no por ruta) · Tab Tácticas: `src/components/ads/AdsList.jsx` · `AdsCard.jsx` · `AdsForm.jsx` · `AdsDetail.jsx` · `AdsStats.jsx` · `constants.js` · Tab Ads: `AdsSpendView.jsx` · `AdsSpendStats.jsx` · `AdsSpendForm.jsx` · `AdsSpendDetail.jsx` · `campaignSpendApi.js` · Compartido entre ambas tabs: `ClientCell.jsx` (logo/inicial + nombre de cliente) |
+| **Tablas** | `campaigns` (`id, name, client_id→metric_clients, assignee→users, priority, status, notes, start_date, end_date, created_by→users, updated_at`) — tácticas orgánicas. `paid_campaigns` (`id, company_id, client_id→metric_clients, client, name, objective, piece_url, amount, start_date, end_date, status, responsable_id→users (texto, sin FK, migración `20260716000002`), created_by, created_at, updated_at`, creada como `ads` en `20260714000001`, renombrada en `20260715000000`) — pauta pagada; `duracion` se deriva en JS (`durationDays`), no se almacena. |
+| **Look de la tabla (tab Ads)** | Igualado a la tabla de Tácticas (`AdsList.jsx`/`AdsCard.jsx`): columna `#` de índice, fechas formateadas con `fmtDate()`/coloreadas por proximidad con `dateColor()` (ambas en `campaignSpendApi.js`, compartidas entre las dos tabs), logo de cliente vía `ClientCell.jsx`, acciones como íconos (ver/editar/eliminar) que aparecen al hover de la fila (`opacity-0 group-hover:opacity-100`). Orden de columnas: `#, Inicio, Nombre de campaña, Cliente, Responsable, Fecha fin, Duración, Objetivo, Pieza, Monto, Estado, Acciones` — los campos compartidos con Tácticas ocupan la misma posición relativa; no se agregó click-to-sort en encabezados ni exportar CSV (fuera de alcance, son funcionalidades extra de Tácticas no pedidas). |
+| **Responsable (tab Ads)** | A diferencia de Tácticas (que usa `UserPickerSingle` con toda la plantilla), el Responsable de un Ad usa una lista **acotada**: usuarios marcados `users.ads_responsable_fixed = true` (Katherine Mora, Paola Urdaneta — migración `20260716000001`) + jefas de línea (`metric_line_members.is_lead = true`, migración `20260716000000`). Cargada por `loadAdsResponsables(companyId)` en `campaignSpendApi.js` (dos consultas encadenadas, sin JOIN de Supabase — ver nota en §5). El liderazgo de línea se sembró inicialmente por coincidencia de nombre (`users.first_name ilike metric_lines.name`, ya que las líneas llevan el nombre de la jefa — `SEED_LINES`), pero queda guardado como dato (`is_lead`), no recalculado en cada consulta. |
+| **Notificaciones** | Edge fn `supabase/functions/notify-campaign-assignee/index.ts` → Resend email al asignar campaña (solo tab Tácticas) |
+| **Rutas** | `/ads` (única ruta; el switcher de tabs "Tácticas"/"Ads" vive en estado local de `AdsPage`, para no chocar con el nombre del segundo tab ni añadir sub-ítems al Sidebar) |
+| **Selector de periodo** | Ambas tabs comparten un selector mes/año (mismo patrón que `ClientsView`, §2.6) que filtra por `start_date` cayendo en ese mes (`inPeriod()` de `campaignSpendApi.js`). |
+| **Presupuesto y tracking (tab Ads)** | Cada cliente tiene `metric_clients.campaign_budget` (USD/mes, editable en `ClientModal.jsx`, visible a todos — no gated financiero). La tab Ads muestra cards de resumen (`AdsSpendStats.jsx`: Total Ads, Invertido, En Revisión, Completados, Avance Global — mismo layout que `AdsStats` de Tácticas) y una toolbar de filtros (búsqueda, estado, cliente) igual que `AdsList`, además del tracking invertido-vs-presupuesto del cliente seleccionado (`spentByClientInPeriod()`). Al crear/editar un Ad, si `Σ montos del cliente en el mes de inicio del plazo + nuevo monto > campaign_budget`, se muestra un aviso ("Te estás pasando del presupuesto aprobado…") que **no bloquea** el guardado. |
+| **Permisos** | Ver: cualquier autenticado. Crear/editar/eliminar (ambas tabs, tablas `campaigns` y `paid_campaigns`): capability `ads.manage`, `access_level ≥ 3` o admin. |
+| **Click en fila → detalle** | En ambas tabs, clic en cualquier parte de una fila (fuera de controles interactivos) abre un modal de solo lectura (`AdsDetail.jsx` en Tácticas, `AdsSpendDetail.jsx` en Ads) con botones Editar/Eliminar cuando `canManage`. El **estado** es la única excepción editable directamente desde ese modal, vía `StatusPill` (§5, "Componente compartido de estado") que llama a `supabase.update`/`updateAd` sin pasar por modo edición completo. Los controles internos de la fila (`StatusPill`, edición inline del nombre, botones de acción, link de "Ver pieza") detienen la propagación del click para no disparar el modal de detalle. `AdsSpendDetail.jsx` recibe además `ads` (lista completa) y `client` (resuelto por `AdsSpendView`) para mostrar el mismo aviso de sobrepaso de presupuesto que el formulario (§ fila anterior) cuando ese cliente ya lo excede ese mes. |
+| **⚠️ Naming gotcha** | Ni archivos ni tablas nuevos dentro del módulo Ads deben llamarse literalmente `ads` (solo o combinado, p. ej. `adsApi`, o el nombre de tabla `ads`): los bloqueadores de anuncios (uBlock Origin y similares) bloquean por defecto (1) peticiones cuyo nombre de archivo combina "ads" + "api" y (2) peticiones REST cuya URL trae `/ads?...` como segmento — ambos son patrones típicos de endpoints/scripts de redes publicitarias. Esto ya rompió dos veces: el archivo de datos se llama `campaignSpendApi.js` (no `adsApi.js`), y la tabla se llama `paid_campaigns` (no `ads`, migración `20260715000000_rename_ads_to_paid_campaigns.sql`) tras que un usuario reportara `PATCH .../rest/v1/ads?...  net::ERR_BLOCKED_BY_CLIENT` al editar un ad. El nombre de carpeta `components/ads/` y la ruta `/ads` no se han visto afectados (no es una llamada XHR con query params). |
 
 ---
 
@@ -276,8 +282,9 @@ Realtime habilitado en todas.
 | `team_members` | `20260622000000` | **LEGACY — inerte.** |
 | `tasks` | `20260622000000` (mod. hasta `20260712000000`) | Tareas operativas. FK `client_id→metric_clients`. Múltiples responsables via `assignee_ids text[]` (migración `20260702000001`). `assignee_id` (texto singular) conservada como columna deprecada. Columna `blocked_reason text` (migración `20260706000003`; guarda la razón de la paralización cuando el estado es "Paralizado"). El estado "Bloqueado" fue renombrado a "Paralizado" (migración `20260713000000`). Columna `checklist jsonb` con triggers de clamp de fechas y notificaciones a encargados de ítems (migración `20260712000000`). El estado de la tarea es siempre manual. |
 | `metric_lines` | `20260625000000` (mod. hasta `20260710000000`) | Líneas/jefas operativas. Eje central de Tareas + Métricas. |
-| `metric_line_members` | `20260710000000` | Relación N:M entre líneas y empleados. Reemplaza `member_user_ids jsonb` en `metric_lines`. |
-| `metric_clients` | `20260625000000` (mod. hasta `20260713000000`) | Cartera de clientes. FK `line_id→metric_lines`. Columnas añadidas: `contacts jsonb`, `anniversary_date date`, `mdn_since date`, `monthly_fee numeric`, `social_manager_id text`, `designer_id text`, `audiovisual_ids jsonb`, `apoyo_ids jsonb`, **`deleted_at timestamptz`** (soft delete — migración `20260713000000`). Los registros archivados conservan su `id` para que las referencias en `metric_reports.data`, `tasks.client_id` y `campaigns.client_id` sigan resolviendo el nombre. `loadClients` excluye archivados por defecto (`{ includeArchived: false }`); con `{ includeArchived: true }` devuelve todos (usado en `OperacionesView`/`FinanzasView` para name-resolution histórica y en `ClientsView` para la vista por mes y el toggle de archivados). `deleteClient` hace UPDATE de `deleted_at`; `restoreClient` lo vuelve a `null`. |
+| `metric_line_members` | `20260710000000` (mod. `20260716000000`) | Relación N:M entre líneas y empleados. Reemplaza `member_user_ids jsonb` en `metric_lines`. Columna `is_lead boolean` (migración `20260716000000`): marca real de "jefa de línea" (antes solo era convención de nombres); sembrada inicialmente por `first_name ilike metric_lines.name` por compañía. Consumida por `loadAdsResponsables()` (Ads, §2.10). **Editable desde la UI**: en `LineFichaModal.jsx` (Empresa → Líneas), cada chip de miembro (vista `canManage`) tiene un botón ⭐ que llama a `setLineLeader(lineId, userId)`/`removeLineLeader(lineId, userId)` (`metricsApi.js`) — `setLineLeader` limpia primero el flag de cualquier otra miembro de esa línea, así que solo puede haber una jefa a la vez. `loadLines()` expone el resultado como `line.lead_user_id` (o `null`). Al mover o quitar a la jefa de la línea (`assignMemberToLine`/`removeMemberFromLine`, `src/utils/lineMembers.js`), el liderazgo se limpia en el estado optimista — no "viaja" con ella (igual que en la BD, donde la fila de `metric_line_members` se borra). |
+| `metric_clients` | `20260625000000` (mod. hasta `20260714000000`) | Cartera de clientes. FK `line_id→metric_lines`. Columnas añadidas: `contacts jsonb`, `anniversary_date date`, `mdn_since date`, `monthly_fee numeric`, `campaign_budget numeric` (presupuesto mensual para campañas/Ads, migración `20260714000000`, visible a todos — no gated financiero), `social_manager_id text`, `designer_id text`, `audiovisual_ids jsonb`, `apoyo_ids jsonb`, **`deleted_at timestamptz`** (soft delete — migración `20260713000000`). Los registros archivados conservan su `id` para que las referencias en `metric_reports.data`, `tasks.client_id`, `campaigns.client_id` y `paid_campaigns.client_id` sigan resolviendo el nombre. `loadClients` excluye archivados por defecto (`{ includeArchived: false }`); con `{ includeArchived: true }` devuelve todos (usado en `OperacionesView`/`FinanzasView` para name-resolution histórica y en `ClientsView` para la vista por mes y el toggle de archivados). `deleteClient` hace UPDATE de `deleted_at`; `restoreClient` lo vuelve a `null`. |
+| `paid_campaigns` | `20260714000001` (creada como `ads`) + `20260715000000` (renombrada) + `20260716000002` (`responsable_id`) | Pauta pagada (distinta de `campaigns`, que son tácticas orgánicas). FK `client_id→metric_clients` (`ON DELETE SET NULL`); `client` guarda el nombre denormalizado como snapshot. `responsable_id` texto sin FK (igual que `campaigns.assignee`), resuelto vía `loadAdsResponsables()`. RLS: SELECT abierto a autenticados, INSERT/UPDATE/DELETE gated por `user_can('ads.manage')`. Habilitada en `supabase_realtime` desde la migración de renombrado. |
 | `metric_reports` | `20260625000000` | Un reporte jsonb por `(line_id, year, month)`. FK `line_id→metric_lines` CASCADE. |
 | `notifications` | `20260703000000` | Notificaciones in-app y de correo. RLS: lectura/actualización solo del destinatario (`auth.uid()::text = user_id`). Realtime habilitado. Índice único parcial sobre `dedupe_key` para idempotencia de las notificaciones de fecha. |
 | `module_permissions` | `20260705000000` | Reglas de acceso por módulo (DNF: grupos OR de condiciones AND). Una fila por `(company_id, module_key)`. Estructura `rules jsonb`: `{"rules":[{"all":[{"type":"department","ids":[...]},{"type":"min_level","value":N},...]},...]}`. Sin filas = módulo abierto. RLS: SELECT abierto a `authenticated`; INSERT/UPDATE/DELETE solo si `is_company_admin()` (función SECURITY DEFINER). |
@@ -326,7 +333,8 @@ metric_lines (id PK)  ←── eje operativo
 
 metric_clients (id PK)  ←── cliente central
   ├─── tasks.client_id          (FK, SET NULL)
-  └─── campaigns.client_id      (FK, SET NULL)
+  ├─── campaigns.client_id      (FK, SET NULL)
+  └─── paid_campaigns.client_id (FK, SET NULL)
 
 tasks
   ├─ client_id    ──→ metric_clients
@@ -338,6 +346,10 @@ campaigns
   ├─ client_id  ──→ metric_clients
   ├─ created_by ··→ users
   └─ assignee   ··→ users (texto)
+
+paid_campaigns  ←── pauta pagada (distinta de campaigns; tabla llamada `ads` originalmente)
+  ├─ client_id  ──→ metric_clients (SET NULL)
+  └─ created_by ··→ users (texto, sin FK)
 
 support_tickets
   ├─ requester_id ──→ users
@@ -382,7 +394,7 @@ Leyenda: `──→` FK formal declarada · `··→` relación lógica por conv
 |---|---|
 | **Evaluaciones ↔ Tareas** | `MiPerfilView` y `MiPerfilV2View` leen `tasks` vía `src/utils/aggregateTaskMetrics.js`: totales, completadas, % a tiempo, días promedio, por usuario. |
 | **Evaluaciones ↔ Proyectos** | `MiPerfilV2View` usa deeplink `?projectId=uuid` para abrir `ProjectModal` en AppLayout. |
-| **Ads ↔ Empresa/Métricas** | `campaigns.client_id → metric_clients.id`: las campañas se asocian al cliente central de Métricas/Empresa. |
+| **Ads ↔ Empresa/Métricas** | `campaigns.client_id → metric_clients.id` (tab Tácticas) y `paid_campaigns.client_id → metric_clients.id` (tab Ads): ambas entidades se asocian al cliente central de Métricas/Empresa. La tab Ads además lee/compara contra `metric_clients.campaign_budget` para el tracking de inversión mensual y el aviso de sobrepaso. |
 | **Tareas ↔ Empresa/Métricas** | `tasks.client_id → metric_clients.id` y `tasks.team_id → metric_lines.id`: las tareas están relacionadas relacionalmente a clientes y líneas. |
 | **Métricas ↔ Empresa (mensualidad)** | `metric_reports.data.finanzas.ingresos` se auto-puebla desde `metric_clients.monthly_fee`: `FinanzasView` carga los clientes de la línea, y `syncReportClients`/`initMetricReport` sincronizan los ingresos con la mensualidad guardada (valores editables mes a mes). |
 | **Métricas ↔ Empresa (sueldos)** | `metric_reports.data.finanzas.sueldos` se auto-puebla desde `users.monthly_salary` filtrando por `metric_lines.member_user_ids`: `FinanzasView` carga los empleados de la línea y `syncReportClients`/`initMetricReport` sincronizan los sueldos (mismo patrón sembrar-y-editar). Visible solo para nivel 4 / admin (`isFinancePrivileged`). El campo `monthly_salary` solo es editable por nivel 4 / admin en `EmployeeModal`/`NewEmployeeDialog`. |
@@ -419,6 +431,35 @@ Entregados*. Esta desconexión es el principal punto de deuda de interconexión 
 | Filtros sidebar | `"all"`, `"En proceso"`, etc. para estado; `"dept:Diseño"` para departamento |
 | Color de marca | `#FFB800` (amarillo/dorado) para estados activos y acentos |
 | Fondo | `#f2f0e8` (crema cálido) con patrón de puntos (clase `.main-bg`) |
+| Relaciones "texto sin FK" (`assignee`, `created_by`, `responsable_id`, `metric_line_members.user_id`) | No se puede usar el embed automático de PostgREST (`select=*, users(...)`) porque no hay FK declarada. Se resuelven con consultas encadenadas + un `Map` en JS (ver `loadAdsResponsables()` en `campaignSpendApi.js`, o `usersMap`/`clientsById` en `AdsPage.jsx`), nunca agregando una FK solo para habilitar el embed. |
+
+### Componente compartido de estado — `StatusPill`
+
+`src/components/common/StatusPill.jsx` es el único punto de partida recomendado para
+mostrar/editar el "estado" de una entidad (no un filtro ni un `<select>` de formulario
+de captura inicial). Props: `value`, `meta` (`{ [key]: { label, bg, text, dot } }` —
+clases Tailwind **literales**, no construidas dinámicamente), `options` (orden de las
+keys seleccionables), `editable`, `onChange(nextValue)`. No editable → badge de solo
+lectura; editable → botón píldora con punto de color + chevron que abre un menú con
+todas las opciones. **No hace llamadas a datos**: cada pantalla conserva su propia
+función de persistencia y se la pasa como `onChange`.
+
+Adoptado hoy solo en el módulo **Ads** (`AdsCard.jsx`, `AdsDetail.jsx`,
+`AdsSpendDetail.jsx`, `AdsSpendView.jsx` — reemplazó el botón click-to-cycle y los
+`<select>` nativos coloreados que tenía cada uno). Antes de este componente, un
+relevamiento encontró **6 mapas de color distintos** (Ads, Tareas, Proyectos, Tickets,
+Evaluaciones — Tailwind bg/text, Tailwind string única, y hex inline en `style`) y
+**5 formas de interacción** (badge RO, click-to-cycle, `<select>` coloreado, dropdown
+con `createPortal` + chevron + punto en Tareas `BaseView.jsx`, y botones de transición
+fija en Tickets). Candidatos a migrar después, **no migrados aún**:
+- `src/components/tickets/TicketStatusBadge.jsx` (badge RO — migración directa).
+- `src/components/ProjectCard.jsx` / `ProjectDetailModal.jsx` (badges/selects con hex
+  inline vía `style` — requiere convertir sus mapas `STATUS`/`TASK_S` de
+  `src/constants/projectStatus.js` a clases Tailwind literales, conservando aparte el
+  valor hex crudo que usan para el anillo de progreso `conic-gradient`).
+- `src/components/tareas/BaseView.jsx` (dropdown con `createPortal` — el más complejo;
+  necesitaría una variante de `StatusPill` con portal para no quedar recortado por el
+  `overflow` de su tabla, antes de poder migrarse).
 
 ### Archivos de referencia
 

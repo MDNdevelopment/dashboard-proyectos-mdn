@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { supabase } from "../../supabase";
-import { STATUS, PRIORITY } from "./constants";
+import { STATUS, STATUSES, PRIORITY } from "./constants";
+import StatusPill from "../common/StatusPill";
 
 export default function AdsDetail({
   campaign,
@@ -14,8 +15,17 @@ export default function AdsDetail({
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const status = STATUS[campaign.status];
   const priority = PRIORITY[campaign.priority];
+
+  async function handleStatusChange(nextStatus) {
+    const { data, error } = await supabase
+      .from("campaigns")
+      .update({ status: nextStatus, updated_at: new Date().toISOString() })
+      .eq("id", campaign.id)
+      .select()
+      .single();
+    if (!error && data) onUpdated(data);
+  }
 
   const fmt = (d) =>
     d
@@ -53,11 +63,13 @@ export default function AdsDetail({
               {campaign.name}
             </h2>
             <div className="flex items-center gap-2 flex-wrap">
-              <span
-                className={`text-[13px] font-mono font-bold px-2.5 py-1 rounded-lg ${status?.bg} ${status?.text}`}
-              >
-                {status?.label ?? campaign.status}
-              </span>
+              <StatusPill
+                value={campaign.status}
+                meta={STATUS}
+                options={STATUSES}
+                editable={canManage}
+                onChange={handleStatusChange}
+              />
               <span className="flex items-center gap-1.5 text-[13px] font-mono font-semibold text-[#555]">
                 <span
                   className={`w-2 h-2 rounded-full flex-shrink-0 ${priority?.dot}`}

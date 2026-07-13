@@ -93,6 +93,13 @@ export default function ClientFichaContent({ client, line, onClose, employees = 
           </div>
         )}
 
+        {/* Presupuesto de campañas — visible para todos */}
+        <InfoItem label="Presupuesto mensual campañas">
+          {client.campaign_budget != null ? (
+            <span className="text-[16px] font-bold text-[#111]">{fmtUSD(client.campaign_budget)}</span>
+          ) : "—"}
+        </InfoItem>
+
         {/* Fechas */}
         <div className="grid grid-cols-2 gap-3">
           <InfoItem label="Cliente MDN desde">{fmtDate(client.mdn_since)}</InfoItem>

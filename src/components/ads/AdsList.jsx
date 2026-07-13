@@ -44,7 +44,6 @@ export default function AdsList({ campaigns, loading, canManage, usersMap, clien
   const [sortAsc, setSortAsc]             = useState(false)
   const [inlineEditId, setInlineEditId]   = useState(null)
   const [inlineEditValue, setInlineEditValue] = useState('')
-  const [cyclingId, setCyclingId]         = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
 
   const clients = [...new Set(campaigns.map(c => c.client))].sort()
@@ -90,15 +89,13 @@ export default function AdsList({ campaigns, loading, canManage, usersMap, clien
     setSearch(''); setFilterStatus('all'); setFilterPriority('all'); setFilterClient('all')
   }
 
-  async function handleStatusCycle(id, nextStatus) {
-    setCyclingId(id)
+  async function handleStatusChange(id, nextStatus) {
     const { data, error } = await supabase
       .from('campaigns')
       .update({ status: nextStatus, updated_at: new Date().toISOString() })
       .eq('id', id)
       .select()
       .single()
-    setCyclingId(null)
     if (!error && data) onUpdated(data)
   }
 
@@ -243,7 +240,7 @@ export default function AdsList({ campaigns, loading, canManage, usersMap, clien
                   usersMap={usersMap}
                   clientsById={clientsById}
                   onSelect={onSelect}
-                  onStatusCycle={handleStatusCycle}
+                  onStatusChange={handleStatusChange}
                   onEdit={onEdit}
                   onDelete={campaign => setConfirmDelete(campaign)}
                   inlineEditId={inlineEditId}

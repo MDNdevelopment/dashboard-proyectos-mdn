@@ -68,6 +68,25 @@ describe('assignMemberToLine', () => {
     expect(updated[0].member_user_ids).toContain('u-1')
     expect(changedIds).toEqual(['l1'])
   })
+
+  it('al mover a la jefa de línea a otra línea, se le quita el liderazgo (no viaja con ella)', () => {
+    const lines = [
+      { id: 'line-1', member_user_ids: ['u-a'], lead_user_id: 'u-a' },
+      { id: 'line-2', member_user_ids: [], lead_user_id: null },
+    ]
+    const { updated } = assignMemberToLine(lines, 'line-2', 'u-a')
+    expect(updated.find(l => l.id === 'line-1').lead_user_id).toBeNull()
+    expect(updated.find(l => l.id === 'line-2').lead_user_id).toBeNull()
+  })
+
+  it('mover a un miembro que NO es jefa no afecta el lead_user_id de la línea origen', () => {
+    const lines = [
+      { id: 'line-1', member_user_ids: ['u-a', 'u-b'], lead_user_id: 'u-a' },
+      { id: 'line-2', member_user_ids: [], lead_user_id: null },
+    ]
+    const { updated } = assignMemberToLine(lines, 'line-2', 'u-b')
+    expect(updated.find(l => l.id === 'line-1').lead_user_id).toBe('u-a')
+  })
 })
 
 describe('visibleLinesForUser', () => {
@@ -130,5 +149,17 @@ describe('removeMemberFromLine', () => {
     const { updated, changedIds } = removeMemberFromLine(LINES, 'no-existe', 'u-a')
     expect(changedIds).toHaveLength(0)
     expect(updated).toEqual(LINES)
+  })
+
+  it('al quitar a la jefa de línea, se limpia lead_user_id', () => {
+    const lines = [{ id: 'line-1', member_user_ids: ['u-a', 'u-b'], lead_user_id: 'u-a' }]
+    const { updated } = removeMemberFromLine(lines, 'line-1', 'u-a')
+    expect(updated.find(l => l.id === 'line-1').lead_user_id).toBeNull()
+  })
+
+  it('quitar a un miembro que no es jefa no toca lead_user_id', () => {
+    const lines = [{ id: 'line-1', member_user_ids: ['u-a', 'u-b'], lead_user_id: 'u-a' }]
+    const { updated } = removeMemberFromLine(lines, 'line-1', 'u-b')
+    expect(updated.find(l => l.id === 'line-1').lead_user_id).toBe('u-a')
   })
 })

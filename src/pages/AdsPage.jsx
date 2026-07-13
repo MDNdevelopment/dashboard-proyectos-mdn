@@ -1,14 +1,30 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabase";
 import { useAuth } from "../context/AuthContext";
 import AdsStats from "../components/ads/AdsStats";
 import AdsList from "../components/ads/AdsList";
 import AdsForm from "../components/ads/AdsForm";
 import AdsDetail from "../components/ads/AdsDetail";
+import AdsSpendView from "../components/ads/AdsSpendView";
 import { loadClients } from "../components/metricas/metricsApi";
+import { inPeriod } from "../components/ads/campaignSpendApi";
+import { MONTHS } from "../components/metricas/constants";
+
+const CURRENT_YEAR = new Date().getFullYear();
+const YEARS = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2, CURRENT_YEAR - 3];
+
+const TABS = [
+  { key: "tacticas", label: "Tácticas" },
+  { key: "ads", label: "Ads" },
+];
 
 export default function AdsPage() {
   const { userProfile, can = () => true } = useAuth();
+  const [tab, setTab] = useState("tacticas");
+  const [periodo, setPeriodo] = useState(() => ({
+    month: new Date().getMonth() + 1,
+    year: CURRENT_YEAR,
+  }));
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedCampaign, setSelectedCampaign] = useState(null);
@@ -16,9 +32,12 @@ export default function AdsPage() {
   const [editingCampaign, setEditingCampaign] = useState(null);
   const [usersMap, setUsersMap] = useState(new Map());
   const [clientsById, setClientsById] = useState(new Map());
+  const adsSpendViewRef = useRef(null);
 
   // Control de acceso config-driven — sin reglas configuradas: abierto a todos.
   const canManage = can("ads.manage");
+
+  const filteredCampaigns = campaigns.filter(c => inPeriod(c.start_date, periodo));
 
   useEffect(() => {
     fetchCampaigns();
@@ -81,18 +100,18 @@ export default function AdsPage() {
       <main className="flex-1 overflow-y-auto main-bg h-screen">
         <div className="max-w-6xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
           {/* Header */}
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-[26px] font-bold text-[#111] leading-tight">
                 Campañas & Tácticas
               </h1>
               <p className="text-[15px] text-[#888] mt-0.5">
                 {canManage
-                  ? "Gestión de campañas y tácticas publicitarias"
-                  : "Vista de campañas y tácticas"}
+                  ? "Gestión de campañas, tácticas y pauta publicitaria"
+                  : "Vista de campañas, tácticas y pauta publicitaria"}
               </p>
             </div>
-            {canManage && (
+            {canManage && (tab === "tacticas" ? (
               <button
                 onClick={() => setShowCreateForm(true)}
                 className="flex items-center gap-2 bg-[#111] text-white text-[15px] font-bold px-4 py-2.5 rounded-xl hover:bg-[#222] transition-colors"
@@ -109,22 +128,92 @@ export default function AdsPage() {
                 </svg>
                 Nueva campaña
               </button>
-            )}
+            ) : (
+              <button
+                onClick={() => adsSpendViewRef.current?.openCreate()}
+                className="flex items-center gap-2 bg-[#111] text-white text-[15px] font-bold px-4 py-2.5 rounded-xl hover:bg-[#222] transition-colors"
+              >
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 12 12"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.8"
+                >
+                  <path d="M6 1v10M1 6h10" strokeLinecap="round" />
+                </svg>
+                Nuevo Ad
+              </button>
+            ))}
           </div>
 
-          <AdsStats campaigns={campaigns} />
+          {/* Tabs + selector de periodo */}
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+            <div className="flex flex-wrap gap-1 bg-white border border-[#e0ddd4] rounded-xl p-1 w-fit">
+              {TABS.map(t => (
+                <button
+                  key={t.key}
+                  onClick={() => setTab(t.key)}
+                  className={`px-4 py-1.5 rounded-lg text-[14px] font-semibold transition-colors ${
+                    tab === t.key ? "bg-[#111] text-white" : "text-[#666] hover:bg-[#f5f3eb]"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
 
-          <AdsList
-            campaigns={campaigns}
-            loading={loading}
-            canManage={canManage}
-            usersMap={usersMap}
-            clientsById={clientsById}
-            onSelect={setSelectedCampaign}
-            onUpdated={handleUpdated}
-            onDeleted={handleDeleted}
-            onEdit={(campaign) => setEditingCampaign(campaign)}
-          />
+            {/* Selector mes/año — aplica a ambas tabs */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[12px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] mr-1">
+                Período
+              </span>
+              <select
+                value={periodo.month}
+                onChange={e => setPeriodo(p => ({ ...p, month: Number(e.target.value) }))}
+                className="text-[13.5px] border border-[#e0ddd4] rounded-lg px-2 py-1.5 bg-white text-[#333] focus:outline-none focus:border-[#FFB800]"
+              >
+                {MONTHS.map((name, i) => (
+                  <option key={i + 1} value={i + 1}>{name}</option>
+                ))}
+              </select>
+              <select
+                value={periodo.year}
+                onChange={e => setPeriodo(p => ({ ...p, year: Number(e.target.value) }))}
+                className="text-[13.5px] border border-[#e0ddd4] rounded-lg px-2 py-1.5 bg-white text-[#333] focus:outline-none focus:border-[#FFB800]"
+              >
+                {YEARS.map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {tab === "tacticas" ? (
+            <>
+              <AdsStats campaigns={filteredCampaigns} />
+
+              <AdsList
+                campaigns={filteredCampaigns}
+                loading={loading}
+                canManage={canManage}
+                usersMap={usersMap}
+                clientsById={clientsById}
+                onSelect={setSelectedCampaign}
+                onUpdated={handleUpdated}
+                onDeleted={handleDeleted}
+                onEdit={(campaign) => setEditingCampaign(campaign)}
+              />
+            </>
+          ) : (
+            <AdsSpendView
+              ref={adsSpendViewRef}
+              companyId={userProfile?.company_id}
+              canManage={canManage}
+              periodo={periodo}
+            />
+          )}
         </div>
       </main>
 

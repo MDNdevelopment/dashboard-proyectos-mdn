@@ -45,6 +45,7 @@ export default function ClientModal({
     line_id:           client?.line_id           ?? '',
     payment_day:       client?.payment_day       ?? '',
     monthly_fee:       client?.monthly_fee       ?? '',
+    campaign_budget:   client?.campaign_budget   ?? '',
     website:           client?.website           ?? '',
     social_links:      client?.social_links      ?? [],
     contacts:          client?.contacts          ?? [],
@@ -127,6 +128,7 @@ export default function ClientModal({
       }
       monthly_fee = form.monthly_fee !== '' ? Number(form.monthly_fee) : null
     }
+    const campaign_budget = form.campaign_budget !== '' ? Number(form.campaign_budget) : null
 
     setSaving(true)
     setError(null)
@@ -138,6 +140,7 @@ export default function ClientModal({
       website:           form.website.trim() || null,
       payment_day,
       monthly_fee,
+      campaign_budget,
       social_links:      form.social_links.filter(s => s.link.trim()),
       contacts:          form.contacts.filter(c => c.name.trim()),
       anniversary_date:  form.anniversary_date || null,
@@ -360,6 +363,23 @@ export default function ClientModal({
               </div>
             </div>
           )}
+
+          {/* Presupuesto mensual para campañas (Ads) — visible para todos */}
+          <div>
+            <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+              Presupuesto mensual campañas (USD)
+            </label>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              className="input-base"
+              value={form.campaign_budget}
+              onChange={e => set('campaign_budget', e.target.value)}
+              placeholder="0.00"
+              disabled={readOnly}
+            />
+          </div>
 
           {/* Sitio web */}
           <div>

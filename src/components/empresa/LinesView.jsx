@@ -9,6 +9,8 @@ import {
   loadYearReports,
   addLineMember,
   removeLineMember,
+  setLineLeader,
+  removeLineLeader,
 } from "../metricas/metricsApi";
 import { useAuth } from "../../context/AuthContext";
 import { assignMemberToLine, lineOfMember, removeMemberFromLine } from "../../utils/lineMembers";
@@ -217,6 +219,23 @@ export default function LinesView({ companyId, canManage = true }) {
   async function handleRemoveMember(lineId, userId) {
     await removeLineMember(lineId, userId);
     setLines((prev) => removeMemberFromLine(prev, lineId, userId).updated);
+  }
+
+  // ── Marcar/quitar jefa de línea (llamado desde LineFichaModal) ────────────────
+  async function handleSetLeader(lineId, userId) {
+    await setLineLeader(lineId, userId);
+    setLines((prev) =>
+      prev.map((l) => (l.id === lineId ? { ...l, lead_user_id: userId } : l)),
+    );
+  }
+
+  async function handleRemoveLeader(lineId, userId) {
+    await removeLineLeader(lineId, userId);
+    setLines((prev) =>
+      prev.map((l) =>
+        l.id === lineId && l.lead_user_id === userId ? { ...l, lead_user_id: null } : l,
+      ),
+    );
   }
 
   // ── Estado optimista: líneas guardadas desde LineModal ────────────────────────
@@ -438,6 +457,12 @@ export default function LinesView({ companyId, canManage = true }) {
               }
               onRemoveMember={canManage ? (userId) =>
                 handleRemoveMember(freshLine.id, userId) : undefined
+              }
+              onSetLeader={canManage ? (userId) =>
+                handleSetLeader(freshLine.id, userId) : undefined
+              }
+              onRemoveLeader={canManage ? (userId) =>
+                handleRemoveLeader(freshLine.id, userId) : undefined
               }
               onClose={() => setFichaModal(null)}
             />
