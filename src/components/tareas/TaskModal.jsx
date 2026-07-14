@@ -97,6 +97,8 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
     e.preventDefault()
     if (!form.team_id) { setError('Selecciona un team'); return }
     if (!form.description?.trim()) { setError('La descripción de la tarea es obligatoria'); return }
+    if (!form.request_date) { setError('La fecha de solicitud es obligatoria'); return }
+    if (form.status === 'Terminado' && !form.closed_date) { setError('La fecha de cierre es obligatoria para tareas terminadas'); return }
     setSaving(true)
     setError(null)
 
@@ -349,8 +351,8 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Fecha solicitud</label>
-              <input type="date" className="input-base" value={form.request_date} onChange={e => set('request_date', e.target.value)} />
+              <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Fecha solicitud *</label>
+              <input type="date" className="input-base" value={form.request_date} onChange={e => set('request_date', e.target.value)} required />
             </div>
             <div>
               <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Fecha entrega</label>
@@ -395,8 +397,8 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
 
           {form.status === 'Terminado' && (
             <div>
-              <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Fecha de cierre</label>
-              <input type="date" className="input-base" value={form.closed_date} onChange={e => set('closed_date', e.target.value)} />
+              <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Fecha de cierre *</label>
+              <input type="date" className="input-base" value={form.closed_date} onChange={e => set('closed_date', e.target.value)} required />
             </div>
           )}
 

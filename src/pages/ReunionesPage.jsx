@@ -205,7 +205,7 @@ export default function ReunionesPage() {
                 aria-label="Filtrar por modalidad"
                 value={modalityFilter}
                 onChange={(e) => setModalityFilter(e.target.value)}
-                className="input-base text-[14.5px] py-2"
+                className="input-base !text-[13px] sm:!text-[14.5px] px-2 sm:px-3 py-2"
               >
                 <option value="todas">Modalidad: todas</option>
                 <option value="presencial">Presencial</option>
@@ -215,7 +215,7 @@ export default function ReunionesPage() {
                 aria-label="Filtrar por alcance"
                 value={onlyMine ? "mias" : "todas"}
                 onChange={(e) => setOnlyMine(e.target.value === "mias")}
-                className="input-base text-[14.5px] py-2"
+                className="input-base !text-[13px] sm:!text-[14.5px] px-2 sm:px-3 py-2"
               >
                 <option value="todas">Reuniones: todas</option>
                 <option value="mias">Solo las mías</option>
@@ -272,12 +272,12 @@ function StatusSummaryCard({ label, value, active, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className={`text-left bg-white border rounded-2xl p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_-8px_rgba(0,0,0,0.14)] ${
+      className={`text-left bg-white border rounded-2xl p-3 sm:p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_-8px_rgba(0,0,0,0.14)] ${
         active ? "border-[#111] ring-1 ring-[#111]" : "border-[#e0ddd4]"
       }`}
     >
-      <p className="text-[13px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] mb-3">{label}</p>
-      <p className="text-[30px] font-bold leading-none tracking-tight text-[#111]">{value}</p>
+      <p className="text-[11px] sm:text-[13px] font-mono font-bold tracking-[0.08em] sm:tracking-[0.14em] uppercase text-[#888] mb-2 sm:mb-3">{label}</p>
+      <p className="text-[24px] sm:text-[30px] font-bold leading-none tracking-tight text-[#111]">{value}</p>
     </button>
   );
 }

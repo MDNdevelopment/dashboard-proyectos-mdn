@@ -9,10 +9,15 @@ const WEEKDAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
 /**
  * Grid mensual construido a mano con date-fns (no hay librería de calendario en el
- * proyecto). Cada día muestra hasta 3 pills de sus reuniones (el resto vía "+N más" →
- * `DayMeetingsList`, ver abajo). Click en el día vacío crea una reunión con esa fecha
- * precargada; click en una pill abre el detalle de solo lectura de esa reunión
- * (`onMeetingClick` — el padre decide si es vista o edición).
+ * proyecto). En desktop (≥ sm) cada día muestra hasta 3 pills de sus reuniones (el resto
+ * vía "+N más" → `DayMeetingsList`, ver abajo); en móvil (< sm), donde 7 columnas no dan
+ * espacio para texto legible, cada día muestra puntos de color en su lugar (ver
+ * `dotColor`). Click en el día vacío crea una reunión con esa fecha precargada. En
+ * desktop, click en el resto de la celda también crea (las pills tienen su propio click
+ * para ver detalle); en móvil, click en un día CON reuniones abre `DayMeetingsList` en vez
+ * de crear (ver `handleCellClick`). Click en una pill, en el grid desktop o dentro de esa
+ * lista, abre el detalle de solo lectura de esa reunión (`onMeetingClick` — el padre
+ * decide si es vista o edición).
  */
 export default function CalendarView({ year, month, meetings, currentUserId, onMonthChange, onDayClick, onMeetingClick, onToggleHeld }) {
   const [expandedDay, setExpandedDay] = useState(null); // Date | null — día cuya lista completa está abierta
@@ -39,6 +44,23 @@ export default function CalendarView({ year, month, meetings, currentUserId, onM
   function goToday() {
     const now = new Date();
     onMonthChange(now.getFullYear(), now.getMonth() + 1);
+  }
+
+  /**
+   * Click en una celda del día. En desktop el comportamiento no cambia: siempre crea una
+   * reunión con esa fecha (las pills tienen su propio click para ver detalle). En móvil,
+   * donde la celda solo muestra puntos (sin pills clickeables), tocar un día CON reuniones
+   * abre la lista completa en vez de crear una nueva — un día vacío sigue creando. Se
+   * resuelve con un chequeo de ancho al momento del click (no un listener de resize/estado)
+   * para no duplicar la celda en dos árboles JSX separados.
+   */
+  function handleCellClick(day, dayMeetings) {
+    const isMobile = typeof window.matchMedia === "function" && window.matchMedia("(max-width: 639px)").matches;
+    if (isMobile && dayMeetings.length > 0) {
+      setExpandedDay(day);
+    } else {
+      onDayClick(day);
+    }
   }
 
   return (
@@ -79,8 +101,8 @@ export default function CalendarView({ year, month, meetings, currentUserId, onM
           return (
             <div
               key={key}
-              onClick={() => onDayClick(day)}
-              className={`min-h-[92px] border-b border-r border-[#ece9df] p-1.5 cursor-pointer transition-colors hover:bg-[#f5f3eb]/60 ${
+              onClick={() => handleCellClick(day, dayMeetings)}
+              className={`min-h-[64px] sm:min-h-[92px] border-b border-r border-[#ece9df] p-1.5 cursor-pointer transition-colors hover:bg-[#f5f3eb]/60 ${
                 inMonth ? "" : "bg-[#fafaf7]"
               }`}
             >
@@ -91,7 +113,22 @@ export default function CalendarView({ year, month, meetings, currentUserId, onM
               >
                 {format(day, "d")}
               </span>
-              <div className="mt-1 space-y-0.5">
+
+              {/* Móvil (< sm): puntos de color, uno por reunión — el detalle se ve al
+                  tocar el día, que abre DayMeetingsList (ver onClick de la celda). */}
+              {dayMeetings.length > 0 && (
+                <div className="mt-1 flex flex-wrap gap-1 sm:hidden">
+                  {dayMeetings.slice(0, 4).map((m) => (
+                    <span key={m.id} className={`w-1.5 h-1.5 rounded-full ${dotColor(m)}`} title={m.client_name ?? m.title} />
+                  ))}
+                  {dayMeetings.length > 4 && (
+                    <span className="text-[10px] leading-none font-semibold text-[#888]">+{dayMeetings.length - 4}</span>
+                  )}
+                </div>
+              )}
+
+              {/* Desktop (≥ sm): pills completas, comportamiento sin cambios. */}
+              <div className="mt-1 space-y-0.5 hidden sm:block">
                 {dayMeetings.slice(0, 3).map((m) => (
                   <MeetingPill key={m.id} meeting={m} currentUserId={currentUserId} onMeetingClick={onMeetingClick} onToggleHeld={onToggleHeld} />
                 ))}
@@ -125,6 +162,16 @@ export default function CalendarView({ year, month, meetings, currentUserId, onM
       )}
     </div>
   );
+}
+
+/** Color del punto de estado en la vista compacta de móvil — misma lógica de estado que
+ * `MeetingPill` (programada/realizada/cancelada/vencida-sin-marcar), resumida a un color. */
+function dotColor(m) {
+  const isPast = isBefore(startOfDay(new Date(m.starts_at)), startOfDay(new Date()));
+  if (m.status === "cancelada") return "bg-[#bbb]";
+  if (m.status === "realizada") return "bg-green-600";
+  if (m.status === "programada" && isPast) return "bg-red-500";
+  return "bg-blue-500";
 }
 
 /** Lista completa de reuniones de un día — abierta desde "+N más" cuando no caben en la
@@ -188,6 +235,7 @@ function MeetingPill({ meeting: m, currentUserId, onMeetingClick, onToggleHeld, 
         : "bg-blue-50 text-blue-700 hover:bg-blue-100";
 
   const timeLabel = format(new Date(m.starts_at), "HH:mm");
+  const displayName = m.client_name ?? m.title;
   const iconSize = isLarge ? 14 : 11;
 
   return (
@@ -199,7 +247,7 @@ function MeetingPill({ meeting: m, currentUserId, onMeetingClick, onToggleHeld, 
       className={`w-full flex items-center rounded transition-colors cursor-pointer ${
         isLarge ? "gap-2 text-[14px] font-semibold px-3 py-2.5" : "gap-1 text-[11.5px] font-medium px-1.5 py-1"
       } ${styleClass}`}
-      title={`${timeLabel} · ${m.title}`}
+      title={`${timeLabel} · ${displayName}`}
     >
       {isCancelada && (
         <svg aria-hidden="true" width={iconSize} height={iconSize} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.2" className="flex-shrink-0">
@@ -224,7 +272,7 @@ function MeetingPill({ meeting: m, currentUserId, onMeetingClick, onToggleHeld, 
           <path d="M8 6v3.5M8 11v.5" strokeLinecap="round" />
         </svg>
       )}
-      <span className={`min-w-0 flex-1 ${truncateTitle ? "truncate" : ""}`}>{timeLabel} {m.title}</span>
+      <span className={`min-w-0 flex-1 ${truncateTitle ? "truncate" : ""}`}>{timeLabel} {displayName}</span>
       {involvesMe && (
         <PersonIcon
           aria-label="Te incluye como participante"

@@ -17,3 +17,5 @@ export const PRIORITY = {
 
 export const STATUSES   = ['Pendiente', 'En Curso', 'Revisión', 'Aprobado', 'Finalizado', 'Cancelado']
 export const PRIORITIES = ['Alta', 'Media', 'Baja']
+
+export const OBJECTIVES = ['Tráfico al perfil', 'Mensajes / Interacción', 'Clientes potenciales']

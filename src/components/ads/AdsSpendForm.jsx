@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useAuth } from '../../context/AuthContext'
-import { STATUSES } from './constants'
+import { STATUSES, OBJECTIVES } from './constants'
 import { loadClients } from '../metricas/metricsApi'
 import { createAd, updateAd, durationDays, spentByClientInPeriod, loadAdsResponsables } from './campaignSpendApi'
 import { fmtUSD } from '../../utils/metricsFinance'
@@ -195,16 +195,17 @@ export default function AdsSpendForm({ ad, ads = [], companyId, onClose, onCreat
               />
             </div>
 
-            {/* Objetivo — texto libre */}
+            {/* Objetivo */}
             <div className="col-span-1 sm:col-span-2">
               <label className={labelClass}>Objetivo</label>
-              <input
-                type="text"
+              <select
                 className="input-base w-full"
-                placeholder="Ej. Alcance, conversiones, tráfico..."
                 value={fields.objective}
                 onChange={e => set('objective', e.target.value)}
-              />
+              >
+                <option value="">— Seleccionar objetivo —</option>
+                {OBJECTIVES.map(o => <option key={o} value={o}>{o}</option>)}
+              </select>
             </div>
 
             {/* Pieza — link */}

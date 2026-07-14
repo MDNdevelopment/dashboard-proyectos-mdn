@@ -175,6 +175,50 @@ describe('CalendarView — ícono de "me incluye"', () => {
   })
 })
 
+describe('CalendarView — nombre de cliente en la pill', () => {
+  it('muestra el nombre del cliente en vez del título cuando la reunión tiene client_name', () => {
+    const meetings = [{ id: 'm-1', title: 'Kickoff', client_name: 'Acme Corp', starts_at: '2026-07-15T14:00:00', status: 'programada' }]
+    renderCalendar({ meetings })
+    expect(screen.getByText(/14:00 Acme Corp/)).toBeInTheDocument()
+    expect(screen.queryByText(/14:00 Kickoff/)).not.toBeInTheDocument()
+  })
+
+  it('usa el título como fallback cuando la reunión no tiene client_name', () => {
+    const meetings = [{ id: 'm-1', title: 'Kickoff', client_name: null, starts_at: '2026-07-15T14:00:00', status: 'programada' }]
+    renderCalendar({ meetings })
+    expect(screen.getByText(/14:00 Kickoff/)).toBeInTheDocument()
+  })
+})
+
+describe('CalendarView — vista compacta de móvil (puntos)', () => {
+  it('renderiza un punto de color por reunión del día', () => {
+    const meetings = [
+      { id: 'm-1', title: 'Uno', starts_at: '2026-07-15T09:00:00', status: 'programada' },
+      { id: 'm-2', title: 'Dos', starts_at: '2026-07-15T10:00:00', status: 'realizada' },
+    ]
+    renderCalendar({ meetings })
+    const dotsContainer = screen.getByTitle('Uno').parentElement
+    expect(dotsContainer.className).toContain('sm:hidden')
+    expect(dotsContainer.children).toHaveLength(2)
+  })
+
+  it('el punto de una reunión "realizada" es verde y el de una "programada" futura es azul', () => {
+    const meetings = [
+      { id: 'm-1', title: 'Futura', starts_at: '2099-01-25T14:00:00', status: 'programada' },
+      { id: 'm-2', title: 'Hecha', starts_at: '2099-01-25T15:00:00', status: 'realizada' },
+    ]
+    renderCalendar({ meetings, year: 2099, month: 1 })
+    expect(screen.getByTitle('Futura').className).toContain('bg-blue-500')
+    expect(screen.getByTitle('Hecha').className).toContain('bg-green-600')
+  })
+
+  it('un punto usa el nombre del cliente como title si está presente', () => {
+    const meetings = [{ id: 'm-1', title: 'Kickoff', client_name: 'Acme Corp', starts_at: '2026-07-15T09:00:00', status: 'programada' }]
+    renderCalendar({ meetings })
+    expect(screen.getByTitle('Acme Corp')).toBeInTheDocument()
+  })
+})
+
 describe('CalendarView — overflow del día ("+N más")', () => {
   const SAME_DAY_MEETINGS = [
     { id: 'm-1', title: 'Uno', starts_at: '2026-07-15T09:00:00', status: 'programada' },
