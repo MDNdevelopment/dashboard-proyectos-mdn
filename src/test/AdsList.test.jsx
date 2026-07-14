@@ -34,8 +34,8 @@ describe('AdsList — click en fila abre detalle', () => {
     render(<AdsList campaigns={[CAMPAIGN]} loading={false} canManage={true} usersMap={new Map()} clientsById={new Map()} onSelect={onSelect} onUpdated={() => {}} onDeleted={() => {}} onEdit={() => {}} />)
 
     // El texto del nombre tiene su propio onClick (edición inline); clicamos
-    // en la celda del número de fila, que no intercepta el click.
-    await user.click(screen.getByText('1'))
+    // en la celda del cliente, que no intercepta el click.
+    await user.click(screen.getByText('Banco Exterior', { selector: 'span' }))
     expect(onSelect).toHaveBeenCalledWith(CAMPAIGN)
   })
 

@@ -4,11 +4,10 @@ import AdsCard from './AdsCard'
 import { STATUSES, PRIORITIES } from './constants'
 
 const COLUMNS = [
-  { key: 'num',        label: '#',          sortable: false },
-  { key: 'start_date', label: 'Inicio',     sortable: true  },
-  { key: 'name',       label: 'Táctica',    sortable: true  },
   { key: 'client',     label: 'Cliente',    sortable: true  },
+  { key: 'name',       label: 'Táctica',    sortable: true  },
   { key: 'assignee',   label: 'Responsable',sortable: true  },
+  { key: 'start_date', label: 'Inicio',     sortable: true  },
   { key: 'end_date',   label: 'Fecha fin',  sortable: true  },
   { key: 'priority',   label: 'Prioridad',  sortable: true  },
   { key: 'status',     label: 'Estado',     sortable: true  },
@@ -231,11 +230,10 @@ export default function AdsList({ campaigns, loading, canManage, usersMap, clien
               </tr>
             </thead>
             <tbody>
-              {sorted.map((c, i) => (
+              {sorted.map((c) => (
                 <AdsCard
                   key={c.id}
                   campaign={c}
-                  index={i}
                   canManage={canManage}
                   usersMap={usersMap}
                   clientsById={clientsById}

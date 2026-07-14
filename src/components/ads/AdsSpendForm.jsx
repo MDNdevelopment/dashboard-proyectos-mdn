@@ -80,6 +80,18 @@ export default function AdsSpendForm({ ad, ads = [], companyId, onClose, onCreat
 
   const duration = durationDays(fields.start_date, fields.end_date)
 
+  // Disponible del cliente para el mes del plazo de ESTE ad (o el mes actual si aún
+  // no se eligió fecha de inicio), antes de sumar el monto que se está tecleando.
+  const available = useMemo(() => {
+    if (!selectedClient || selectedClient.campaign_budget == null) return null
+    const now = new Date()
+    const [year, month] = fields.start_date
+      ? fields.start_date.split('-').map(Number)
+      : [now.getFullYear(), now.getMonth() + 1]
+    const spent = spentByClientInPeriod(ads, fields.client_id, { month, year }, ad?.id ?? null)
+    return Number(selectedClient.campaign_budget) - spent
+  }, [ads, selectedClient, fields.client_id, fields.start_date, ad?.id])
+
   // Aviso de sobrepaso: mes del inicio del plazo de ESTE ad.
   const overspend = useMemo(() => {
     if (!selectedClient?.campaign_budget || !fields.start_date || !fields.client_id) return null
@@ -209,7 +221,14 @@ export default function AdsSpendForm({ ad, ads = [], companyId, onClose, onCreat
 
             {/* Monto */}
             <div>
-              <label className={labelClass}>Monto (USD)</label>
+              <div className="flex items-baseline justify-between gap-2">
+                <label className={labelClass}>Monto (USD)</label>
+                {available != null && (
+                  <span className={`text-[12.5px] font-medium mb-1.5 ${available < 0 ? 'text-red-600' : 'text-[#888]'}`}>
+                    Disponible: {fmtUSD(available)}
+                  </span>
+                )}
+              </div>
               <input
                 type="number"
                 min={0}

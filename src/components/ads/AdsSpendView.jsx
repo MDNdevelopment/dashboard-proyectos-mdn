@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, forwardRef, useImperativeHan
 import { supabase } from '../../supabase'
 import { loadClients } from '../metricas/metricsApi'
 import {
-  loadAds, deleteAd, inPeriod, durationDays, spentByClientInPeriod,
+  loadAds, deleteAd, updateAd, inPeriod, durationDays, spentByClientInPeriod,
   loadAdsResponsables, fmtDate, dateColor,
 } from './campaignSpendApi'
 import { fmtUSD } from '../../utils/metricsFinance'
@@ -11,6 +11,7 @@ import ConfirmDeleteDialog from '../common/ConfirmDeleteDialog'
 import AdsSpendForm from './AdsSpendForm'
 import AdsSpendStats from './AdsSpendStats'
 import AdsSpendDetail from './AdsSpendDetail'
+import AdsBudgetOverview from './AdsBudgetOverview'
 import StatusPill from '../common/StatusPill'
 import ClientCell from './ClientCell'
 
@@ -35,6 +36,7 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
   const [detail, setDetail] = useState(null) // ad en modo visualización, o null=cerrado
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [showBudgetOverview, setShowBudgetOverview] = useState(false)
 
   const fetchAll = useCallback(async () => {
     if (!companyId) return
@@ -67,6 +69,11 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
       return next.sort((a, b) => (a.start_date < b.start_date ? 1 : -1))
     })
     setDetail(prev => (prev?.id === row.id ? row : prev))
+  }
+
+  async function handleAdStatusChange(id, next) {
+    const { data, error } = await updateAd(id, { status: next })
+    if (!error && data) handleSaved(data)
   }
 
   function handleRequestDeleteFromDetail(ad) {
@@ -180,6 +187,17 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
             Limpiar
           </button>
         )}
+        <button
+          onClick={() => setShowBudgetOverview(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FFB800] text-[#111] text-[14px] font-bold hover:bg-[#e6a600] transition-colors"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" stroke="none">
+            <rect x="2" y="9" width="2.6" height="5" rx="0.5" />
+            <rect x="6.7" y="5" width="2.6" height="9" rx="0.5" />
+            <rect x="11.4" y="2" width="2.6" height="12" rx="0.5" />
+          </svg>
+          Presupuestos por cliente
+        </button>
       </div>
 
       {/* Count */}
@@ -230,7 +248,7 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-[#ece9df] bg-[#fafaf7]">
-                {['#', 'Inicio', 'Nombre de campaña', 'Cliente', 'Responsable', 'Fecha fin', 'Duración', 'Objetivo', 'Pieza', 'Monto', 'Estado', ''].map(h => (
+                {['Cliente', 'Nombre de campaña', 'Responsable', 'Inicio', 'Fecha fin', 'Duración', 'Objetivo', 'Pieza', 'Monto', 'Estado', ''].map(h => (
                   <th key={h} className="px-3 py-2.5 text-[12px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] whitespace-nowrap">
                     {h}
                   </th>
@@ -238,7 +256,7 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
               </tr>
             </thead>
             <tbody>
-              {filtered.map((a, i) => {
+              {filtered.map((a) => {
                 const duration = durationDays(a.start_date, a.end_date)
                 return (
                   <tr
@@ -246,15 +264,14 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
                     onClick={() => setDetail(a)}
                     className="border-b border-[#f0ede3] last:border-0 hover:bg-[#fafaf7] transition-colors group cursor-pointer"
                   >
-                    <td className="px-3 py-2.5 text-[13px] font-mono text-[#aaa]">{i + 1}</td>
-                    <td className="px-3 py-2.5 text-[14px] text-[#555] whitespace-nowrap">{fmtDate(a.start_date)}</td>
-                    <td className="px-3 py-2.5 max-w-[180px] text-[15px] font-semibold text-[#111] leading-snug">{a.name}</td>
                     <td className="px-3 py-2.5 text-[14px] text-[#444] whitespace-nowrap">
                       <ClientCell name={a.client} logoUrl={a.client_id ? clientsById.get(a.client_id)?.logo_url : null} />
                     </td>
+                    <td className="px-3 py-2.5 max-w-[180px] text-[15px] font-semibold text-[#111] leading-snug">{a.name}</td>
                     <td className="px-3 py-2.5 text-[14px] text-[#555] whitespace-nowrap">
                       {responsablesById.get(a.responsable_id) ?? '—'}
                     </td>
+                    <td className="px-3 py-2.5 text-[14px] text-[#555] whitespace-nowrap">{fmtDate(a.start_date)}</td>
                     <td className={`px-3 py-2.5 text-[14px] whitespace-nowrap ${dateColor(a.end_date)}`}>
                       {fmtDate(a.end_date)}
                     </td>
@@ -277,7 +294,14 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
                     </td>
                     <td className="px-3 py-2.5 text-[14px] font-semibold text-[#111] whitespace-nowrap">{fmtUSD(a.amount)}</td>
                     <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                      <StatusPill value={a.status} meta={STATUS} editable={false} size="sm" />
+                      <StatusPill
+                        value={a.status}
+                        meta={STATUS}
+                        options={STATUSES}
+                        editable={canManage}
+                        onChange={(next) => handleAdStatusChange(a.id, next)}
+                        size="sm"
+                      />
                     </td>
                     <td className="px-3 py-2.5">
                       <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -355,6 +379,16 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
           onConfirm={handleDeleteConfirm}
           onCancel={() => setConfirmDelete(null)}
           confirming={deleting}
+        />
+      )}
+
+      {showBudgetOverview && (
+        <AdsBudgetOverview
+          companyId={companyId}
+          periodo={periodo}
+          ads={ads}
+          clients={clients}
+          onClose={() => setShowBudgetOverview(false)}
         />
       )}
     </div>

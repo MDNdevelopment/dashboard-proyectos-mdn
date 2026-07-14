@@ -5,7 +5,6 @@ import { fmtDate, dateColor } from "./campaignSpendApi";
 
 export default function AdsCard({
   campaign,
-  index,
   canManage,
   usersMap,
   clientsById,
@@ -28,14 +27,12 @@ export default function AdsCard({
       onClick={() => onSelect(campaign)}
       className="border-b border-[#f0ede3] hover:bg-[#fafaf7] transition-colors group cursor-pointer"
     >
-      {/* # */}
-      <td className="px-3 py-2.5 text-[13px] font-mono text-[#aaa]">
-        {index + 1}
-      </td>
-
-      {/* Start date */}
-      <td className="px-3 py-2.5 text-[14px] text-[#555] whitespace-nowrap">
-        {fmtDate(campaign.start_date)}
+      {/* Client */}
+      <td className="px-3 py-2.5 text-[14px] text-[#444] whitespace-nowrap">
+        <ClientCell
+          name={campaign.client}
+          logoUrl={campaign.client_id ? clientsById?.get(campaign.client_id)?.logo_url : null}
+        />
       </td>
 
       {/* Name — inline editable */}
@@ -76,17 +73,14 @@ export default function AdsCard({
         )}
       </td>
 
-      {/* Client */}
-      <td className="px-3 py-2.5 text-[14px] text-[#444] whitespace-nowrap">
-        <ClientCell
-          name={campaign.client}
-          logoUrl={campaign.client_id ? clientsById?.get(campaign.client_id)?.logo_url : null}
-        />
-      </td>
-
       {/* Assignee */}
       <td className="px-3 py-2.5 text-[14px] text-[#555] whitespace-nowrap">
         {usersMap?.get(campaign.assignee) ?? campaign.assignee ?? "—"}
+      </td>
+
+      {/* Start date */}
+      <td className="px-3 py-2.5 text-[14px] text-[#555] whitespace-nowrap">
+        {fmtDate(campaign.start_date)}
       </td>
 
       {/* End date */}

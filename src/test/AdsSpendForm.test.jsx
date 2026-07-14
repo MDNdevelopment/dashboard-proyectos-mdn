@@ -146,6 +146,54 @@ describe('AdsSpendForm', () => {
     expect(screen.getByRole('button', { name: 'Crear ad' })).not.toBeDisabled()
   })
 
+  it('muestra "Disponible" junto a Monto (USD) cuando el cliente tiene presupuesto', async () => {
+    const user = userEvent.setup()
+    const existingAds = [
+      { id: 'ad-1', client_id: 'c-1', amount: 20, start_date: '2026-07-01' },
+    ]
+    renderForm({ ads: existingAds })
+
+    await waitFor(() => screen.getByRole('option', { name: 'Banco Exterior' }))
+    const clientSelect = screen.getAllByRole('combobox')[0]
+    await user.selectOptions(clientSelect, 'c-1')
+    const dateInputs = document.querySelectorAll('input[type="date"]')
+    await user.type(dateInputs[0], '2026-07-05')
+
+    // Presupuesto 100 - invertido 20 = disponible 80
+    await waitFor(() => {
+      expect(screen.getByText('Disponible: $80.00')).toBeInTheDocument()
+    })
+  })
+
+  it('NO muestra "Disponible" cuando el cliente no tiene presupuesto configurado', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    await waitFor(() => screen.getByRole('option', { name: 'Pepsi' }))
+    const clientSelect = screen.getAllByRole('combobox')[0]
+    await user.selectOptions(clientSelect, 'c-2')
+
+    expect(screen.queryByText(/Disponible:/)).not.toBeInTheDocument()
+  })
+
+  it('NO muestra la suma de este ad en Disponible: refleja lo disponible antes de escribir el monto', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    await waitFor(() => screen.getByRole('option', { name: 'Banco Exterior' }))
+    const clientSelect = screen.getAllByRole('combobox')[0]
+    await user.selectOptions(clientSelect, 'c-1')
+    const dateInputs = document.querySelectorAll('input[type="date"]')
+    await user.type(dateInputs[0], '2026-07-05')
+    await user.type(screen.getByPlaceholderText('0.00'), '999')
+
+    // Sin ads previos, disponible sigue siendo el presupuesto completo ($100.00),
+    // no descuenta lo que se está tecleando en Monto.
+    await waitFor(() => {
+      expect(screen.getByText('Disponible: $100.00')).toBeInTheDocument()
+    })
+  })
+
   it('NO muestra el aviso cuando el total está por debajo del presupuesto', async () => {
     const user = userEvent.setup()
     const existingAds = [

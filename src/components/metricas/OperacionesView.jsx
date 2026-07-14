@@ -9,6 +9,8 @@ import { calcTotal, sumScore, crecimientoCliente } from "../../utils/metricsScor
 import { MONTHS, INDICATORS } from "./constants";
 import { useUnsavedChanges } from "../../hooks/useUnsavedChanges";
 import { Avatar } from "../tareas/UserPickerSingle";
+import { loadAds, spentByClientInPeriod } from "../ads/campaignSpendApi";
+import { fmtUSD } from "../../utils/metricsFinance";
 
 /** Adapta un objeto cliente (logo_url) al shape que espera <Avatar> (avatar_url). */
 function clientAvatar(c) {
@@ -26,6 +28,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
   const [prevReport, setPrevReport] = useState(null);
   const [clients, setClients] = useState([]);
   const [companyEmployees, setCompanyEmployees] = useState([]);
+  const [ads, setAds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -41,12 +44,14 @@ export default function OperacionesView({ line, companyId, year, month }) {
     setLoading(true);
     setError(null);
 
-    const [reportRes, prevRes, clientsRes, employeesRes] = await Promise.all([
+    const [reportRes, prevRes, clientsRes, employeesRes, adsRes] = await Promise.all([
       loadReport(line.id, year, month),
       loadPrevReport(line.id, year, month),
       loadClients(companyId, line.id, { includeArchived: true }),
       loadCompanyEmployees(companyId),
+      loadAds(companyId),
     ]);
+    setAds(adsRes.data ?? []);
 
     // Todos (incl. archivados) para resolver nombres en reportes guardados;
     // solo activos para syncReportClients (no re-agregar archivados al reporte actual).
@@ -319,13 +324,13 @@ export default function OperacionesView({ line, companyId, year, month }) {
               </p>
             )}
             <div className="overflow-x-auto">
-              <div className="min-w-[640px]">
+              <div className="min-w-[760px]">
                 {report.crecimiento.items.length === 0 ? (
                   <p className="text-[14px] text-[#bbb]">Sin clientes. Configurá la cartera en la pestaña Configuración.</p>
                 ) : (
                   <>
                     {/* Fila de encabezados de columna */}
-                    <div className="grid grid-cols-[minmax(110px,1fr)_auto_auto_auto_auto] gap-x-3 gap-y-0 items-end mb-1">
+                    <div className="grid grid-cols-[minmax(110px,1fr)_auto_auto_auto_auto_auto] gap-x-3 gap-y-0 items-end mb-1">
                       <div />
                       {/* Título único mes anterior (centrado sobre las 2 columnas del grupo) */}
                       <div className="text-center">
@@ -337,11 +342,14 @@ export default function OperacionesView({ line, companyId, year, month }) {
                       </div>
                       <div />
                       <div />
+                      <div />
                     </div>
                     {/* Filas por cliente */}
                     <div className="space-y-2">
                       {report.crecimiento.items.map((item, idx) => {
                         const { ganados, cumple, pct } = crecimientoCliente(item);
+                        const spent = spentByClientInPeriod(ads, item.clienteId, { month, year });
+                        const budget = clients.find(c => c.id === item.clienteId)?.campaign_budget;
                         const prevItem = (prevReport?.crecimiento?.items ?? [])
                           .find(i => i.clienteId === item.clienteId);
                         // Editable por campo: si el mes anterior tiene un valor, se muestra bloqueado;
@@ -353,7 +361,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
                         const prevGanados = hasPrevGanados ? prevItem.seguidoresGanados : (item.seguidoresGanadosPrev ?? "");
                         const prevTotales = hasPrevTotales ? prevItem.seguidoresActuales : (item.seguidoresBase ?? "");
                         return (
-                          <div key={item.clienteId} className="grid grid-cols-[minmax(110px,1fr)_auto_auto_auto_auto] gap-x-3 items-center">
+                          <div key={item.clienteId} className="grid grid-cols-[minmax(110px,1fr)_auto_auto_auto_auto_auto] gap-x-3 items-center">
                             <ClientLink clienteId={item.clienteId} />
 
                             {/* Mes anterior — editable si no hay dato en el reporte del mes anterior */}
@@ -443,6 +451,17 @@ export default function OperacionesView({ line, companyId, year, month }) {
                                   {Math.round(pct)}%
                                 </span>
                               )}
+                            </div>
+
+                            {/* Inversión en pauta (auto desde paid_campaigns, por start_date) vs presupuesto del cliente */}
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className="text-[10px] text-[#aaa] whitespace-nowrap">Inversión Ads</span>
+                              <span className="flex items-baseline gap-0.5 whitespace-nowrap">
+                                <span className="text-[13px] font-mono text-[#555] tabular-nums">{fmtUSD(spent)}</span>
+                                {budget != null && (
+                                  <span className="text-[10px] font-mono text-[#aaa] tabular-nums">/ {fmtUSD(budget)}</span>
+                                )}
+                              </span>
                             </div>
                           </div>
                         );

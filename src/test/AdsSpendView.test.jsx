@@ -22,6 +22,7 @@ const MOCK_ADS = [
 
 const mockLoadAds = vi.fn()
 const mockDeleteAd = vi.fn()
+const mockUpdateAd = vi.fn()
 const mockLoadAdsResponsables = vi.fn()
 
 vi.mock('../components/ads/campaignSpendApi', async () => {
@@ -30,12 +31,14 @@ vi.mock('../components/ads/campaignSpendApi', async () => {
     ...actual,
     loadAds: (...a) => mockLoadAds(...a),
     deleteAd: (...a) => mockDeleteAd(...a),
+    updateAd: (...a) => mockUpdateAd(...a),
     loadAdsResponsables: (...a) => mockLoadAdsResponsables(...a),
   }
 })
 
 vi.mock('../components/metricas/metricsApi', () => ({
   loadClients: vi.fn().mockResolvedValue({ data: MOCK_CLIENTS, error: null }),
+  loadLines: vi.fn().mockResolvedValue({ data: [], error: null }),
 }))
 
 vi.mock('../supabase', () => {
@@ -64,6 +67,7 @@ describe('AdsSpendView', () => {
     vi.clearAllMocks()
     mockLoadAds.mockResolvedValue({ data: MOCK_ADS, error: null })
     mockLoadAdsResponsables.mockResolvedValue({ data: [], error: null })
+    mockUpdateAd.mockResolvedValue({ data: null, error: null })
     useAuth.mockReturnValue({ userProfile: { user_id: 'u-1', company_id: 'co-1' } })
   })
 
@@ -209,14 +213,26 @@ describe('AdsSpendView', () => {
     })
   })
 
+  it('el botón "Presupuestos por cliente" abre el modal de resumen por cliente', async () => {
+    const user = userEvent.setup()
+    renderView({ month: 7, year: 2026 })
+    await waitFor(() => { expect(screen.getByText('Ad Julio')).toBeInTheDocument() })
+
+    await user.click(screen.getByRole('button', { name: 'Presupuestos por cliente' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Presupuestos por cliente' })).toBeInTheDocument()
+    })
+  })
+
   describe('paridad visual con la tabla de Tácticas', () => {
-    it('el orden de columnas coincide con el especificado (#, Inicio, Nombre, Cliente, Responsable, Fecha fin, Duración, Objetivo, Pieza, Monto, Estado)', async () => {
+    it('el orden de columnas coincide con el especificado (Cliente, Nombre, Responsable, Inicio, Fecha fin, Duración, Objetivo, Pieza, Monto, Estado)', async () => {
       renderView({ month: 7, year: 2026 })
       await waitFor(() => { expect(screen.getByText('Ad Julio')).toBeInTheDocument() })
 
       const headers = screen.getAllByRole('columnheader').map(th => th.textContent)
       expect(headers).toEqual([
-        '#', 'Inicio', 'Nombre de campaña', 'Cliente', 'Responsable',
+        'Cliente', 'Nombre de campaña', 'Responsable', 'Inicio',
         'Fecha fin', 'Duración', 'Objetivo', 'Pieza', 'Monto', 'Estado', '',
       ])
     })
@@ -245,13 +261,15 @@ describe('AdsSpendView', () => {
       await waitFor(() => { expect(screen.getByText('Katherine Mora')).toBeInTheDocument() })
     })
 
-    it('la columna índice numera las filas empezando en 1', async () => {
+    it('el estado es editable desde la tabla: seleccionar una opción llama a updateAd', async () => {
+      const user = userEvent.setup()
       renderView({ month: 7, year: 2026 })
       await waitFor(() => { expect(screen.getByText('Ad Julio')).toBeInTheDocument() })
 
-      const firstRow = screen.getByText('Ad Julio').closest('tr')
-      const indexCell = firstRow.querySelector('td')
-      expect(indexCell).toHaveTextContent('1')
+      await user.click(screen.getByRole('button', { name: 'Aprobado' }))
+      await user.click(screen.getByRole('button', { name: 'Finalizado' }))
+
+      expect(mockUpdateAd).toHaveBeenCalledWith('ad-1', { status: 'Finalizado' })
     })
   })
 })
