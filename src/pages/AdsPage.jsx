@@ -100,7 +100,7 @@ export default function AdsPage() {
       <main className="flex-1 overflow-y-auto main-bg h-screen">
         <div className="max-w-6xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
           {/* Header */}
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
             <div>
               <h1 className="text-[26px] font-bold text-[#111] leading-tight">
                 Campañas & Tácticas
@@ -114,7 +114,7 @@ export default function AdsPage() {
             {canManage && (tab === "tacticas" ? (
               <button
                 onClick={() => setShowCreateForm(true)}
-                className="flex items-center gap-2 bg-[#111] text-white text-[15px] font-bold px-4 py-2.5 rounded-xl hover:bg-[#222] transition-colors"
+                className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#111] text-white text-[15px] font-bold px-4 py-2.5 rounded-xl hover:bg-[#222] transition-colors"
               >
                 <svg
                   width="11"
@@ -131,7 +131,7 @@ export default function AdsPage() {
             ) : (
               <button
                 onClick={() => adsSpendViewRef.current?.openCreate()}
-                className="flex items-center gap-2 bg-[#111] text-white text-[15px] font-bold px-4 py-2.5 rounded-xl hover:bg-[#222] transition-colors"
+                className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#111] text-white text-[15px] font-bold px-4 py-2.5 rounded-xl hover:bg-[#222] transition-colors"
               >
                 <svg
                   width="11"

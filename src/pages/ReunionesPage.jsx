@@ -155,7 +155,7 @@ export default function ReunionesPage() {
   return (
     <main className="flex-1 overflow-y-auto main-bg h-screen">
       <div className="max-w-5xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
           <div>
             <h1 className="text-[26px] font-bold text-[#111] leading-tight">Reuniones</h1>
             <p className="text-[15px] text-[#888] mt-0.5">
@@ -165,7 +165,7 @@ export default function ReunionesPage() {
           {canManage && (
             <button
               onClick={() => { setModalDefaultDate(new Date()); setModalMeeting(null); }}
-              className="flex items-center gap-2 bg-[#111] text-white text-[15px] font-bold px-4 py-2.5 rounded-xl hover:bg-[#222] transition-colors"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#111] text-white text-[15px] font-bold px-4 py-2.5 rounded-xl hover:bg-[#222] transition-colors"
             >
               <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.8">
                 <path d="M6 1v10M1 6h10" strokeLinecap="round" />

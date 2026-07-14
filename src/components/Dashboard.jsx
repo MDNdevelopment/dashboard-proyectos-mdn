@@ -154,7 +154,7 @@ function Dashboard({ projects, loading, onNewProject, onEditProject, onViewProje
 <div className="px-4 sm:px-6 lg:px-10 pt-8 pb-16 max-w-[1400px]">
 
         {/* Header */}
-        <div className="flex items-end justify-between mb-7 gap-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between mb-7 sm:gap-4">
           <div>
             <p className="text-[13px] font-mono font-semibold text-[#888] tracking-[0.14em] uppercase mb-1.5">
               MDN Publicidad
@@ -163,7 +163,7 @@ function Dashboard({ projects, loading, onNewProject, onEditProject, onViewProje
               {title}
             </h1>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 sm:flex-shrink-0">
             <button
               onClick={onExport}
               className="flex items-center gap-2 bg-white border border-[#e0ddd4] text-[#111] text-[15px] font-semibold px-4 py-2.5 rounded-xl hover:bg-[#f5f3eb] transition-colors shadow-sm"
@@ -176,12 +176,12 @@ function Dashboard({ projects, loading, onNewProject, onEditProject, onViewProje
             </button>
             <button
               onClick={onNewProject}
-              className="flex items-center gap-2 bg-[#0d0d0d] text-white font-semibold rounded-xl hover:bg-[#222] transition-colors shadow-sm px-3 py-2.5 lg:px-4 lg:text-[15px]"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-[#0d0d0d] text-white font-semibold rounded-xl hover:bg-[#222] transition-colors shadow-sm px-3 py-2.5 lg:px-4 lg:text-[15px]"
             >
               <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.8">
                 <path d="M6 1v10M1 6h10" strokeLinecap="round"/>
               </svg>
-              <span className="hidden lg:inline">Nuevo proyecto</span>
+              <span className="sm:hidden lg:inline">Nuevo proyecto</span>
             </button>
           </div>
         </div>

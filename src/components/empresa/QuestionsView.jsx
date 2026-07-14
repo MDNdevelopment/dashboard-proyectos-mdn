@@ -98,7 +98,7 @@ export default function QuestionsView({ companyId }) {
   return (
     <>
       {/* Barra superior */}
-      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+      <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-center sm:justify-between sm:flex-wrap">
         <div className="flex items-center gap-3">
           <p className="text-[15px] text-[#888]">
             {filteredQuestions.length} pregunta{filteredQuestions.length !== 1 ? 's' : ''}
@@ -123,7 +123,7 @@ export default function QuestionsView({ companyId }) {
         <button
           type="button"
           onClick={() => setModal(undefined)}
-          className="px-4 py-2 rounded-xl text-[15px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors"
+          className="w-full sm:w-auto px-4 py-2 rounded-xl text-[15px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors"
         >
           + Nueva pregunta
         </button>

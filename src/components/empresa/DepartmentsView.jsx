@@ -198,14 +198,14 @@ export default function DepartmentsView({ companyId }) {
   return (
     <>
       {/* Barra superior */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
         <p className="text-[15px] text-[#888]">
           {departments.length} departamento{departments.length !== 1 ? 's' : ''}
         </p>
         <button
           type="button"
           onClick={() => setDeptModal(undefined)}
-          className="px-4 py-2 rounded-xl text-[15px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors"
+          className="w-full sm:w-auto px-4 py-2 rounded-xl text-[15px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors"
         >
           + Nuevo departamento
         </button>
