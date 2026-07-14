@@ -16,6 +16,7 @@ const TASKS_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" s
 const COMPANY_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="1" y="4" width="14" height="10" rx="1.5"/><path d="M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1" strokeLinecap="round"/><path d="M1 8h14" strokeLinecap="round"/></svg>
 const EVAL_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="8" cy="5.5" r="2.5"/><path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6" strokeLinecap="round"/><path d="M10.5 8.5l1 1 2-2" strokeLinecap="round" strokeLinejoin="round"/></svg>
 const METRICS_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><polyline points="1 12 5 7 8 10 11 5 15 8" strokeLinecap="round" strokeLinejoin="round"/><path d="M1 14h14" strokeLinecap="round"/></svg>
+const MEETINGS_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="1.5" y="2.5" width="13" height="12" rx="1.5"/><path d="M1.5 6h13" strokeLinecap="round"/><path d="M5 1v3M11 1v3" strokeLinecap="round"/><path d="M4.5 9h2M4.5 11.5h5" strokeLinecap="round"/></svg>
 
 function Sidebar() {
   const { signOut, userProfile, refreshProfile, can = () => false, permissionsLoaded = false } = useAuth()
@@ -52,6 +53,7 @@ function Sidebar() {
 
   const canEval = userProfile?.access_level >= 2 || userProfile?.admin === true
   const isMetricasRoute = location.pathname.startsWith('/reportes')
+  const isReunionesRoute = location.pathname.startsWith('/reuniones')
   const isEvalRoute = location.pathname.startsWith('/evaluaciones')
   const evalActive = location.pathname === '/evaluaciones'
   const evalResumenActive = location.pathname === '/evaluaciones/resumen'
@@ -137,6 +139,23 @@ function Sidebar() {
                 {ADS_ICON}
               </span>
               <span className="flex-1">Campañas</span>
+            </Link>
+          )}
+
+          {/* Reuniones — botón directo */}
+          {canR('reuniones') && (
+            <Link
+              to="/reuniones"
+              className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all ${
+                isReunionesRoute
+                  ? 'bg-[#FFB800] text-[#111]'
+                  : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+              }`}
+            >
+              <span className={`flex-shrink-0 ${isReunionesRoute ? 'text-[#111]' : 'text-[#666]'}`}>
+                {MEETINGS_ICON}
+              </span>
+              <span className="flex-1">Reuniones</span>
             </Link>
           )}
 

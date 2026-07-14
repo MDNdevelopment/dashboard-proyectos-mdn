@@ -108,6 +108,16 @@ export const MODULES = [
       { key: 'reportes.manage', label: 'Editar / importar reportes' },
     ],
   },
+  {
+    key: 'reuniones',
+    label: 'Reuniones',
+    routePrefix: '/reuniones',
+    description: 'Calendario de reuniones con clientes y empleados',
+    tabs: [],
+    manageActions: [
+      { key: 'reuniones.manage', label: 'Crear / editar / eliminar reuniones' },
+    ],
+  },
 ]
 
 /** Mapa rápido key → módulo */

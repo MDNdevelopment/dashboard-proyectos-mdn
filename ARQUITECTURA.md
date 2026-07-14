@@ -1,7 +1,8 @@
 # Arquitectura del Sistema — MDN Dashboard
 
 Suite de gestión interna de **MDN Publicidad** (agencia de publicidad venezolana). Reúne en un solo
-dashboard 8 módulos: Proyectos, Tareas, Métricas, Empresa, Evaluaciones, Tickets, Ads y Autenticación.
+dashboard 9 módulos: Proyectos, Tareas, Métricas, Empresa, Evaluaciones, Tickets, Ads, Reuniones y
+Autenticación.
 
 > **Fuente de verdad del sistema.** Actualizar este archivo en el mismo commit cada vez que se agregue
 > un módulo nuevo o cambie el modelo de datos / rutas / relaciones entre tablas.
@@ -18,7 +19,7 @@ dashboard 8 módulos: Proyectos, Tareas, Métricas, Empresa, Evaluaciones, Ticke
 | Deploy | Netlify (SPA redirect, `netlify.toml`) |
 | Imágenes | **Cloudinary** (`src/utils/uploadToCloudinary.js`) — no Supabase Storage |
 | IA | Gemini (Evaluaciones vía Netlify fn `evaluation-analysis.js`) |
-| Notificaciones email | Resend (Edge fn `notify-campaign-assignee`) + Edge fn `express` (tickets) + Edge fn `notify-dispatch` (asignaciones de tarea/proyecto) |
+| Notificaciones email | Resend (Edge fn `notify-campaign-assignee`) + Edge fn `express` (tickets) + Edge fn `notify-dispatch` (asignaciones de tarea/proyecto/reunión, recordatorios de reunión) |
 | Notificaciones in-app | Tabla `notifications` con campanita realtime en toda la app (`NotificationBell.jsx`) |
 
 ### Punto de entrada y routing
@@ -239,16 +240,18 @@ Realtime habilitado en todas.
 
 | | |
 |---|---|
-| **Propósito** | Centro de notificaciones in-app (campanita) + correos para asignaciones. Tres grupos: (1) asignación a tarea/proyecto → in-app + correo; (2) fechas de cliente (aniversario empresa, aniversario MDN, cumpleaños de contacto) → solo in-app, a miembros de la línea + nivel 4; (3) fechas de empleados MDN (cumpleaños y aniversario de entrada) → solo in-app, a toda la empresa. |
+| **Propósito** | Centro de notificaciones in-app (campanita) + correos para asignaciones. Grupos: (1) asignación a tarea/proyecto/reunión → in-app + correo; (2) fechas de cliente (aniversario empresa, aniversario MDN, cumpleaños de contacto) → solo in-app, a miembros de la línea + nivel 4; (3) fechas de empleados MDN (cumpleaños y aniversario de entrada) → solo in-app, a toda la empresa; (4) recordatorios de reunión (día previo + 1 hora antes) → in-app + correo, a los participantes. |
 | **Archivos principales** | `src/components/notifications/NotificationBell.jsx` (campanita global con realtime y panel desplegable) · `src/utils/notificationFormat.js` (ícono, etiqueta, ruta de navegación, tiempo relativo) |
 | **Tabla** | `notifications` (`id, company_id, user_id, type, title, body, entity_type, entity_id, email, read, dedupe_key, created_at`) — RLS: solo el destinatario puede leer/actualizar sus notificaciones. Habilitada en `supabase_realtime`. |
-| **Types** | `task_assigned` · `project_added` · `client_anniversary` · `client_mdn_anniversary` · `client_contact_birthday` · `employee_birthday` · `employee_mdn_anniversary` |
-| **Detección de asignaciones** | Triggers Postgres `notify_task_assignees()` (sobre `tasks.assignee_ids`) y `notify_project_members()` (sobre `projects.members`). Comparan OLD vs NEW; en INSERT todos los ids son "nuevos". Migraciones `20260703000001_notif_assignment_triggers.sql`. Tipo adicional `checklist_item_assigned` (trigger `notify_checklist_assignees` sobre `tasks.checklist`, migración `20260712000000`): diff por id del ítem, notifica al `assignee_id` nuevo/cambiado. |
+| **Types** | `task_assigned` · `project_added` · `client_anniversary` · `client_mdn_anniversary` · `client_contact_birthday` · `employee_birthday` · `employee_mdn_anniversary` · `meeting_invite` · `meeting_reminder_day` · `meeting_reminder_hour` |
+| **Detección de asignaciones** | Triggers Postgres `notify_task_assignees()` (sobre `tasks.assignee_ids`), `notify_project_members()` (sobre `projects.members`) y `notify_meeting_attendees()` (sobre `meetings.attendee_ids`, migración `20260717000001_meeting_notifications.sql`). Comparan OLD vs NEW; en INSERT todos los ids son "nuevos" (task/project excluyen al creador; meetings no, ya que el creador puede agregarse a sí mismo como participante). Migraciones `20260703000001_notif_assignment_triggers.sql`. Tipo adicional `checklist_item_assigned` (trigger `notify_checklist_assignees` sobre `tasks.checklist`, migración `20260712000000`): diff por id del ítem, notifica al `assignee_id` nuevo/cambiado. |
 | **Job de fechas** | `pg_cron` diario a las 08:00 Caracas (12:00 UTC): función `enqueue_date_notifications()` SECURITY DEFINER. Usa `dedupe_key` con `ON CONFLICT DO NOTHING` para idempotencia (re-ejecutar el mismo día no duplica). Timing: fechas de cliente → 3 días antes + el día; fechas de empleado → solo el día exacto. Destinatarios fecha-cliente: `notif_client_recipients()` (miembros de línea ∪ usuarios `access_level ≥ 4`; `line_id` nulo → solo nivel 4). Migraciones `20260703000002_notif_date_cron.sql`. |
-| **Correo** | `supabase/functions/notify-dispatch/index.ts` → Resend. Invocado por un Database Webhook de Supabase en INSERT sobre `notifications` cuando `email = true`. Solo aplica a `task_assigned` y `project_added`. Secrets: `RESEND_API_KEY`, `SENDER_EMAIL`. |
+| **Job de recordatorios de reunión** | `pg_cron` cada 15 minutos (más frecuente que el job de fechas porque "1 hora antes" necesita granularidad sub-diaria): función `enqueue_meeting_reminders()` SECURITY DEFINER, migración `20260717000001_meeting_notifications.sql`. Ventanas `[+24h, +24h15m)` (día previo) y `[+1h, +1h15m)` (1 hora antes) sobre `meetings.starts_at` de reuniones `status='programada'`. `dedupe_key` incluye `starts_at` para que reprogramar la reunión genere nuevos recordatorios en vez de quedar suprimido por el dedupe de la fecha anterior. |
+| **Correo** | `supabase/functions/notify-dispatch/index.ts` → Resend. Invocado por un Database Webhook de Supabase en INSERT sobre `notifications` cuando `email = true`. Aplica a `task_assigned`, `project_added`, `meeting_invite`, `meeting_reminder_day` y `meeting_reminder_hour`. Secrets: `RESEND_API_KEY`, `SENDER_EMAIL`. |
+| **WhatsApp** | No implementado — canal pendiente (ver §2.11 Reuniones). El enganche sería una edge function nueva disparada por el mismo patrón de trigger sobre `notifications`, sin tocar el resto del sistema. |
 | **Campanita** | `NotificationBell.jsx` montada en la barra mobile de `AppLayout.jsx` y en la sección de usuario del `Sidebar.jsx` (desktop). Carga las últimas 40 notificaciones del usuario y suscribe a `postgres_changes` (INSERT + UPDATE) filtrado por `user_id`. Badge de no leídas; marcar leída individual o todas; navega a la entidad relacionada al hacer clic. |
 | **Fechas en empleados MDN** | `users.birth_date` (cumpleaños) y `users.hire_date` (aniversario de entrada). Campos ya existentes en la tabla, editables desde `EmployeeModal.jsx`. No requirieron migración. |
-| **Rutas** | Sin ruta propia — la campanita es un widget global. La navegación al hacer clic en una notificación: tarea → `/tareas`, proyecto → `/?projectId=<id>`, cliente → `/empresa/clientes`, empleado → `/empresa/empleados`. |
+| **Rutas** | Sin ruta propia — la campanita es un widget global. La navegación al hacer clic en una notificación: tarea → `/tareas`, proyecto → `/?projectId=<id>` (`AppLayout.jsx` lee el param y abre `ProjectModal`), cliente → `/empresa/clientes`, empleado → `/empresa/empleados`, reunión → `/reuniones?meetingId=<id>` (`ReunionesPage.jsx` lee el param, mismo patrón, y abre `MeetingDetail` — el modal de solo lectura, no el formulario de edición). |
 | **Permisos** | Cualquier usuario autenticado ve sus propias notificaciones (RLS). Los INSERTs los hacen únicamente los triggers y funciones SECURITY DEFINER. |
 | **Setup manual** | Configurar un Database Webhook en Supabase dashboard: tabla `notifications`, evento INSERT, URL `{SUPABASE_URL}/functions/v1/notify-dispatch`, header `Authorization: Bearer {SERVICE_ROLE_KEY}`. Habilitar extensión `pg_cron` vía Supabase dashboard → Extensions. |
 
@@ -269,6 +272,26 @@ Realtime habilitado en todas.
 | **Click en fila → detalle** | En ambas tabs, clic en cualquier parte de una fila (fuera de controles interactivos) abre un modal de solo lectura (`AdsDetail.jsx` en Tácticas, `AdsSpendDetail.jsx` en Ads) con botones Editar/Eliminar cuando `canManage`. El **estado** es la única excepción editable directamente desde ese modal, vía `StatusPill` (§5, "Componente compartido de estado") que llama a `supabase.update`/`updateAd` sin pasar por modo edición completo. Los controles internos de la fila (`StatusPill`, edición inline del nombre, botones de acción, link de "Ver pieza") detienen la propagación del click para no disparar el modal de detalle. `AdsSpendDetail.jsx` recibe además `ads` (lista completa) y `client` (resuelto por `AdsSpendView`) para mostrar el mismo aviso de sobrepaso de presupuesto que el formulario (§ fila anterior) cuando ese cliente ya lo excede ese mes. |
 | **⚠️ Naming gotcha** | Ni archivos ni tablas nuevos dentro del módulo Ads deben llamarse literalmente `ads` (solo o combinado, p. ej. `adsApi`, o el nombre de tabla `ads`): los bloqueadores de anuncios (uBlock Origin y similares) bloquean por defecto (1) peticiones cuyo nombre de archivo combina "ads" + "api" y (2) peticiones REST cuya URL trae `/ads?...` como segmento — ambos son patrones típicos de endpoints/scripts de redes publicitarias. Esto ya rompió dos veces: el archivo de datos se llama `campaignSpendApi.js` (no `adsApi.js`), y la tabla se llama `paid_campaigns` (no `ads`, migración `20260715000000_rename_ads_to_paid_campaigns.sql`) tras que un usuario reportara `PATCH .../rest/v1/ads?...  net::ERR_BLOCKED_BY_CLIENT` al editar un ad. El nombre de carpeta `components/ads/` y la ruta `/ads` no se han visto afectados (no es una llamada XHR con query params). |
 
+### 2.11 Reuniones
+
+| | |
+|---|---|
+| **Propósito** | Reemplaza la gestión manual de reuniones por WhatsApp (listas copiadas/editadas/reenviadas por los jefes) con un calendario compartido: crear/editar/cancelar/eliminar reuniones asignadas a un cliente y a empleados, con notificaciones automáticas. |
+| **Archivos principales** | `src/pages/ReunionesPage.jsx` (host, realtime) · `src/components/reuniones/CalendarView.jsx` (grid mensual con `date-fns`, sin librería de calendario) · `MeetingDetail.jsx` (vista de solo lectura, patrón `AdsDetail.jsx`) · `MeetingModal.jsx` (formulario crear/editar, convención `undefined`/`null`/objeto, patrón `AdsForm.jsx`) · `AttendeePicker.jsx` (chips + botones rápidos por cargo) · `meetingsApi.js` (CRUD + `countMeetingsHeldForLine`) |
+| **Tabla** | `meetings` (`id, company_id, title, client_id→metric_clients (SET NULL), client_name, line_id→metric_lines (SET NULL), starts_at, ends_at, modality ('presencial'\|'videollamada'), location, meeting_url, notes, attendee_ids text[], status ('programada'\|'realizada'\|'cancelada'), minuta_url, created_by, created_at, updated_at` — migración `20260717000000_create_meetings.sql` (+ `20260718000000_meeting_minuta_url.sql` para `minuta_url`). `client_name`/`line_id` son snapshot resuelto desde `metric_clients` al crear/editar (`resolveClientSnapshot` en `meetingsApi.js`): si el cliente cambia de línea después, la reunión conserva la línea de cuando se agendó, para no falsear reportes de meses ya cerrados. Solo se persiste el campo de la modalidad activa (`location` o `meeting_url`; el otro queda `null`). Habilitada en `supabase_realtime`. RLS: SELECT abierto a autenticados; INSERT/UPDATE/DELETE gated por `user_can('reuniones.manage')` (default nivel 2+, migración incluye seed). |
+| **"Realizada" (marcado manual)** | `status` tiene 3 valores: `'programada'` (default) · `'realizada'` (marcada a mano) · `'cancelada'` (queda cancelada en el calendario, no se borra el registro). No hay marcado automático por fecha. Helpers en `meetingsApi.js`: `markMeetingHeld(id)` / `unmarkMeetingHeld(id)` y `cancelMeeting(id)`. El contador de Reportes → Operaciones (`countMeetingsHeldForLine`) cuenta únicamente `status='realizada'` dentro del mes — sin fallback por fecha vencida. |
+| **Minuta (link a Google Drive)** | `meetings.minuta_url` (texto libre, sin validar dominio) — en `MeetingDetail.jsx`, "Marcar realizada" marca la reunión **al instante** (un solo click, `markMeetingHeld(id)`, sin esperar ningún link); recién después, ya marcada, se abre un panel inline con un input opcional para pegar el link (`updateMeeting(id, { minuta_url })`) — el link nunca bloquea el marcado y puede agregarse/editarse en cualquier momento ("Agregar link"/"Editar link"). Reuniones `realizada` muestran el link (o "Sin minuta") debajo de Participantes. Desmarcar (`unmarkMeetingHeld`) sigue siendo directo, sin pedir nada. |
+| **Flujo ver → editar** | Click en una reunión (pill del calendario o fila de `DayMeetingsList`) abre **`MeetingDetail`** (solo lectura), nunca el formulario directo — mismo patrón que Ads (`AdsDetail.jsx` → `AdsForm.jsx`). `ReunionesPage` guarda esto en un estado independiente `viewMeeting` (`undefined`/objeto) separado de `modalMeeting` (`undefined`/`null`/objeto, para crear/editar). **Ver es universal** — `handleMeetingClick` ya no está gateado por `canManage` (cualquier autenticado puede consultar); solo las acciones dentro de `MeetingDetail` (marcar realizada, reagendar, cancelar, botones Editar/Eliminar) están condicionadas a `canManage`, igual que `AdsDetail`. El botón "Editar" de `MeetingDetail` llama a `onEdit(meeting)` → `ReunionesPage.handleEditFromDetail` cierra el detalle y abre `MeetingModal` en modo edición. |
+| **Reagendar vs. Cancelar** (en `MeetingDetail.jsx`) | Dos acciones separadas (antes eran un solo botón ambiguo en el modal): el ícono **Reagendar** (SVG de calendario) abre un panel inline que exige elegir explícitamente la nueva fecha/hora antes de confirmar (`handleReschedule` → `updateMeeting(id, { starts_at, status: 'programada' })`) — reactiva la reunión aunque estuviera `cancelada` o `realizada`. El ícono **Cancelar reunión** (SVG X) llama a `cancelMeeting` directamente (sin pedir fecha) y la reunión queda `cancelada` en el calendario. `MeetingModal` mantiene, aparte, una red de seguridad: si se cambia la fecha directamente en su campo del formulario de una reunión `realizada`, el guardado resetea `status` a `'programada'` (mismo criterio, sin pasar por el panel). |
+| **Eliminar (dos pasos)** | El botón "Eliminar" de `MeetingDetail` sigue el patrón de confirmación de `AdsDetail.jsx`: primer click → cambia a "¿Confirmar?" (rojo) + aparece un botón "No"; segundo click → `deleteMeeting` y cierra. Evita borrados accidentales sin un modal de confirmación aparte. |
+| **Calendario** | `CalendarView.jsx` construye el grid mensual a mano con `date-fns` (`startOfMonth/endOfMonth/eachDayOfInterval`, locale `es`) — no hay librería de calendario en el proyecto. Cada día muestra hasta 3 pills; click en cualquier parte de una pill → `onMeetingClick` (abre `MeetingDetail`); click en día vacío → crear con esa fecha precargada. Cada pill (`MeetingPill`) tiene uno de 4 estilos según estado: `programada` futura = azul sin ícono; `realizada` = check verde, texto normal; `cancelada` = X gris + texto tachado; `programada` **vencida** = alerta roja (triángulo, puramente decorativo — click abre el detalle, donde se marca realizada y se puede agregar el link de la minuta). "Vencida" compara por **día calendario** (`startOfDay`), no por hora exacta: una reunión de hoy no se ve en alerta solo porque su horario ya pasó — recién se considera vencida al día siguiente. Los íconos de estado son SVG de trazo fino (viewBox 16×16, sin relleno — consistentes con el resto de la app, no emoji/unicode); solo el check de `realizada` es un `<button>` interno con `stopPropagation` que llama a `onToggleHeld` para **desmarcar** sin abrir nada (marcar siempre pasa por `MeetingDetail`). Si `currentUserId` (prop pasada desde `ReunionesPage`) está en `attendee_ids`, la pill muestra además un ícono de persona a la derecha; el botón "+N más" también lo muestra si alguna de las reuniones ocultas incluye al usuario. |
+| **Overflow del día ("+N más")** | Cuando un día tiene más de 3 reuniones, el texto "+N más" es un botón que abre **`DayMeetingsList`** (estado local `expandedDay` en `CalendarView`, sin props nuevas del padre): un popup centrado con el título del día y la lista **completa** de reuniones (reusa `MeetingPill` con `truncateTitle={false}`). Click en una fila cierra la lista y llama a `onMeetingClick` — mismo callback que las pills del grid, sin cambiar el contrato con `ReunionesPage`. |
+| **Cards de resumen + filtros** (en `ReunionesPage.jsx`, arriba del calendario) | 3 cards clickeables (`StatusSummaryCard`, local a la página): Pautadas/Completadas/Canceladas — cuentan `meetings` del **mes que se está viendo** (`period.year`/`period.month`) por `status`, **sin aplicar** los filtros de modalidad/alcance (decisión: las cards siempre reflejan el total del mes). Click en una card activa `statusFilter` con selección única y toggle (click de nuevo la desactiva) — las cards son el único control de ese filtro, no hay un segmented control aparte. Dos `<select className="input-base">` (mismo patrón de filtros por dropdown que Tareas/Tickets/Ads — ver `BaseView.jsx`, no un control segmentado tipo tabs): modalidad (Todas/Presencial/Videollamada) y alcance (Todas las reuniones/Solo las mías, criterio `attendee_ids.includes(userProfile.user_id)`). Estos 3 filtros (estado + modalidad + alcance) se combinan en `calendarMeetings`, el array que se le pasa a `CalendarView` en vez de `meetings` crudo — a diferencia de las cards, `calendarMeetings` no se restringe al mes visible (preserva los días de desborde del grid). Todo client-side, sin nuevas queries. |
+| **Participantes por cargo** | `AttendeePicker.jsx` resuelve los botones rápidos por `users.access_level` (fuente confiable; los cargos de `positions.position_name` son texto libre por empresa): "Solo directores" = nivel 4, "Solo jefes" = nivel 3, "Directores y jefes" = nivel ≥3, "Solo coordinadores" = nivel 2, "Directores, jefes y coordinadores" = nivel ≥2, "Toda la empresa" = todos. Cada botón **reemplaza** la selección actual (el último presionado predomina) más "Quitar a todos". Un buscador permite agregar/quitar individualmente (sugiere por nombre; a los ya agregados los marca con check verde en vez de ocultarlos, y el click alterna agregar/quitar); solo se listan los participantes ya agregados, no toda la plantilla. |
+| **Rutas** | `/reuniones` (única ruta, sin sub-tabs) |
+| **Permisos** | Ver: cualquier autenticado. Crear/editar/eliminar/cancelar: capability `reuniones.manage` (default `access_level ≥ 2`, igual que `tareas.manage`). |
+| **WhatsApp (pendiente)** | No implementado. El enganche sería idéntico al de correo (§2.9): una edge function nueva disparada por el mismo patrón de trigger sobre `notifications`, sin rehacer nada de lo existente. |
+
 ---
 
 ## 3. Modelo de datos y relaciones
@@ -288,6 +311,7 @@ Realtime habilitado en todas.
 | `metric_reports` | `20260625000000` | Un reporte jsonb por `(line_id, year, month)`. FK `line_id→metric_lines` CASCADE. |
 | `notifications` | `20260703000000` | Notificaciones in-app y de correo. RLS: lectura/actualización solo del destinatario (`auth.uid()::text = user_id`). Realtime habilitado. Índice único parcial sobre `dedupe_key` para idempotencia de las notificaciones de fecha. |
 | `module_permissions` | `20260705000000` | Reglas de acceso por módulo (DNF: grupos OR de condiciones AND). Una fila por `(company_id, module_key)`. Estructura `rules jsonb`: `{"rules":[{"all":[{"type":"department","ids":[...]},{"type":"min_level","value":N},...]},...]}`. Sin filas = módulo abierto. RLS: SELECT abierto a `authenticated`; INSERT/UPDATE/DELETE solo si `is_company_admin()` (función SECURITY DEFINER). |
+| `meetings` | `20260717000000` (+ `20260717000001` para triggers/cron de notificación, + `20260718000000` para `minuta_url`) | Reuniones agendadas. FK `client_id→metric_clients` (SET NULL), `line_id→metric_lines` (SET NULL, snapshot resuelto desde el cliente). `attendee_ids text[]` sin FK (convención igual que `tasks.assignee_ids`). `status` de 3 valores (`programada`/`realizada`/`cancelada`) marcado a mano — ver §2.11. `minuta_url` (texto libre, link de Google Drive) opcional al marcar `realizada`. RLS: SELECT abierto a autenticados; INSERT/UPDATE/DELETE gated por `user_can('reuniones.manage')`. Habilitada en `supabase_realtime`. |
 
 ### 3.2 Tablas externas (base compartida — no en migraciones)
 
@@ -329,12 +353,14 @@ metric_lines (id PK)  ←── eje operativo
   ├─── metric_clients.line_id   (FK, SET NULL)
   ├─── metric_reports.line_id   (FK, CASCADE; único por line+year+month)
   ├─── tasks.team_id            (convención sin FK formal)
+  ├─── meetings.line_id         (FK, SET NULL; snapshot del line_id del cliente)
   └─ member_user_ids[]  ······→ users (array jsonb, sin FK)
 
 metric_clients (id PK)  ←── cliente central
   ├─── tasks.client_id          (FK, SET NULL)
   ├─── campaigns.client_id      (FK, SET NULL)
-  └─── paid_campaigns.client_id (FK, SET NULL)
+  ├─── paid_campaigns.client_id (FK, SET NULL)
+  └─── meetings.client_id       (FK, SET NULL; client_name snapshot)
 
 tasks
   ├─ client_id    ──→ metric_clients
@@ -351,6 +377,12 @@ paid_campaigns  ←── pauta pagada (distinta de campaigns; tabla llamada `ad
   ├─ client_id  ──→ metric_clients (SET NULL)
   └─ created_by ··→ users (texto, sin FK)
 
+meetings  ←── reuniones agendadas (calendario)
+  ├─ client_id    ──→ metric_clients (SET NULL; client_name snapshot)
+  ├─ line_id       ──→ metric_lines (SET NULL; snapshot del line_id del cliente)
+  ├─ attendee_ids ··→ users[]  (array text[], sin FK; igual que tasks.assignee_ids)
+  └─ created_by   ··→ users (texto, sin FK)
+
 support_tickets
   ├─ requester_id ──→ users
   ├─ assigned_to  ──→ users
@@ -362,7 +394,8 @@ notifications (user_id ··→ users — sin FK formal, RLS by auth.uid()::text)
   ├─ entity_type='task'     entity_id ··→ tasks.id
   ├─ entity_type='project'  entity_id ··→ projects.id
   ├─ entity_type='client'   entity_id ··→ metric_clients.id
-  └─ entity_type='employee' entity_id ··→ users.user_id
+  ├─ entity_type='employee' entity_id ··→ users.user_id
+  └─ entity_type='meeting'  entity_id ··→ meetings.id
 ```
 
 Leyenda: `──→` FK formal declarada · `··→` relación lógica por convención (sin constraint) · `───` uno-a-muchos (tabla hija contiene la FK)
@@ -409,6 +442,9 @@ Leyenda: `──→` FK formal declarada · `··→` relación lógica por conv
 | **Empresa → fichas de empleado/cliente (drill-down)** | Clic en el card de una línea en `LinesView` → `LineFichaModal` (ficha read-only de la línea). Sus listas de miembros y clientes drillean **dentro del mismo modal** a `EmployeeFichaContent` / `ClientFichaContent` (los mismos cuerpos de ficha del módulo Reportes), heredando el gating financiero y los deep-links a Evaluaciones y Tareas. |
 | **Empresa → Reportes (deep-link financiero)** | Los KPIs "Ingresos brutos" y "Total egresos" del resumen de finanzas de `LineFichaModal` (visibles solo con `isFinancePrivileged`; navegables solo si además `can('reportes')`) cierran el modal y navegan a `/reportes/linea/{lineId}?tab=finanzas&section=ingresos|gastos`. `FinanzasView` lee `?section=` con `useSearchParams`: scroll one-shot a la sección (refs `ingresosRef`/`gastosRef`) tras la primera carga y limpia el param con `replace` (no re-scrollea al cambiar mes/sub-tab). |
 | **Reportes → Reportes (deep-link interno)** | KPI "Línea líder" en `DashboardView` navega a `/reportes/linea/{lineId}`. Las tarjetas financieras de la tabla resumen navegan a `/reportes/linea/{lineId}?tab=finanzas`. Los sub-links "N cuentas" / "N empleados" de las tarjetas financieras navegan a `?tab=operaciones` y al Resumen de la línea respectivamente. `LineView` lee `?tab=hub|operaciones|finanzas` para pre-seleccionar la sub-pestaña al cargar. |
+| **Reuniones ↔ Empresa/Métricas** | `meetings.client_id → metric_clients.id` y `meetings.line_id → metric_lines.id` (snapshot del `line_id` del cliente al crear/editar, ver §2.11). `AttendeePicker` asigna `meetings.attendee_ids` por `users.access_level`. |
+| **Reuniones → Métricas (Operaciones, "reuniones realizadas")** | La sección "1. Reuniones realizadas" de `OperacionesView` (Reportes → Operaciones) llama a `countMeetingsHeldForLine(companyId, line.id, {month, year})` (`meetingsApi.js`) y siembra `metric_reports.data.reuniones.realizadas` con ese conteo **solo si el reporte no tiene valor guardado aún** (patrón sembrar-y-editar, mismo que `monthly_fee`/`monthly_salary` en `syncReportClients`, §4 fila "Métricas ↔ Empresa"). El campo sigue siendo editable; un hint "Auto: N reuniones · usar automático" permite re-sincronizar cuando el valor difiere del conteo. |
+| **Reuniones ↔ Notificaciones** | `notify_meeting_attendees()` (trigger sobre `meetings.attendee_ids`) + `enqueue_meeting_reminders()` (pg_cron cada 15 min) generan `meeting_invite`, `meeting_reminder_day` y `meeting_reminder_hour` — ver §2.9. |
 
 ### Desconexión notable (doble fuente de verdad)
 

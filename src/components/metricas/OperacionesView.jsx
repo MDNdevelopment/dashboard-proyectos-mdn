@@ -11,6 +11,7 @@ import { useUnsavedChanges } from "../../hooks/useUnsavedChanges";
 import { Avatar } from "../tareas/UserPickerSingle";
 import { loadAds, spentByClientInPeriod } from "../ads/campaignSpendApi";
 import { fmtUSD } from "../../utils/metricsFinance";
+import { countMeetingsHeldForLine } from "../reuniones/meetingsApi";
 
 /** Adapta un objeto cliente (logo_url) al shape que espera <Avatar> (avatar_url). */
 function clientAvatar(c) {
@@ -29,6 +30,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
   const [clients, setClients] = useState([]);
   const [companyEmployees, setCompanyEmployees] = useState([]);
   const [ads, setAds] = useState([]);
+  const [meetingsHeld, setMeetingsHeld] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -44,14 +46,17 @@ export default function OperacionesView({ line, companyId, year, month }) {
     setLoading(true);
     setError(null);
 
-    const [reportRes, prevRes, clientsRes, employeesRes, adsRes] = await Promise.all([
+    const [reportRes, prevRes, clientsRes, employeesRes, adsRes, meetingsRes] = await Promise.all([
       loadReport(line.id, year, month),
       loadPrevReport(line.id, year, month),
       loadClients(companyId, line.id, { includeArchived: true }),
       loadCompanyEmployees(companyId),
       loadAds(companyId),
+      countMeetingsHeldForLine(companyId, line.id, { month, year }),
     ]);
     setAds(adsRes.data ?? []);
+    const meetingsCount = meetingsRes?.count ?? 0;
+    setMeetingsHeld(meetingsCount);
 
     // Todos (incl. archivados) para resolver nombres en reportes guardados;
     // solo activos para syncReportClients (no re-agregar archivados al reporte actual).
@@ -73,6 +78,9 @@ export default function OperacionesView({ line, companyId, year, month }) {
     if (reportRes.data) {
       // Sincronizar items con los clientes activos y empleados actuales de la línea
       const synced = syncReportClients(reportRes.data.data, activeLineClients, lineEmployees);
+      // Sembrar "realizadas" con el conteo automático solo si no hay valor guardado aún
+      // (patrón sembrar-y-editar, igual que monthly_fee/monthly_salary en syncReportClients).
+      if (synced.reuniones.realizadas == null) synced.reuniones.realizadas = meetingsCount;
       setReport(synced);
       baselineRef.current = synced;
     } else {
@@ -80,6 +88,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
       const lineMetas = line?.metas ?? {};
       const fresh = initMetricReport(prevRes.data?.data ?? null, activeLineClients, lineMetas);
       const synced = syncReportClients(fresh, activeLineClients, lineEmployees);
+      if (synced.reuniones.realizadas == null) synced.reuniones.realizadas = meetingsCount;
       setReport(synced);
       baselineRef.current = synced;
     }
@@ -224,6 +233,16 @@ export default function OperacionesView({ line, companyId, year, month }) {
               value={report.reuniones.realizadas ?? ""}
               onChange={e => setField("reuniones.realizadas", e.target.value === "" ? null : Number(e.target.value))}
             />
+            {report.reuniones.realizadas !== meetingsHeld && (
+              <button
+                type="button"
+                onClick={() => setField("reuniones.realizadas", meetingsHeld)}
+                className="mt-1 text-[12px] font-mono text-[#888] hover:text-[#111] transition-colors"
+                title="Reemplaza el valor actual por el conteo automático de reuniones del módulo Reuniones"
+              >
+                Auto: {meetingsHeld} reunion{meetingsHeld === 1 ? "" : "es"} registrada{meetingsHeld === 1 ? "" : "s"} · usar automático
+              </button>
+            )}
           </Field>
           <Field label="Meta">
             <input type="number" min="1" className="input-base"

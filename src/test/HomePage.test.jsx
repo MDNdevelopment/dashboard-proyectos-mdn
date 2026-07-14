@@ -1,12 +1,22 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { vi } from 'vitest'
+import { startOfWeek, addDays } from 'date-fns'
+
+// ── Mock useNavigate (mantiene el resto de react-router-dom real) ───────────
+const mockNavigate = vi.fn()
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom')
+  return { ...actual, useNavigate: () => mockNavigate }
+})
 
 // ── Mock supabase ────────────────────────────────────────────────────────────
 vi.mock('../supabase', () => {
   const makeQuery = (result = []) => ({
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
+    gte: vi.fn().mockReturnThis(),
+    lt: vi.fn().mockReturnThis(),
     is: vi.fn().mockReturnThis(),
     order: vi.fn().mockResolvedValue({ data: result, error: null }),
     then: (resolve) => resolve({ data: result, error: null }),
@@ -19,6 +29,7 @@ vi.mock('../supabase', () => {
     if (table === 'metric_clients') return makeQuery(globalThis.__MOCK_CLIENTS_OVERRIDE__ ?? MOCK_CLIENTS)
     if (table === 'metric_lines') return makeQuery(globalThis.__MOCK_METRIC_LINES__ ?? [])
     if (table === 'metric_reports') return makeQuery(globalThis.__MOCK_METRIC_REPORTS__ ?? [])
+    if (table === 'meetings') return makeQuery(globalThis.__MOCK_MEETINGS_OVERRIDE__ ?? [])
     return makeQuery([])
   })
 
@@ -331,6 +342,61 @@ describe('HomePage — Mi línea (nivel 3)', () => {
     renderPage({ access_level: 2 })
     await waitFor(() => expect(screen.getByText(/asignadas activas/i)).toBeInTheDocument())
     expect(screen.queryByRole('heading', { name: /^mi línea$/i })).not.toBeInTheDocument()
+  })
+})
+
+describe('HomePage — Mis reuniones', () => {
+  afterEach(() => {
+    globalThis.__MOCK_MEETINGS_OVERRIDE__ = undefined
+  })
+
+  const thisMonday = startOfWeek(new Date(), { weekStartsOn: 1 })
+  const inWeek = addDays(thisMonday, 2).toISOString()
+
+  it('muestra el texto de estado vacío cuando no hay reuniones esta semana', async () => {
+    globalThis.__MOCK_MEETINGS_OVERRIDE__ = []
+    renderPage({ access_level: 1 })
+    await waitFor(() => {
+      expect(screen.getByText(/no tienes reuniones agendadas para esta semana/i)).toBeInTheDocument()
+    })
+  })
+
+  it('lista una reunión programada de esta semana donde el usuario es asistente', async () => {
+    globalThis.__MOCK_MEETINGS_OVERRIDE__ = [
+      { id: 'm1', title: 'ALsa estrategia', client_name: 'ALSA', modality: 'videollamada', starts_at: inWeek, status: 'programada', attendee_ids: ['u1'] },
+    ]
+    renderPage({ access_level: 1 })
+    await waitFor(() => {
+      expect(screen.getByText(/alsa estrategia/i)).toBeInTheDocument()
+    })
+    expect(screen.getByText(/^alsa$/i)).toBeInTheDocument()
+    expect(screen.getByText(/videollamada/i)).toBeInTheDocument()
+    expect(screen.queryByText(/no tienes reuniones agendadas/i)).not.toBeInTheDocument()
+  })
+
+  it('NO lista reuniones donde el usuario no es asistente, ni canceladas/realizadas', async () => {
+    globalThis.__MOCK_MEETINGS_OVERRIDE__ = [
+      { id: 'm2', title: 'Otra persona', starts_at: inWeek, status: 'programada', attendee_ids: ['u2'] },
+      { id: 'm3', title: 'Ya cancelada', starts_at: inWeek, status: 'cancelada', attendee_ids: ['u1'] },
+      { id: 'm4', title: 'Ya realizada', starts_at: inWeek, status: 'realizada', attendee_ids: ['u1'] },
+    ]
+    renderPage({ access_level: 1 })
+    await waitFor(() => {
+      expect(screen.getByText(/no tienes reuniones agendadas para esta semana/i)).toBeInTheDocument()
+    })
+    expect(screen.queryByText(/otra persona/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/ya cancelada/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/ya realizada/i)).not.toBeInTheDocument()
+  })
+
+  it('al hacer click en una reunión navega a /reuniones con el meetingId', async () => {
+    globalThis.__MOCK_MEETINGS_OVERRIDE__ = [
+      { id: 'm1', title: 'ALsa estrategia', client_name: 'ALSA', starts_at: inWeek, status: 'programada', attendee_ids: ['u1'] },
+    ]
+    renderPage({ access_level: 1 })
+    await waitFor(() => expect(screen.getByText(/alsa estrategia/i)).toBeInTheDocument())
+    screen.getByText(/alsa estrategia/i).closest('button').click()
+    expect(mockNavigate).toHaveBeenCalledWith('/reuniones?meetingId=m1')
   })
 })
 

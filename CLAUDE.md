@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Internal management suite for **MDN Publicidad**, a Venezuelan advertising agency. Covers 8 modules: Proyectos, Tareas, Métricas, Empresa, Evaluaciones, Tickets, Ads, and Auth. Built with React + Vite, styled with Tailwind CSS, using Supabase (PostgreSQL) as the backend. Deployed on Netlify.
+Internal management suite for **MDN Publicidad**, a Venezuelan advertising agency. Covers 9 modules: Proyectos, Tareas, Métricas, Empresa, Evaluaciones, Tickets, Ads, Reuniones, and Auth. Built with React + Vite, styled with Tailwind CSS, using Supabase (PostgreSQL) as the backend. Deployed on Netlify.
 
 The UI is entirely in Spanish.
 
