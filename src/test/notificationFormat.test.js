@@ -34,6 +34,15 @@ describe('notifIcon', () => {
   it('returns 🎊 for employee_mdn_anniversary', () => {
     expect(notifIcon('employee_mdn_anniversary')).toBe('🎊')
   })
+  it('returns 📅 for meeting_invite', () => {
+    expect(notifIcon('meeting_invite')).toBe('📅')
+  })
+  it('returns 📅 for meeting_reminder_day', () => {
+    expect(notifIcon('meeting_reminder_day')).toBe('📅')
+  })
+  it('returns ⏰ for meeting_reminder_hour', () => {
+    expect(notifIcon('meeting_reminder_hour')).toBe('⏰')
+  })
   it('returns 🔔 for unknown types', () => {
     expect(notifIcon('unknown_type')).toBe('🔔')
     expect(notifIcon('')).toBe('🔔')
@@ -54,6 +63,15 @@ describe('notifLabel', () => {
   })
   it('returns human-readable label for employee_mdn_anniversary', () => {
     expect(notifLabel('employee_mdn_anniversary')).toBe('Aniversario MDN')
+  })
+  it('returns human-readable label for meeting_invite', () => {
+    expect(notifLabel('meeting_invite')).toBe('Reunión agendada')
+  })
+  it('returns human-readable label for meeting_reminder_day', () => {
+    expect(notifLabel('meeting_reminder_day')).toBe('Recordatorio de reunión')
+  })
+  it('returns human-readable label for meeting_reminder_hour', () => {
+    expect(notifLabel('meeting_reminder_hour')).toBe('Recordatorio de reunión')
   })
   it('returns fallback for unknown types', () => {
     expect(notifLabel('whatever')).toBe('Notificación')
@@ -92,6 +110,20 @@ describe('notifRoute', () => {
       .toBe('/empresa/empleados')
     expect(notifRoute({ type: 'employee_mdn_anniversary', entity_type: 'employee', entity_id: 'u1' }))
       .toBe('/empresa/empleados')
+  })
+
+  it('routes meeting types to /reuniones?meetingId=<id> (deeplink al detalle de la reunión)', () => {
+    expect(notifRoute({ type: 'meeting_invite', entity_type: 'meeting', entity_id: 'm1' }))
+      .toBe('/reuniones?meetingId=m1')
+    expect(notifRoute({ type: 'meeting_reminder_day', entity_type: 'meeting', entity_id: 'm1' }))
+      .toBe('/reuniones?meetingId=m1')
+    expect(notifRoute({ type: 'meeting_reminder_hour', entity_type: 'meeting', entity_id: 'm1' }))
+      .toBe('/reuniones?meetingId=m1')
+  })
+
+  it('routes meeting types to /reuniones (sin query) cuando no hay entity_id', () => {
+    expect(notifRoute({ type: 'meeting_invite', entity_type: 'meeting', entity_id: null }))
+      .toBe('/reuniones')
   })
 
   it('falls back to / for unknown types', () => {

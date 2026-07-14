@@ -1,11 +1,14 @@
 import { useState, useEffect, Fragment } from 'react'
-import { useOutletContext, Link } from 'react-router-dom'
+import { useOutletContext, useNavigate, Link } from 'react-router-dom'
+import { startOfWeek, endOfWeek, format } from 'date-fns'
+import { es } from 'date-fns/locale'
 import { supabase } from '../supabase'
 import { useAuth } from '../context/AuthContext'
 import { MODULES } from '../config/modules'
 import { isLate, isClosed } from '../components/tareas/constants'
 import KpiCard from '../components/common/KpiCard'
-import { loadLines, loadYearReports, loadClients } from '../components/metricas/metricsApi'
+import { loadLines, loadYearReports, loadClients, loadCompanyEmployees } from '../components/metricas/metricsApi'
+import { loadMeetings } from '../components/reuniones/meetingsApi'
 import { calcTotal, sumScore, monthLineScore } from '../utils/metricsScore'
 import { calcFinanzas } from '../utils/metricsFinance'
 import { aggregateMetricsDashboard } from '../utils/aggregateMetricsDashboard'
@@ -33,6 +36,17 @@ const ICON_CLIENTS = <svg width="16" height="16" viewBox="0 0 16 16" fill="none"
 const ICON_EMPLOYEES = <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="8" cy="5" r="2.5"/><path d="M3 14c0-2.8 2.2-5 5-5s5 2.2 5 5" strokeLinecap="round" strokeLinejoin="round"/></svg>
 const ICON_LINES = <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M2 4h7M2 8h10M2 12h5" strokeLinecap="round"/></svg>
 
+const ICON_CALENDAR = <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" className="flex-shrink-0"><rect x="1.5" y="2.5" width="13" height="12" rx="1.5"/><path d="M1.5 6h13" strokeLinecap="round"/><path d="M5 1v3M11 1v3" strokeLinecap="round"/></svg>
+const ICON_VIDEO = <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" className="flex-shrink-0"><rect x="1.5" y="4" width="9" height="8" rx="1.5"/><path d="M10.5 6.5 14.5 4v8l-4-2.5" strokeLinejoin="round"/></svg>
+const ICON_LOCATION = <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" className="flex-shrink-0"><path d="M8 14.5S13 9.8 13 6.3a5 5 0 1 0-10 0c0 3.5 5 8.2 5 8.2Z" strokeLinejoin="round"/><circle cx="8" cy="6.2" r="1.8"/></svg>
+
+function attendeeFullName(u) {
+  return `${u?.first_name ?? ''} ${u?.last_name ?? ''}`.trim()
+}
+function attendeeInitials(u) {
+  return `${u?.first_name?.[0] ?? ''}${u?.last_name?.[0] ?? ''}`.toUpperCase()
+}
+
 // Salud de la empresa: se muestra el mes cerrado más reciente (el anterior al actual),
 // igual convención que el dashboard de reportes (DashboardView.jsx).
 const HEALTH_CURRENT_MONTH = new Date().getMonth() + 1
@@ -48,6 +62,7 @@ function timeGreeting() {
 
 export default function HomePage() {
   const { userProfile, can = () => true } = useAuth()
+  const navigate = useNavigate()
   // Proyectos ya vive en el estado de AppLayout — se reutiliza en vez de re-fetchear.
   const outlet = useOutletContext() ?? {}
   const projects = outlet.projects ?? []
@@ -58,6 +73,9 @@ export default function HomePage() {
   const [lines, setLines] = useState([])
   const [metricReports, setMetricReports] = useState([])
   const [clients, setClients] = useState([])
+  const [meetings, setMeetings] = useState([])
+  const [loadingMeetings, setLoadingMeetings] = useState(true)
+  const [meetingEmployees, setMeetingEmployees] = useState([])
 
   const isDirector = userProfile?.access_level >= 4 || userProfile?.admin === true
   // A nivel 4 no se le asignan tareas directamente, solo se le pone como apoyo de dirección.
@@ -70,6 +88,7 @@ export default function HomePage() {
   const showEmpresaClientes = can('empresa.clientes')
   const showEmpresaEmpleados = can('empresa.empleados')
   const showEmpresaLineas = can('empresa.lineas')
+  const showReuniones = can('reuniones')
 
   useEffect(() => {
     if (!userProfile?.company_id || !showTareas) { setLoadingTasks(false); return }
@@ -85,6 +104,33 @@ export default function HomePage() {
       })
     return () => { cancelled = true }
   }, [userProfile?.company_id, showTareas])
+
+  // Reuniones de la semana actual (lunes a domingo) — se filtran a "las mías" client-side,
+  // mismo patrón que "Mis tareas".
+  useEffect(() => {
+    if (!userProfile?.company_id || !showReuniones) { setLoadingMeetings(false); return }
+    let cancelled = false
+    const now = new Date()
+    const from = startOfWeek(now, { weekStartsOn: 1 })
+    const to = endOfWeek(now, { weekStartsOn: 1 })
+    loadMeetings(userProfile.company_id, { from, to }).then(({ data, error }) => {
+      if (cancelled) return
+      setMeetings(error ? [] : (data ?? []))
+      setLoadingMeetings(false)
+    })
+    return () => { cancelled = true }
+  }, [userProfile?.company_id, showReuniones])
+
+  // Empleados de la empresa — solo para mostrar nombre/avatar de los participantes de "Mis reuniones".
+  useEffect(() => {
+    if (!userProfile?.company_id || !showReuniones) return
+    let cancelled = false
+    loadCompanyEmployees(userProfile.company_id).then(({ data }) => {
+      if (cancelled) return
+      setMeetingEmployees(data ?? [])
+    })
+    return () => { cancelled = true }
+  }, [userProfile?.company_id, showReuniones])
 
   useEffect(() => {
     if (!userProfile?.company_id || !isDirector) return
@@ -123,6 +169,9 @@ export default function HomePage() {
   const mySupportTasks = activeTasks.filter(t => t.support_id === myUserId)
   const mySupportLateTasks = mySupportTasks.filter(isLate)
   const companyLateTasks = activeTasks.filter(isLate)
+  const myMeetings = meetings.filter(
+    m => m.status === 'programada' && (m.attendee_ids ?? []).includes(myUserId)
+  )
 
   const greetingName = userProfile?.first_name ?? ''
   const roleLine = [userProfile?.department?.department_name, userProfile?.position?.position_name]
@@ -254,6 +303,75 @@ export default function HomePage() {
                 />
               )}
             </div>
+          </section>
+        )}
+
+        {/* Mis reuniones */}
+        {showReuniones && (
+          <section className="mb-8 rise-in" style={{ animationDelay: '95ms' }}>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-1.5 h-4 rounded-full bg-[#ccc]" aria-hidden="true" />
+              <h2 className="text-[13px] font-mono font-bold tracking-[0.14em] uppercase text-[#888]">
+                Mis reuniones de la semana
+              </h2>
+            </div>
+            {loadingMeetings ? (
+              <p className="text-[14px] text-[#888]">Cargando…</p>
+            ) : myMeetings.length === 0 ? (
+              <div className="bg-white border border-[#e0ddd4] rounded-2xl p-4 w-full">
+                <p className="text-[14px] text-[#888]">
+                  No tienes reuniones agendadas para esta semana
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                {myMeetings.map(m => {
+                  const attendees = meetingEmployees.filter(u => (m.attendee_ids ?? []).includes(u.user_id))
+                  const isVideo = m.modality === 'videollamada'
+                  const place = isVideo ? 'Videollamada' : (m.location || 'Presencial')
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => navigate(`/reuniones?meetingId=${m.id}`)}
+                      className="text-left bg-white border border-[#e0ddd4] rounded-2xl p-3 flex flex-col transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_-8px_rgba(0,0,0,0.14)]"
+                    >
+                      {/* Título: siempre presente (campo obligatorio). */}
+                      <p className="text-[13.5px] font-bold text-[#111] leading-snug truncate">{m.title}</p>
+                      {/* Cliente: slot de altura fija, invisible si no aplica, para no correr el resto del contenido. */}
+                      <p className={`text-[12px] text-[#888] mt-0.5 truncate ${m.client_name ? '' : 'invisible'}`}>
+                        {m.client_name || '—'}
+                      </p>
+                      <p className="flex items-center gap-1.5 text-[12px] text-[#555] font-medium capitalize mt-2">
+                        {ICON_CALENDAR}
+                        <span className="truncate">{format(new Date(m.starts_at), "EEE d · HH:mm", { locale: es })}</span>
+                      </p>
+                      <p className="flex items-center gap-1.5 text-[12px] text-[#555] mt-1.5 truncate">
+                        {isVideo ? ICON_VIDEO : ICON_LOCATION}
+                        <span className="truncate">{place}</span>
+                      </p>
+                      {/* Participantes: contenedor de altura fija, vacío si no hay ninguno. */}
+                      <div className="flex items-center -space-x-1.5 mt-2.5 h-6">
+                        {attendees.slice(0, 4).map(u => (
+                          <span
+                            key={u.user_id}
+                            title={attendeeFullName(u)}
+                            className="w-6 h-6 rounded-full ring-2 ring-white bg-[#eee] flex items-center justify-center text-[9px] font-bold text-[#888] overflow-hidden flex-shrink-0"
+                          >
+                            {u.avatar_url ? (
+                              <img src={u.avatar_url} alt="" className="w-full h-full object-cover" />
+                            ) : attendeeInitials(u)}
+                          </span>
+                        ))}
+                        {attendees.length > 4 && (
+                          <span className="text-[11px] text-[#888] pl-3">+{attendees.length - 4}</span>
+                        )}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
           </section>
         )}
 

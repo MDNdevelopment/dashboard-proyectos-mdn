@@ -17,6 +17,7 @@ import TareasPage from './pages/TareasPage.jsx'
 import EmpresaPage from './pages/EmpresaPage.jsx'
 import EvaluacionesPage from './pages/EvaluacionesPage.jsx'
 import MetricasPage from './pages/MetricasPage.jsx'
+import ReunionesPage from './pages/ReunionesPage.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -61,6 +62,9 @@ createRoot(document.getElementById('root')).render(
             {/* Reportes */}
             <Route path="/reportes" element={<RequireModule moduleKey="reportes"><MetricasPage /></RequireModule>} />
             <Route path="/reportes/linea/:lineId" element={<RequireModule moduleKey="reportes"><MetricasPage /></RequireModule>} />
+
+            {/* Reuniones */}
+            <Route path="/reuniones" element={<RequireModule moduleKey="reuniones"><ReunionesPage /></RequireModule>} />
 
             {/* Proyectos */}
             <Route path="/proyectos" element={<App />} />

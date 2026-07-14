@@ -38,6 +38,7 @@ const mockLoadClients = vi.fn()
 const mockLoadCompanyEmployees = vi.fn()
 const mockUpsertReport = vi.fn()
 const mockLoadAds = vi.fn()
+const mockCountMeetingsHeldForLine = vi.fn()
 
 vi.mock('../components/metricas/metricsApi', () => ({
   loadReport: (...a) => mockLoadReport(...a),
@@ -54,6 +55,10 @@ vi.mock('../components/ads/campaignSpendApi', async () => {
     loadAds: (...a) => mockLoadAds(...a),
   }
 })
+
+vi.mock('../components/reuniones/meetingsApi', () => ({
+  countMeetingsHeldForLine: (...a) => mockCountMeetingsHeldForLine(...a),
+}))
 
 vi.mock('../context/AuthContext', () => ({
   useAuth: () => ({ can: () => true }),
@@ -77,6 +82,8 @@ describe('OperacionesView — columna Inversión Ads (Crecimiento de seguidores)
     mockLoadClients.mockResolvedValue({ data: MOCK_CLIENTS, error: null })
     mockLoadCompanyEmployees.mockResolvedValue({ data: [], error: null })
     mockUpsertReport.mockResolvedValue({ data: null, error: null })
+    mockCountMeetingsHeldForLine.mockResolvedValue({ count: 0, error: null })
+    mockLoadAds.mockResolvedValue({ data: [], error: null })
   })
 
   it('muestra la suma de campañas del cliente cuyo start_date cae en el mes del reporte', async () => {
@@ -132,5 +139,56 @@ describe('OperacionesView — columna Inversión Ads (Crecimiento de seguidores)
     expect(screen.queryByText('$999.00')).not.toBeInTheDocument()
     const zeros = await screen.findAllByText('$0.00')
     expect(zeros.length).toBeGreaterThanOrEqual(2)
+  })
+})
+
+describe('OperacionesView — "Reuniones realizadas" (sembrar-y-editar desde el módulo Reuniones)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockLoadPrevReport.mockResolvedValue({ data: null, error: null })
+    mockLoadClients.mockResolvedValue({ data: MOCK_CLIENTS, error: null })
+    mockLoadCompanyEmployees.mockResolvedValue({ data: [], error: null })
+    mockUpsertReport.mockResolvedValue({ data: null, error: null })
+    mockLoadAds.mockResolvedValue({ data: [], error: null })
+  })
+
+  it('respeta el valor ya guardado en el reporte aunque el conteo automático sea distinto', async () => {
+    // El reporte guardado ya tiene realizadas=10; el conteo automático del módulo
+    // Reuniones da 5 — el override del usuario debe prevalecer.
+    mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
+    mockCountMeetingsHeldForLine.mockResolvedValue({ count: 5, error: null })
+    renderView()
+    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    const realizadasInput = document.querySelectorAll('input[type="number"]')[0]
+    expect(realizadasInput.value).toBe('10')
+  })
+
+  it('siembra "realizadas" con el conteo automático cuando el reporte no tiene valor guardado', async () => {
+    const data = makeReportData()
+    data.reuniones.realizadas = null
+    mockLoadReport.mockResolvedValue({ data: { data }, error: null })
+    mockCountMeetingsHeldForLine.mockResolvedValue({ count: 7, error: null })
+    renderView()
+    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    const realizadasInput = document.querySelectorAll('input[type="number"]')[0]
+    expect(realizadasInput.value).toBe('7')
+  })
+
+  it('siembra "realizadas" con el conteo automático en un reporte nuevo (sin fila previa)', async () => {
+    mockLoadReport.mockResolvedValue({ data: null, error: null })
+    mockCountMeetingsHeldForLine.mockResolvedValue({ count: 3, error: null })
+    renderView()
+    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    const realizadasInput = document.querySelectorAll('input[type="number"]')[0]
+    expect(realizadasInput.value).toBe('3')
+  })
+
+  it('muestra el hint "usar automático" cuando el valor difiere del conteo, y lo oculta cuando coincide', async () => {
+    mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
+    mockCountMeetingsHeldForLine.mockResolvedValue({ count: 10, error: null })
+    renderView()
+    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    // realizadas=10 (guardado) === conteo automático=10 → no debe mostrarse el hint
+    expect(screen.queryByText(/usar automático/)).not.toBeInTheDocument()
   })
 })

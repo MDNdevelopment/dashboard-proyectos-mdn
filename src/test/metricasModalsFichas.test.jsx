@@ -115,6 +115,9 @@ vi.mock('../utils/initMetricReport', () => ({
 vi.mock('../utils/syncReportClients', () => ({
   syncReportClients: vi.fn((r) => r),
 }))
+vi.mock('../components/reuniones/meetingsApi', () => ({
+  countMeetingsHeldForLine: vi.fn().mockResolvedValue({ count: 0, error: null }),
+}))
 
 // ── Fixtures ───────────────────────────────────────────────────────────────────
 

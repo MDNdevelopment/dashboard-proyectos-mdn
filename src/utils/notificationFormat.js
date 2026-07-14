@@ -22,6 +22,9 @@ export function notifIcon(type) {
     client_contact_birthday: '🎂',
     employee_birthday:       '🎂',
     employee_mdn_anniversary:'🎊',
+    meeting_invite:          '📅',
+    meeting_reminder_day:    '📅',
+    meeting_reminder_hour:   '⏰',
   }
   return icons[type] ?? '🔔'
 }
@@ -42,6 +45,9 @@ export function notifLabel(type) {
     client_contact_birthday: 'Cumpleaños de contacto',
     employee_birthday:       'Cumpleaños',
     employee_mdn_anniversary:'Aniversario MDN',
+    meeting_invite:          'Reunión agendada',
+    meeting_reminder_day:    'Recordatorio de reunión',
+    meeting_reminder_hour:   'Recordatorio de reunión',
   }
   return labels[type] ?? 'Notificación'
 }
@@ -57,6 +63,11 @@ export function notifRoute(notif) {
   const { type, entity_type, entity_id } = notif
 
   if (type === 'task_assigned' || type === 'task_comment' || type === 'checklist_item_assigned') return '/tareas'
+  if (type === 'meeting_invite' || type === 'meeting_reminder_day' || type === 'meeting_reminder_hour') {
+    // Deep-link al detalle de solo lectura de la reunión vía ?meetingId=uuid (ReunionesPage lo lee)
+    if (entity_id) return `/reuniones?meetingId=${entity_id}`
+    return '/reuniones'
+  }
   if (type === 'project_added') {
     // Deep-link to the project modal via ?projectId=uuid (AppLayout reads this param)
     if (entity_id) return `/?projectId=${entity_id}`
