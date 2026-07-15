@@ -81,7 +81,8 @@ export async function loadAdsResponsables(companyId) {
       .from("users")
       .select("user_id, first_name, last_name")
       .eq("company_id", companyId)
-      .eq("ads_responsable_fixed", true),
+      .eq("ads_responsable_fixed", true)
+      .is("deleted_at", null),
     supabase.from("metric_lines").select("id").eq("company_id", companyId),
   ]);
 
@@ -98,7 +99,8 @@ export async function loadAdsResponsables(companyId) {
       const { data: leadUsers } = await supabase
         .from("users")
         .select("user_id, first_name, last_name")
-        .in("user_id", leadIds);
+        .in("user_id", leadIds)
+        .is("deleted_at", null);
       leads = leadUsers ?? [];
     }
   }

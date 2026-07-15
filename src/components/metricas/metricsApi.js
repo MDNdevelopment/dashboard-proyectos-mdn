@@ -138,7 +138,7 @@ export async function updateClient(clientId, updates) {
 export async function loadCompanyUsers(companyId) {
   return supabase
     .from("users")
-    .select("user_id, first_name, last_name, avatar_url")
+    .select("user_id, first_name, last_name, avatar_url, deleted_at")
     .eq("company_id", companyId)
     .order("first_name");
 }
@@ -231,6 +231,24 @@ export async function upsertReport(companyId, lineId, year, month, data) {
       { company_id: companyId, line_id: lineId, year, month, data, updated_at: new Date().toISOString() },
       { onConflict: "line_id,year,month" }
     )
+    .select()
+    .single();
+}
+
+/**
+ * Cierra permanentemente el reporte de una línea/mes: Operaciones y Finanzas quedan de
+ * solo lectura para siempre (bloqueado también a nivel de base por un trigger — ver
+ * migración 20260721000000_metric_reports_close.sql). No existe función de reapertura:
+ * el cierre es irreversible por diseño.
+ * @returns {{ data, error }}
+ */
+export async function closeReport(lineId, year, month, userId) {
+  return supabase
+    .from("metric_reports")
+    .update({ closed_at: new Date().toISOString(), closed_by: userId })
+    .eq("line_id", lineId)
+    .eq("year", year)
+    .eq("month", month)
     .select()
     .single();
 }

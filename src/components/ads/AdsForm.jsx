@@ -37,7 +37,7 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
     if (!userProfile?.company_id) { setLoadingUsers(false); return }
     supabase
       .from('users')
-      .select('user_id, first_name, last_name, avatar_url, access_level, position:positions(position_name)')
+      .select('user_id, first_name, last_name, avatar_url, access_level, deleted_at, position:positions(position_name)')
       .eq('company_id', userProfile.company_id)
       .order('first_name')
       .then(({ data }) => { setUsers(data ?? []); setLoadingUsers(false) })

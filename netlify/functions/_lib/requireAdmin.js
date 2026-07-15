@@ -28,11 +28,12 @@ export async function requireAdmin(event) {
   // Confirmar que el caller tiene admin === true en la tabla users
   const { data: profile, error: profileErr } = await supabase
     .from('users')
-    .select('user_id, admin, company_id')
+    .select('user_id, admin, company_id, deleted_at')
     .eq('user_id', user.id)
     .single()
 
   if (profileErr || !profile) return { error: errJson(401, 'Unauthorized') }
+  if (profile.deleted_at) return { error: errJson(401, 'Unauthorized') }
   if (!profile.admin) return { error: errJson(403, 'Forbidden') }
 
   return { caller: profile }

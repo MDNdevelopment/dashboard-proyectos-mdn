@@ -40,6 +40,7 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
   const [deleting, setDeleting] = useState(false)
   const [showBudgetOverview, setShowBudgetOverview] = useState(false)
   const [resultsFor, setResultsFor] = useState(null) // ad pendiente de resultados para poder finalizar, o null
+  const [generatingExcel, setGeneratingExcel] = useState(false)
 
   const fetchAll = useCallback(async () => {
     if (!companyId) return
@@ -140,6 +141,15 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
     setSearch(''); setStatusFilter('all'); setClientFilter('all')
   }
 
+  async function handleExportExcel() {
+    setGeneratingExcel(true)
+    try {
+      await exportAdsToExcel({ ads: filtered, periodo })
+    } finally {
+      setGeneratingExcel(false)
+    }
+  }
+
   useImperativeHandle(ref, () => ({
     openCreate: () => setModal(null),
   }))
@@ -207,14 +217,19 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
           </button>
         )}
         <button
-          onClick={() => exportAdsToExcel({ ads: filtered, periodo })}
-          className="px-3 py-1.5 rounded-lg border border-[#e0ddd4] text-[14px] font-medium text-[#555] hover:bg-[#f5f3eb] transition-colors flex items-center gap-1.5"
+          onClick={handleExportExcel}
+          disabled={generatingExcel}
+          className="px-3 py-1.5 rounded-lg border border-[#e0ddd4] text-[14px] font-medium text-[#555] hover:bg-[#f5f3eb] transition-colors flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed"
         >
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
-            <path d="M8 1v9M5 7l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
-            <path d="M2 12v2h12v-2" strokeLinecap="round"/>
-          </svg>
-          Excel
+          {generatingExcel ? (
+            <span className="w-3 h-3 border-2 border-[#999] border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
+              <path d="M8 1v9M5 7l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M2 12v2h12v-2" strokeLinecap="round"/>
+            </svg>
+          )}
+          {generatingExcel ? 'Generando…' : 'Excel'}
         </button>
         <button
           onClick={() => setShowBudgetOverview(true)}

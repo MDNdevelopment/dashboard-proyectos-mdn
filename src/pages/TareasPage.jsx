@@ -109,7 +109,7 @@ export default function TareasPage() {
     const [linesRes, tasksRes, usersRes, clientsRes] = await Promise.all([
       loadLines(companyId),
       supabase.from('tasks').select('*').eq('company_id', companyId).order('created_at', { ascending: false }),
-      supabase.from('users').select('user_id, first_name, last_name, avatar_url, access_level, position:positions(position_name)').eq('company_id', companyId).order('first_name'),
+      supabase.from('users').select('user_id, first_name, last_name, avatar_url, access_level, deleted_at, position:positions(position_name)').eq('company_id', companyId).order('first_name'),
       loadClients(companyId),
     ])
 

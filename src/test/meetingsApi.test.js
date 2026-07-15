@@ -58,8 +58,8 @@ vi.mock('../supabase', () => ({
 }))
 
 import {
-  loadMeetings, countMeetingsHeldForLine, createMeeting, updateMeeting, cancelMeeting, deleteMeeting,
-  markMeetingHeld, unmarkMeetingHeld,
+  loadMeetings, countMeetingsHeldForLine, loadHeldClientIdsForLine, createMeeting, updateMeeting,
+  cancelMeeting, deleteMeeting, markMeetingHeld, unmarkMeetingHeld,
 } from '../components/reuniones/meetingsApi'
 
 function activateOnly(active) {
@@ -158,22 +158,87 @@ describe('markMeetingHeld / unmarkMeetingHeld — marcado manual de "realizada"'
   })
 })
 
-describe('countMeetingsHeldForLine — "realizadas" para Operaciones (100% marcado manual)', () => {
-  it('cuenta únicamente reuniones marcadas status=realizada dentro del mes', async () => {
+describe('countMeetingsHeldForLine — "realizadas" para Operaciones (100% marcado manual, 1 por cliente)', () => {
+  it('cuenta clientes distintos, no el total de reuniones (2 reuniones del mismo cliente cuentan 1)', async () => {
     activateOnly(mockCountResult)
-    mockCountResult.mockReturnValue({ count: 4, error: null })
+    mockCountResult.mockReturnValue({
+      data: [{ client_id: 'cli-1' }, { client_id: 'cli-1' }, { client_id: 'cli-2' }],
+      error: null,
+    })
 
     const { count } = await countMeetingsHeldForLine('co-1', 'line-1', { month: 7, year: 2026 })
-    expect(count).toBe(4)
+    expect(count).toBe(2)
+  })
+
+  it('con 3 reuniones de 3 clientes distintos, cuenta 3', async () => {
+    activateOnly(mockCountResult)
+    mockCountResult.mockReturnValue({
+      data: [{ client_id: 'cli-1' }, { client_id: 'cli-2' }, { client_id: 'cli-3' }],
+      error: null,
+    })
+
+    const { count } = await countMeetingsHeldForLine('co-1', 'line-1', { month: 7, year: 2026 })
+    expect(count).toBe(3)
+  })
+
+  it('sin reuniones realizadas, cuenta 0', async () => {
+    activateOnly(mockCountResult)
+    mockCountResult.mockReturnValue({ data: [], error: null })
+
+    const { count } = await countMeetingsHeldForLine('co-1', 'line-1', { month: 7, year: 2026 })
+    expect(count).toBe(0)
+  })
+
+  it('reuniones sin client_id (caso borde) se cuentan cada una por separado', async () => {
+    activateOnly(mockCountResult)
+    mockCountResult.mockReturnValue({
+      data: [{ client_id: null }, { client_id: null }, { client_id: 'cli-1' }],
+      error: null,
+    })
+
+    const { count } = await countMeetingsHeldForLine('co-1', 'line-1', { month: 7, year: 2026 })
+    expect(count).toBe(3)
   })
 
   it('no depende de la fecha actual — cuenta reuniones realizadas de un mes futuro igual', async () => {
     // Antes del cambio esto devolvía 0 sin consultar; ahora es 100% fiel al marcado manual.
     activateOnly(mockCountResult)
-    mockCountResult.mockReturnValue({ count: 2, error: null })
+    mockCountResult.mockReturnValue({ data: [{ client_id: 'cli-1' }, { client_id: 'cli-2' }], error: null })
 
     const { count } = await countMeetingsHeldForLine('co-1', 'line-1', { month: 12, year: 2099 })
     expect(count).toBe(2)
+  })
+})
+
+describe('loadHeldClientIdsForLine — clientes distintos con reunión realizada (modal de cobertura)', () => {
+  it('deduplica client_ids repetidos', async () => {
+    activateOnly(mockCountResult)
+    mockCountResult.mockReturnValue({
+      data: [{ client_id: 'cli-1' }, { client_id: 'cli-1' }, { client_id: 'cli-2' }],
+      error: null,
+    })
+
+    const { clientIds } = await loadHeldClientIdsForLine('co-1', 'line-1', { month: 7, year: 2026 })
+    expect(clientIds.sort()).toEqual(['cli-1', 'cli-2'])
+  })
+
+  it('ignora reuniones con client_id nulo', async () => {
+    activateOnly(mockCountResult)
+    mockCountResult.mockReturnValue({
+      data: [{ client_id: null }, { client_id: 'cli-1' }],
+      error: null,
+    })
+
+    const { clientIds } = await loadHeldClientIdsForLine('co-1', 'line-1', { month: 7, year: 2026 })
+    expect(clientIds).toEqual(['cli-1'])
+  })
+
+  it('devuelve [] sin reuniones realizadas', async () => {
+    activateOnly(mockCountResult)
+    mockCountResult.mockReturnValue({ data: [], error: null })
+
+    const { clientIds } = await loadHeldClientIdsForLine('co-1', 'line-1', { month: 7, year: 2026 })
+    expect(clientIds).toEqual([])
   })
 })
 
