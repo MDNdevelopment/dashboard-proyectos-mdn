@@ -4,7 +4,7 @@
  * cliente/mes (según start_date), estado vacío en $0.00, que campañas de
  * otro mes no se cuenten, y el "/ presupuesto" tomado de campaign_budget.
  */
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react'
 import { vi } from 'vitest'
 
 const { MOCK_CLIENTS } = vi.hoisted(() => ({
@@ -39,6 +39,7 @@ const mockLoadCompanyEmployees = vi.fn()
 const mockUpsertReport = vi.fn()
 const mockLoadAds = vi.fn()
 const mockCountMeetingsHeldForLine = vi.fn()
+const mockLoadHeldClientIdsForLine = vi.fn()
 
 vi.mock('../components/metricas/metricsApi', () => ({
   loadReport: (...a) => mockLoadReport(...a),
@@ -58,6 +59,7 @@ vi.mock('../components/ads/campaignSpendApi', async () => {
 
 vi.mock('../components/reuniones/meetingsApi', () => ({
   countMeetingsHeldForLine: (...a) => mockCountMeetingsHeldForLine(...a),
+  loadHeldClientIdsForLine: (...a) => mockLoadHeldClientIdsForLine(...a),
 }))
 
 vi.mock('../context/AuthContext', () => ({
@@ -83,6 +85,7 @@ describe('OperacionesView — columna Inversión Ads (Crecimiento de seguidores)
     mockLoadCompanyEmployees.mockResolvedValue({ data: [], error: null })
     mockUpsertReport.mockResolvedValue({ data: null, error: null })
     mockCountMeetingsHeldForLine.mockResolvedValue({ count: 0, error: null })
+    mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: [], error: null })
     mockLoadAds.mockResolvedValue({ data: [], error: null })
   })
 
@@ -142,7 +145,7 @@ describe('OperacionesView — columna Inversión Ads (Crecimiento de seguidores)
   })
 })
 
-describe('OperacionesView — "Reuniones realizadas" (sembrar-y-editar desde el módulo Reuniones)', () => {
+describe('OperacionesView — "Reuniones realizadas" (solo lectura, siempre derivado del módulo Reuniones)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockLoadPrevReport.mockResolvedValue({ data: null, error: null })
@@ -150,17 +153,18 @@ describe('OperacionesView — "Reuniones realizadas" (sembrar-y-editar desde el 
     mockLoadCompanyEmployees.mockResolvedValue({ data: [], error: null })
     mockUpsertReport.mockResolvedValue({ data: null, error: null })
     mockLoadAds.mockResolvedValue({ data: [], error: null })
+    mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: [], error: null })
   })
 
-  it('respeta el valor ya guardado en el reporte aunque el conteo automático sea distinto', async () => {
-    // El reporte guardado ya tiene realizadas=10; el conteo automático del módulo
-    // Reuniones da 5 — el override del usuario debe prevalecer.
+  it('sobreescribe el valor guardado con el conteo automático (ya no hay override manual)', async () => {
+    // El reporte guardado tiene realizadas=10; el conteo automático (clientes distintos
+    // con reunión realizada, máx. 1 por cliente) da 5 — debe prevalecer el derivado.
     mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
     mockCountMeetingsHeldForLine.mockResolvedValue({ count: 5, error: null })
     renderView()
     await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
     const realizadasInput = document.querySelectorAll('input[type="number"]')[0]
-    expect(realizadasInput.value).toBe('10')
+    expect(realizadasInput.value).toBe('5')
   })
 
   it('siembra "realizadas" con el conteo automático cuando el reporte no tiene valor guardado', async () => {
@@ -183,12 +187,184 @@ describe('OperacionesView — "Reuniones realizadas" (sembrar-y-editar desde el 
     expect(realizadasInput.value).toBe('3')
   })
 
-  it('muestra el hint "usar automático" cuando el valor difiere del conteo, y lo oculta cuando coincide', async () => {
+  it('el input de "Realizadas" es de solo lectura y ya no existe el botón "usar automático"', async () => {
     mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
     mockCountMeetingsHeldForLine.mockResolvedValue({ count: 10, error: null })
     renderView()
     await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
-    // realizadas=10 (guardado) === conteo automático=10 → no debe mostrarse el hint
+    const realizadasInput = document.querySelectorAll('input[type="number"]')[0]
+    expect(realizadasInput).toBeDisabled()
     expect(screen.queryByText(/usar automático/)).not.toBeInTheDocument()
+  })
+})
+
+describe('OperacionesView — meses previos al módulo Reuniones conservan el valor histórico', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockLoadPrevReport.mockResolvedValue({ data: null, error: null })
+    mockLoadClients.mockResolvedValue({ data: MOCK_CLIENTS, error: null })
+    mockLoadCompanyEmployees.mockResolvedValue({ data: [], error: null })
+    mockUpsertReport.mockResolvedValue({ data: null, error: null })
+    mockLoadAds.mockResolvedValue({ data: [], error: null })
+    mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: [], error: null })
+  })
+
+  it('junio 2026 (previo al módulo Reuniones) conserva el valor guardado en vez de pisarlo con el conteo automático (0)', async () => {
+    // El reporte de junio tiene 10 reuniones guardadas manualmente antes del módulo.
+    // El módulo Reuniones no existía en junio → el conteo automático da 0.
+    mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
+    mockCountMeetingsHeldForLine.mockResolvedValue({ count: 0, error: null })
+    renderView({ month: 6 })
+    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    const realizadasInput = document.querySelectorAll('input[type="number"]')[0]
+    expect(realizadasInput.value).toBe('10')
+  })
+
+  it('julio 2026 (mes de lanzamiento del módulo, inclusive) sí usa el conteo automático', async () => {
+    mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
+    mockCountMeetingsHeldForLine.mockResolvedValue({ count: 4, error: null })
+    renderView({ month: 7 })
+    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    const realizadasInput = document.querySelectorAll('input[type="number"]')[0]
+    expect(realizadasInput.value).toBe('4')
+  })
+})
+
+describe('OperacionesView — reporte cerrado (prop "closed")', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockLoadPrevReport.mockResolvedValue({ data: null, error: null })
+    mockLoadClients.mockResolvedValue({ data: MOCK_CLIENTS, error: null })
+    mockLoadCompanyEmployees.mockResolvedValue({ data: [], error: null })
+    mockUpsertReport.mockResolvedValue({ data: null, error: null })
+    mockLoadAds.mockResolvedValue({ data: [], error: null })
+    mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: [], error: null })
+  })
+
+  it('conserva "realizadas" guardado sin recalcular, aunque el mes esté en la era del módulo Reuniones', async () => {
+    mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
+    mockCountMeetingsHeldForLine.mockResolvedValue({ count: 999, error: null })
+    renderView({ month: 7, closed: true })
+    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    const realizadasInput = document.querySelectorAll('input[type="number"]')[0]
+    expect(realizadasInput.value).toBe('10')
+  })
+
+  it('deshabilita todos los inputs del reporte', async () => {
+    mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
+    mockCountMeetingsHeldForLine.mockResolvedValue({ count: 0, error: null })
+    renderView({ month: 7, closed: true })
+    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    const inputs = document.querySelectorAll('input, textarea')
+    expect(inputs.length).toBeGreaterThan(0)
+    inputs.forEach(input => expect(input).toBeDisabled())
+  })
+
+  it('deshabilita el botón "Guardar reporte"', async () => {
+    mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
+    mockCountMeetingsHeldForLine.mockResolvedValue({ count: 0, error: null })
+    renderView({ month: 7, closed: true })
+    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    expect(screen.getByText('Guardar reporte')).toBeDisabled()
+  })
+})
+
+describe('OperacionesView — meta de reuniones topada a la cantidad de marcas activas', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockLoadPrevReport.mockResolvedValue({ data: null, error: null })
+    mockLoadClients.mockResolvedValue({ data: MOCK_CLIENTS, error: null }) // 2 marcas activas
+    mockLoadCompanyEmployees.mockResolvedValue({ data: [], error: null })
+    mockUpsertReport.mockResolvedValue({ data: null, error: null })
+    mockLoadAds.mockResolvedValue({ data: [], error: null })
+    mockCountMeetingsHeldForLine.mockResolvedValue({ count: 0, error: null })
+    mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: [], error: null })
+  })
+
+  it('clampa un valor tipeado por encima de la cantidad de marcas activas', async () => {
+    mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
+    renderView()
+    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    const metaInput = document.querySelectorAll('input[type="number"]')[1]
+    fireEvent.change(metaInput, { target: { value: '9' } })
+    expect(metaInput.value).toBe('2') // MOCK_CLIENTS tiene 2 marcas
+  })
+
+  it('permite un valor dentro del límite', async () => {
+    mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
+    renderView()
+    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    const metaInput = document.querySelectorAll('input[type="number"]')[1]
+    fireEvent.change(metaInput, { target: { value: '1' } })
+    expect(metaInput.value).toBe('1')
+  })
+
+  it('muestra el hint con el máximo permitido', async () => {
+    mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
+    renderView()
+    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    expect(screen.getByText('Máx. 2 (1 por marca activa de la línea)')).toBeInTheDocument()
+  })
+})
+
+describe('OperacionesView — modal de cobertura de reuniones por marca', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
+    mockLoadPrevReport.mockResolvedValue({ data: null, error: null })
+    mockLoadClients.mockResolvedValue({ data: MOCK_CLIENTS, error: null })
+    mockLoadCompanyEmployees.mockResolvedValue({ data: [], error: null })
+    mockUpsertReport.mockResolvedValue({ data: null, error: null })
+    mockLoadAds.mockResolvedValue({ data: [], error: null })
+    mockCountMeetingsHeldForLine.mockResolvedValue({ count: 1, error: null })
+  })
+
+  it('el botón "Ver marcas" abre el modal con check para la marca cubierta y select para la otra', async () => {
+    mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: ['c-1'], error: null })
+    renderView()
+    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+
+    fireEvent.click(screen.getByRole('button', { name: /Ver marcas/ }))
+
+    const heading = await screen.findByText('Cobertura de reuniones por marca')
+    const modal = heading.closest('div.bg-white')
+    expect(within(modal).getByText('1/2 marcas con reunión realizada')).toBeInTheDocument()
+    expect(within(modal).getByText('Banco Exterior')).toBeInTheDocument()
+    expect(within(modal).getByText('Reunión realizada')).toBeInTheDocument()
+    // Pepsi (c-2) no tiene reunión → debe mostrar el select de justificativo
+    expect(within(modal).getByText('Pepsi')).toBeInTheDocument()
+    expect(within(modal).getByRole('combobox')).toBeInTheDocument()
+  })
+
+  it('el botón "Ver marcas" muestra la cantidad de marcas sin reunión', async () => {
+    mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: ['c-1'], error: null })
+    renderView()
+    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    expect(screen.getByRole('button', { name: /Ver marcas \(1 sin reunión\)/ })).toBeInTheDocument()
+  })
+
+  it('elegir un justificativo lo persiste en report.reuniones.justificativos', async () => {
+    mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: ['c-1'], error: null })
+    renderView()
+    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    fireEvent.click(screen.getByRole('button', { name: /Ver marcas/ }))
+    await screen.findByText('Cobertura de reuniones por marca')
+
+    const select = screen.getByRole('combobox')
+    fireEvent.change(select, { target: { value: 'no_cumplio' } })
+
+    await waitFor(() => { expect(select.value).toBe('no_cumplio') })
+
+    fireEvent.click(screen.getByText('Guardar reporte'))
+    await waitFor(() => {
+      expect(mockUpsertReport).toHaveBeenCalledWith(
+        'co-1', 'line-1', 2026, 7,
+        expect.objectContaining({
+          reuniones: expect.objectContaining({
+            justificativos: { 'c-2': 'no_cumplio' },
+          }),
+        })
+      )
+    })
   })
 })

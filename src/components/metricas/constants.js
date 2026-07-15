@@ -7,6 +7,12 @@ export const MONTHS = [
   "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"
 ];
 
+// Mes en que arrancó el módulo Reuniones (migración 20260717000000_create_meetings.sql).
+// Antes de este mes no existen filas en `meetings`, así que el conteo automático de
+// reuniones.realizadas siempre daría 0 — los reportes de meses anteriores conservan el
+// valor que ya tenían guardado en metric_reports.data en vez de que se les pise con 0.
+export const REUNIONES_MODULE_START = { year: 2026, month: 7 };
+
 export const INDICATORS = [
   { key: "reuniones",    nombre: "Reuniones realizadas",          peso: 20, short: "Reuniones"    },
   { key: "productividad",nombre: "Productividad – Tareas Fijas",  peso: 20, short: "Productividad" },
@@ -14,6 +20,14 @@ export const INDICATORS = [
   { key: "solicitudes",  nombre: "Solicitudes vs Entregados",     peso: 10, short: "Solicitudes"  },
   { key: "pautas",       nombre: "Nº Pautas",                     peso: 20, short: "Pautas"       },
   { key: "piezas",       nombre: "Nº Piezas vs Piezas editadas",  peso: 10, short: "Piezas"       },
+];
+
+// Justificativo de marcas sin reunión realizada en el período (Reportes → Operaciones,
+// modal de cobertura de reuniones). No afecta el score — es puramente informativo.
+export const JUSTIFICATIVOS_REUNION = [
+  { value: 'no_aplica',            label: 'No aplica' },
+  { value: 'reprogramado_cliente', label: 'Reprogramado por el cliente' },
+  { value: 'no_cumplio',           label: 'No cumplió' },
 ];
 
 export const DEFAULT_SUBTAREAS = [

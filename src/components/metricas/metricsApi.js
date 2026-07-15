@@ -236,6 +236,24 @@ export async function upsertReport(companyId, lineId, year, month, data) {
 }
 
 /**
+ * Cierra permanentemente el reporte de una línea/mes: Operaciones y Finanzas quedan de
+ * solo lectura para siempre (bloqueado también a nivel de base por un trigger — ver
+ * migración 20260721000000_metric_reports_close.sql). No existe función de reapertura:
+ * el cierre es irreversible por diseño.
+ * @returns {{ data, error }}
+ */
+export async function closeReport(lineId, year, month, userId) {
+  return supabase
+    .from("metric_reports")
+    .update({ closed_at: new Date().toISOString(), closed_by: userId })
+    .eq("line_id", lineId)
+    .eq("year", year)
+    .eq("month", month)
+    .select()
+    .single();
+}
+
+/**
  * Persiste los montos de sueldo del reporte al sueldo maestro (users.monthly_salary).
  * Recibe filas ya filtradas [{ user_id, monto }] — se hace un UPDATE por empleado.
  * @returns {{ error: Error|null }}

@@ -1,7 +1,10 @@
+import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 import LineHubView from "./LineHubView";
 import OperacionesView from "./OperacionesView";
 import FinanzasView from "./FinanzasView";
+import { loadReport, closeReport } from "./metricsApi";
 
 const MONTHS = [
   "Enero","Febrero","Marzo","Abril","Mayo","Junio",
@@ -17,6 +20,9 @@ const YEARS = Array.from({ length: 4 }, (_, i) => CURRENT_YEAR - i);
 const VALID_TABS = ["hub", "operaciones", "finanzas"];
 
 export default function LineView({ line, companyId, onLinesChange }) {
+  const { can = () => true, userProfile } = useAuth();
+  const canClose = can("reportes.close");
+
   // sub-tab, mes y año viven en la URL para sobrevivir a F5 y remounts.
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -44,6 +50,43 @@ export default function LineView({ line, companyId, onLinesChange }) {
     { key: "operaciones", label: "Operaciones"  },
     { key: "finanzas",    label: "Finanzas"     },
   ];
+
+  // ── Estado de cierre del reporte (línea, año, mes) ────────────────────────
+  // Operaciones y Finanzas comparten la misma fila de metric_reports, así que
+  // "Cerrar reporte" bloquea ambas pestañas a la vez.
+  const [reportMeta, setReportMeta] = useState(null); // fila de metric_reports o null
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [closeError, setCloseError] = useState(null);
+
+  const loadMeta = useCallback(async () => {
+    if (!line?.id) return;
+    const { data } = await loadReport(line.id, year, month);
+    setReportMeta(data ?? null);
+  }, [line?.id, year, month]);
+
+  // Recarga también al cambiar de sub-tab: si el usuario acaba de guardar en
+  // Operaciones/Finanzas y vuelve, el botón/badge refleja el estado real.
+  useEffect(() => { loadMeta(); }, [loadMeta, subView]);
+
+  const isClosed = !!reportMeta?.closed_at;
+
+  async function handleConfirmClose() {
+    setClosing(true);
+    setCloseError(null);
+    const { data, error } = await closeReport(line.id, year, month, userProfile?.user_id ?? null);
+    setClosing(false);
+    if (error) {
+      setCloseError(
+        error.code === "PGRST116"
+          ? "Primero guardá el reporte (Operaciones o Finanzas) antes de cerrarlo."
+          : error.message
+      );
+      return;
+    }
+    setReportMeta(data);
+    setConfirmOpen(false);
+  }
 
   return (
     <div className="space-y-5">
@@ -103,6 +146,27 @@ export default function LineView({ line, companyId, onLinesChange }) {
             >
               {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
             </select>
+
+            {isClosed ? (
+              <span
+                className="flex items-center gap-1.5 text-[12px] font-mono font-bold uppercase tracking-[0.08em] text-[#888] bg-[#f0ede3] border border-[#e0ddd4] rounded-full px-3 py-1"
+                title={reportMeta?.closed_at ? `Cerrado el ${new Date(reportMeta.closed_at).toLocaleDateString()}` : ""}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <rect x="4" y="10" width="16" height="10" rx="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M8 10V7a4 4 0 018 0v3" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                Reporte cerrado
+              </span>
+            ) : canClose && (
+              <button
+                type="button"
+                onClick={() => { setCloseError(null); setConfirmOpen(true); }}
+                className="text-[13px] font-semibold text-[#888] hover:text-red-600 transition-colors"
+              >
+                Cerrar reporte
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -117,6 +181,7 @@ export default function LineView({ line, companyId, onLinesChange }) {
           companyId={companyId}
           year={year}
           month={month}
+          closed={isClosed}
         />
       )}
       {subView === "finanzas" && (
@@ -125,7 +190,45 @@ export default function LineView({ line, companyId, onLinesChange }) {
           companyId={companyId}
           year={year}
           month={month}
+          closed={isClosed}
         />
+      )}
+
+      {confirmOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl border border-[#e0ddd4] p-6 max-w-sm w-full space-y-4">
+            <p className="text-[16px] font-bold text-[#111]">
+              ¿Cerrar el reporte de {line.name} · {MONTHS[month - 1]} {year}?
+            </p>
+            <p className="text-[13px] text-[#888]">
+              Esta acción es permanente: ni Operaciones ni Finanzas de este mes podrán
+              volver a editarse, y no hay forma de reabrirlo desde la app.
+            </p>
+            {closeError && (
+              <p className="text-[13px] text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                {closeError}
+              </p>
+            )}
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setConfirmOpen(false)}
+                disabled={closing}
+                className="px-4 py-2 rounded-xl text-[14px] font-semibold text-[#666] hover:bg-[#f5f3eb] transition-colors disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmClose}
+                disabled={closing}
+                className="px-4 py-2 rounded-xl text-[14px] font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-60"
+              >
+                {closing ? "Cerrando..." : "Sí, cerrar permanentemente"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -38,7 +38,7 @@ const SECCIONES = [
   { key: "otrosGastos",      label: "Otros gastos",       color: "#8B5CF6", totalLabel: "otros gastos" },
 ];
 
-export default function FinanzasView({ line, companyId, year, month }) {
+export default function FinanzasView({ line, companyId, year, month, closed = false }) {
   const { can = () => true, userProfile } = useAuth();
   const privileged = isFinancePrivileged(userProfile);
 
@@ -131,7 +131,7 @@ export default function FinanzasView({ line, companyId, year, month }) {
   }, [loading, setSearchParams]);
 
   async function handleSave() {
-    if (!report) return;
+    if (!report || closed) return;
     setSaving(true);
     const { error: err } = await upsertReport(companyId, line.id, year, month, report);
     setSaving(false);
@@ -209,7 +209,7 @@ export default function FinanzasView({ line, companyId, year, month }) {
   );
 
   return (
-    <div className="space-y-5">
+    <fieldset disabled={closed} className="space-y-5 border-0 p-0 m-0 min-w-0">
       {/* KPIs */}
       <div className="text-[14px] font-mono text-[#888] mb-1">
         {line.name} · {MONTHS[month - 1]} {year}
@@ -674,7 +674,7 @@ export default function FinanzasView({ line, companyId, year, month }) {
           onClose={() => setEmpModal(null)}
         />
       )}
-    </div>
+    </fieldset>
   );
 }
 

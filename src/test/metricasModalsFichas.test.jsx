@@ -117,6 +117,7 @@ vi.mock('../utils/syncReportClients', () => ({
 }))
 vi.mock('../components/reuniones/meetingsApi', () => ({
   countMeetingsHeldForLine: vi.fn().mockResolvedValue({ count: 0, error: null }),
+  loadHeldClientIdsForLine: vi.fn().mockResolvedValue({ clientIds: [], error: null }),
 }))
 
 // ── Fixtures ───────────────────────────────────────────────────────────────────
@@ -728,6 +729,40 @@ describe('FinanzasView — toggle Lista/Tarjetas + KPIs + Nómina', () => {
       expect(screen.getByText('Ingresos')).toBeInTheDocument()
     })
     expect(screen.queryByText('Sueldos / Nómina')).not.toBeInTheDocument()
+  })
+})
+
+describe('FinanzasView — reporte cerrado (prop "closed")', () => {
+  beforeEach(() => {
+    mockLoadReport.mockResolvedValue({ data: { data: FINANZAS_REPORT_DATA }, error: null })
+    mockLoadPrevReport.mockResolvedValue({ data: null, error: null })
+    mockLoadClients.mockResolvedValue({
+      data: [
+        { id: 'c-1', name: 'Pepsi', monthly_fee: 1500, payment_day: 5,
+          logo_url: null, line_id: 'l-1', contacts: [], social_links: [] },
+      ],
+      error: null,
+    })
+    useAuthImport.mockReturnValue({
+      userProfile: { user_id: 'u-1', company_id: 'co-1', access_level: 4, admin: true, first_name: 'Admin', last_name: 'Test' },
+      can: () => true,
+      signOut: vi.fn(),
+    })
+  })
+
+  it('deshabilita todos los inputs y el botón "Guardar finanzas"', async () => {
+    wrap(<FinanzasView line={MOCK_LINE} companyId="co-1" year={2026} month={6} closed />)
+    await waitFor(() => { expect(screen.getByText('Guardar finanzas')).toBeInTheDocument() })
+    expect(screen.getByText('Guardar finanzas')).toBeDisabled()
+    const inputs = document.querySelectorAll('input, textarea, select')
+    expect(inputs.length).toBeGreaterThan(0)
+    inputs.forEach(input => expect(input).toBeDisabled())
+  })
+
+  it('sin "closed" (default) los inputs y el botón "Guardar finanzas" siguen habilitados', async () => {
+    wrap(<FinanzasView line={MOCK_LINE} companyId="co-1" year={2026} month={6} />)
+    await waitFor(() => { expect(screen.getByText('Guardar finanzas')).toBeInTheDocument() })
+    expect(screen.getByText('Guardar finanzas')).not.toBeDisabled()
   })
 })
 

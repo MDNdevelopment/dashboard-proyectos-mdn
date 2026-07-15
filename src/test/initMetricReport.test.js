@@ -7,6 +7,10 @@ const CLIENTS = [
   { id: "c2", name: "Cliente B", monthly_fee: 600 },
 ];
 
+// Cartera amplia para tests que verifican la lógica de `reuniones.meta` en sí
+// (herencia/override), sin que el tope "meta <= cantidad de marcas activas" interfiera.
+const MANY_CLIENTS = Array.from({ length: 25 }, (_, i) => ({ id: `m${i}`, name: `Marca ${i}` }));
+
 function makePrevReport(overrides = {}) {
   return {
     reuniones:     { realizadas: 15, meta: 20 },
@@ -39,7 +43,7 @@ describe("initMetricReport — sin mes anterior", () => {
       reuniones: 10,
       tareas: [{ nombre: "Calendario", meta: 10 }, { nombre: "Reportes", meta: 5 }],
     };
-    const r = initMetricReport(null, CLIENTS, lineMetas);
+    const r = initMetricReport(null, MANY_CLIENTS, lineMetas);
     expect(r.reuniones.meta).toBe(10);
     expect(r.productividad.tareas).toHaveLength(2);
     expect(r.productividad.tareas[0].nombre).toBe("Calendario");
@@ -63,9 +67,14 @@ describe("initMetricReport — sin mes anterior", () => {
   });
 
   it("retorna meta de reuniones en 15 por defecto", () => {
-    const r = initMetricReport(null, []);
+    const r = initMetricReport(null, MANY_CLIENTS);
     expect(r.reuniones.meta).toBe(15);
     expect(r.reuniones.realizadas).toBeNull();
+  });
+
+  it("topa la meta de reuniones a la cantidad de marcas activas de la línea", () => {
+    const r = initMetricReport(null, CLIENTS); // solo 2 clientes, default es 15
+    expect(r.reuniones.meta).toBe(2);
   });
 
   it("inicializa finanzas con sueldos/gastos vacíos cuando no hay empleados", () => {
@@ -134,7 +143,7 @@ describe("initMetricReport — sin mes anterior", () => {
 
 describe("initMetricReport — con mes anterior (carry-forward)", () => {
   it("hereda la meta de reuniones del mes anterior", () => {
-    const r = initMetricReport(makePrevReport(), []);
+    const r = initMetricReport(makePrevReport(), MANY_CLIENTS);
     expect(r.reuniones.meta).toBe(20); // heredada
     expect(r.reuniones.realizadas).toBeNull(); // reseteada
   });
@@ -191,7 +200,7 @@ describe("initMetricReport — con mes anterior (carry-forward)", () => {
 describe("initMetricReport — lineMetas tiene prioridad sobre carry-forward", () => {
   it("lineMetas.reuniones pisa la meta heredada del mes anterior", () => {
     // prevReport tiene reuniones.meta = 20, pero la línea configuró 12
-    const r = initMetricReport(makePrevReport(), [], { reuniones: 12 });
+    const r = initMetricReport(makePrevReport(), MANY_CLIENTS, { reuniones: 12 });
     expect(r.reuniones.meta).toBe(12);
     expect(r.reuniones.realizadas).toBeNull(); // siempre reseteado
   });
@@ -211,14 +220,14 @@ describe("initMetricReport — lineMetas tiene prioridad sobre carry-forward", (
 
   it("lineMetas completas (reuniones + tareas) pisan ambos campos del carry-forward", () => {
     const lineMetas = { reuniones: 8, tareas: [{ nombre: "Calendario", meta: 30 }] };
-    const r = initMetricReport(makePrevReport(), [], lineMetas);
+    const r = initMetricReport(makePrevReport(), MANY_CLIENTS, lineMetas);
     expect(r.reuniones.meta).toBe(8);
     expect(r.productividad.tareas[0].nombre).toBe("Calendario");
     expect(r.productividad.tareas[0].meta).toBe(30);
   });
 
   it("sin lineMetas ({}) el carry-forward queda intacto", () => {
-    const r = initMetricReport(makePrevReport(), [], {});
+    const r = initMetricReport(makePrevReport(), MANY_CLIENTS, {});
     expect(r.reuniones.meta).toBe(20);       // heredada de prevReport
     expect(r.productividad.tareas[0].nombre).toBe("Métricas");
     expect(r.productividad.tareas[0].meta).toBe(15);
@@ -231,7 +240,7 @@ describe("initMetricReport — lineMetas tiene prioridad sobre carry-forward", (
   });
 
   it("lineMetas.reuniones pisa el default cuando no hay prevReport", () => {
-    const r = initMetricReport(null, [], { reuniones: 8 });
+    const r = initMetricReport(null, MANY_CLIENTS, { reuniones: 8 });
     expect(r.reuniones.meta).toBe(8);
   });
 });
