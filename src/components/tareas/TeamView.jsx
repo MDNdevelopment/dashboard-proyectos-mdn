@@ -11,9 +11,17 @@ import {
   ESTADOS,
 } from "./constants";
 
-function KpiCard({ label, value, sub, color }) {
+function KpiCard({ label, value, sub, color, onClick }) {
+  const Tag = onClick ? "button" : "div";
   return (
-    <div className="bg-white rounded-xl border border-[#e0ddd4] px-4 py-3.5">
+    <Tag
+      onClick={onClick}
+      className={`bg-white rounded-xl border border-[#e0ddd4] px-4 py-3.5 text-left w-full ${
+        onClick
+          ? "hover:border-[#FFB800] hover:shadow-md transition-all cursor-pointer"
+          : ""
+      }`}
+    >
       <p className="text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1">
         {label}
       </p>
@@ -24,7 +32,7 @@ function KpiCard({ label, value, sub, color }) {
         {value}
       </p>
       {sub && <p className="text-[13.5px] text-[#888] mt-1">{sub}</p>}
-    </div>
+    </Tag>
   );
 }
 
@@ -35,6 +43,7 @@ export default function TeamView({
   monthIdx,
   clientsById,
   onOpenTask,
+  onNavigateToBase,
 }) {
   if (!team) {
     return (
@@ -88,35 +97,45 @@ export default function TeamView({
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <KpiCard label="Planificadas" value={total} sub={fmtMonth(monthIdx)} />
+        <KpiCard
+          label="Planificadas"
+          value={total}
+          sub={fmtMonth(monthIdx)}
+          onClick={() => onNavigateToBase(null)}
+        />
         <KpiCard
           label="Cerradas"
           value={`${closed}/${total}`}
           sub="Completadas"
           color="#16A34A"
+          onClick={() => onNavigateToBase({ status: "Terminado" })}
         />
         <KpiCard
           label="Cumplimiento"
           value={`${pct}%`}
           sub={semLabel}
           color={semColor}
+          onClick={() => onNavigateToBase(null)}
         />
         <KpiCard
           label="Paralizados"
           value={blocked}
           sub={blocked ? "Este mes" : "Sin paralizaciones"}
           color={blocked ? "#E14848" : undefined}
+          onClick={() => onNavigateToBase({ status: "Paralizado" })}
         />
         <KpiCard
           label="Retrasados"
           value={late}
           sub="Entregas vencidas"
           color={late ? "#E14848" : undefined}
+          onClick={() => onNavigateToBase({ alert: "late" })}
         />
         <KpiCard
           label="Apoyo dir."
           value={supportCount}
           sub={supportCount ? "Activos" : "Ninguno"}
+          onClick={() => onNavigateToBase({ support: "all" })}
         />
       </div>
 

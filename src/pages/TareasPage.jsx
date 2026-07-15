@@ -95,7 +95,7 @@ export default function TareasPage() {
   // null = closed, undefined = new task, object = edit existing
   const [taskModal, setTaskModal] = useState(null)
   // Filtro pendiente a aplicar al entrar a Base desde una card del dashboard.
-  // { status?: string, alert?: string } | null
+  // { status?: string, alert?: string, support?: 'all' } | null
   const [pendingBaseFilter, setPendingBaseFilter] = useState(null)
 
   const isAll = activeTeamId === ALL_TEAMS
@@ -313,7 +313,7 @@ export default function TareasPage() {
               {activeView === 'team' && (
                 isAll
                   ? <PanoramaView teams={teams} tasks={tasks} monthIdx={monthIdx} onSelectTeam={selectTeam} onNavigateToBase={goToBaseWithFilter} />
-                  : <TeamView team={activeTeam} tasks={tasks} usersMap={usersMap} monthIdx={monthIdx} clientsById={clientsById} onOpenTask={openEditTask} />
+                  : <TeamView team={activeTeam} tasks={tasks} usersMap={usersMap} monthIdx={monthIdx} clientsById={clientsById} onOpenTask={openEditTask} onNavigateToBase={goToBaseWithFilter} />
               )}
               {activeView === 'base' && (
                 <BaseView tasks={tasks} teams={teams} team={activeTeam} allLines={isAll} usersMap={usersMap} clientsById={clientsById} monthIdx={monthIdx} onOpenTask={openEditTask} onUpdated={handleUpdated} initialFilter={pendingBaseFilter} />

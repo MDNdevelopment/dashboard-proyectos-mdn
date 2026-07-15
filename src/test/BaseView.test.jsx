@@ -148,6 +148,28 @@ describe('BaseView — filtro de apoyo de dirección', () => {
     expect(screen.getByText('Sin apoyo')).toBeInTheDocument()
     expect(screen.getByText('Apoyo Diana')).toBeInTheDocument()
   })
+
+  it('initialFilter={ support: "all" } (card "Apoyo dir." del dashboard) marca a todos los directores', () => {
+    render(
+      <MemoryRouter>
+        <BaseView
+          tasks={TASKS}
+          teams={[TEAM]}
+          team={TEAM}
+          usersMap={USERS_MAP}
+          clientsById={new Map()}
+          onOpenTask={() => {}}
+          onUpdated={() => {}}
+          initialFilter={{ support: 'all' }}
+        />
+      </MemoryRouter>,
+    )
+    // Ambos directores quedan preseleccionados: solo se ven las tareas con apoyo
+    expect(screen.getByRole('button', { name: /apoyo: diana \+1/i })).toBeInTheDocument()
+    expect(screen.getByText('Apoyo Diana')).toBeInTheDocument()
+    expect(screen.getByText('Apoyo Pedro')).toBeInTheDocument()
+    expect(screen.queryByText('Sin apoyo')).not.toBeInTheDocument()
+  })
 })
 
 describe('BaseView — filtro por mes (monthIdx)', () => {
