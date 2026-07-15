@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useAuth } from '../../context/AuthContext'
-import { STATUSES, OBJECTIVES } from './constants'
+import { STATUSES, OBJECTIVES, RESULT_FIELDS } from './constants'
 import { loadClients } from '../metricas/metricsApi'
 import { createAd, updateAd, durationDays, spentByClientInPeriod, loadAdsResponsables } from './campaignSpendApi'
 import { fmtUSD } from '../../utils/metricsFinance'
@@ -27,6 +27,7 @@ export default function AdsSpendForm({ ad, ads = [], companyId, onClose, onCreat
     end_date:   ad?.end_date   ?? '',
     status:     ad?.status     ?? 'Pendiente',
     responsable_id: ad?.responsable_id ?? '',
+    ...Object.fromEntries(RESULT_FIELDS.map(f => [f.key, ad?.[f.key] ?? ''])),
   })
   const initialFields = useRef(fields)
   const { requestClose } = useUnsavedChanges({ value: fields, baseline: initialFields.current, onClose })
@@ -66,6 +67,11 @@ export default function AdsSpendForm({ ad, ads = [], companyId, onClose, onCreat
   }
 
   const dateRangeInvalid = !!(fields.start_date && fields.end_date && fields.end_date < fields.start_date)
+
+  // Al finalizar, los 4 resultados son obligatorios — mismo requisito que exige
+  // AdsResultsModal al finalizar desde un pill.
+  const resultsMissing = fields.status === 'Finalizado'
+    && RESULT_FIELDS.some(f => fields[f.key] === '' || fields[f.key] == null)
 
   function handleClientChange(e) {
     const id = e.target.value
@@ -107,10 +113,11 @@ export default function AdsSpendForm({ ad, ads = [], companyId, onClose, onCreat
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (!fields.name.trim() || !fields.client_id || !fields.start_date || !fields.end_date || dateRangeInvalid) return
+    if (!fields.name.trim() || !fields.client_id || !fields.start_date || !fields.end_date || dateRangeInvalid || resultsMissing) return
     setSubmitting(true)
     setError(null)
 
+    const isFinalizado = fields.status === 'Finalizado'
     const payload = {
       client_id:  fields.client_id,
       client:     fields.client,
@@ -122,6 +129,10 @@ export default function AdsSpendForm({ ad, ads = [], companyId, onClose, onCreat
       end_date:   fields.end_date,
       status:     fields.status,
       responsable_id: fields.responsable_id || null,
+      ...Object.fromEntries(RESULT_FIELDS.map(f => [
+        f.key,
+        isFinalizado ? Number(fields[f.key]) : null,
+      ])),
     }
 
     if (isEdit) {
@@ -254,6 +265,24 @@ export default function AdsSpendForm({ ad, ads = [], companyId, onClose, onCreat
               </select>
             </div>
 
+            {/* Resultados — obligatorios solo cuando el estado es Finalizado; nunca se muestran
+                como columnas de la tabla, solo aquí y en el detalle. */}
+            {fields.status === 'Finalizado' && RESULT_FIELDS.map(f => (
+              <div key={f.key}>
+                <label htmlFor={`ad-result-${f.key}`} className={labelClass}>{f.label}</label>
+                <input
+                  id={`ad-result-${f.key}`}
+                  type="number"
+                  min={0}
+                  step="1"
+                  className="input-base w-full"
+                  value={fields[f.key]}
+                  onChange={e => set(f.key, e.target.value)}
+                  required
+                />
+              </div>
+            ))}
+
             {/* Responsable — lista acotada (Katherine, Paola y jefas de línea) */}
             <div className="col-span-1 sm:col-span-2">
               <label className={labelClass}>Responsable</label>
@@ -328,7 +357,7 @@ export default function AdsSpendForm({ ad, ads = [], companyId, onClose, onCreat
             </button>
             <button
               type="submit"
-              disabled={submitting || !fields.name.trim() || !fields.client_id || !fields.start_date || !fields.end_date || dateRangeInvalid}
+              disabled={submitting || !fields.name.trim() || !fields.client_id || !fields.start_date || !fields.end_date || dateRangeInvalid || resultsMissing}
               className="flex-1 py-2.5 rounded-xl bg-[#111] text-white text-[15px] font-bold hover:bg-[#222] transition-colors disabled:opacity-50"
             >
               {submitting ? (isEdit ? 'Guardando...' : 'Creando...') : (isEdit ? 'Guardar cambios' : 'Crear ad')}

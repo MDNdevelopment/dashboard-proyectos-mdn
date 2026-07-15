@@ -37,6 +37,40 @@ describe('StatusPill', () => {
     expect(screen.getByRole('button', { name: 'Cancelado' })).toBeInTheDocument()
   })
 
+  it('el menú se renderiza en un portal fuera del wrapper (document.body), para no quedar recortado por contenedores con overflow', async () => {
+    const user = userEvent.setup()
+    const { container } = render(
+      <StatusPill value="Pendiente" meta={META} options={OPTIONS} editable={true} onChange={() => {}} />
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Pendiente' }))
+
+    const menuOption = screen.getByRole('button', { name: 'Cancelado' })
+    expect(container.contains(menuOption)).toBe(false)
+    expect(document.body.contains(menuOption)).toBe(true)
+  })
+
+  it('si no hay espacio debajo dentro del viewport (última fila de una tabla), el menú abre hacia arriba', async () => {
+    const originalInnerHeight = window.innerHeight
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 200 })
+    const user = userEvent.setup()
+    render(<StatusPill value="Pendiente" meta={META} options={OPTIONS} editable={true} onChange={() => {}} />)
+
+    const trigger = screen.getByRole('button', { name: 'Pendiente' })
+    // Simula un botón pegado al borde inferior del viewport (poco espacio debajo, sí arriba).
+    trigger.parentElement.getBoundingClientRect = () => ({
+      top: 150, bottom: 160, left: 5, width: 60, height: 10, right: 65, x: 5, y: 150, toJSON() {},
+    })
+
+    await user.click(trigger)
+
+    const menuOption = screen.getByRole('button', { name: 'Cancelado' })
+    const menu = menuOption.closest('div')
+    expect(parseFloat(menu.style.top)).toBeLessThan(150)
+
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: originalInnerHeight })
+  })
+
   it('elegir una opción del menú llama a onChange con esa key y cierra el menú', async () => {
     const user = userEvent.setup()
     const onChange = vi.fn().mockResolvedValue(undefined)

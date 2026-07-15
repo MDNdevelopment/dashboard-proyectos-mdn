@@ -7,7 +7,7 @@ import AdsForm from "../components/ads/AdsForm";
 import AdsDetail from "../components/ads/AdsDetail";
 import AdsSpendView from "../components/ads/AdsSpendView";
 import { loadClients } from "../components/metricas/metricsApi";
-import { inPeriod } from "../components/ads/campaignSpendApi";
+import { inPeriod, spansPeriod } from "../components/ads/campaignSpendApi";
 import { MONTHS } from "../components/metricas/constants";
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -33,11 +33,12 @@ export default function AdsPage() {
   const [usersMap, setUsersMap] = useState(new Map());
   const [clientsById, setClientsById] = useState(new Map());
   const adsSpendViewRef = useRef(null);
+  const adsListRef = useRef(null);
 
   // Control de acceso config-driven — sin reglas configuradas: abierto a todos.
   const canManage = can("ads.manage");
 
-  const filteredCampaigns = campaigns.filter(c => inPeriod(c.start_date, periodo));
+  const filteredCampaigns = campaigns.filter(c => spansPeriod(c.start_date, c.end_date, periodo));
 
   useEffect(() => {
     fetchCampaigns();
@@ -192,14 +193,20 @@ export default function AdsPage() {
 
           {tab === "tacticas" ? (
             <>
-              <AdsStats campaigns={filteredCampaigns} />
+              <AdsStats
+                campaigns={filteredCampaigns}
+                onResetFilters={() => adsListRef.current?.clearFilters()}
+                onFilterStatus={(status) => adsListRef.current?.setFilterStatus(status)}
+              />
 
               <AdsList
+                ref={adsListRef}
                 campaigns={filteredCampaigns}
                 loading={loading}
                 canManage={canManage}
                 usersMap={usersMap}
                 clientsById={clientsById}
+                periodo={periodo}
                 onSelect={setSelectedCampaign}
                 onUpdated={handleUpdated}
                 onDeleted={handleDeleted}

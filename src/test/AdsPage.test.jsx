@@ -13,6 +13,7 @@ const { mockOpenCreate } = vi.hoisted(() => ({ mockOpenCreate: vi.fn() }))
 const MOCK_CAMPAIGNS = [
   { id: 'camp-1', name: 'Táctica Julio', client: 'Banco Exterior', client_id: 'c-1', assignee: 'u1', priority: 'Media', status: 'Pendiente', notes: '', start_date: '2026-07-05', end_date: '2026-07-20' },
   { id: 'camp-2', name: 'Táctica Junio', client: 'Pepsi', client_id: 'c-2', assignee: 'u2', priority: 'Alta', status: 'En Curso', notes: '', start_date: '2026-06-01', end_date: '2026-06-10' },
+  { id: 'camp-3', name: 'Táctica Cruzada', client: 'Coca-Cola', client_id: 'c-3', assignee: 'u1', priority: 'Baja', status: 'En Curso', notes: '', start_date: '2026-06-25', end_date: '2026-07-05' },
 ]
 
 vi.mock('../supabase', () => ({
@@ -117,6 +118,65 @@ describe('AdsPage — tabs Tácticas/Ads', () => {
     await user.selectOptions(monthSelect, '6')
 
     await waitFor(() => { expect(screen.getByText('Táctica Junio')).toBeInTheDocument() })
+    expect(screen.queryByText('Táctica Julio')).not.toBeInTheDocument()
+  })
+
+  describe('cards de resumen (Tácticas)', () => {
+    it('ya no muestra la card "Pendientes"', async () => {
+      renderPage()
+      await waitFor(() => { expect(screen.getByText('Táctica Julio')).toBeInTheDocument() })
+      expect(screen.queryByText('Pendientes')).not.toBeInTheDocument()
+    })
+
+    it('clic en "Total tácticas" resetea los filtros', async () => {
+      const user = userEvent.setup()
+      renderPage()
+      await waitFor(() => { expect(screen.getByText('Táctica Julio')).toBeInTheDocument() })
+
+      await user.type(screen.getByPlaceholderText('Buscar táctica, cliente, responsable...'), 'Cruzada')
+      expect(screen.queryByText('Táctica Julio')).not.toBeInTheDocument()
+
+      await user.click(screen.getByText('Total tácticas', { selector: 'p' }))
+      await waitFor(() => { expect(screen.getByText('Táctica Julio')).toBeInTheDocument() })
+    })
+
+    it('clic en "En Curso" filtra la tabla a tácticas En Curso', async () => {
+      const user = userEvent.setup()
+      renderPage()
+      await waitFor(() => { expect(screen.getByText('Táctica Julio')).toBeInTheDocument() })
+      expect(screen.getByText('Táctica Cruzada')).toBeInTheDocument()
+
+      await user.click(screen.getByText('En Curso', { selector: 'p' }))
+      expect(screen.queryByText('Táctica Julio')).not.toBeInTheDocument()
+      expect(screen.getByText('Táctica Cruzada')).toBeInTheDocument()
+    })
+
+    it('clic en "Completadas" filtra la tabla a tácticas Finalizado', async () => {
+      const user = userEvent.setup()
+      renderPage()
+      await waitFor(() => { expect(screen.getByText('Táctica Julio')).toBeInTheDocument() })
+
+      await user.click(screen.getByText('Completadas', { selector: 'p' }))
+      await waitFor(() => {
+        expect(screen.getByText('Sin resultados para los filtros aplicados')).toBeInTheDocument()
+      })
+    })
+  })
+
+  it('una táctica cuyo rango cruza dos meses aparece en ambos periodos', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    // Período por defecto (julio): la táctica cruzada (jun 25 -> jul 5) debe verse
+    await waitFor(() => { expect(screen.getByText('Táctica Julio')).toBeInTheDocument() })
+    expect(screen.getByText('Táctica Cruzada')).toBeInTheDocument()
+
+    // Cambiar a junio: sigue apareciendo, y la de julio ya no
+    const monthSelect = screen.getAllByRole('combobox')[0]
+    await user.selectOptions(monthSelect, '6')
+
+    await waitFor(() => { expect(screen.getByText('Táctica Junio')).toBeInTheDocument() })
+    expect(screen.getByText('Táctica Cruzada')).toBeInTheDocument()
     expect(screen.queryByText('Táctica Julio')).not.toBeInTheDocument()
   })
 })

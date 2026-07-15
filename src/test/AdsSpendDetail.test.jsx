@@ -1,21 +1,13 @@
 /**
- * Tests de AdsSpendDetail (modal de vista de un Ad): el estado se puede
- * cambiar directamente desde el modal de visualización, y se muestra el
- * aviso de sobrepaso de presupuesto cuando corresponde.
+ * Tests de AdsSpendDetail (modal de vista de un Ad): el cambio de estado se
+ * delega al padre vía onStatusChange (la guardia de "Finalizado exige
+ * resultados" vive en AdsSpendView), se muestra el aviso de sobrepaso de
+ * presupuesto cuando corresponde, y los resultados solo aparecen cuando el
+ * ad ya está Finalizado.
  */
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
-
-const mockUpdateAd = vi.fn()
-
-vi.mock('../components/ads/campaignSpendApi', async () => {
-  const actual = await vi.importActual('../components/ads/campaignSpendApi')
-  return {
-    ...actual,
-    updateAd: (...a) => mockUpdateAd(...a),
-  }
-})
 
 import AdsSpendDetail from '../components/ads/AdsSpendDetail'
 
@@ -33,7 +25,7 @@ function renderDetail(props = {}) {
       client={{ id: 'c-1', name: 'Banco Exterior', campaign_budget: 100 }}
       canManage={true}
       onClose={() => {}}
-      onUpdated={() => {}}
+      onStatusChange={() => {}}
       onEdit={() => {}}
       onRequestDelete={() => {}}
       {...props}
@@ -42,10 +34,7 @@ function renderDetail(props = {}) {
 }
 
 describe('AdsSpendDetail — cambio de estado en modo visualización', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mockUpdateAd.mockResolvedValue({ data: { ...AD, status: 'Aprobado' }, error: null })
-  })
+  beforeEach(() => vi.clearAllMocks())
 
   it('muestra los datos del ad en modo lectura', () => {
     renderDetail()
@@ -78,17 +67,16 @@ describe('AdsSpendDetail — cambio de estado en modo visualización', () => {
     expect(screen.queryByRole('button', { name: 'Pendiente' })).not.toBeInTheDocument()
   })
 
-  it('elegir un estado en el StatusPill llama a updateAd y a onUpdated con la fila actualizada', async () => {
+  it('elegir un estado en el StatusPill delega el cambio al padre vía onStatusChange', async () => {
     const user = userEvent.setup()
-    const onUpdated = vi.fn()
-    renderDetail({ onUpdated })
+    const onStatusChange = vi.fn()
+    renderDetail({ onStatusChange })
 
     await user.click(screen.getByRole('button', { name: 'Pendiente' }))
-    await user.click(screen.getByRole('button', { name: 'Aprobado' }))
+    await user.click(screen.getByRole('button', { name: 'Finalizado' }))
 
     await waitFor(() => {
-      expect(mockUpdateAd).toHaveBeenCalledWith('ad-1', { status: 'Aprobado' })
-      expect(onUpdated).toHaveBeenCalledWith(expect.objectContaining({ status: 'Aprobado' }))
+      expect(onStatusChange).toHaveBeenCalledWith('Finalizado')
     })
   })
 
@@ -103,6 +91,31 @@ describe('AdsSpendDetail — cambio de estado en modo visualización', () => {
 
     await user.click(screen.getByRole('button', { name: 'Eliminar' }))
     expect(onRequestDelete).toHaveBeenCalled()
+  })
+})
+
+describe('AdsSpendDetail — sección de resultados', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('NO muestra la sección de resultados si el ad no está Finalizado', () => {
+    renderDetail({ ad: { ...AD, status: 'Pendiente' } })
+    expect(screen.queryByText('Resultados')).not.toBeInTheDocument()
+  })
+
+  it('muestra los 4 resultados cuando el ad está Finalizado', () => {
+    renderDetail({
+      // objective se pone en null para no chocar con la etiqueta "Alcance" de resultados
+      ad: { ...AD, objective: null, status: 'Finalizado', reach: 1000, interactions: 200, followers: 30, impressions: 5000 },
+    })
+    expect(screen.getByText('Resultados')).toBeInTheDocument()
+    expect(screen.getByText('Alcance')).toBeInTheDocument()
+    expect(screen.getByText('1.000')).toBeInTheDocument()
+    expect(screen.getByText('Interacciones')).toBeInTheDocument()
+    expect(screen.getByText('200')).toBeInTheDocument()
+    expect(screen.getByText('Seguidores')).toBeInTheDocument()
+    expect(screen.getByText('30')).toBeInTheDocument()
+    expect(screen.getByText('Impresiones')).toBeInTheDocument()
+    expect(screen.getByText('5.000')).toBeInTheDocument()
   })
 })
 

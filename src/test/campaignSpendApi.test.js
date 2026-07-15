@@ -41,7 +41,7 @@ vi.mock('../supabase', () => ({
   get supabase() { return globalThis.__campaignSpendApiSupabaseMock },
 }))
 
-import { loadAdsResponsables } from '../components/ads/campaignSpendApi'
+import { loadAdsResponsables, inPeriod, spansPeriod } from '../components/ads/campaignSpendApi'
 
 const USERS = [
   { user_id: 'u1', company_id: 'co-1', ads_responsable_fixed: true, first_name: 'Katherine', last_name: 'Mora' },
@@ -89,5 +89,53 @@ describe('loadAdsResponsables', () => {
     globalThis.__campaignSpendApiSupabaseMock = mockSupabase({ users: [], lines: [], members: [] })
     const { data } = await loadAdsResponsables('co-1')
     expect(data).toEqual([])
+  })
+})
+
+describe('inPeriod', () => {
+  it('true cuando mes y año de la fecha coinciden con el período (tab Ads sigue igual)', () => {
+    expect(inPeriod('2026-07-15', { month: 7, year: 2026 })).toBe(true)
+  })
+
+  it('false cuando la fecha cae en otro mes, aunque el rango la incluyera', () => {
+    expect(inPeriod('2026-07-15', { month: 8, year: 2026 })).toBe(false)
+  })
+
+  it('false sin fecha', () => {
+    expect(inPeriod(null, { month: 7, year: 2026 })).toBe(false)
+  })
+})
+
+describe('spansPeriod', () => {
+  it('rango dentro de un solo mes: visible solo ese mes', () => {
+    const periodo = { month: 7, year: 2026 }
+    expect(spansPeriod('2026-07-05', '2026-07-20', periodo)).toBe(true)
+    expect(spansPeriod('2026-07-05', '2026-07-20', { month: 8, year: 2026 })).toBe(false)
+  })
+
+  it('rango que cruza meses (jul→ago): visible en jul y ago, no en jun ni sep', () => {
+    const start = '2026-07-20'
+    const end = '2026-08-10'
+    expect(spansPeriod(start, end, { month: 7, year: 2026 })).toBe(true)
+    expect(spansPeriod(start, end, { month: 8, year: 2026 })).toBe(true)
+    expect(spansPeriod(start, end, { month: 6, year: 2026 })).toBe(false)
+    expect(spansPeriod(start, end, { month: 9, year: 2026 })).toBe(false)
+  })
+
+  it('rango que cruza el límite de año (dic→ene): visible en ambos años', () => {
+    const start = '2026-12-20'
+    const end = '2027-01-10'
+    expect(spansPeriod(start, end, { month: 12, year: 2026 })).toBe(true)
+    expect(spansPeriod(start, end, { month: 1, year: 2027 })).toBe(true)
+    expect(spansPeriod(start, end, { month: 11, year: 2026 })).toBe(false)
+  })
+
+  it('end_date nulo se comporta como inPeriod (solo mes de inicio)', () => {
+    expect(spansPeriod('2026-07-05', null, { month: 7, year: 2026 })).toBe(true)
+    expect(spansPeriod('2026-07-05', null, { month: 8, year: 2026 })).toBe(false)
+  })
+
+  it('start_date nulo: false', () => {
+    expect(spansPeriod(null, '2026-07-20', { month: 7, year: 2026 })).toBe(false)
   })
 })

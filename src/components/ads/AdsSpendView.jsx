@@ -7,11 +7,13 @@ import {
 } from './campaignSpendApi'
 import { fmtUSD } from '../../utils/metricsFinance'
 import { STATUS, STATUSES } from './constants'
+import { exportAdsToExcel } from '../../utils/exportAdsToExcel'
 import ConfirmDeleteDialog from '../common/ConfirmDeleteDialog'
 import AdsSpendForm from './AdsSpendForm'
 import AdsSpendStats from './AdsSpendStats'
 import AdsSpendDetail from './AdsSpendDetail'
 import AdsBudgetOverview from './AdsBudgetOverview'
+import AdsResultsModal from './AdsResultsModal'
 import StatusPill from '../common/StatusPill'
 import ClientCell from './ClientCell'
 
@@ -37,6 +39,7 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
   const [showBudgetOverview, setShowBudgetOverview] = useState(false)
+  const [resultsFor, setResultsFor] = useState(null) // ad pendiente de resultados para poder finalizar, o null
 
   const fetchAll = useCallback(async () => {
     if (!companyId) return
@@ -74,6 +77,17 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
   async function handleAdStatusChange(id, next) {
     const { data, error } = await updateAd(id, { status: next })
     if (!error && data) handleSaved(data)
+  }
+
+  // Guardia central: finalizar exige capturar resultados primero (vía AdsResultsModal),
+  // cualquier otro cambio de estado se persiste directo. Única fuente de esta regla —
+  // la usan tanto el pill de la fila como el pill del detalle.
+  function requestStatusChange(ad, next) {
+    if (next === 'Finalizado') {
+      setResultsFor(ad)
+      return
+    }
+    handleAdStatusChange(ad.id, next)
   }
 
   function handleRequestDeleteFromDetail(ad) {
@@ -148,7 +162,12 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
 
   return (
     <div>
-      <AdsSpendStats ads={periodAds} />
+      <AdsSpendStats
+        ads={periodAds}
+        onResetFilters={clearFilters}
+        onOpenBudget={() => setShowBudgetOverview(true)}
+        onFilterStatus={(status) => setStatusFilter(status)}
+      />
 
       {/* Toolbar: búsqueda + filtros (igual que la tab Tácticas) + nuevo ad */}
       <div className="flex flex-wrap gap-2 mb-4">
@@ -187,6 +206,16 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
             Limpiar
           </button>
         )}
+        <button
+          onClick={() => exportAdsToExcel({ ads: filtered, periodo })}
+          className="px-3 py-1.5 rounded-lg border border-[#e0ddd4] text-[14px] font-medium text-[#555] hover:bg-[#f5f3eb] transition-colors flex items-center gap-1.5"
+        >
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <path d="M8 1v9M5 7l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M2 12v2h12v-2" strokeLinecap="round"/>
+          </svg>
+          Excel
+        </button>
         <button
           onClick={() => setShowBudgetOverview(true)}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FFB800] text-[#111] text-[14px] font-bold hover:bg-[#e6a600] transition-colors"
@@ -299,7 +328,7 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
                         meta={STATUS}
                         options={STATUSES}
                         editable={canManage}
-                        onChange={(next) => handleAdStatusChange(a.id, next)}
+                        onChange={(next) => requestStatusChange(a, next)}
                         size="sm"
                       />
                     </td>
@@ -366,9 +395,17 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
           responsables={responsables}
           canManage={canManage}
           onClose={() => setDetail(null)}
-          onUpdated={handleSaved}
+          onStatusChange={(next) => requestStatusChange(detail, next)}
           onEdit={() => handleEditFromDetail(detail)}
           onRequestDelete={() => handleRequestDeleteFromDetail(detail)}
+        />
+      )}
+
+      {resultsFor && (
+        <AdsResultsModal
+          ad={resultsFor}
+          onClose={() => setResultsFor(null)}
+          onSaved={(row) => { handleSaved(row); setResultsFor(null) }}
         />
       )}
 

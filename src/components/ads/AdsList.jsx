@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, forwardRef, useImperativeHandle } from 'react'
 import { supabase } from '../../supabase'
 import AdsCard from './AdsCard'
 import { STATUSES, PRIORITIES } from './constants'
@@ -16,25 +16,7 @@ const COLUMNS = [
 
 const PRIORITY_ORDER = { Alta: 0, Media: 1, Baja: 2 }
 
-function exportCSV(campaigns, usersMap) {
-  const headers = ['Táctica','Cliente','Responsable','Fecha inicio','Fecha fin','Prioridad','Estado','Notas']
-  const rows = campaigns.map(c => [
-    c.name, c.client,
-    usersMap?.get(c.assignee) ?? c.assignee ?? '',
-    c.start_date, c.end_date,
-    c.priority, c.status, c.notes ?? '',
-  ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
-  const csv = [headers.join(','), ...rows].join('\n')
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `campanas_${new Date().toISOString().slice(0,10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
-export default function AdsList({ campaigns, loading, canManage, usersMap, clientsById, onSelect, onUpdated, onDeleted, onEdit }) {
+const AdsList = forwardRef(function AdsList({ campaigns, loading, canManage, usersMap, clientsById, periodo, onSelect, onUpdated, onDeleted, onEdit }, ref) {
   const [search, setSearch]               = useState('')
   const [filterStatus, setFilterStatus]   = useState('all')
   const [filterPriority, setFilterPriority] = useState('all')
@@ -87,6 +69,11 @@ export default function AdsList({ campaigns, loading, canManage, usersMap, clien
   function clearFilters() {
     setSearch(''); setFilterStatus('all'); setFilterPriority('all'); setFilterClient('all')
   }
+
+  useImperativeHandle(ref, () => ({
+    clearFilters,
+    setFilterStatus,
+  }))
 
   async function handleStatusChange(id, nextStatus) {
     const { data, error } = await supabase
@@ -186,16 +173,6 @@ export default function AdsList({ campaigns, loading, canManage, usersMap, clien
             Limpiar
           </button>
         )}
-        <button
-          onClick={() => exportCSV(sorted, usersMap)}
-          className="px-3 py-1.5 rounded-lg border border-[#e0ddd4] text-[14px] font-medium text-[#555] hover:bg-[#f5f3eb] transition-colors flex items-center gap-1.5"
-        >
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
-            <path d="M8 1v9M5 7l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
-            <path d="M2 12v2h12v-2" strokeLinecap="round"/>
-          </svg>
-          CSV
-        </button>
       </div>
 
       {/* Count */}
@@ -237,6 +214,7 @@ export default function AdsList({ campaigns, loading, canManage, usersMap, clien
                   canManage={canManage}
                   usersMap={usersMap}
                   clientsById={clientsById}
+                  periodo={periodo}
                   onSelect={onSelect}
                   onStatusChange={handleStatusChange}
                   onEdit={onEdit}
@@ -280,4 +258,6 @@ export default function AdsList({ campaigns, loading, canManage, usersMap, clien
       )}
     </div>
   )
-}
+})
+
+export default AdsList

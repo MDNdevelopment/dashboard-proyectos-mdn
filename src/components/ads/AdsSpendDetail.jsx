@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
-import { STATUS, STATUSES } from './constants'
-import { durationDays, updateAd, spentByClientInPeriod } from './campaignSpendApi'
+import { STATUS, STATUSES, RESULT_FIELDS } from './constants'
+import { durationDays, spentByClientInPeriod } from './campaignSpendApi'
 import { fmtUSD } from '../../utils/metricsFinance'
 import StatusPill from '../common/StatusPill'
 
@@ -15,8 +15,10 @@ import StatusPill from '../common/StatusPill'
  *   ads          — array completo de ads ya cargado por el padre (para el cálculo de sobrepaso)
  *   client       — objeto metric_clients resuelto (para leer campaign_budget)
  *   responsables — lista acotada de responsables (Katherine, Paola, jefas de línea) para resolver el nombre
+ *   onStatusChange — cambio de estado delegado al padre (AdsSpendView.requestStatusChange), que
+ *                    decide si persiste directo o exige resultados primero (finalizar)
  */
-export default function AdsSpendDetail({ ad, ads = [], client, responsables = [], onClose, onUpdated, canManage, onEdit, onRequestDelete }) {
+export default function AdsSpendDetail({ ad, ads = [], client, responsables = [], onClose, onStatusChange, canManage, onEdit, onRequestDelete }) {
   const responsableName = (() => {
     const r = responsables.find(r => r.user_id === ad.responsable_id)
     return r ? `${r.first_name} ${r.last_name}` : '—'
@@ -27,11 +29,6 @@ export default function AdsSpendDetail({ ad, ads = [], client, responsables = []
     d
       ? new Date(d + 'T00:00:00').toLocaleDateString('es-VE', { day: 'numeric', month: 'long', year: 'numeric' })
       : '—'
-
-  async function handleStatusChange(nextStatus) {
-    const { data, error } = await updateAd(ad.id, { status: nextStatus })
-    if (!error && data) onUpdated(data)
-  }
 
   // Aviso de sobrepaso: el ad ya está incluido en `ads`, así que no se excluye por id.
   const overspend = useMemo(() => {
@@ -56,7 +53,7 @@ export default function AdsSpendDetail({ ad, ads = [], client, responsables = []
                 meta={STATUS}
                 options={STATUSES}
                 editable={canManage}
-                onChange={handleStatusChange}
+                onChange={onStatusChange}
               />
             </div>
           </div>
@@ -112,6 +109,23 @@ export default function AdsSpendDetail({ ad, ads = [], client, responsables = []
               <p className="text-[15px] text-[#444] whitespace-pre-wrap leading-relaxed bg-[#f5f3eb] rounded-xl p-3">
                 {ad.objective}
               </p>
+            </div>
+          )}
+
+          {/* Resultados — solo visibles una vez finalizado el ad; nunca como columnas de la tabla */}
+          {ad.status === 'Finalizado' && (
+            <div className="mb-4">
+              <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-1.5">Resultados</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#f5f3eb] rounded-xl p-3">
+                {RESULT_FIELDS.map(f => (
+                  <div key={f.key}>
+                    <p className="text-[11px] font-mono uppercase tracking-widest text-[#888] mb-0.5">{f.label}</p>
+                    <p className="text-[15px] font-semibold text-[#111]">
+                      {ad[f.key] != null ? Number(ad[f.key]).toLocaleString('es-VE') : '—'}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

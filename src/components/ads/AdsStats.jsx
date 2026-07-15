@@ -1,9 +1,8 @@
-export default function AdsStats({ campaigns }) {
+export default function AdsStats({ campaigns, onResetFilters, onFilterStatus }) {
   const total = campaigns.length
   const uniqueClients = new Set(campaigns.map(c => c.client)).size
   const inProgress = campaigns.filter(c => c.status === 'En Curso').length
-  const inReview = campaigns.filter(c => c.status === 'Revisión').length
-  const completed = campaigns.filter(c => c.status === 'Finalizado' || c.status === 'Aprobado').length
+  const completed = campaigns.filter(c => c.status === 'Finalizado').length
   const progress = total > 0 ? Math.round((completed / total) * 100) : 0
 
   const cards = [
@@ -12,24 +11,21 @@ export default function AdsStats({ campaigns }) {
       value: total,
       sub: `${uniqueClients} cliente${uniqueClients !== 1 ? 's' : ''}`,
       accent: '#111',
+      onClick: onResetFilters,
     },
     {
       label: 'En Curso',
       value: inProgress,
       sub: 'activas',
       accent: '#f57f17',
-    },
-    {
-      label: 'En Revisión',
-      value: inReview,
-      sub: 'pendientes de aprobación',
-      accent: '#7b1fa2',
+      onClick: () => onFilterStatus?.('En Curso'),
     },
     {
       label: 'Completadas',
       value: completed,
-      sub: 'aprobadas + finalizadas',
+      sub: 'finalizadas',
       accent: '#2e7d32',
+      onClick: () => onFilterStatus?.('Finalizado'),
     },
     {
       label: 'Avance Global',
@@ -41,11 +37,14 @@ export default function AdsStats({ campaigns }) {
   ]
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-6">
       {cards.map(card => (
         <div
           key={card.label}
-          className="bg-white border border-[#e0ddd4] rounded-2xl p-4"
+          onClick={card.onClick}
+          className={`bg-white border border-[#e0ddd4] rounded-2xl p-4 ${
+            card.onClick ? 'cursor-pointer hover:border-[#FFB800] transition-colors' : ''
+          }`}
         >
           <p className="text-[12px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] mb-1.5">
             {card.label}

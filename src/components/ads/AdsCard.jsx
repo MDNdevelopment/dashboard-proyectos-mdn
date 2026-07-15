@@ -1,13 +1,14 @@
 import { STATUS, STATUSES, PRIORITY } from "./constants";
 import StatusPill from "../common/StatusPill";
 import ClientCell from "./ClientCell";
-import { fmtDate, dateColor } from "./campaignSpendApi";
+import { fmtDate, dateColor, inPeriod } from "./campaignSpendApi";
 
 export default function AdsCard({
   campaign,
   canManage,
   usersMap,
   clientsById,
+  periodo,
   onSelect,
   onStatusChange,
   onEdit,
@@ -19,6 +20,8 @@ export default function AdsCard({
   onInlineEditSave,
 }) {
   const priority = PRIORITY[campaign.priority];
+  // La táctica se ve en este período por su rango, pero no empezó en él (spansPeriod en AdsPage).
+  const esContinua = periodo && !inPeriod(campaign.start_date, periodo);
 
   const isInlineEditing = inlineEditId === campaign.id;
 
@@ -81,6 +84,11 @@ export default function AdsCard({
       {/* Start date */}
       <td className="px-3 py-2.5 text-[14px] text-[#555] whitespace-nowrap">
         {fmtDate(campaign.start_date)}
+        {esContinua && (
+          <span className="block text-[11px] font-mono font-semibold text-[#c99400] mt-0.5">
+            Táctica continua
+          </span>
+        )}
       </td>
 
       {/* End date */}

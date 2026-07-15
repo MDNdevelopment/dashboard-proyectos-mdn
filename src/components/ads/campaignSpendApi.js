@@ -161,6 +161,23 @@ export function durationDays(startDate, endDate) {
 }
 
 /**
+ * ¿El rango [start_date, end_date] abarca (solapa) el mes/año dado?
+ * Un rango que empieza en un mes y termina en otro cae en TODOS los meses
+ * intermedios inclusive. Si no hay end_date, equivale a inPeriod(start_date).
+ * Solo se usa en el tab Tácticas; el tab Ads sigue con inPeriod (start_date).
+ */
+export function spansPeriod(startDate, endDate, { month, year }) {
+  if (!startDate) return false;
+  const target = year * 12 + month;                 // clave mes/año del período
+  const [sy, sm] = startDate.split("-").map(Number);
+  const startKey = sy * 12 + sm;
+  if (!endDate) return startKey === target;         // fallback: solo inicio
+  const [ey, em] = endDate.split("-").map(Number);
+  const endKey = ey * 12 + em;
+  return startKey <= target && target <= endKey;    // solapamiento inclusive
+}
+
+/**
  * Suma de montos de ads de un cliente cuyo start_date cae en el mes/año dado.
  * Usado para el aviso de sobrepaso de presupuesto y el tracking por periodo.
  * @param {Array} ads       — lista de ads ya cargados

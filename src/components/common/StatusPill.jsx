@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 
 /**
  * Control de estado unificado — píldora de color, opcionalmente editable.
@@ -23,10 +24,15 @@ import { useState, useRef, useEffect } from 'react'
  *   onChange — (nextValue) => void | Promise<void>
  *   size     — 'sm' | 'md' (default 'md')
  *
+ * El menú desplegable se renderiza vía `createPortal` en `document.body` con
+ * posición `fixed` calculada desde el botón — así no lo recorta el `overflow`
+ * de contenedores como tablas con scroll horizontal. Si no hay espacio debajo
+ * del botón dentro del viewport (p. ej. la última fila de una tabla), abre
+ * hacia arriba en su lugar.
+ *
  * Módulos candidatos a adoptar este componente más adelante (documentado en
  * ARQUITECTURA.md): Tickets (`TicketStatusBadge.jsx`), Proyectos
- * (`ProjectCard.jsx` / `ProjectDetailModal.jsx`), Tareas (`BaseView.jsx` —
- * requiere una variante con `createPortal` por el `overflow` de su tabla).
+ * (`ProjectCard.jsx` / `ProjectDetailModal.jsx`), Tareas (`BaseView.jsx`).
  */
 export default function StatusPill({
   value,
@@ -38,19 +44,54 @@ export default function StatusPill({
 }) {
   const [open, setOpen] = useState(false)
   const [pending, setPending] = useState(false)
+  const [menuPos, setMenuPos] = useState(null)
   const wrapperRef = useRef(null)
+  const menuRef = useRef(null)
 
   const opts = options ?? Object.keys(meta)
   const current = meta[value] ?? { label: value, bg: 'bg-[#f5f3eb]', text: 'text-[#555]', dot: 'bg-[#999]' }
 
+  // Antes de que el menú se monte no hay altura real que medir; se estima con el
+  // tamaño fijo de cada opción (py-1.5 + texto) para decidir si abre hacia arriba
+  // en el primer render. Una vez montado, updateMenuPos() re-mide la altura real.
+  const updateMenuPos = useCallback(() => {
+    const rect = wrapperRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const margin = 8
+    const estimatedHeight = opts.length * 34 + 8
+    const menuHeight = menuRef.current?.offsetHeight || estimatedHeight
+    const gap = 4
+    const opensAbove = window.innerHeight - rect.bottom < menuHeight + margin && rect.top > menuHeight + margin
+    setMenuPos({
+      top: opensAbove ? rect.top - menuHeight - gap : rect.bottom + gap,
+      left: rect.left,
+      minWidth: Math.max(rect.width, 150),
+    })
+  }, [opts.length])
+
+  // Segunda pasada tras montar el menú: corrige la posición con la altura real
+  // (la estimación pudo haber sido ligeramente distinta), todavía antes del paint.
+  useLayoutEffect(() => {
+    if (!open) return
+    updateMenuPos()
+  }, [open, updateMenuPos])
+
   useEffect(() => {
     if (!open) return
     const fn = (e) => {
-      if (!wrapperRef.current?.contains(e.target)) setOpen(false)
+      if (wrapperRef.current?.contains(e.target)) return
+      if (menuRef.current?.contains(e.target)) return
+      setOpen(false)
     }
     document.addEventListener('mousedown', fn)
-    return () => document.removeEventListener('mousedown', fn)
-  }, [open])
+    window.addEventListener('scroll', updateMenuPos, true)
+    window.addEventListener('resize', updateMenuPos)
+    return () => {
+      document.removeEventListener('mousedown', fn)
+      window.removeEventListener('scroll', updateMenuPos, true)
+      window.removeEventListener('resize', updateMenuPos)
+    }
+  }, [open, updateMenuPos])
 
   const padding = size === 'sm' ? 'px-2 py-0.5 text-[12.5px]' : 'px-2.5 py-1 text-[13px]'
 
@@ -85,8 +126,12 @@ export default function StatusPill({
         </svg>
       </button>
 
-      {open && (
-        <div className="absolute z-30 mt-1 min-w-[150px] bg-white border border-[#e0ddd4] rounded-xl shadow-lg overflow-hidden py-1">
+      {open && menuPos && createPortal(
+        <div
+          ref={menuRef}
+          style={{ position: 'fixed', top: menuPos.top, left: menuPos.left, minWidth: menuPos.minWidth }}
+          className="z-30 bg-white border border-[#e0ddd4] rounded-xl shadow-lg overflow-hidden py-1"
+        >
           {opts.map((key) => {
             const m = meta[key] ?? {}
             return (
@@ -106,7 +151,8 @@ export default function StatusPill({
               </button>
             )
           })}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

@@ -59,3 +59,30 @@ describe('AdsList — click en fila abre detalle', () => {
     expect(onSelect).not.toHaveBeenCalled()
   })
 })
+
+describe('AdsList — export', () => {
+  it('ya no muestra el botón de export CSV (movido a la tab Ads como Excel)', () => {
+    render(<AdsList campaigns={[CAMPAIGN]} loading={false} canManage={true} usersMap={new Map()} clientsById={new Map()} onSelect={() => {}} onUpdated={() => {}} onDeleted={() => {}} onEdit={() => {}} />)
+    expect(screen.queryByRole('button', { name: /CSV/i })).not.toBeInTheDocument()
+  })
+})
+
+describe('AdsList — texto "Táctica continua"', () => {
+  const baseProps = { loading: false, canManage: true, usersMap: new Map(), clientsById: new Map(), onSelect: () => {}, onUpdated: () => {}, onDeleted: () => {}, onEdit: () => {} }
+
+  it('NO se muestra cuando la táctica empezó en el período que se está viendo', () => {
+    render(<AdsList campaigns={[CAMPAIGN]} periodo={{ month: 7, year: 2026 }} {...baseProps} />)
+    expect(screen.queryByText('Táctica continua')).not.toBeInTheDocument()
+  })
+
+  it('se muestra cuando la táctica empezó en un mes distinto al período visto (rango multi-mes)', () => {
+    const continua = { ...CAMPAIGN, id: 'camp-2', start_date: '2026-06-25', end_date: '2026-07-05' }
+    render(<AdsList campaigns={[continua]} periodo={{ month: 7, year: 2026 }} {...baseProps} />)
+    expect(screen.getByText('Táctica continua')).toBeInTheDocument()
+  })
+
+  it('sin periodo (prop no provista), no se muestra', () => {
+    render(<AdsList campaigns={[CAMPAIGN]} {...baseProps} />)
+    expect(screen.queryByText('Táctica continua')).not.toBeInTheDocument()
+  })
+})

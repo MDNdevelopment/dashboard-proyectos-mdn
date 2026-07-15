@@ -223,6 +223,45 @@ describe('AdsSpendForm', () => {
     expect(onCreated).toHaveBeenCalled()
   })
 
+  describe('resultados al finalizar', () => {
+    it('NO muestra los campos de resultado si el estado no es Finalizado', async () => {
+      renderForm()
+      await waitFor(() => screen.getByRole('option', { name: 'Banco Exterior' }))
+      expect(screen.queryByLabelText('Alcance')).not.toBeInTheDocument()
+    })
+
+    it('al elegir Finalizado, aparecen los 4 campos y bloquean el envío hasta llenarlos', async () => {
+      const user = userEvent.setup()
+      renderForm()
+
+      await fillRequiredFields(user, { amount: 40 })
+      const statusSelect = screen.getAllByRole('combobox').find(s =>
+        Array.from(s.options ?? []).some(o => o.text === 'Finalizado')
+      )
+      await user.selectOptions(statusSelect, 'Finalizado')
+
+      expect(screen.getByLabelText('Alcance')).toBeInTheDocument()
+      expect(screen.getByLabelText('Interacciones')).toBeInTheDocument()
+      expect(screen.getByLabelText('Seguidores')).toBeInTheDocument()
+      expect(screen.getByLabelText('Impresiones')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Crear ad' })).toBeDisabled()
+
+      await user.type(screen.getByLabelText('Alcance'), '1000')
+      await user.type(screen.getByLabelText('Interacciones'), '200')
+      await user.type(screen.getByLabelText('Seguidores'), '30')
+      await user.type(screen.getByLabelText('Impresiones'), '5000')
+
+      expect(screen.getByRole('button', { name: 'Crear ad' })).not.toBeDisabled()
+
+      await user.click(screen.getByRole('button', { name: 'Crear ad' }))
+      await waitFor(() => {
+        expect(mockCreateAd).toHaveBeenCalledWith('co-1', expect.objectContaining({
+          status: 'Finalizado', reach: 1000, interactions: 200, followers: 30, impressions: 5000,
+        }))
+      })
+    })
+  })
+
   describe('validación de plazo (fin no puede ser anterior a inicio)', () => {
     it('el input de fecha fin tiene un min ligado a la fecha de inicio', async () => {
       const user = userEvent.setup()
