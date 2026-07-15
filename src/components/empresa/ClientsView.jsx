@@ -11,6 +11,7 @@ import {
 } from "../metricas/metricsApi";
 import { MONTHS } from "../metricas/constants";
 import { clientInMonth } from "../../utils/clientInMonth";
+import { exportClientsToPdf } from "../../utils/exportClientsToPdf";
 import ClientModal from "./ClientModal";
 import ConfirmDeleteDialog from "../common/ConfirmDeleteDialog";
 
@@ -35,6 +36,7 @@ export default function ClientsView({ companyId, canManage = true }) {
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState(null);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
 
   // Período: null = "Actual" (roster vigente), o { month, year } para vista histórica
   const [periodo, setPeriodo] = useState(null);
@@ -124,6 +126,16 @@ export default function ClientsView({ companyId, canManage = true }) {
       ),
     );
     setConfirmDelete(null);
+  }
+
+  // ── Export PDF (clientes activos agrupados por social) ───────────────────────
+  async function handleExportPdf() {
+    setGeneratingPdf(true);
+    try {
+      await exportClientsToPdf({ clients, employees, lines });
+    } finally {
+      setGeneratingPdf(false);
+    }
   }
 
   // ── Restaurar ─────────────────────────────────────────────────────────────────
@@ -262,6 +274,23 @@ export default function ClientsView({ companyId, canManage = true }) {
                 : `Ver archivados (${archivedClients.length})`}
             </button>
           )}
+
+          {/* Descargar PDF — clientes activos agrupados por social */}
+          <button
+            onClick={handleExportPdf}
+            disabled={generatingPdf}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#e0ddd4] text-[14px] font-medium text-[#555] hover:bg-[#f5f3eb] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {generatingPdf ? (
+              <span className="w-3 h-3 border-2 border-[#999] border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M8 1v9M5 7l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M2 12v2h12v-2" strokeLinecap="round"/>
+              </svg>
+            )}
+            {generatingPdf ? "Generando…" : "PDF"}
+          </button>
 
           {/* Botón nuevo cliente — solo en modo Actual con permiso */}
           {modoActual && !showArchived && canManage && (
