@@ -82,6 +82,7 @@ export default function PanoramaView({
   const gPct = gTotal ? Math.round((gCer / gTotal) * 100) : 0;
   const gBloq = stats.reduce((a, s) => a + s.bloqueados, 0);
   const gRet = stats.reduce((a, s) => a + s.retrasados, 0);
+  const gApoyo = stats.reduce((a, s) => a + s.apoyo, 0);
   const ranked = [...stats].sort(
     (a, b) =>
       (b.total ? b.pct : -1) - (a.total ? a.pct : -1) ||
@@ -105,7 +106,7 @@ export default function PanoramaView({
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <KpiCard
           label="Tareas del mes"
           value={gTotal}
@@ -147,6 +148,12 @@ export default function PanoramaView({
           sub="Entregas vencidas"
           color={gRet ? "#E14848" : undefined}
           onClick={() => onNavigateToBase({ alert: "late" })}
+        />
+        <KpiCard
+          label="Apoyo dir."
+          value={gApoyo}
+          sub={gApoyo ? "De dirección" : "Ninguno"}
+          onClick={() => onNavigateToBase({ support: "all" })}
         />
       </div>
 

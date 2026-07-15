@@ -202,8 +202,14 @@ export default function BaseView({ tasks, teams, team, allLines = false, usersMa
   const [fStatus, setFStatus] = useState(() => initialFilter?.status ?? searchParams.get('status') ?? '')
   const [fClient, setFClient] = useState('')
   const [fClientId, setFClientId] = useState(() => searchParams.get('client') ?? '') // client_id desde Reportes
-  // user_id[] de personas de dirección; precargable desde Home vía ?support=<userId>
+  // user_id[] de personas de dirección; precargable desde Home vía ?support=<userId>, o desde la
+  // card "Apoyo dir." del dashboard (initialFilter.support === 'all') que marca a todos los directores
   const [fSupportIds, setFSupportIds] = useState(() => {
+    if (initialFilter?.support === 'all') {
+      return Array.from(usersMap.values())
+        .filter(u => (u.access_level ?? 0) >= 3)
+        .map(u => u.user_id)
+    }
     const s = searchParams.get('support')
     return s ? [s] : []
   })
