@@ -11,6 +11,7 @@ import { useAuth } from "../../context/AuthContext";
 import EmployeeInfoModal from "./EmployeeInfoModal";
 import ClientFichaModal from "./ClientFichaModal";
 import { fmtUSD } from "../../utils/metricsFinance";
+import { activeEmployees } from "../../lib/employees";
 import EntityGridList, { ViewToggle } from "../common/EntityGridList";
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -41,7 +42,8 @@ export default function LineHubView({ line, companyId, year = CURRENT_YEAR }) {
     const allEmployees = usersData ?? [];
     setCompanyEmployees(allEmployees);
     const memberIds = line.member_user_ids ?? [];
-    setTeamMembers(allEmployees.filter(u => memberIds.includes(u.user_id)));
+    // Empleados archivados no cuentan como miembros activos de la línea.
+    setTeamMembers(activeEmployees(allEmployees).filter(u => memberIds.includes(u.user_id)));
     setLineClients(clientsData ?? []);
     setLoading(false);
   }, [companyId, line?.id, line?.member_user_ids, year]);

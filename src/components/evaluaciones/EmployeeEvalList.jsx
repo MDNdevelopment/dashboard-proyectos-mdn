@@ -28,6 +28,7 @@ export default function EmployeeEvalList({ companyId, currentUserId }) {
         .select('*, department:departments(department_name), position:positions(position_name)')
         .eq('company_id', companyId)
         .neq('user_id', currentUserId)
+        .is('deleted_at', null)
         .order('first_name'),
       supabase
         .from('evaluation_sessions')

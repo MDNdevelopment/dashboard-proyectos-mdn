@@ -31,6 +31,9 @@ vi.mock('../supabase', () => {
       from: mockFrom,
       channel: vi.fn(() => channel),
       removeChannel: vi.fn(),
+      auth: {
+        getSession: vi.fn().mockResolvedValue({ data: { session: { access_token: 'test-token' } } }),
+      },
     },
   }
 })
@@ -262,5 +265,132 @@ describe('EmployeesView', () => {
     })
     // Fecha formateada como dd/MM/yyyy
     expect(screen.getByText('01/07/2026 – 15/07/2026')).toBeInTheDocument()
+  })
+
+  // ── Soft delete (eliminar / restaurar) ─────────────────────────────────────
+  describe('eliminar y restaurar empleados (soft delete)', () => {
+    beforeEach(() => {
+      global.fetch = vi.fn()
+    })
+
+    it('abre el diálogo de confirmación al hacer click en Eliminar', async () => {
+      const user = userEvent.setup()
+      renderAsAdmin()
+      await waitFor(() => { expect(screen.getByText('Ana Pérez')).toBeInTheDocument() })
+
+      const archiveButtons = screen.getAllByRole('button', { name: 'Eliminar' })
+      await user.click(archiveButtons[0])
+
+      expect(screen.getByRole('heading', { name: 'Eliminar empleado' })).toBeInTheDocument()
+    })
+
+    it('archiva al empleado tras confirmar con su nombre completo', async () => {
+      const user = userEvent.setup()
+      global.fetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ ...MOCK_USERS[0], deleted_at: '2026-07-15T00:00:00.000Z' }),
+      })
+      renderAsAdmin()
+      await waitFor(() => { expect(screen.getByText('Ana Pérez')).toBeInTheDocument() })
+
+      const archiveButtons = screen.getAllByRole('button', { name: 'Eliminar' })
+      await user.click(archiveButtons[0])
+
+      const input = screen.getByPlaceholderText('Ana Pérez')
+      await user.type(input, 'Ana Pérez')
+      const dialogButtons = screen.getAllByRole('button', { name: 'Eliminar' })
+      await user.click(dialogButtons[dialogButtons.length - 1])
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith('/api/employees/manage', expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ user_id: 'u10', action: 'archive' }),
+        }))
+      })
+      // Ana desaparece de la lista activa (búsqueda por defecto)
+      await waitFor(() => {
+        expect(screen.queryByText('Ana Pérez')).not.toBeInTheDocument()
+      })
+      expect(screen.getByText('Carlos López')).toBeInTheDocument()
+    })
+
+    it('el toggle "Ver eliminados" muestra solo a los empleados eliminados', async () => {
+      const user = userEvent.setup()
+      global.fetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ ...MOCK_USERS[0], deleted_at: '2026-07-15T00:00:00.000Z' }),
+      })
+      renderAsAdmin()
+      await waitFor(() => { expect(screen.getByText('Ana Pérez')).toBeInTheDocument() })
+
+      await user.click(screen.getAllByRole('button', { name: 'Eliminar' })[0])
+      await user.type(screen.getByPlaceholderText('Ana Pérez'), 'Ana Pérez')
+      const dialogButtons1 = screen.getAllByRole('button', { name: 'Eliminar' })
+      await user.click(dialogButtons1[dialogButtons1.length - 1])
+      await waitFor(() => { expect(screen.queryByText('Ana Pérez')).not.toBeInTheDocument() })
+
+      await user.click(screen.getByRole('button', { name: /ver eliminados/i }))
+
+      expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
+      expect(screen.queryByText('Carlos López')).not.toBeInTheDocument()
+      expect(screen.getByText('Eliminado')).toBeInTheDocument()
+    })
+
+    it('restaura a un empleado archivado', async () => {
+      const user = userEvent.setup()
+      global.fetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ ...MOCK_USERS[0], deleted_at: '2026-07-15T00:00:00.000Z' }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ ...MOCK_USERS[0], deleted_at: null }),
+        })
+      renderAsAdmin()
+      await waitFor(() => { expect(screen.getByText('Ana Pérez')).toBeInTheDocument() })
+
+      await user.click(screen.getAllByRole('button', { name: 'Eliminar' })[0])
+      await user.type(screen.getByPlaceholderText('Ana Pérez'), 'Ana Pérez')
+      const dialogButtons2 = screen.getAllByRole('button', { name: 'Eliminar' })
+      await user.click(dialogButtons2[dialogButtons2.length - 1])
+      await waitFor(() => { expect(screen.queryByText('Ana Pérez')).not.toBeInTheDocument() })
+
+      await user.click(screen.getByRole('button', { name: /ver eliminados/i }))
+      await user.click(screen.getByRole('button', { name: 'Restaurar' }))
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenLastCalledWith('/api/employees/manage', expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ user_id: 'u10', action: 'restore' }),
+        }))
+      })
+
+      // De vuelta en la vista de activos, Ana reaparece
+      await user.click(screen.getByRole('button', { name: /ocultando activos/i }))
+      expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
+    })
+
+    it('no muestra el botón Eliminar para el propio usuario', async () => {
+      useAuth.mockReturnValue({
+        userProfile: {
+          user_id: 'u10', // mismo id que Ana Pérez en MOCK_USERS
+          company_id: 'co-1',
+          access_level: 3,
+          admin: true,
+          first_name: 'Ana',
+          last_name: 'Pérez',
+        },
+      })
+      render(
+        <MemoryRouter initialEntries={['/empresa/empleados']}>
+          <EmpresaPage />
+        </MemoryRouter>
+      )
+      await waitFor(() => { expect(screen.getByText('Ana Pérez')).toBeInTheDocument() })
+
+      // Solo Carlos (el otro empleado) tiene botón Eliminar
+      expect(screen.getAllByRole('button', { name: 'Eliminar' })).toHaveLength(1)
+    })
   })
 })

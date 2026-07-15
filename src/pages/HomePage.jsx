@@ -7,8 +7,9 @@ import { useAuth } from '../context/AuthContext'
 import { MODULES } from '../config/modules'
 import { isLate, isClosed } from '../components/tareas/constants'
 import KpiCard from '../components/common/KpiCard'
-import { loadLines, loadYearReports, loadClients, loadCompanyEmployees } from '../components/metricas/metricsApi'
+import { loadLines, loadYearReports, loadClients, loadCompanyEmployees, loadCompanyUsers } from '../components/metricas/metricsApi'
 import { loadMeetings } from '../components/reuniones/meetingsApi'
+import { activeEmployees } from '../lib/employees'
 import { calcTotal, sumScore, monthLineScore } from '../utils/metricsScore'
 import { calcFinanzas } from '../utils/metricsFinance'
 import { aggregateMetricsDashboard } from '../utils/aggregateMetricsDashboard'
@@ -76,6 +77,9 @@ export default function HomePage() {
   const [meetings, setMeetings] = useState([])
   const [loadingMeetings, setLoadingMeetings] = useState(true)
   const [meetingEmployees, setMeetingEmployees] = useState([])
+  // Set de user_id activos (no archivados) de la empresa — usado para excluir
+  // empleados dados de baja de los conteos (KPI de empresa y de línea).
+  const [activeEmployeeIds, setActiveEmployeeIds] = useState(null)
 
   const isDirector = userProfile?.access_level >= 4 || userProfile?.admin === true
   // A nivel 4 no se le asignan tareas directamente, solo se le pone como apoyo de dirección.
@@ -133,15 +137,16 @@ export default function HomePage() {
   }, [userProfile?.company_id, showReuniones])
 
   useEffect(() => {
-    if (!userProfile?.company_id || !isDirector) return
+    if (!userProfile?.company_id || !(isDirector || isLineLead)) return
     let cancelled = false
-    supabase.from('users').select('user_id').eq('company_id', userProfile.company_id)
-      .then(({ data }) => {
-        if (cancelled) return
-        setCompanyCounts({ empleados: data?.length ?? null })
-      })
+    loadCompanyUsers(userProfile.company_id).then(({ data }) => {
+      if (cancelled) return
+      const active = activeEmployees(data ?? [])
+      setActiveEmployeeIds(new Set(active.map(u => u.user_id)))
+      if (isDirector) setCompanyCounts({ empleados: active.length })
+    })
     return () => { cancelled = true }
-  }, [userProfile?.company_id, isDirector])
+  }, [userProfile?.company_id, isDirector, isLineLead])
 
   // Líneas + reportes + clientes del año: los usa el director (salud/conteos de empresa) y el
   // nivel 3 (salud/conteos de su línea). Para nivel 3, loadYearReports ya viene filtrado por RLS
@@ -203,7 +208,11 @@ export default function HomePage() {
       HEALTH_PREV_MONTH,
     )
     const lineClients = clients.filter(c => c.line_id === line.id)
-    const lineEmployees = line.member_user_ids ?? []
+    // Excluye empleados archivados del conteo (activeEmployeeIds llega vacío hasta
+    // que resuelve el fetch; en ese instante se muestra el total sin filtrar).
+    const lineEmployees = (line.member_user_ids ?? []).filter(
+      id => activeEmployeeIds === null || activeEmployeeIds.has(id)
+    )
     return {
       line,
       count: lineTasks.length,

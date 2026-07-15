@@ -98,3 +98,24 @@ describe('UserPickerSingle — empleado seleccionado', () => {
     expect(screen.queryByText('undefined')).not.toBeInTheDocument()
   })
 })
+
+describe('UserPickerSingle — empleados archivados (soft delete)', () => {
+  const ARCHIVED_USERS = [
+    ...USERS,
+    { user_id: 'u6', first_name: 'Fabia', last_name: 'Soto', avatar_url: null, access_level: 1, deleted_at: '2026-07-15T00:00:00.000Z', position: null },
+  ]
+
+  it('un empleado archivado no aparece como opción nueva en el desplegable', () => {
+    render(<UserPickerSingle users={ARCHIVED_USERS} selectedId={null} onChange={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button'))
+    expect(screen.queryByText('Fabia Soto')).not.toBeInTheDocument()
+    // Los demás siguen apareciendo como opciones
+    expect(screen.getByText('Ana García')).toBeInTheDocument()
+  })
+
+  it('un empleado archivado ya asignado sigue resolviendo su nombre en el trigger', () => {
+    render(<UserPickerSingle users={ARCHIVED_USERS} selectedId="u6" onChange={vi.fn()} />)
+    // El trigger (cerrado) resuelve el nombre desde la lista completa, no la filtrada
+    expect(screen.getByText('Fabia Soto')).toBeInTheDocument()
+  })
+})

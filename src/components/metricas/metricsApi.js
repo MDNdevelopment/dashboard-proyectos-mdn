@@ -138,7 +138,7 @@ export async function updateClient(clientId, updates) {
 export async function loadCompanyUsers(companyId) {
   return supabase
     .from("users")
-    .select("user_id, first_name, last_name, avatar_url")
+    .select("user_id, first_name, last_name, avatar_url, deleted_at")
     .eq("company_id", companyId)
     .order("first_name");
 }

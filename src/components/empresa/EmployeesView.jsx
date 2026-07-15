@@ -1,16 +1,20 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../supabase'
+import { useAuth } from '../../context/AuthContext'
 import { Avatar } from '../tareas/UserPickerSingle'
 import EmployeeModal from './EmployeeModal'
 import VacationsDialog from './VacationsDialog'
 import NewEmployeeDialog from './NewEmployeeDialog'
+import ConfirmDeleteDialog from '../common/ConfirmDeleteDialog'
 
 export default function EmployeesView({ companyId }) {
+  const { userProfile } = useAuth()
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
   const [positions, setPositions] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [showArchived, setShowArchived] = useState(false)
 
   // Modal de edición: null=cerrado, objeto=editar
   const [editModal, setEditModal] = useState(null)
@@ -18,6 +22,10 @@ export default function EmployeesView({ companyId }) {
   const [vacEmployee, setVacEmployee] = useState(null)
   // Dialog crear empleado
   const [createOpen, setCreateOpen] = useState(false)
+  // Diálogo de confirmación de archivado: null=cerrado, objeto=empleado
+  const [confirmArchive, setConfirmArchive] = useState(null)
+  const [archiving, setArchiving] = useState(false)
+  const [error, setError] = useState(null)
 
   // ── Carga de datos ──────────────────────────────────────────────────────────
   const loadAll = useCallback(async () => {
@@ -60,8 +68,54 @@ export default function EmployeesView({ companyId }) {
     })
   }
 
-  // ── Filtro local ────────────────────────────────────────────────────────────
-  const filtered = employees.filter(e => {
+  // Archivar/restaurar van a la Netlify function (service role): banea/desbanea el
+  // login en auth.users además de marcar/desmarcar deleted_at en el perfil.
+  async function callManage(user_id, action) {
+    const { data: { session } } = await supabase.auth.getSession()
+    const res = await fetch('/api/employees/manage', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ user_id, action }),
+    })
+    const payload = await res.json()
+    if (!res.ok) throw new Error(payload.error ?? 'Error al procesar el empleado')
+    return payload
+  }
+
+  async function handleArchive() {
+    if (!confirmArchive) return
+    setArchiving(true)
+    setError(null)
+    try {
+      const updated = await callManage(confirmArchive.user_id, 'archive')
+      handleEmployeeSaved(updated)
+      setConfirmArchive(null)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setArchiving(false)
+    }
+  }
+
+  async function handleRestore(employee) {
+    setError(null)
+    try {
+      const updated = await callManage(employee.user_id, 'restore')
+      handleEmployeeSaved(updated)
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  // ── Split activos / archivados + filtro local ────────────────────────────────
+  const activeEmployees = employees.filter(e => !e.deleted_at)
+  const archivedEmployees = employees.filter(e => !!e.deleted_at)
+  const visibleEmployees = showArchived ? archivedEmployees : activeEmployees
+
+  const filtered = visibleEmployees.filter(e => {
     const q = search.toLowerCase()
     if (!q) return true
     const fullName = `${e.first_name} ${e.last_name}`.toLowerCase()
@@ -80,9 +134,9 @@ export default function EmployeesView({ companyId }) {
   return (
     <>
       {/* Barra superior */}
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex items-center gap-3 mb-4 flex-wrap">
         <p className="text-[15px] text-[#888] flex-shrink-0">
-          {employees.length} empleado{employees.length !== 1 ? 's' : ''}
+          {visibleEmployees.length} empleado{visibleEmployees.length !== 1 ? 's' : ''}
         </p>
         <input
           type="text"
@@ -91,27 +145,48 @@ export default function EmployeesView({ companyId }) {
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
-        <div className="ml-auto">
-          <button
-            type="button"
-            onClick={() => setCreateOpen(true)}
-            className="px-3 py-1.5 rounded-lg text-[14px] font-bold bg-[#FFB800] text-[#111] hover:bg-[#e6a600] transition-colors"
-          >
-            + Nuevo empleado
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setShowArchived(v => !v)}
+          className={`px-3 py-1.5 rounded-lg text-[13.5px] font-semibold border transition-all ${
+            showArchived
+              ? 'bg-[#f5f0e0] text-[#888] border-[#d4c890]'
+              : 'bg-white text-[#aaa] border-[#e0ddd4] hover:bg-[#f5f3eb]'
+          }`}
+        >
+          {showArchived ? 'Ocultando activos' : `Ver eliminados (${archivedEmployees.length})`}
+        </button>
+        {!showArchived && (
+          <div className="ml-auto">
+            <button
+              type="button"
+              onClick={() => setCreateOpen(true)}
+              className="px-3 py-1.5 rounded-lg text-[14px] font-bold bg-[#FFB800] text-[#111] hover:bg-[#e6a600] transition-colors"
+            >
+              + Nuevo empleado
+            </button>
+          </div>
+        )}
       </div>
+
+      {error && (
+        <div className="mb-4 bg-red-50 border border-red-300 rounded-xl px-4 py-3 text-[14px] text-red-700 font-medium">
+          {error}
+        </div>
+      )}
 
       {/* Estado vacío */}
       {filtered.length === 0 ? (
         <div className="bg-white rounded-xl border border-[#e0ddd4] p-10 text-center">
           <p className="text-[17px] font-semibold text-[#888] mb-1">
-            {search ? 'Sin resultados' : 'Sin empleados'}
+            {search ? 'Sin resultados' : showArchived ? 'Sin empleados eliminados' : 'Sin empleados'}
           </p>
           <p className="text-[15px] text-[#bbb]">
             {search
               ? 'Intenta con otro nombre o email.'
-              : 'Aún no hay empleados registrados en esta empresa.'}
+              : showArchived
+                ? 'Los empleados que elimines aparecerán aquí.'
+                : 'Aún no hay empleados registrados en esta empresa.'}
           </p>
         </div>
       ) : (
@@ -140,6 +215,11 @@ export default function EmployeesView({ companyId }) {
                       Nivel {emp.access_level}
                     </span>
                   )}
+                  {emp.deleted_at && (
+                    <span className="text-[12px] font-mono font-bold tracking-wide uppercase bg-red-100 text-red-700 border border-red-200 px-1.5 py-0.5 rounded">
+                      Eliminado
+                    </span>
+                  )}
                 </div>
                 <p className="text-[14px] text-[#888] mt-0.5 truncate">{emp.email}</p>
                 <p className="text-[14px] text-[#666] mt-0.5">
@@ -152,20 +232,41 @@ export default function EmployeesView({ companyId }) {
 
               {/* Acciones */}
               <div className="flex items-center gap-2 flex-shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setVacEmployee(emp)}
-                  className="px-3 py-1.5 rounded-lg text-[14px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
-                >
-                  Vacaciones
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditModal(emp)}
-                  className="px-3 py-1.5 rounded-lg text-[14px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors"
-                >
-                  Editar
-                </button>
+                {emp.deleted_at ? (
+                  <button
+                    type="button"
+                    onClick={() => handleRestore(emp)}
+                    className="px-3 py-1.5 rounded-lg text-[14px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
+                  >
+                    Restaurar
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setVacEmployee(emp)}
+                      className="px-3 py-1.5 rounded-lg text-[14px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
+                    >
+                      Vacaciones
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditModal(emp)}
+                      className="px-3 py-1.5 rounded-lg text-[14px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors"
+                    >
+                      Editar
+                    </button>
+                    {emp.user_id !== userProfile?.user_id && (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmArchive(emp)}
+                        className="px-3 py-1.5 rounded-lg text-[14px] font-semibold text-red-600 border border-red-200 hover:bg-red-50 transition-colors"
+                      >
+                        Eliminar
+                      </button>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           ))}
@@ -198,6 +299,25 @@ export default function EmployeesView({ companyId }) {
           positions={positions}
           onClose={() => setCreateOpen(false)}
           onCreated={handleEmployeeSaved}
+        />
+      )}
+
+      {/* Diálogo de confirmación de eliminación (soft delete) */}
+      {confirmArchive && (
+        <ConfirmDeleteDialog
+          itemName={`${confirmArchive.first_name} ${confirmArchive.last_name}`}
+          itemLabel="empleado"
+          message={
+            <>
+              <strong>{confirmArchive.first_name} {confirmArchive.last_name}</strong> dejará de
+              aparecer en selectores y conteos, y no podrá iniciar sesión. Su historial (tareas,
+              reuniones, evaluaciones, reportes) se conserva intacto. Esta acción se puede revertir
+              restaurando al empleado. Para confirmar, escribe su nombre completo a continuación.
+            </>
+          }
+          onConfirm={handleArchive}
+          onCancel={() => setConfirmArchive(null)}
+          confirming={archiving}
         />
       )}
     </>

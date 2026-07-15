@@ -14,6 +14,9 @@ export function AuthProvider({ children }) {
   // true cuando la sesión se invalidó externamente (token expirado / rechazado).
   // Permite que LoginPage muestre el aviso "Tu sesión expiró".
   const [sessionExpired, setSessionExpired] = useState(false)
+  // true cuando el perfil del usuario está archivado (deleted_at). Permite que
+  // LoginPage muestre "Tu cuenta ha sido deshabilitada" en vez del error genérico.
+  const [accountDisabled, setAccountDisabled] = useState(false)
 
   // Ref que guarda el userId cuyo perfil ya fue cargado. Evita re-fetches
   // redundantes (TOKEN_REFRESHED al refocar la pestaña) que causarían remounts.
@@ -34,11 +37,25 @@ export function AuthProvider({ children }) {
     supabase.auth.signOut()
   }
 
+  /**
+   * Empleado archivado (soft delete): cierra la sesión y muestra un aviso
+   * distinto al de "sesión expirada" en LoginPage.
+   */
+  function handleAccountDisabled() {
+    setAccountDisabled(true)
+    setSession(null)
+    setUserProfile(null)
+    setModulePermissions({})
+    setPermissionsLoaded(true)
+    loadedUserId.current = null
+    supabase.auth.signOut()
+  }
+
   async function fetchUserProfile(userId) {
     loadedUserId.current = userId
     const { data, error } = await supabase
       .from('users')
-      .select('user_id, first_name, last_name, email, department_id, position_id, access_level, admin, tasks_view_all, company_id, avatar_url, receive_ticket_notifications, department:departments(department_name), position:positions(position_name)')
+      .select('user_id, first_name, last_name, email, department_id, position_id, access_level, admin, tasks_view_all, company_id, avatar_url, receive_ticket_notifications, deleted_at, department:departments(department_name), position:positions(position_name)')
       .eq('user_id', userId)
       .single()
     if (error) {
@@ -47,6 +64,7 @@ export function AuthProvider({ children }) {
       setUserProfile(null)
       return
     }
+    if (data?.deleted_at) { handleAccountDisabled(); return }
     setUserProfile(data)
     if (data?.company_id) await fetchModulePermissions(data.company_id)
   }
@@ -102,8 +120,9 @@ export function AuthProvider({ children }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
       if (session) {
-        // Un nuevo login (o token refresh exitoso) limpia cualquier aviso de expiración.
+        // Un nuevo login (o token refresh exitoso) limpia cualquier aviso previo.
         setSessionExpired(false)
+        setAccountDisabled(false)
         // Solo re-fetchear si el usuario cambia (evita remounts por TOKEN_REFRESHED
         // al refocar la pestaña, que desmontaría las vistas y perdería datos sin guardar).
         if (session.user.id !== loadedUserId.current) {
@@ -164,7 +183,7 @@ export function AuthProvider({ children }) {
   return (
     <AuthContext.Provider value={{
       session, loading, userProfile, modulePermissions, permissionsLoaded,
-      sessionExpired,
+      sessionExpired, accountDisabled,
       signIn, signOut, resetPassword, refreshProfile,
       can,
     }}>

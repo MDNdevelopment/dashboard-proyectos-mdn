@@ -14,6 +14,7 @@ const { mockSupabase } = vi.hoisted(() => {
           select: vi.fn(() => builder),
           eq: vi.fn((col, val) => { filters[col] = val; return builder }),
           in: vi.fn((col, vals) => { filters[col] = vals; return builder }),
+          is: vi.fn((col, val) => { filters[col] = val; return builder }),
           then: (resolve) => {
             let data = []
             if (table === 'users') {

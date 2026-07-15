@@ -8,6 +8,7 @@ import { loadCompanyEmployees, loadClients, loadYearReports } from "../metricas/
 import EmployeeFichaContent from "../metricas/EmployeeFichaContent";
 import ClientFichaContent from "../metricas/ClientFichaContent";
 import EntityGridList, { ViewToggle } from "../common/EntityGridList";
+import { activeEmployees } from "../../lib/employees";
 
 const CURRENT_YEAR = new Date().getFullYear();
 const CURRENT_MONTH = new Date().getMonth() + 1;
@@ -48,7 +49,8 @@ export default function LineFichaModal({ line, companyId, canManage = false, onA
   // Derivados por render (sin refetch al cambiar member_user_ids)
   const memberIds = line.member_user_ids ?? [];
   const members   = allEmployees?.filter(u => memberIds.includes(u.user_id)) ?? [];
-  const available = allEmployees?.filter(u => !memberIds.includes(u.user_id)) ?? [];
+  // Un empleado archivado no puede agregarse como nuevo miembro de la línea.
+  const available = activeEmployees(allEmployees ?? []).filter(u => !memberIds.includes(u.user_id));
 
   // Carga on-mount: todos los empleados de la empresa + clientes de la línea.
   // No depende de member_user_ids para no refetchear al asignar.

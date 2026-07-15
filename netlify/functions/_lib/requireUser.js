@@ -29,11 +29,12 @@ export async function requireUser(event) {
   // Obtener company_id de confianza desde la tabla users
   const { data: profile, error: profileErr } = await supabase
     .from('users')
-    .select('user_id, company_id')
+    .select('user_id, company_id, deleted_at')
     .eq('user_id', user.id)
     .single()
 
   if (profileErr || !profile) return { error: errJson(401, 'Unauthorized') }
+  if (profile.deleted_at) return { error: errJson(401, 'Unauthorized') }
 
   return { caller: profile }
 }

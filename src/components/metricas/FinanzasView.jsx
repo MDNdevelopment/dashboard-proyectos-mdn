@@ -91,9 +91,11 @@ export default function FinanzasView({ line, companyId, year, month }) {
     const allEmployees = employeesRes.data ?? [];
     setCompanyEmployees(allEmployees);
     // Filtrar empleados del team de esta línea (member_user_ids es un array reconstruido
-    // en loadLines a partir de la tabla relacional metric_line_members)
+    // en loadLines a partir de la tabla relacional metric_line_members). Excluye
+    // archivados (deleted_at) por la misma razón que activeClients: no re-sembrar su
+    // fila de sueldo en el reporte actual; los reportes ya cerrados conservan la suya.
     const memberIds = new Set(line.member_user_ids ?? []);
-    const employees = allEmployees.filter(e => memberIds.has(e.user_id));
+    const employees = allEmployees.filter(e => memberIds.has(e.user_id) && !e.deleted_at);
     setLineEmployees(employees);
 
     if (reportRes.data) {
