@@ -179,9 +179,9 @@ export default function EvaluationModal({
       <div
         className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25 backdrop-blur-[3px]"
       >
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-y-auto max-h-[90vh]">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
           {/* Header */}
-          <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-[#ece9df]">
+          <div className="flex-shrink-0 flex items-center justify-between px-6 pt-5 pb-4 border-b border-[#ece9df]">
             <div>
               <h2 className="text-[18px] font-bold text-[#111]">
                 {isReadOnly ? 'Evaluación' : 'Nueva evaluación'}
@@ -201,7 +201,7 @@ export default function EvaluationModal({
           </div>
 
           {/* Body */}
-          <div className="px-6 py-5 space-y-5">
+          <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
             {/* Período */}
             <div className="flex items-center gap-2">
               <span className="text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">
@@ -289,7 +289,7 @@ export default function EvaluationModal({
 
           {/* Footer */}
           {!loadingData && questions.length > 0 && (
-            <div className="px-6 pb-5 flex items-center justify-between">
+            <div className="flex-shrink-0 px-6 py-4 border-t border-[#ece9df] flex items-center justify-between">
               {isReadOnly ? (
                 <>
                   <button

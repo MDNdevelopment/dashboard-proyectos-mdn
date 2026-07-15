@@ -32,7 +32,7 @@ export default function EmployeeFichaContent({ employee, line, onClose }) {
   return (
     <>
       {/* Header — foto protagonista centrada */}
-      <div className="flex flex-col items-center px-6 pt-7 pb-5 border-b border-[#ece9df]">
+      <div className="flex-shrink-0 flex flex-col items-center px-6 pt-7 pb-5 border-b border-[#ece9df]">
         {/* Avatar grande */}
         {employee.avatar_url ? (
           <img
@@ -67,7 +67,7 @@ export default function EmployeeFichaContent({ employee, line, onClose }) {
       </div>
 
       {/* Cuerpo */}
-      <div className="px-6 py-5 space-y-4">
+      <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
 
         {/* Departamento */}
         {employee.department?.department_name && (

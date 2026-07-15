@@ -57,7 +57,7 @@ export default function AdsDetail({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-black/30">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="px-6 pt-6 pb-4 border-b border-[#ece9df] flex items-start justify-between gap-4">
+        <div className="flex-shrink-0 px-6 pt-6 pb-4 border-b border-[#ece9df] flex items-start justify-between gap-4">
           <div className="flex-1">
             <h2 className="text-[19px] font-bold text-[#111] leading-snug mb-2">
               {campaign.name}
@@ -137,40 +137,41 @@ export default function AdsDetail({
             </div>
           )}
 
-          {canManage && (
-            <div className="flex gap-2 mt-2">
-              <button
-                onClick={onEdit}
-                className="flex-1 py-2.5 rounded-xl bg-[#FFB800] text-[#111] text-[15px] font-bold hover:bg-[#e6a600] transition-colors"
-              >
-                Editar
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={deleting}
-                className={`flex-1 py-2.5 rounded-xl text-[15px] font-bold transition-colors disabled:opacity-50 ${
-                  confirming
-                    ? "bg-red-600 text-white hover:bg-red-700"
-                    : "border border-[#e0ddd4] text-[#555] hover:bg-[#f5f3eb]"
-                }`}
-              >
-                {deleting
-                  ? "Eliminando..."
-                  : confirming
-                    ? "¿Confirmar?"
-                    : "Eliminar"}
-              </button>
-              {confirming && (
-                <button
-                  onClick={() => setConfirming(false)}
-                  className="px-4 py-2.5 rounded-xl border border-[#e0ddd4] text-[15px] font-semibold text-[#555] hover:bg-[#f5f3eb] transition-colors"
-                >
-                  No
-                </button>
-              )}
-            </div>
-          )}
         </div>
+
+        {canManage && (
+          <div className="flex-shrink-0 flex gap-2 px-6 py-4 border-t border-[#ece9df]">
+            <button
+              onClick={onEdit}
+              className="flex-1 py-2.5 rounded-xl bg-[#FFB800] text-[#111] text-[15px] font-bold hover:bg-[#e6a600] transition-colors"
+            >
+              Editar
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className={`flex-1 py-2.5 rounded-xl text-[15px] font-bold transition-colors disabled:opacity-50 ${
+                confirming
+                  ? "bg-red-600 text-white hover:bg-red-700"
+                  : "border border-[#e0ddd4] text-[#555] hover:bg-[#f5f3eb]"
+              }`}
+            >
+              {deleting
+                ? "Eliminando..."
+                : confirming
+                  ? "¿Confirmar?"
+                  : "Eliminar"}
+            </button>
+            {confirming && (
+              <button
+                onClick={() => setConfirming(false)}
+                className="px-4 py-2.5 rounded-xl border border-[#e0ddd4] text-[15px] font-semibold text-[#555] hover:bg-[#f5f3eb] transition-colors"
+              >
+                No
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

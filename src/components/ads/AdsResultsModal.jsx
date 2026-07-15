@@ -40,7 +40,7 @@ export default function AdsResultsModal({ ad, onClose, onSaved }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-black/30">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
-        <div className="px-6 pt-6 pb-5 border-b border-[#ece9df] flex items-center justify-between">
+        <div className="flex-shrink-0 px-6 pt-6 pb-5 border-b border-[#ece9df] flex items-center justify-between">
           <div>
             <h2 className="text-[19px] font-bold text-[#111]">Resultados del ad</h2>
             <p className="text-[13px] text-[#888] mt-0.5">
@@ -54,7 +54,7 @@ export default function AdsResultsModal({ ad, onClose, onSaved }) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-6 py-5 overflow-y-auto flex-1">
+        <form id="ads-results-form" onSubmit={handleSubmit} className="px-6 py-5 overflow-y-auto flex-1">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {RESULT_FIELDS.map(f => (
               <div key={f.key}>
@@ -74,24 +74,25 @@ export default function AdsResultsModal({ ad, onClose, onSaved }) {
           </div>
 
           {error && <p className="text-[14px] text-red-600 mt-3">{error}</p>}
-
-          <div className="flex gap-3 pt-4 mt-4 border-t border-[#ece9df]">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl border border-[#e0ddd4] text-[15px] font-semibold text-[#555] hover:bg-[#f5f3eb] transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={submitting || !allFilled}
-              className="flex-1 py-2.5 rounded-xl bg-[#111] text-white text-[15px] font-bold hover:bg-[#222] transition-colors disabled:opacity-50"
-            >
-              {submitting ? 'Guardando...' : 'Guardar y finalizar'}
-            </button>
-          </div>
         </form>
+
+        <div className="flex-shrink-0 flex gap-3 px-6 py-4 border-t border-[#ece9df]">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl border border-[#e0ddd4] text-[15px] font-semibold text-[#555] hover:bg-[#f5f3eb] transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            form="ads-results-form"
+            disabled={submitting || !allFilled}
+            className="flex-1 py-2.5 rounded-xl bg-[#111] text-white text-[15px] font-bold hover:bg-[#222] transition-colors disabled:opacity-50"
+          >
+            {submitting ? 'Guardando...' : 'Guardar y finalizar'}
+          </button>
+        </div>
       </div>
     </div>
   )

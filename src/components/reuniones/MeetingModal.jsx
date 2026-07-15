@@ -73,7 +73,7 @@ export default function MeetingModal({ meeting, defaultDate, clients, employees,
         onSubmit={handleSubmit}
         className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col"
       >
-        <div className="px-6 pt-6 pb-5 border-b border-[#ece9df] flex items-center justify-between">
+        <div className="flex-shrink-0 px-6 pt-6 pb-5 border-b border-[#ece9df] flex items-center justify-between">
           <h2 className="text-[19px] font-bold text-[#111]">
             {isEdit ? "Editar reunión" : "Nueva reunión"}
           </h2>
@@ -84,7 +84,7 @@ export default function MeetingModal({ meeting, defaultDate, clients, employees,
           </button>
         </div>
 
-        <div className="px-6 py-5 space-y-4 overflow-y-auto">
+        <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 text-[14px] rounded-xl px-4 py-3">
               {error}
@@ -182,7 +182,7 @@ export default function MeetingModal({ meeting, defaultDate, clients, employees,
           </div>
         </div>
 
-        <div className="px-6 py-4 border-t border-[#ece9df] flex items-center justify-end gap-2">
+        <div className="flex-shrink-0 px-6 py-4 border-t border-[#ece9df] flex items-center justify-end gap-2">
           <button
             type="button"
             onClick={onClose}

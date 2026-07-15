@@ -53,7 +53,7 @@ export default function TicketDetail({ ticket, onClose, onUpdated }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-black/30">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="px-6 pt-6 pb-4 border-b border-[#ece9df] flex items-start justify-between gap-4">
+        <div className="flex-shrink-0 px-6 pt-6 pb-4 border-b border-[#ece9df] flex items-start justify-between gap-4">
           <div className="flex-1">
             <h2 className="text-[19px] font-bold text-[#111] leading-snug mb-2">{ticket.title}</h2>
             <div className="flex items-center gap-2 flex-wrap">

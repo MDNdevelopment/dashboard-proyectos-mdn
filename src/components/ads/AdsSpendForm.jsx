@@ -155,7 +155,7 @@ export default function AdsSpendForm({ ad, ads = [], companyId, onClose, onCreat
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-black/30">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-        <div className="px-6 pt-6 pb-5 border-b border-[#ece9df] flex items-center justify-between">
+        <div className="flex-shrink-0 px-6 pt-6 pb-5 border-b border-[#ece9df] flex items-center justify-between">
           <h2 className="text-[19px] font-bold text-[#111]">
             {isEdit ? 'Editar ad' : 'Nuevo ad'}
           </h2>
@@ -166,7 +166,7 @@ export default function AdsSpendForm({ ad, ads = [], companyId, onClose, onCreat
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-6 py-5 overflow-y-auto flex-1">
+        <form id="ads-spend-form" onSubmit={handleSubmit} className="px-6 py-5 overflow-y-auto flex-1">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Cliente */}
             <div className="col-span-1 sm:col-span-2">
@@ -346,24 +346,25 @@ export default function AdsSpendForm({ ad, ads = [], companyId, onClose, onCreat
           )}
 
           {error && <p className="text-[14px] text-red-600 mt-3">{error}</p>}
-
-          <div className="flex gap-3 pt-4 mt-2 border-t border-[#ece9df]">
-            <button
-              type="button"
-              onClick={requestClose}
-              className="flex-1 py-2.5 rounded-xl border border-[#e0ddd4] text-[15px] font-semibold text-[#555] hover:bg-[#f5f3eb] transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={submitting || !fields.name.trim() || !fields.client_id || !fields.start_date || !fields.end_date || dateRangeInvalid || resultsMissing}
-              className="flex-1 py-2.5 rounded-xl bg-[#111] text-white text-[15px] font-bold hover:bg-[#222] transition-colors disabled:opacity-50"
-            >
-              {submitting ? (isEdit ? 'Guardando...' : 'Creando...') : (isEdit ? 'Guardar cambios' : 'Crear ad')}
-            </button>
-          </div>
         </form>
+
+        <div className="flex-shrink-0 flex gap-3 px-6 py-4 border-t border-[#ece9df]">
+          <button
+            type="button"
+            onClick={requestClose}
+            className="flex-1 py-2.5 rounded-xl border border-[#e0ddd4] text-[15px] font-semibold text-[#555] hover:bg-[#f5f3eb] transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            form="ads-spend-form"
+            disabled={submitting || !fields.name.trim() || !fields.client_id || !fields.start_date || !fields.end_date || dateRangeInvalid || resultsMissing}
+            className="flex-1 py-2.5 rounded-xl bg-[#111] text-white text-[15px] font-bold hover:bg-[#222] transition-colors disabled:opacity-50"
+          >
+            {submitting ? (isEdit ? 'Guardando...' : 'Creando...') : (isEdit ? 'Guardar cambios' : 'Crear ad')}
+          </button>
+        </div>
       </div>
     </div>
   )

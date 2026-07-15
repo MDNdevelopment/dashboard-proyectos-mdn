@@ -67,10 +67,10 @@ export default function LineMetasModal({ line, onClose, onSaved }) {
       style={{ background: 'rgba(0,0,0,0.35)' }}
       
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col">
         {/* Header */}
         <div
-          className="px-6 py-4 flex items-center justify-between border-b border-[#f0ede3]"
+          className="flex-shrink-0 px-6 py-4 flex items-center justify-between border-b border-[#f0ede3]"
           style={{ background: line.color + '14' }}
         >
           <div className="flex items-center gap-2">
@@ -91,7 +91,7 @@ export default function LineMetasModal({ line, onClose, onSaved }) {
         </div>
 
         {/* Cuerpo */}
-        <div className="px-6 py-5 space-y-5 max-h-[70vh] overflow-y-auto">
+        <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
           <p className="text-[13px] text-[#888]">
             Estas metas se aplican a todos los periodos <strong>aún no guardados</strong> en Operaciones,
             con prioridad sobre el mes anterior. Los meses ya guardados no se modifican (se editan
@@ -168,7 +168,7 @@ export default function LineMetasModal({ line, onClose, onSaved }) {
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-[#f0ede3] flex items-center justify-end gap-3">
+        <div className="flex-shrink-0 px-6 py-4 border-t border-[#f0ede3] flex items-center justify-end gap-3">
           <button
             onClick={requestClose}
             className="px-4 py-2 rounded-xl border border-[#e0ddd4] text-[14px] font-medium text-[#555] hover:bg-[#f5f3eb] transition-colors"

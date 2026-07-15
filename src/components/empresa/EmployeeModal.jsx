@@ -102,9 +102,9 @@ export default function EmployeeModal({ employee, departments, positions, onClos
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25 backdrop-blur-[3px]"
       
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-y-auto max-h-[90vh]">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-[#ece9df]">
+        <div className="flex-shrink-0 flex items-center justify-between px-6 pt-5 pb-4 border-b border-[#ece9df]">
           <div className="flex items-center gap-3">
             <AvatarUpload
               user={{ ...employee, avatar_url: form.avatar_url }}
@@ -130,7 +130,7 @@ export default function EmployeeModal({ employee, departments, positions, onClos
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+        <form id="employee-form" onSubmit={handleSubmit} className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 text-[15px] rounded-lg px-3 py-2">
               {error}
@@ -300,24 +300,26 @@ export default function EmployeeModal({ employee, departments, positions, onClos
             <span className="text-[15px] text-[#555]">Administrador</span>
           </div>
 
-          {/* Botones */}
-          <div className="flex items-center justify-end gap-2 pt-1">
-            <button
-              type="button"
-              onClick={requestClose}
-              className="px-4 py-2 rounded-xl text-[15px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-2 rounded-xl text-[15px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors disabled:opacity-50"
-            >
-              {saving ? 'Guardando…' : 'Guardar cambios'}
-            </button>
-          </div>
         </form>
+
+        {/* Botones */}
+        <div className="flex-shrink-0 flex items-center justify-end gap-2 px-6 py-4 border-t border-[#ece9df]">
+          <button
+            type="button"
+            onClick={requestClose}
+            className="px-4 py-2 rounded-xl text-[15px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            form="employee-form"
+            disabled={saving}
+            className="px-4 py-2 rounded-xl text-[15px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors disabled:opacity-50"
+          >
+            {saving ? 'Guardando…' : 'Guardar cambios'}
+          </button>
+        </div>
       </div>
     </div>
   )

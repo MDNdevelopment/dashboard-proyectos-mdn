@@ -120,7 +120,7 @@ export default function VacationsDialog({ employee, onClose }) {
       >
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col">
           {/* Header */}
-          <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-[#ece9df]">
+          <div className="flex-shrink-0 flex items-center justify-between px-6 pt-5 pb-4 border-b border-[#ece9df]">
             <div>
               <h2 className="text-[18px] font-bold text-[#111]">Vacaciones</h2>
               <p className="text-[14px] text-[#888] mt-0.5">

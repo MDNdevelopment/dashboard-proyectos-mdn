@@ -48,7 +48,7 @@ export default function ClientFichaContent({ client, line, onClose, employees = 
   return (
     <>
       {/* Header — pr-10 reserva espacio para el botón X del contenedor */}
-      <div className="flex items-center gap-3 px-6 pt-5 pb-4 pr-10 border-b border-[#ece9df]">
+      <div className="flex-shrink-0 flex items-center gap-3 px-6 pt-5 pb-4 pr-10 border-b border-[#ece9df]">
         {/* Logo o inicial */}
         {client.logo_url ? (
           <img
@@ -75,7 +75,7 @@ export default function ClientFichaContent({ client, line, onClose, employees = 
       </div>
 
       {/* Cuerpo */}
-      <div className="px-6 py-5 space-y-5">
+      <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
 
         {/* Datos financieros — solo nivel 4 / admin */}
         {privileged && (

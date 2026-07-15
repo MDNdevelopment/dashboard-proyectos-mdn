@@ -180,7 +180,7 @@ function DayMeetingsList({ day, meetings, currentUserId, onClose, onMeetingClick
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-black/30">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm max-h-[80vh] flex flex-col">
-        <div className="px-5 pt-5 pb-3 border-b border-[#ece9df] flex items-center justify-between">
+        <div className="flex-shrink-0 px-5 pt-5 pb-3 border-b border-[#ece9df] flex items-center justify-between">
           <h3 className="text-[16px] font-bold text-[#111] capitalize">
             {format(day, "EEEE d 'de' MMMM", { locale: es })}
           </h3>

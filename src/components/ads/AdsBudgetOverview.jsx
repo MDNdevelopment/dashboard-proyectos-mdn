@@ -51,7 +51,7 @@ export default function AdsBudgetOverview({ companyId, periodo, ads, clients, on
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-black/30">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-        <div className="px-6 pt-6 pb-5 border-b border-[#ece9df] flex items-start justify-between">
+        <div className="flex-shrink-0 px-6 pt-6 pb-5 border-b border-[#ece9df] flex items-start justify-between">
           <div>
             <h2 className="text-[19px] font-bold text-[#111]">Presupuestos por cliente</h2>
             <p className="text-[13px] text-[#888] mt-0.5">Periodo: {periodLabel}</p>
@@ -63,7 +63,7 @@ export default function AdsBudgetOverview({ companyId, periodo, ads, clients, on
           </button>
         </div>
 
-        <div className="px-6 pt-4">
+        <div className="flex-shrink-0 px-6 pt-4">
           <select
             value={lineFilter}
             onChange={e => setLineFilter(e.target.value)}

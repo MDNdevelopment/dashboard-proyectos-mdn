@@ -119,7 +119,7 @@ export default function LineFichaModal({ line, companyId, canManage = false, onA
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25 backdrop-blur-[3px]">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto relative">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col relative">
         {/* Botón cerrar — cierre total desde cualquier nivel */}
         <button
           type="button"
@@ -135,7 +135,7 @@ export default function LineFichaModal({ line, companyId, canManage = false, onA
         {drill ? (
           <>
             {/* Barra de retorno al nivel raíz */}
-            <div className="px-4 pt-4">
+            <div className="flex-shrink-0 px-4 pt-4">
               <button
                 type="button"
                 onClick={() => setDrill(null)}
@@ -158,7 +158,7 @@ export default function LineFichaModal({ line, companyId, canManage = false, onA
           <>
             {/* Header — mismo estilo del card de LinesView */}
             <div
-              className="px-6 pt-5 pb-4 border-b border-[#f0ede3] pr-12"
+              className="flex-shrink-0 px-6 pt-5 pb-4 border-b border-[#f0ede3] pr-12"
               style={{ background: line.color + "14" }}
             >
               <div className="flex items-center gap-2">
@@ -176,11 +176,11 @@ export default function LineFichaModal({ line, companyId, canManage = false, onA
             </div>
 
             {loading ? (
-              <div className="flex items-center justify-center py-16">
+              <div className="flex-1 overflow-y-auto flex items-center justify-center py-16">
                 <div className="w-6 h-6 border-2 border-[#FFB800] border-t-transparent rounded-full animate-spin" />
               </div>
             ) : (
-              <div className="px-6 py-5 space-y-6">
+              <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
 
                 {/* Miembros */}
                 <div>

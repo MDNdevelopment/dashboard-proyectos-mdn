@@ -192,8 +192,8 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25 backdrop-blur-[3px]"
       
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-[#ece9df]">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+        <div className="flex-shrink-0 flex items-center justify-between px-6 pt-5 pb-4 border-b border-[#ece9df]">
           <h2 className="text-[18px] font-bold text-[#111]">
             {isEdit ? 'Editar tarea' : 'Nueva tarea'}
           </h2>
@@ -209,7 +209,8 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+        <div className="flex-1 overflow-y-auto">
+        <form id="task-form" onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 text-[15px] rounded-lg px-3 py-2">
               {error}
@@ -402,21 +403,6 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
             </div>
           )}
 
-          <div className="flex items-center justify-between pt-2">
-            {isEdit && privileged ? (
-              <button type="button" onClick={handleDelete} className="text-[15px] font-semibold text-red-500 hover:text-red-700 transition-colors">
-                Eliminar
-              </button>
-            ) : <span />}
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={requestClose} className="px-4 py-2 rounded-xl text-[15px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors">
-                Cancelar
-              </button>
-              <button type="submit" disabled={saving} className="px-4 py-2 rounded-xl text-[15px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors disabled:opacity-50">
-                {saving ? 'Guardando…' : (isEdit ? 'Guardar cambios' : 'Crear tarea')}
-              </button>
-            </div>
-          </div>
         </form>
 
         {/* Sección de checklist — disponible en creación y edición */}
@@ -582,6 +568,23 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
             <p className="text-[11px] text-[#bbb] mt-1">Ctrl+Enter para enviar</p>
           </div>
         )}
+        </div>
+
+        <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-t border-[#ece9df]">
+          {isEdit && privileged ? (
+            <button type="button" onClick={handleDelete} className="text-[15px] font-semibold text-red-500 hover:text-red-700 transition-colors">
+              Eliminar
+            </button>
+          ) : <span />}
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={requestClose} className="px-4 py-2 rounded-xl text-[15px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors">
+              Cancelar
+            </button>
+            <button type="submit" form="task-form" disabled={saving} className="px-4 py-2 rounded-xl text-[15px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors disabled:opacity-50">
+              {saving ? 'Guardando…' : (isEdit ? 'Guardar cambios' : 'Crear tarea')}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   )
