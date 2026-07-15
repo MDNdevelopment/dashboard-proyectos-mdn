@@ -220,13 +220,16 @@ describe('LineView — click en tab actualiza ?tab= en la URL', () => {
 // 2. DashboardView — KPI "Línea líder" y tarjetas financieras clickeables
 // ══════════════════════════════════════════════════════════════════════════════
 
-// Mock de metricsApi para DashboardView
+// Mock de metricsApi para DashboardView (y para el estado de cierre que LineView
+// consulta directamente con loadReport/closeReport).
 vi.mock('../components/metricas/metricsApi', () => ({
   loadYearReports: vi.fn().mockResolvedValue({ data: [], error: null }),
   loadClients:     vi.fn().mockResolvedValue({ data: [], error: null }),
   loadCompanyUsers: vi.fn().mockResolvedValue({ data: [], error: null }),
   seedMetricsIfEmpty: vi.fn().mockResolvedValue(null),
   loadLines: vi.fn().mockResolvedValue({ data: [], error: null }),
+  loadReport: vi.fn().mockResolvedValue({ data: null, error: null }),
+  closeReport: vi.fn().mockResolvedValue({ data: null, error: null }),
 }))
 
 vi.mock('../utils/aggregateMetricsDashboard', () => ({

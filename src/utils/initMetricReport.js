@@ -35,6 +35,7 @@ export function initMetricReport(prevReport, lineClients = [], lineMetas = {}, l
         realizadas: null,
         meta: prevReport.reuniones?.meta ?? 15,
         comentario: null,
+        justificativos: {}, // no se hereda del mes anterior: cada mes justifica lo suyo
       },
       productividad: {
         tareas: (prevReport.productividad?.tareas ?? []).map(t => ({
@@ -79,7 +80,7 @@ export function initMetricReport(prevReport, lineClients = [], lineMetas = {}, l
   } else {
     // Sin mes anterior: defaults
     base = {
-      reuniones: { realizadas: null, meta: 15, comentario: null },
+      reuniones: { realizadas: null, meta: 15, comentario: null, justificativos: {} },
       productividad: {
         tareas: DEFAULT_SUBTAREAS.map(s => ({ nombre: s.nombre, realizado: null, meta: s.meta })),
       },
@@ -124,6 +125,10 @@ export function initMetricReport(prevReport, lineClients = [], lineMetas = {}, l
       meta: Number(t.meta) || 0,
     }));
   }
+
+  // La meta de reuniones no puede superar la cantidad de marcas activas de la línea
+  // (cada marca aporta como máximo 1 reunión al conteo — ver countMeetingsHeldForLine).
+  base.reuniones.meta = Math.min(base.reuniones.meta, lineClients.length);
 
   return base;
 }

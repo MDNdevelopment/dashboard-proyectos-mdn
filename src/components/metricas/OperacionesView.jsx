@@ -6,12 +6,13 @@ import ClientFichaModal from "./ClientFichaModal";
 import { initMetricReport } from "../../utils/initMetricReport";
 import { syncReportClients } from "../../utils/syncReportClients";
 import { calcTotal, sumScore, crecimientoCliente } from "../../utils/metricsScore";
-import { MONTHS, INDICATORS } from "./constants";
+import { MONTHS, INDICATORS, REUNIONES_MODULE_START } from "./constants";
 import { useUnsavedChanges } from "../../hooks/useUnsavedChanges";
 import { Avatar } from "../tareas/UserPickerSingle";
 import { loadAds, spentByClientInPeriod } from "../ads/campaignSpendApi";
 import { fmtUSD } from "../../utils/metricsFinance";
-import { countMeetingsHeldForLine } from "../reuniones/meetingsApi";
+import { countMeetingsHeldForLine, loadHeldClientIdsForLine } from "../reuniones/meetingsApi";
+import ReunionesClientesModal from "./ReunionesClientesModal";
 
 /** Adapta un objeto cliente (logo_url) al shape que espera <Avatar> (avatar_url). */
 function clientAvatar(c) {
@@ -23,19 +24,20 @@ function clientAvatar(c) {
   };
 }
 
-export default function OperacionesView({ line, companyId, year, month }) {
+export default function OperacionesView({ line, companyId, year, month, closed = false }) {
   const { can = () => true } = useAuth();
   const [report, setReport] = useState(null);
   const [prevReport, setPrevReport] = useState(null);
   const [clients, setClients] = useState([]);
   const [companyEmployees, setCompanyEmployees] = useState([]);
   const [ads, setAds] = useState([]);
-  const [meetingsHeld, setMeetingsHeld] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState(null);
   const [cliModal, setCliModal] = useState(null); // null=cerrado, objeto=cliente abierto
+  const [heldClientIds, setHeldClientIds] = useState([]); // clientes con reunión realizada en el período
+  const [reunionesModal, setReunionesModal] = useState(false);
 
   // Snapshot del reporte tal como vino del servidor (o quedó tras un save).
   // Se usa para detectar cambios sin guardar y mostrar aviso al recargar/cerrar.
@@ -46,17 +48,19 @@ export default function OperacionesView({ line, companyId, year, month }) {
     setLoading(true);
     setError(null);
 
-    const [reportRes, prevRes, clientsRes, employeesRes, adsRes, meetingsRes] = await Promise.all([
+    const [reportRes, prevRes, clientsRes, employeesRes, adsRes, meetingsRes, heldRes] = await Promise.all([
       loadReport(line.id, year, month),
       loadPrevReport(line.id, year, month),
       loadClients(companyId, line.id, { includeArchived: true }),
       loadCompanyEmployees(companyId),
       loadAds(companyId),
       countMeetingsHeldForLine(companyId, line.id, { month, year }),
+      loadHeldClientIdsForLine(companyId, line.id, { month, year }),
     ]);
     setAds(adsRes.data ?? []);
     const meetingsCount = meetingsRes?.count ?? 0;
-    setMeetingsHeld(meetingsCount);
+    const heldIds = heldRes?.clientIds ?? [];
+    setHeldClientIds(heldIds);
 
     // Todos (incl. archivados) para resolver nombres en reportes guardados;
     // solo activos para syncReportClients (no re-agregar archivados al reporte actual).
@@ -75,12 +79,31 @@ export default function OperacionesView({ line, companyId, year, month }) {
     // Guardar el reporte del mes anterior para mostrarlo en la sección de crecimiento
     setPrevReport(prevRes.data?.data ?? null);
 
+    // Poda las marcas que ya quedaron cubiertas (tienen reunión realizada) del mapa de
+    // justificativos, para no arrastrar justificativos obsoletos en el jsonb del reporte.
+    function pruneJustificativos(reuniones) {
+      const justificativos = { ...(reuniones.justificativos ?? {}) };
+      heldIds.forEach(id => { delete justificativos[id]; });
+      return justificativos;
+    }
+
+    // Antes del lanzamiento del módulo Reuniones no hay filas en `meetings` para derivar
+    // el conteo — esos meses conservan el valor que ya tenían guardado en vez de pisarlo
+    // con 0. De REUNIONES_MODULE_START en adelante (o si el reporte está cerrado, ver
+    // "Cerrar reporte"), se mantiene como siempre reflejando el conteo automático.
+    const isReunionesEra = year > REUNIONES_MODULE_START.year
+      || (year === REUNIONES_MODULE_START.year && month >= REUNIONES_MODULE_START.month);
+    const shouldAutoSync = isReunionesEra && !closed;
+
     if (reportRes.data) {
       // Sincronizar items con los clientes activos y empleados actuales de la línea
       const synced = syncReportClients(reportRes.data.data, activeLineClients, lineEmployees);
-      // Sembrar "realizadas" con el conteo automático solo si no hay valor guardado aún
-      // (patrón sembrar-y-editar, igual que monthly_fee/monthly_salary en syncReportClients).
-      if (synced.reuniones.realizadas == null) synced.reuniones.realizadas = meetingsCount;
+      // "Realizadas" ya no es editable — siempre refleja el conteo automático (clientes
+      // distintos con reunión realizada en el mes), a diferencia del resto de indicadores
+      // que quedan congelados al guardar. Excepto en meses previos al módulo Reuniones o
+      // en reportes cerrados, donde se conserva el valor histórico guardado.
+      if (shouldAutoSync) synced.reuniones.realizadas = meetingsCount;
+      synced.reuniones.justificativos = pruneJustificativos(synced.reuniones);
       setReport(synced);
       baselineRef.current = synced;
     } else {
@@ -88,12 +111,13 @@ export default function OperacionesView({ line, companyId, year, month }) {
       const lineMetas = line?.metas ?? {};
       const fresh = initMetricReport(prevRes.data?.data ?? null, activeLineClients, lineMetas);
       const synced = syncReportClients(fresh, activeLineClients, lineEmployees);
-      if (synced.reuniones.realizadas == null) synced.reuniones.realizadas = meetingsCount;
+      if (shouldAutoSync) synced.reuniones.realizadas = meetingsCount;
+      synced.reuniones.justificativos = pruneJustificativos(synced.reuniones);
       setReport(synced);
       baselineRef.current = synced;
     }
     setLoading(false);
-  }, [line?.id, line?.member_user_ids, companyId, year, month]);
+  }, [line?.id, line?.member_user_ids, companyId, year, month, closed]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -101,7 +125,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
   useUnsavedChanges({ value: report, baseline: baselineRef.current, onClose: () => {} });
 
   async function handleSave() {
-    if (!report) return;
+    if (!report || closed) return;
     setSaving(true);
     const { error: err } = await upsertReport(companyId, line.id, year, month, report);
     setSaving(false);
@@ -151,6 +175,11 @@ export default function OperacionesView({ line, companyId, year, month }) {
 
   if (!report) return null;
 
+  // Tope de la meta de reuniones: no puede superar la cantidad de marcas activas de la
+  // línea (cada marca aporta como máximo 1 reunión al conteo — ver countMeetingsHeldForLine).
+  const activeClients = clients.filter(c => !c.deleted_at);
+  const maxMeta = activeClients.length;
+
   // ── Helpers de actualización ──────────────────────────────────────────────
   function setField(path, value) {
     setReport(prev => {
@@ -159,6 +188,18 @@ export default function OperacionesView({ line, companyId, year, month }) {
       let obj = next;
       for (let i = 0; i < parts.length - 1; i++) obj = obj[parts[i]];
       obj[parts[parts.length - 1]] = value;
+      return next;
+    });
+  }
+
+  // Guarda (o quita, si value es "") el justificativo de una marca sin reunión en el período.
+  function setJustificativo(clienteId, value) {
+    setReport(prev => {
+      const next = structuredClone(prev);
+      const justificativos = { ...(next.reuniones.justificativos ?? {}) };
+      if (value) justificativos[clienteId] = value;
+      else delete justificativos[clienteId];
+      next.reuniones.justificativos = justificativos;
       return next;
     });
   }
@@ -181,7 +222,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
   }
 
   return (
-    <div className="space-y-5">
+    <fieldset disabled={closed} className="space-y-5 border-0 p-0 m-0 min-w-0">
       {/* Header con score en tiempo real */}
       <div className="flex items-center justify-between">
         <div>
@@ -229,28 +270,47 @@ export default function OperacionesView({ line, companyId, year, month }) {
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Realizadas">
-            <input type="number" min="0" className="input-base"
-              value={report.reuniones.realizadas ?? ""}
-              onChange={e => setField("reuniones.realizadas", e.target.value === "" ? null : Number(e.target.value))}
+            <input type="number" className="input-base bg-[#f2f0e8] text-[#888] cursor-not-allowed"
+              value={report.reuniones.realizadas ?? 0}
+              disabled
+              readOnly
+              title="Derivado automáticamente del módulo Reuniones: clientes distintos con reunión realizada en el mes (máx. 1 por cliente)"
             />
-            {report.reuniones.realizadas !== meetingsHeld && (
-              <button
-                type="button"
-                onClick={() => setField("reuniones.realizadas", meetingsHeld)}
-                className="mt-1 text-[12px] font-mono text-[#888] hover:text-[#111] transition-colors"
-                title="Reemplaza el valor actual por el conteo automático de reuniones del módulo Reuniones"
-              >
-                Auto: {meetingsHeld} reunion{meetingsHeld === 1 ? "" : "es"} registrada{meetingsHeld === 1 ? "" : "s"} · usar automático
-              </button>
-            )}
+            <p className="mt-1 text-[12px] font-mono text-[#888]">
+              Derivado de Reuniones · máx. 1 por cliente
+            </p>
           </Field>
           <Field label="Meta">
-            <input type="number" min="1" className="input-base"
+            <input type="number" min="1" max={maxMeta || undefined} className="input-base"
               value={report.reuniones.meta ?? ""}
-              onChange={e => setField("reuniones.meta", e.target.value === "" ? null : Number(e.target.value))}
+              onChange={e => {
+                if (e.target.value === "") { setField("reuniones.meta", null); return; }
+                const clamped = Math.min(Number(e.target.value), maxMeta);
+                setField("reuniones.meta", clamped);
+              }}
             />
+            <p className="mt-1 text-[12px] font-mono text-[#888]">
+              Máx. {maxMeta} (1 por marca activa de la línea)
+            </p>
           </Field>
         </div>
+        {(() => {
+          const heldSet = new Set(heldClientIds);
+          const pending = activeClients.filter(c => !heldSet.has(c.id));
+          return (
+            <button
+              type="button"
+              onClick={() => setReunionesModal(true)}
+              className="flex items-center gap-1.5 text-[13px] font-mono text-[#555] hover:text-[#111] transition-colors"
+            >
+              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <circle cx="12" cy="12" r="9" strokeLinecap="round" strokeLinejoin="round"/>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4"/>
+              </svg>
+              Ver marcas{activeClients.length > 0 ? ` (${pending.length} sin reunión)` : ""}
+            </button>
+          );
+        })()}
         <Field label="Comentario (opcional)">
           <textarea
             className="input-base w-full resize-none"
@@ -261,6 +321,16 @@ export default function OperacionesView({ line, companyId, year, month }) {
           />
         </Field>
       </Section>
+
+      {reunionesModal && (
+        <ReunionesClientesModal
+          clients={activeClients}
+          heldClientIds={heldClientIds}
+          justificativos={report.reuniones.justificativos ?? {}}
+          onSetJustificativo={setJustificativo}
+          onClose={() => setReunionesModal(false)}
+        />
+      )}
 
       {/* 2. PRODUCTIVIDAD */}
       <Section
@@ -623,7 +693,7 @@ export default function OperacionesView({ line, companyId, year, month }) {
           employees={companyEmployees}
         />
       )}
-    </div>
+    </fieldset>
   );
 }
 
