@@ -29,6 +29,11 @@ export default function AdsSpendForm({ ad, ads = [], companyId, onClose, onCreat
     responsable_id: ad?.responsable_id ?? '',
     ...Object.fromEntries(RESULT_FIELDS.map(f => [f.key, ad?.[f.key] ?? ''])),
   })
+  // Indicadores seleccionados para capturar al finalizar — mismo patrón que
+  // AdsResultsModal. Preseleccionados si el ad ya trae valores (edición).
+  const [selectedResults, setSelectedResults] = useState(
+    () => new Set(RESULT_FIELDS.filter(f => ad?.[f.key] != null).map(f => f.key))
+  )
   const initialFields = useRef(fields)
   const { requestClose } = useUnsavedChanges({ value: fields, baseline: initialFields.current, onClose })
   const [submitting, setSubmitting] = useState(false)
@@ -56,6 +61,21 @@ export default function AdsSpendForm({ ad, ads = [], companyId, onClose, onCreat
     setFields(prev => ({ ...prev, [key]: val }))
   }
 
+  // Al deseleccionar un indicador se limpia su valor, para que lo que se ve
+  // en el selector sea lo que se guarda (WYSIWYG).
+  function toggleResult(key) {
+    setSelectedResults(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) {
+        next.delete(key)
+        setFields(f => ({ ...f, [key]: '' }))
+      } else {
+        next.add(key)
+      }
+      return next
+    })
+  }
+
   // Al mover el inicio más allá del fin ya elegido, se limpia el fin para
   // forzar a re-elegirlo (evita dejar un rango inválido en silencio).
   function handleStartDateChange(val) {
@@ -68,10 +88,11 @@ export default function AdsSpendForm({ ad, ads = [], companyId, onClose, onCreat
 
   const dateRangeInvalid = !!(fields.start_date && fields.end_date && fields.end_date < fields.start_date)
 
-  // Al finalizar, los 4 resultados son obligatorios — mismo requisito que exige
-  // AdsResultsModal al finalizar desde un pill.
+  // Al finalizar, se exige elegir y capturar al menos 1 indicador — mismo
+  // requisito que exige AdsResultsModal al finalizar desde un pill.
   const resultsMissing = fields.status === 'Finalizado'
-    && RESULT_FIELDS.some(f => fields[f.key] === '' || fields[f.key] == null)
+    && (selectedResults.size === 0
+      || RESULT_FIELDS.some(f => selectedResults.has(f.key) && (fields[f.key] === '' || fields[f.key] == null)))
 
   function handleClientChange(e) {
     const id = e.target.value
@@ -131,7 +152,7 @@ export default function AdsSpendForm({ ad, ads = [], companyId, onClose, onCreat
       responsable_id: fields.responsable_id || null,
       ...Object.fromEntries(RESULT_FIELDS.map(f => [
         f.key,
-        isFinalizado ? Number(fields[f.key]) : null,
+        isFinalizado && selectedResults.has(f.key) ? Number(fields[f.key]) : null,
       ])),
     }
 
@@ -265,23 +286,48 @@ export default function AdsSpendForm({ ad, ads = [], companyId, onClose, onCreat
               </select>
             </div>
 
-            {/* Resultados — obligatorios solo cuando el estado es Finalizado; nunca se muestran
-                como columnas de la tabla, solo aquí y en el detalle. */}
-            {fields.status === 'Finalizado' && RESULT_FIELDS.map(f => (
-              <div key={f.key}>
-                <label htmlFor={`ad-result-${f.key}`} className={labelClass}>{f.label}</label>
-                <input
-                  id={`ad-result-${f.key}`}
-                  type="number"
-                  min={0}
-                  step="1"
-                  className="input-base w-full"
-                  value={fields[f.key]}
-                  onChange={e => set(f.key, e.target.value)}
-                  required
-                />
-              </div>
-            ))}
+            {/* Resultados — al finalizar, se elige cuáles de los 6 indicadores capturar
+                (mínimo 1); nunca se muestran como columnas de la tabla, solo aquí y en
+                el detalle. */}
+            {fields.status === 'Finalizado' && RESULT_FIELDS.map(f => {
+              const isSelected = selectedResults.has(f.key)
+              return (
+                <div key={f.key}>
+                  {/* No se envuelve en <label> junto al nombre del indicador: si ambos
+                      compartieran el mismo texto, quedaría ambiguo para lookup por label
+                      (checkbox vs. input numérico). El checkbox usa aria-label propio. */}
+                  <div
+                    className="flex items-center gap-2 cursor-pointer mb-1.5"
+                    onClick={() => toggleResult(f.key)}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleResult(f.key)}
+                      onClick={e => e.stopPropagation()}
+                      aria-label={`Incluir ${f.label}`}
+                      className="h-4 w-4 rounded border-[#e0ddd4] accent-[#FFB800]"
+                    />
+                    <span className="text-[13px] font-mono font-bold tracking-widest uppercase text-[#888]">{f.label}</span>
+                  </div>
+                  {isSelected && (
+                    <>
+                      <label htmlFor={`ad-result-${f.key}`} className="sr-only">{f.label}</label>
+                      <input
+                        id={`ad-result-${f.key}`}
+                        type="number"
+                        min={0}
+                        step="1"
+                        className="input-base w-full"
+                        value={fields[f.key]}
+                        onChange={e => set(f.key, e.target.value)}
+                        required
+                      />
+                    </>
+                  )}
+                </div>
+              )
+            })}
 
             {/* Responsable — lista acotada (Katherine, Paola y jefas de línea) */}
             <div className="col-span-1 sm:col-span-2">

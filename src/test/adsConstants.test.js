@@ -29,12 +29,14 @@ describe('constants de Ads/Tácticas — estados', () => {
 })
 
 describe('constants de Ads — resultados', () => {
-  it('RESULT_FIELDS expone los 4 campos de resultado con su label', () => {
+  it('RESULT_FIELDS expone los 6 indicadores seleccionables con su label', () => {
     expect(RESULT_FIELDS).toEqual([
       { key: 'reach', label: 'Alcance' },
       { key: 'interactions', label: 'Interacciones' },
       { key: 'followers', label: 'Seguidores' },
       { key: 'impressions', label: 'Impresiones' },
+      { key: 'views', label: 'Visualizaciones' },
+      { key: 'profile_visits', label: 'Visitas al perfil' },
     ])
   })
 })

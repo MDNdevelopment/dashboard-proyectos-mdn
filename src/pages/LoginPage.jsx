@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import MDNLogo from '../components/MDNLogo'
 
 export default function LoginPage() {
-  const { session, signIn, sessionExpired } = useAuth()
+  const { session, signIn, sessionExpired, accountDisabled } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -17,7 +17,15 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
     const { error } = await signIn(email, password)
-    if (error) setError('Correo o contraseña incorrectos')
+    if (error) {
+      // Empleado archivado (baneado en auth.users): Supabase rechaza el login
+      // con este código antes de que lleguemos a fetchUserProfile.
+      setError(
+        error.code === 'user_banned'
+          ? 'Tu cuenta ha sido deshabilitada. Contacta a un administrador.'
+          : 'Correo o contraseña incorrectos'
+      )
+    }
     setLoading(false)
   }
 
@@ -32,6 +40,12 @@ export default function LoginPage() {
         {sessionExpired && (
           <div className="mb-5 bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 text-[14px] text-amber-800 font-medium">
             Tu sesión expiró. Vuelve a iniciar sesión para continuar.
+          </div>
+        )}
+
+        {accountDisabled && (
+          <div className="mb-5 bg-red-50 border border-red-300 rounded-xl px-4 py-3 text-[14px] text-red-700 font-medium">
+            Tu cuenta ha sido deshabilitada. Contacta a un administrador.
           </div>
         )}
 

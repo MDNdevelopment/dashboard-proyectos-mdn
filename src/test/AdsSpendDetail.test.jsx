@@ -102,7 +102,7 @@ describe('AdsSpendDetail — sección de resultados', () => {
     expect(screen.queryByText('Resultados')).not.toBeInTheDocument()
   })
 
-  it('muestra los 4 resultados cuando el ad está Finalizado', () => {
+  it('muestra los resultados capturados cuando el ad está Finalizado', () => {
     renderDetail({
       // objective se pone en null para no chocar con la etiqueta "Alcance" de resultados
       ad: { ...AD, objective: null, status: 'Finalizado', reach: 1000, interactions: 200, followers: 30, impressions: 5000 },
@@ -116,6 +116,23 @@ describe('AdsSpendDetail — sección de resultados', () => {
     expect(screen.getByText('30')).toBeInTheDocument()
     expect(screen.getByText('Impresiones')).toBeInTheDocument()
     expect(screen.getByText('5.000')).toBeInTheDocument()
+  })
+
+  it('solo muestra los indicadores que el ad tiene capturados, no todos los 6', () => {
+    renderDetail({
+      ad: { ...AD, objective: null, status: 'Finalizado', reach: 1000, views: null, profile_visits: null },
+    })
+    expect(screen.getByText('Alcance')).toBeInTheDocument()
+    expect(screen.queryByText('Visualizaciones')).not.toBeInTheDocument()
+    expect(screen.queryByText('Visitas al perfil')).not.toBeInTheDocument()
+    expect(screen.queryByText('Interacciones')).not.toBeInTheDocument()
+  })
+
+  it('oculta la sección de resultados si el ad está Finalizado pero no tiene ningún indicador capturado', () => {
+    renderDetail({
+      ad: { ...AD, status: 'Finalizado' },
+    })
+    expect(screen.queryByText('Resultados')).not.toBeInTheDocument()
   })
 })
 

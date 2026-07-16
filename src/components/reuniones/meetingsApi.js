@@ -22,23 +22,58 @@ export async function loadMeetings(companyId, { from, to } = {}) {
 }
 
 /**
- * Cuenta las reuniones marcadas manualmente como "realizadas" de una línea en un mes/año
- * dado. 100% fiel al marcado manual — no hay fallback por fecha vencida: si nadie marcó
- * la reunión, no cuenta. Usado por Reportes → Operaciones para sembrar `reuniones.realizadas`.
+ * Cuenta los CLIENTES DISTINTOS con al menos una reunión marcada manualmente como
+ * "realizada" en una línea, dentro de un mes/año dado (máx. 1 por cliente, para que la
+ * meta represente cobertura de cartera y no se pueda cumplir reuniéndose repetidas veces
+ * con el mismo cliente). Reuniones sin client_id (caso borde, cliente eliminado sin
+ * soft-delete) se cuentan cada una por separado, ya que no se pueden agrupar por cliente.
+ * 100% fiel al marcado manual — no hay fallback por fecha vencida: si nadie marcó la
+ * reunión, no cuenta. Usado por Reportes → Operaciones para sembrar `reuniones.realizadas`.
  */
 export async function countMeetingsHeldForLine(companyId, lineId, { month, year }) {
   const monthStart = new Date(year, month - 1, 1);
   const monthEnd = new Date(year, month, 1);
 
-  const { count, error } = await supabase
+  const { data, error } = await supabase
     .from("meetings")
-    .select("id", { count: "exact", head: true })
+    .select("client_id")
     .eq("company_id", companyId)
     .eq("line_id", lineId)
     .eq("status", "realizada")
     .gte("starts_at", monthStart.toISOString())
     .lt("starts_at", monthEnd.toISOString());
-  return { count: count ?? 0, error };
+
+  if (error) return { count: 0, error };
+
+  const rows = data ?? [];
+  const distinctClients = new Set(rows.filter(r => r.client_id != null).map(r => r.client_id));
+  const nullClientCount = rows.filter(r => r.client_id == null).length;
+  return { count: distinctClients.size + nullClientCount, error: null };
+}
+
+/**
+ * Devuelve los client_id distintos con al menos una reunión "realizada" de una línea en
+ * un mes/año dado — usado por Reportes → Operaciones para pintar, marca por marca, cuáles
+ * ya cubrieron su reunión del período (mismos filtros que countMeetingsHeldForLine, pero
+ * expone el conjunto de clientes en vez de solo el número).
+ */
+export async function loadHeldClientIdsForLine(companyId, lineId, { month, year }) {
+  const monthStart = new Date(year, month - 1, 1);
+  const monthEnd = new Date(year, month, 1);
+
+  const { data, error } = await supabase
+    .from("meetings")
+    .select("client_id")
+    .eq("company_id", companyId)
+    .eq("line_id", lineId)
+    .eq("status", "realizada")
+    .gte("starts_at", monthStart.toISOString())
+    .lt("starts_at", monthEnd.toISOString());
+
+  if (error) return { clientIds: [], error };
+
+  const clientIds = [...new Set((data ?? []).filter(r => r.client_id != null).map(r => r.client_id))];
+  return { clientIds, error: null };
 }
 
 // ─── Escritura ────────────────────────────────────────────────────────────────

@@ -57,7 +57,7 @@ export default function ProjectModal({ project, onClose, onSave }) {
     if (!userProfile?.company_id) return
     supabase
       .from('users')
-      .select('user_id, first_name, last_name, avatar_url')
+      .select('user_id, first_name, last_name, avatar_url, deleted_at')
       .eq('company_id', userProfile.company_id)
       .order('first_name')
       .then(({ data }) => setUsers(data ?? []))
@@ -358,7 +358,11 @@ function MemberPicker({ users, selected, selectedUsers, onToggle }) {
     return () => document.removeEventListener('mousedown', fn)
   }, [open])
 
+  // Empleados archivados no aparecen como opción nueva; selectedUsers (arriba)
+  // se resuelve sobre la lista completa, así que un miembro ya asignado y luego
+  // archivado sigue mostrándose como chip.
   const filtered = users.filter(u => {
+    if (u.deleted_at) return false
     const q = search.toLowerCase()
     return !q || `${u.first_name} ${u.last_name}`.toLowerCase().includes(q)
   })

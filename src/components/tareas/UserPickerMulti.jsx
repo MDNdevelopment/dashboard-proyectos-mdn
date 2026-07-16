@@ -62,8 +62,12 @@ export default function UserPickerMulti({
     onChange(selectedIds.filter(id => id !== userId))
   }
 
+  // Los empleados archivados (deleted_at) no aparecen como opción nueva, salvo que
+  // ya estén seleccionados (para poder verlos/quitarlos desde la lista, no solo
+  // desde el chip).
   const filtered = users
     .filter(u => {
+      if (u.deleted_at && !selectedIds.includes(u.user_id)) return false
       const q = search.toLowerCase()
       return !q || `${u.first_name} ${u.last_name}`.toLowerCase().includes(q)
     })

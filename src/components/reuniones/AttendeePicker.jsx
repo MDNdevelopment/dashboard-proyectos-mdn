@@ -37,18 +37,21 @@ export default function AttendeePicker({ employees, selectedIds, onChange }) {
     .filter((u) => selectedSet.has(u.user_id))
     .sort((a, b) => fullName(a).localeCompare(fullName(b), "es", { sensitivity: "base" }));
 
+  // Un empleado archivado (deleted_at) no puede agregarse de nuevo, pero si ya
+  // estaba en `selectedIds` (reunión pasada) sigue resolviéndose vía `selected`
+  // arriba, que filtra sobre la lista completa `employees`, no sobre esta.
   const suggestions = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
     return employees
-      .filter((u) => fullName(u).toLowerCase().includes(q))
+      .filter((u) => !u.deleted_at && fullName(u).toLowerCase().includes(q))
       .sort((a, b) => fullName(a).localeCompare(fullName(b), "es", { sensitivity: "base" }))
       .slice(0, MAX_SUGGESTIONS);
   }, [query, employees]);
 
   /** Reemplaza la selección completa por el cargo elegido — el último botón predomina. */
   function setGroup(test) {
-    onChange(employees.filter(test).map((u) => u.user_id));
+    onChange(employees.filter((u) => !u.deleted_at && test(u)).map((u) => u.user_id));
   }
 
   function clearAll() {

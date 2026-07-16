@@ -9,10 +9,12 @@ import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
  * Los valores aquí son los defaults que se usan al inicializar un nuevo periodo;
  * siguen siendo editables en el tab Operaciones de Métricas.
  */
-export default function LineMetasModal({ line, onClose, onSaved }) {
+export default function LineMetasModal({ line, clientCount = 0, onClose, onSaved }) {
   const existingMetas = line.metas ?? {}
+  // La meta de reuniones no puede superar la cantidad de marcas activas de la línea
+  // (cada marca aporta como máximo 1 reunión al conteo — ver countMeetingsHeldForLine).
   const [metaReuniones, setMetaReuniones] = useState(
-    existingMetas.reuniones ?? 15
+    Math.min(existingMetas.reuniones ?? 15, clientCount)
   )
   const [tareas, setTareas] = useState(
     (existingMetas.tareas && existingMetas.tareas.length > 0)
@@ -51,7 +53,7 @@ export default function LineMetasModal({ line, onClose, onSaved }) {
     setSaving(true)
     setError(null)
     const metas = {
-      reuniones: Number(metaReuniones) || 0,
+      reuniones: Math.min(Number(metaReuniones) || 0, clientCount),
       tareas: tareas.map(t => ({ nombre: t.nombre, meta: Number(t.meta) || 0 })),
     }
     const { data, error: err } = await updateLine(line.id, { metas })
@@ -106,10 +108,17 @@ export default function LineMetasModal({ line, onClose, onSaved }) {
             <input
               type="number"
               min="0"
+              max={clientCount || undefined}
               className="input-base w-32"
               value={metaReuniones}
-              onChange={e => setMetaReuniones(e.target.value)}
+              onChange={e => {
+                const value = e.target.value
+                setMetaReuniones(value === '' ? '' : Math.min(Number(value), clientCount))
+              }}
             />
+            <p className="mt-1 text-[12px] font-mono text-[#888]">
+              Máx. {clientCount} (1 por marca activa de la línea)
+            </p>
           </div>
 
           {/* Tareas fijas */}

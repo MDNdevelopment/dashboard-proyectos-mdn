@@ -351,10 +351,10 @@ describe('AdsSpendView', () => {
       expect(mockUpdateAd).not.toHaveBeenCalled()
     })
 
-    it('guardar los 4 resultados en el modal llama a updateAd con status Finalizado y cierra el modal', async () => {
+    it('guardar los resultados elegidos en el modal llama a updateAd con status Finalizado y cierra el modal', async () => {
       const user = userEvent.setup()
       mockUpdateAd.mockResolvedValue({
-        data: { ...MOCK_ADS[0], status: 'Finalizado', reach: 1000, interactions: 200, followers: 30, impressions: 5000 },
+        data: { ...MOCK_ADS[0], status: 'Finalizado', reach: 1000, interactions: 200 },
         error: null,
       })
       renderView({ month: 7, year: 2026 })
@@ -364,15 +364,22 @@ describe('AdsSpendView', () => {
       await user.click(screen.getByRole('button', { name: 'Finalizado' }))
       await waitFor(() => { expect(screen.getByRole('heading', { name: 'Resultados del ad' })).toBeInTheDocument() })
 
+      // Solo se eligen 2 de los 6 indicadores disponibles — el resto se guarda en null.
+      await user.click(screen.getByRole('checkbox', { name: 'Incluir Alcance' }))
+      await user.click(screen.getByRole('checkbox', { name: 'Incluir Interacciones' }))
       await user.type(screen.getByLabelText('Alcance'), '1000')
       await user.type(screen.getByLabelText('Interacciones'), '200')
-      await user.type(screen.getByLabelText('Seguidores'), '30')
-      await user.type(screen.getByLabelText('Impresiones'), '5000')
       await user.click(screen.getByRole('button', { name: 'Guardar y finalizar' }))
 
       await waitFor(() => {
         expect(mockUpdateAd).toHaveBeenCalledWith('ad-1', {
-          status: 'Finalizado', reach: 1000, interactions: 200, followers: 30, impressions: 5000,
+          status: 'Finalizado',
+          reach: 1000,
+          interactions: 200,
+          followers: null,
+          impressions: null,
+          views: null,
+          profile_visits: null,
         })
         expect(screen.queryByRole('heading', { name: 'Resultados del ad' })).not.toBeInTheDocument()
       })

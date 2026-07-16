@@ -30,6 +30,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/employees/manage"
+  to = "/.netlify/functions/archive-employee"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
