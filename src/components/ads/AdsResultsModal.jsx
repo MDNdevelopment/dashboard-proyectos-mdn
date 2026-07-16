@@ -3,20 +3,35 @@ import { RESULT_FIELDS } from './constants'
 import { updateAd } from './campaignSpendApi'
 
 /**
- * Modal que exige los 4 resultados (Alcance, Interacciones, Seguidores,
- * Impresiones) al marcar un Ad como Finalizado. Se abre desde el pill de
- * estado (fila o detalle) en vez de persistir el estado directamente —
- * la guardia vive en AdsSpendView.requestStatusChange.
- * Pre-llena con los valores existentes por si se re-abre para corregirlos.
+ * Modal que exige elegir y capturar al menos 1 de los 6 indicadores posibles
+ * (Alcance, Interacciones, Seguidores, Impresiones, Visualizaciones, Visitas al
+ * perfil) al marcar un Ad como Finalizado. Se abre desde el pill de estado (fila
+ * o detalle) en vez de persistir el estado directamente — la guardia vive en
+ * AdsSpendView.requestStatusChange.
+ * Pre-selecciona los indicadores que ya tengan valor por si se re-abre para
+ * corregirlos; al deseleccionar uno se limpia (se guarda null).
  */
 export default function AdsResultsModal({ ad, onClose, onSaved }) {
+  const [selected, setSelected] = useState(
+    () => new Set(RESULT_FIELDS.filter(f => ad?.[f.key] != null).map(f => f.key))
+  )
   const [values, setValues] = useState(
     Object.fromEntries(RESULT_FIELDS.map(f => [f.key, ad?.[f.key] ?? '']))
   )
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
 
-  const allFilled = RESULT_FIELDS.every(f => values[f.key] !== '' && values[f.key] != null)
+  const canSave = selected.size > 0
+    && RESULT_FIELDS.every(f => !selected.has(f.key) || (values[f.key] !== '' && values[f.key] != null))
+
+  function toggle(key) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
 
   function set(key, val) {
     setValues(prev => ({ ...prev, [key]: val }))
@@ -24,11 +39,13 @@ export default function AdsResultsModal({ ad, onClose, onSaved }) {
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (!allFilled) return
+    if (!canSave) return
     setSubmitting(true)
     setError(null)
     const payload = { status: 'Finalizado' }
-    RESULT_FIELDS.forEach(f => { payload[f.key] = Number(values[f.key]) })
+    RESULT_FIELDS.forEach(f => {
+      payload[f.key] = selected.has(f.key) ? Number(values[f.key]) : null
+    })
     const { data, error: err } = await updateAd(ad.id, payload)
     setSubmitting(false)
     if (err) { setError('Error al guardar los resultados.'); return }
@@ -44,7 +61,7 @@ export default function AdsResultsModal({ ad, onClose, onSaved }) {
           <div>
             <h2 className="text-[19px] font-bold text-[#111]">Resultados del ad</h2>
             <p className="text-[13px] text-[#888] mt-0.5">
-              Estos datos son obligatorios para marcar "{ad.name}" como Finalizado.
+              Elige al menos un indicador para marcar "{ad.name}" como Finalizado.
             </p>
           </div>
           <button onClick={onClose} className="text-[#999] hover:text-[#111] transition-colors p-1">
@@ -56,21 +73,45 @@ export default function AdsResultsModal({ ad, onClose, onSaved }) {
 
         <form id="ads-results-form" onSubmit={handleSubmit} className="px-6 py-5 overflow-y-auto flex-1">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {RESULT_FIELDS.map(f => (
-              <div key={f.key}>
-                <label htmlFor={`ad-result-${f.key}`} className={labelClass}>{f.label}</label>
-                <input
-                  id={`ad-result-${f.key}`}
-                  type="number"
-                  min={0}
-                  step="1"
-                  className="input-base w-full"
-                  value={values[f.key]}
-                  onChange={e => set(f.key, e.target.value)}
-                  required
-                />
-              </div>
-            ))}
+            {RESULT_FIELDS.map(f => {
+              const isSelected = selected.has(f.key)
+              return (
+                <div key={f.key}>
+                  {/* No se envuelve en <label> junto al nombre del indicador: si ambos
+                      compartieran el mismo texto, quedaría ambiguo para lookup por label
+                      (checkbox vs. input numérico). El checkbox usa aria-label propio. */}
+                  <div
+                    className="flex items-center gap-2 cursor-pointer mb-1.5"
+                    onClick={() => toggle(f.key)}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggle(f.key)}
+                      onClick={e => e.stopPropagation()}
+                      aria-label={`Incluir ${f.label}`}
+                      className="h-4 w-4 rounded border-[#e0ddd4] accent-[#FFB800]"
+                    />
+                    <span className={labelClass.replace('mb-1.5', '')}>{f.label}</span>
+                  </div>
+                  {isSelected && (
+                    <>
+                      <label htmlFor={`ad-result-${f.key}`} className="sr-only">{f.label}</label>
+                      <input
+                        id={`ad-result-${f.key}`}
+                        type="number"
+                        min={0}
+                        step="1"
+                        className="input-base w-full"
+                        value={values[f.key]}
+                        onChange={e => set(f.key, e.target.value)}
+                        required
+                      />
+                    </>
+                  )}
+                </div>
+              )
+            })}
           </div>
 
           {error && <p className="text-[14px] text-red-600 mt-3">{error}</p>}
@@ -87,7 +128,7 @@ export default function AdsResultsModal({ ad, onClose, onSaved }) {
           <button
             type="submit"
             form="ads-results-form"
-            disabled={submitting || !allFilled}
+            disabled={submitting || !canSave}
             className="flex-1 py-2.5 rounded-xl bg-[#111] text-white text-[15px] font-bold hover:bg-[#222] transition-colors disabled:opacity-50"
           >
             {submitting ? 'Guardando...' : 'Guardar y finalizar'}

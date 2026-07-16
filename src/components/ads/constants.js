@@ -21,8 +21,10 @@ export const OBJECTIVES = ['Tráfico al perfil', 'Mensajes / Interacción', 'Cli
 // Resultados de un Ad (pauta pagada), capturados al marcarlo como Finalizado.
 // Fuente única usada por AdsResultsModal, AdsSpendDetail y AdsSpendForm.
 export const RESULT_FIELDS = [
-  { key: 'reach',        label: 'Alcance' },
-  { key: 'interactions', label: 'Interacciones' },
-  { key: 'followers',    label: 'Seguidores' },
-  { key: 'impressions',  label: 'Impresiones' },
+  { key: 'reach',          label: 'Alcance' },
+  { key: 'interactions',   label: 'Interacciones' },
+  { key: 'followers',      label: 'Seguidores' },
+  { key: 'impressions',    label: 'Impresiones' },
+  { key: 'views',          label: 'Visualizaciones' },
+  { key: 'profile_visits', label: 'Visitas al perfil' },
 ]

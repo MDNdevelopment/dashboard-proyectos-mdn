@@ -24,6 +24,8 @@ export default function AdsSpendDetail({ ad, ads = [], client, responsables = []
     return r ? `${r.first_name} ${r.last_name}` : '—'
   })()
   const duration = durationDays(ad.start_date, ad.end_date)
+  // Solo los indicadores que el usuario eligió capturar al finalizar (los demás quedan null).
+  const capturedResults = RESULT_FIELDS.filter(f => ad[f.key] != null)
 
   const fmt = (d) =>
     d
@@ -112,16 +114,17 @@ export default function AdsSpendDetail({ ad, ads = [], client, responsables = []
             </div>
           )}
 
-          {/* Resultados — solo visibles una vez finalizado el ad; nunca como columnas de la tabla */}
-          {ad.status === 'Finalizado' && (
+          {/* Resultados — solo se muestran los indicadores capturados (el usuario elige
+              cuáles al finalizar); nunca como columnas de la tabla */}
+          {ad.status === 'Finalizado' && capturedResults.length > 0 && (
             <div className="mb-4">
               <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-1.5">Resultados</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#f5f3eb] rounded-xl p-3">
-                {RESULT_FIELDS.map(f => (
+                {capturedResults.map(f => (
                   <div key={f.key}>
                     <p className="text-[11px] font-mono uppercase tracking-widest text-[#888] mb-0.5">{f.label}</p>
                     <p className="text-[15px] font-semibold text-[#111]">
-                      {ad[f.key] != null ? Number(ad[f.key]).toLocaleString('es-VE') : '—'}
+                      {Number(ad[f.key]).toLocaleString('es-VE')}
                     </p>
                   </div>
                 ))}

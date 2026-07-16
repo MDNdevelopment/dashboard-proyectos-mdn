@@ -84,7 +84,7 @@ export async function exportAdsToExcel({ ads, responsablesById, periodo }) {
   sheet.columns = [
     { width: 20 }, { width: 26 }, { width: 12 }, { width: 12 },
     { width: 12 }, { width: 22 }, { width: 14 }, { width: 12 }, { width: 14 },
-    { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 },
+    ...RESULT_FIELDS.map(() => ({ width: 14 })),
   ]
 
   const lastCol = HEADERS.length
