@@ -224,41 +224,75 @@ describe('AdsSpendForm', () => {
   })
 
   describe('resultados al finalizar', () => {
-    it('NO muestra los campos de resultado si el estado no es Finalizado', async () => {
+    it('NO muestra los indicadores de resultado si el estado no es Finalizado', async () => {
       renderForm()
       await waitFor(() => screen.getByRole('option', { name: 'Banco Exterior' }))
-      expect(screen.queryByLabelText('Alcance')).not.toBeInTheDocument()
+      expect(screen.queryByText('Alcance')).not.toBeInTheDocument()
     })
 
-    it('al elegir Finalizado, aparecen los 4 campos y bloquean el envío hasta llenarlos', async () => {
-      const user = userEvent.setup()
-      renderForm()
-
-      await fillRequiredFields(user, { amount: 40 })
+    async function selectFinalizado(user) {
       const statusSelect = screen.getAllByRole('combobox').find(s =>
         Array.from(s.options ?? []).some(o => o.text === 'Finalizado')
       )
       await user.selectOptions(statusSelect, 'Finalizado')
+    }
 
-      expect(screen.getByLabelText('Alcance')).toBeInTheDocument()
-      expect(screen.getByLabelText('Interacciones')).toBeInTheDocument()
-      expect(screen.getByLabelText('Seguidores')).toBeInTheDocument()
-      expect(screen.getByLabelText('Impresiones')).toBeInTheDocument()
+    it('al elegir Finalizado, aparecen los 6 indicadores para elegir, ninguno seleccionado, y bloquean el envío', async () => {
+      const user = userEvent.setup()
+      renderForm()
+
+      await fillRequiredFields(user, { amount: 40 })
+      await selectFinalizado(user)
+
+      expect(screen.getByText('Alcance')).toBeInTheDocument()
+      expect(screen.getByText('Interacciones')).toBeInTheDocument()
+      expect(screen.getByText('Seguidores')).toBeInTheDocument()
+      expect(screen.getByText('Impresiones')).toBeInTheDocument()
+      expect(screen.getByText('Visualizaciones')).toBeInTheDocument()
+      expect(screen.getByText('Visitas al perfil')).toBeInTheDocument()
+      expect(screen.queryByLabelText('Alcance')).not.toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Crear ad' })).toBeDisabled()
+    })
 
+    it('seleccionar y llenar al menos 1 indicador habilita el envío y guarda solo ese, el resto en null', async () => {
+      const user = userEvent.setup()
+      renderForm()
+
+      await fillRequiredFields(user, { amount: 40 })
+      await selectFinalizado(user)
+
+      await user.click(screen.getByRole('checkbox', { name: 'Incluir Alcance' }))
       await user.type(screen.getByLabelText('Alcance'), '1000')
-      await user.type(screen.getByLabelText('Interacciones'), '200')
-      await user.type(screen.getByLabelText('Seguidores'), '30')
-      await user.type(screen.getByLabelText('Impresiones'), '5000')
 
       expect(screen.getByRole('button', { name: 'Crear ad' })).not.toBeDisabled()
 
       await user.click(screen.getByRole('button', { name: 'Crear ad' }))
       await waitFor(() => {
         expect(mockCreateAd).toHaveBeenCalledWith('co-1', expect.objectContaining({
-          status: 'Finalizado', reach: 1000, interactions: 200, followers: 30, impressions: 5000,
+          status: 'Finalizado',
+          reach: 1000,
+          interactions: null,
+          followers: null,
+          impressions: null,
+          views: null,
+          profile_visits: null,
         }))
       })
+    })
+
+    it('deseleccionar un indicador ya lleno bloquea el envío si era el único elegido', async () => {
+      const user = userEvent.setup()
+      renderForm()
+
+      await fillRequiredFields(user, { amount: 40 })
+      await selectFinalizado(user)
+
+      await user.click(screen.getByRole('checkbox', { name: 'Incluir Alcance' }))
+      await user.type(screen.getByLabelText('Alcance'), '1000')
+      expect(screen.getByRole('button', { name: 'Crear ad' })).not.toBeDisabled()
+
+      await user.click(screen.getByRole('checkbox', { name: 'Incluir Alcance' }))
+      expect(screen.getByRole('button', { name: 'Crear ad' })).toBeDisabled()
     })
   })
 
