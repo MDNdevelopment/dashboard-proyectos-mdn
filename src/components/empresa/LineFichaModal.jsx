@@ -50,7 +50,9 @@ export default function LineFichaModal({ line, companyId, canManage = false, onA
   const memberIds = line.member_user_ids ?? [];
   const members   = allEmployees?.filter(u => memberIds.includes(u.user_id)) ?? [];
   // Un empleado archivado no puede agregarse como nuevo miembro de la línea.
-  const available = activeEmployees(allEmployees ?? []).filter(u => !memberIds.includes(u.user_id));
+  const available = activeEmployees(allEmployees ?? [])
+    .filter(u => !memberIds.includes(u.user_id))
+    .sort((a, b) => `${a.first_name ?? ""} ${a.last_name ?? ""}`.localeCompare(`${b.first_name ?? ""} ${b.last_name ?? ""}`, "es", { sensitivity: "base" }));
 
   // Carga on-mount: todos los empleados de la empresa + clientes de la línea.
   // No depende de member_user_ids para no refetchear al asignar.

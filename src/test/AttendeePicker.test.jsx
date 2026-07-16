@@ -184,6 +184,23 @@ describe('AttendeePicker — sugerencia de alguien ya agregado (check verde)', (
   })
 })
 
+describe('AttendeePicker — orden alfabético', () => {
+  it('las pills de participantes agregados se muestran en orden alfabético sin importar el orden de selectedIds', () => {
+    renderPicker(['emp-1', 'director-1', 'coord-1']) // Dario, Ana, Carla → debe verse Ana, Carla, Dario
+    const names = screen.getAllByText(/^(Ana|Beto|Carla|Dario) /).map(el => el.textContent)
+    expect(names).toEqual(['Ana Director', 'Carla Coord', 'Dario Empleado'])
+  })
+
+  it('las sugerencias de búsqueda se muestran en orden alfabético', async () => {
+    const user = userEvent.setup()
+    renderPicker()
+    await user.type(screen.getByPlaceholderText('Buscar empleado por nombre…'), 'a')
+    const dropdown = within(screen.getByTestId('attendee-suggestions'))
+    const names = dropdown.getAllByText(/^(Ana|Beto|Carla|Dario) /).map(el => el.textContent)
+    expect(names).toEqual(['Ana Director', 'Carla Coord', 'Dario Empleado'])
+  })
+})
+
 describe('AttendeePicker — quitar participantes agregados', () => {
   it('el botón "Quitar a <nombre>" remueve al participante de la selección', async () => {
     const user = userEvent.setup()

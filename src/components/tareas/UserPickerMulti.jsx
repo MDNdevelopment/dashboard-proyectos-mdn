@@ -65,11 +65,13 @@ export default function UserPickerMulti({
   // Los empleados archivados (deleted_at) no aparecen como opción nueva, salvo que
   // ya estén seleccionados (para poder verlos/quitarlos desde la lista, no solo
   // desde el chip).
-  const filtered = users.filter(u => {
-    if (u.deleted_at && !selectedIds.includes(u.user_id)) return false
-    const q = search.toLowerCase()
-    return !q || `${u.first_name} ${u.last_name}`.toLowerCase().includes(q)
-  })
+  const filtered = users
+    .filter(u => {
+      if (u.deleted_at && !selectedIds.includes(u.user_id)) return false
+      const q = search.toLowerCase()
+      return !q || `${u.first_name} ${u.last_name}`.toLowerCase().includes(q)
+    })
+    .sort((a, b) => `${a.first_name ?? ''} ${a.last_name ?? ''}`.localeCompare(`${b.first_name ?? ''} ${b.last_name ?? ''}`, 'es', { sensitivity: 'base' }))
 
   return (
     <div>

@@ -73,12 +73,14 @@ export default function UserPickerSingle({ users = [], selectedId, onChange, pla
   // Los empleados archivados (deleted_at) no aparecen como opción nueva, pero
   // selectedUser (arriba) sigue resolviéndose contra la lista completa `users`
   // para no perder el nombre de una asignación histórica ya guardada.
-  const filtered = users.filter(u => {
-    if (u.deleted_at) return false
-    if ((u.access_level ?? 0) < minLevel) return false
-    const q = search.toLowerCase()
-    return !q || `${u.first_name} ${u.last_name}`.toLowerCase().includes(q)
-  })
+  const filtered = users
+    .filter(u => {
+      if (u.deleted_at) return false
+      if ((u.access_level ?? 0) < minLevel) return false
+      const q = search.toLowerCase()
+      return !q || `${u.first_name} ${u.last_name}`.toLowerCase().includes(q)
+    })
+    .sort((a, b) => `${a.first_name ?? ''} ${a.last_name ?? ''}`.localeCompare(`${b.first_name ?? ''} ${b.last_name ?? ''}`, 'es', { sensitivity: 'base' }))
 
   const select = (id) => { onChange(id); setOpen(false); setSearch('') }
 

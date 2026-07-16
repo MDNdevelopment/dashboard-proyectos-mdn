@@ -82,6 +82,16 @@ describe('UserPickerSingle — con minLevel={3}', () => {
   })
 })
 
+describe('UserPickerSingle — orden alfabético', () => {
+  it('muestra las opciones en orden alfabético aunque lleguen desordenadas', () => {
+    const shuffled = [USERS[3], USERS[0], USERS[4], USERS[2], USERS[1]] // Diego, Ana, Elena, Carla, Beto
+    renderPicker({ users: shuffled })
+    fireEvent.click(screen.getByRole('button'))
+    const names = screen.getAllByText(/^(Ana|Beto|Carla|Diego|Elena) /).map(el => el.textContent)
+    expect(names).toEqual(['Ana García', 'Beto López', 'Carla Martín', 'Diego Pérez', 'Elena Ruiz'])
+  })
+})
+
 describe('UserPickerSingle — empleado seleccionado', () => {
   it('muestra cargo del empleado seleccionado en el trigger (sin nivel)', () => {
     renderPicker({ selectedId: 'u3' })

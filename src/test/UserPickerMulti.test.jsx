@@ -102,6 +102,16 @@ describe('UserPickerMulti — lockedIds', () => {
   })
 })
 
+describe('UserPickerMulti — orden alfabético', () => {
+  it('muestra las opciones en orden alfabético aunque lleguen desordenadas', () => {
+    const shuffled = [USERS[2], USERS[0], USERS[1]] // Carla, Ana, Beto
+    renderPicker({ users: shuffled })
+    fireEvent.click(screen.getByRole('button'))
+    const names = screen.getAllByText(/^(Ana|Beto|Carla) /).map(el => el.textContent)
+    expect(names).toEqual(['Ana García', 'Beto López', 'Carla Martín'])
+  })
+})
+
 describe('UserPickerMulti — búsqueda', () => {
   it('filtra usuarios por nombre al buscar', () => {
     renderPicker()
