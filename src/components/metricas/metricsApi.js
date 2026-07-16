@@ -98,7 +98,7 @@ export async function loadClients(companyId, lineId = null, { includeArchived = 
     .eq("company_id", companyId);
   if (lineId) q = q.eq("line_id", lineId);
   if (!includeArchived) q = q.is("deleted_at", null);
-  return q.order("created_at");
+  return q.order("name");
 }
 
 export async function createClient(companyId, fields) {

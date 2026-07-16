@@ -33,13 +33,16 @@ function initials(u) {
 export default function AttendeePicker({ employees, selectedIds, onChange }) {
   const [query, setQuery] = useState("");
   const selectedSet = new Set(selectedIds ?? []);
-  const selected = employees.filter((u) => selectedSet.has(u.user_id));
+  const selected = employees
+    .filter((u) => selectedSet.has(u.user_id))
+    .sort((a, b) => fullName(a).localeCompare(fullName(b), "es", { sensitivity: "base" }));
 
   const suggestions = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
     return employees
       .filter((u) => fullName(u).toLowerCase().includes(q))
+      .sort((a, b) => fullName(a).localeCompare(fullName(b), "es", { sensitivity: "base" }))
       .slice(0, MAX_SUGGESTIONS);
   }, [query, employees]);
 

@@ -62,10 +62,12 @@ export default function UserPickerMulti({
     onChange(selectedIds.filter(id => id !== userId))
   }
 
-  const filtered = users.filter(u => {
-    const q = search.toLowerCase()
-    return !q || `${u.first_name} ${u.last_name}`.toLowerCase().includes(q)
-  })
+  const filtered = users
+    .filter(u => {
+      const q = search.toLowerCase()
+      return !q || `${u.first_name} ${u.last_name}`.toLowerCase().includes(q)
+    })
+    .sort((a, b) => `${a.first_name ?? ''} ${a.last_name ?? ''}`.localeCompare(`${b.first_name ?? ''} ${b.last_name ?? ''}`, 'es', { sensitivity: 'base' }))
 
   return (
     <div>
