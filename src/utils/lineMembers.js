@@ -73,6 +73,26 @@ export function visibleLinesForUser(lines, userProfile) {
 }
 
 /**
+ * Rellena member_user_ids de la línea "Independientes" (is_general) con los empleados
+ * que no pertenecen a ninguna línea real. Es una derivación pura (no se persiste en
+ * metric_line_members): se recalcula cada vez que se cargan líneas/usuarios, así que
+ * se auto-mantiene al mover empleados entre líneas.
+ *
+ * @param {Array} lines - Líneas cargadas (incluye la fila is_general si existe)
+ * @param {Array} users - Empleados de la empresa (con user_id, deleted_at)
+ * @returns {Array} Copia de lines con member_user_ids de la línea general recalculado
+ */
+export function withDerivedGeneralMembers(lines, users) {
+  const assignedIds = new Set(
+    lines.filter(l => !l.is_general).flatMap(l => l.member_user_ids ?? []),
+  )
+  const unassignedIds = (users ?? [])
+    .filter(u => !u.deleted_at && !assignedIds.has(u.user_id))
+    .map(u => u.user_id)
+  return lines.map(l => l.is_general ? { ...l, member_user_ids: unassignedIds } : l)
+}
+
+/**
  * Quita un empleado de una línea específica.
  * @param {Array} lines
  * @param {string} lineId

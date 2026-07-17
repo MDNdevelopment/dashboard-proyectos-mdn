@@ -4,6 +4,7 @@ import {
   assignMemberToLine,
   removeMemberFromLine,
   visibleLinesForUser,
+  withDerivedGeneralMembers,
 } from '../utils/lineMembers'
 
 const LINES = [
@@ -161,5 +162,57 @@ describe('removeMemberFromLine', () => {
     const lines = [{ id: 'line-1', member_user_ids: ['u-a', 'u-b'], lead_user_id: 'u-a' }]
     const { updated } = removeMemberFromLine(lines, 'line-1', 'u-b')
     expect(updated.find(l => l.id === 'line-1').lead_user_id).toBe('u-a')
+  })
+})
+
+describe('withDerivedGeneralMembers', () => {
+  const USERS = [
+    { user_id: 'u-a' }, // en line-1
+    { user_id: 'u-b' }, // en line-1
+    { user_id: 'u-c' }, // en line-2
+    { user_id: 'u-x' }, // sin línea → Independientes
+    { user_id: 'u-y' }, // sin línea → Independientes
+    { user_id: 'u-del', deleted_at: '2026-01-01' }, // sin línea pero desactivado
+  ]
+
+  it('asigna a la línea general los empleados que no están en ninguna línea real', () => {
+    const lines = [...LINES, { id: 'line-general', name: 'Independientes', is_general: true, member_user_ids: [] }]
+    const result = withDerivedGeneralMembers(lines, USERS)
+    const general = result.find(l => l.id === 'line-general')
+    expect(general.member_user_ids).toEqual(expect.arrayContaining(['u-x', 'u-y']))
+    expect(general.member_user_ids).toHaveLength(2)
+  })
+
+  it('excluye empleados desactivados (deleted_at) de la línea general', () => {
+    const lines = [...LINES, { id: 'line-general', is_general: true, member_user_ids: [] }]
+    const result = withDerivedGeneralMembers(lines, USERS)
+    const general = result.find(l => l.id === 'line-general')
+    expect(general.member_user_ids).not.toContain('u-del')
+  })
+
+  it('no toca member_user_ids de las líneas reales', () => {
+    const lines = [...LINES, { id: 'line-general', is_general: true, member_user_ids: [] }]
+    const result = withDerivedGeneralMembers(lines, USERS)
+    expect(result.find(l => l.id === 'line-1').member_user_ids).toEqual(['u-a', 'u-b'])
+    expect(result.find(l => l.id === 'line-2').member_user_ids).toEqual(['u-c'])
+  })
+
+  it('devuelve las líneas sin cambios si no hay fila is_general', () => {
+    const result = withDerivedGeneralMembers(LINES, USERS)
+    expect(result).toEqual(LINES)
+  })
+
+  it('un empleado que se mueve a una línea real ya no aparece en la general', () => {
+    const linesAntes = [...LINES, { id: 'line-general', is_general: true, member_user_ids: [] }]
+    const linesDespues = [
+      { id: 'line-1', member_user_ids: ['u-a', 'u-b', 'u-x'] },
+      { id: 'line-2', member_user_ids: ['u-c'] },
+      { id: 'line-3', member_user_ids: [] },
+      { id: 'line-general', is_general: true, member_user_ids: [] },
+    ]
+    const antes = withDerivedGeneralMembers(linesAntes, USERS)
+    const despues = withDerivedGeneralMembers(linesDespues, USERS)
+    expect(antes.find(l => l.id === 'line-general').member_user_ids).toContain('u-x')
+    expect(despues.find(l => l.id === 'line-general').member_user_ids).not.toContain('u-x')
   })
 })

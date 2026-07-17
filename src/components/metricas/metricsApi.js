@@ -8,12 +8,13 @@ import { lastNMonths } from "../../utils/metricsFinance";
 
 // ─── Líneas ───────────────────────────────────────────────────────────────────
 
-export async function loadLines(companyId) {
-  const { data, error } = await supabase
+export async function loadLines(companyId, { includeGeneral = false } = {}) {
+  let query = supabase
     .from("metric_lines")
     .select("*, members:metric_line_members(user_id, is_lead)")
-    .eq("company_id", companyId)
-    .order("sort_order");
+    .eq("company_id", companyId);
+  if (!includeGeneral) query = query.eq("is_general", false);
+  const { data, error } = await query.order("sort_order");
   return {
     data: (data ?? []).map(line => ({
       ...line,
@@ -301,6 +302,16 @@ export async function seedMetricsIfEmpty(companyId) {
   if (allClients.length > 0) {
     await supabase.from("metric_clients").insert(allClients);
   }
+
+  // Fila oculta "Independientes": agrupa tareas de empleados sin línea asignada.
+  // Se excluye de Métricas/Ads/Home/Clientes vía el default includeGeneral=false.
+  await supabase.from("metric_lines").insert({
+    company_id: companyId,
+    name: "Independientes",
+    color: "#9CA3AF",
+    sort_order: 9999,
+    is_general: true,
+  });
 
   return lines;
 }

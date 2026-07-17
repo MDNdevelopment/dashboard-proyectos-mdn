@@ -11,7 +11,7 @@ import TaskModal from '../components/tareas/TaskModal'
 import { loadLines, loadClients } from '../components/metricas/metricsApi'
 import { currentMonthIndex } from '../components/tareas/constants'
 import { MONTHS } from '../components/metricas/constants'
-import { visibleLinesForUser } from '../utils/lineMembers'
+import { visibleLinesForUser, withDerivedGeneralMembers } from '../utils/lineMembers'
 
 const ALL_TEAMS = '__all__'
 const CURRENT_YEAR = Math.floor(currentMonthIndex() / 12)
@@ -107,13 +107,18 @@ export default function TareasPage() {
     const companyId = userProfile.company_id
 
     const [linesRes, tasksRes, usersRes, clientsRes] = await Promise.all([
-      loadLines(companyId),
+      loadLines(companyId, { includeGeneral: true }),
       supabase.from('tasks').select('*').eq('company_id', companyId).order('created_at', { ascending: false }),
       supabase.from('users').select('user_id, first_name, last_name, avatar_url, access_level, deleted_at, position:positions(position_name)').eq('company_id', companyId).order('first_name'),
       loadClients(companyId),
     ])
 
-    const fetchedTeams = visibleLinesForUser(linesRes.data ?? [], userProfile)
+    // El grupo "Independientes" (is_general) agrupa a empleados sin línea asignada.
+    // Su membresía no se persiste: se deriva en memoria como el complemento de los
+    // miembros de las líneas reales, para que se auto-mantenga al mover empleados.
+    const linesWithGeneral = withDerivedGeneralMembers(linesRes.data ?? [], usersRes.data ?? [])
+
+    const fetchedTeams = visibleLinesForUser(linesWithGeneral, userProfile)
     setTeams(fetchedTeams)
     setTasks(tasksRes.data ?? [])
 
@@ -152,6 +157,7 @@ export default function TareasPage() {
         })
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'metric_lines' }, () => loadAll())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'metric_line_members' }, () => loadAll())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'metric_clients' }, () => loadAll())
       .subscribe()
 
