@@ -38,7 +38,7 @@ const EMPLOYEES = [
 const MEETING = {
   id: 'm-1', title: 'Reunión con Pepsi', client_name: 'Pepsi', starts_at: '2099-01-15T14:00:00',
   modality: 'presencial', location: 'Oficina MDN', meeting_url: null,
-  notes: 'Llevar la propuesta', attendee_ids: ['u1'], status: 'programada',
+  notes: 'Llevar la propuesta', attendee_ids: ['u1'], status: 'programada', created_by: 'u1',
 }
 
 function renderDetail(props = {}) {
@@ -85,6 +85,21 @@ describe('MeetingDetail — info de solo lectura', () => {
   it('muestra el badge de estado correspondiente', () => {
     renderDetail({ meeting: { ...MEETING, status: 'realizada' } })
     expect(screen.getByText('Realizada')).toBeInTheDocument()
+  })
+
+  it('muestra quién creó la reunión resolviendo created_by contra employees', () => {
+    renderDetail()
+    expect(screen.getByText('Creada por Ana García')).toBeInTheDocument()
+  })
+
+  it('no muestra "Creada por" si created_by es null', () => {
+    renderDetail({ meeting: { ...MEETING, created_by: null } })
+    expect(screen.queryByText(/Creada por/)).not.toBeInTheDocument()
+  })
+
+  it('no muestra "Creada por" si el creador no está en employees', () => {
+    renderDetail({ meeting: { ...MEETING, created_by: 'u-desconocido' } })
+    expect(screen.queryByText(/Creada por/)).not.toBeInTheDocument()
   })
 })
 
