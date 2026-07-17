@@ -38,6 +38,7 @@ export default function MeetingDetail({ meeting, employees, onClose, onSaved, on
     : STATUS_META[meeting.status] ?? STATUS_META.programada;
 
   const attendees = employees.filter((u) => (meeting.attendee_ids ?? []).includes(u.user_id));
+  const creator = employees.find((u) => u.user_id === meeting.created_by);
 
   /** Desmarcar es directo (sin pedir nada). */
   async function handleUnmarkHeld() {
@@ -213,6 +214,10 @@ export default function MeetingDetail({ meeting, employees, onClose, onSaved, on
                 {meeting.notes}
               </p>
             </div>
+          )}
+
+          {creator && (
+            <p className="text-[12px] text-[#999] mb-4">Creada por {fullName(creator)}</p>
           )}
 
           {canManage && (
