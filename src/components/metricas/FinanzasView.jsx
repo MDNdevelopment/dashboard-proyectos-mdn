@@ -8,6 +8,9 @@ import {
 import { loadReport, loadPrevReport, upsertReport, loadClients, loadCompanyEmployees, updateEmployeeSalaries, loadRecentReports } from "./metricsApi";
 import { initMetricReport } from "../../utils/initMetricReport";
 import { syncReportClients } from "../../utils/syncReportClients";
+import { clientInMonth } from "../../utils/clientInMonth";
+import { employeeActiveInMonth } from "../../utils/employeeInMonth";
+import { isReportFrozen } from "../../utils/reportPeriod";
 import { pickSalaryUpdates } from "../../utils/salaryWriteback";
 import { calcFinanzas, calcConsolidado, calcConsolidadoConGasto, ensureFinanzas, fmtUSD, buildFinanceTrend } from "../../utils/metricsFinance";
 import SectionTotal from "../common/SectionTotal";
@@ -82,37 +85,44 @@ export default function FinanzasView({ line, companyId, year, month, closed = fa
     ]);
     setRecentReports(recentRes.data ?? []);
     // Todos (incl. archivados) para resolver nombres en reportes guardados;
-    // solo activos para syncReportClients (no re-agregar archivados al reporte actual).
+    // solo activos EN ESE MES para syncReportClients (no re-agregar archivados
+    // al reporte actual, pero sin perder al que se dio de baja durante este mismo mes).
     const allClients = clientsRes.data ?? [];
-    const activeClients = allClients.filter(c => !c.deleted_at);
+    const activeClients = allClients.filter(c => clientInMonth(c, year, month));
     setLineClients(allClients);
 
     // Lista completa de empleados de la empresa (para resolver apoyo_ids fuera de la línea)
     const allEmployees = employeesRes.data ?? [];
     setCompanyEmployees(allEmployees);
     // Filtrar empleados del team de esta línea (member_user_ids es un array reconstruido
-    // en loadLines a partir de la tabla relacional metric_line_members). Excluye
-    // archivados (deleted_at) por la misma razón que activeClients: no re-sembrar su
-    // fila de sueldo en el reporte actual; los reportes ya cerrados conservan la suya.
+    // en loadLines a partir de la tabla relacional metric_line_members). Excluye a quienes
+    // ya estaban de baja ANTES de este mes, por la misma razón que activeClients: no
+    // re-sembrar su fila de sueldo en el reporte actual; los reportes ya cerrados/pasados
+    // conservan la suya (ver frozen más abajo).
     const memberIds = new Set(line.member_user_ids ?? []);
-    const employees = allEmployees.filter(e => memberIds.has(e.user_id) && !e.deleted_at);
+    const employees = allEmployees.filter(e => memberIds.has(e.user_id) && employeeActiveInMonth(e, year, month));
     setLineEmployees(employees);
+
+    // Un mes ya pasado (o cerrado) es de solo lectura: se muestra tal cual se guardó,
+    // sin reconciliar contra el roster actual (que puede tener altas/bajas posteriores
+    // a ese mes). Ver utils/reportPeriod.js.
+    const frozen = isReportFrozen(year, month, closed);
 
     if (reportRes.data) {
       const d = reportRes.data.data;
       ensureFinanzas(d);
-      const synced = syncReportClients(d, activeClients, employees);
+      const synced = frozen ? d : syncReportClients(d, activeClients, employees);
       setReport(synced);
       baselineRef.current = synced;
     } else {
       const fresh = initMetricReport(prevRes.data?.data ?? null, activeClients, {}, employees);
       ensureFinanzas(fresh);
-      const synced = syncReportClients(fresh, activeClients, employees);
+      const synced = frozen ? fresh : syncReportClients(fresh, activeClients, employees);
       setReport(synced);
       baselineRef.current = synced;
     }
     setLoading(false);
-  }, [line?.id, line?.member_user_ids, companyId, year, month]);
+  }, [line?.id, line?.member_user_ids, companyId, year, month, closed]);
 
   useEffect(() => { load(); }, [load]);
 

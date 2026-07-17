@@ -5,6 +5,9 @@ import SectionTotal from "../common/SectionTotal";
 import ClientFichaModal from "./ClientFichaModal";
 import { initMetricReport } from "../../utils/initMetricReport";
 import { syncReportClients } from "../../utils/syncReportClients";
+import { clientInMonth } from "../../utils/clientInMonth";
+import { employeeActiveInMonth } from "../../utils/employeeInMonth";
+import { isReportFrozen } from "../../utils/reportPeriod";
 import { calcTotal, sumScore, crecimientoCliente } from "../../utils/metricsScore";
 import { MONTHS, INDICATORS, REUNIONES_MODULE_START } from "./constants";
 import { useUnsavedChanges } from "../../hooks/useUnsavedChanges";
@@ -63,18 +66,25 @@ export default function OperacionesView({ line, companyId, year, month, closed =
     setHeldClientIds(heldIds);
 
     // Todos (incl. archivados) para resolver nombres en reportes guardados;
-    // solo activos para syncReportClients (no re-agregar archivados al reporte actual).
+    // solo activos EN ESE MES para syncReportClients (no re-agregar archivados
+    // al reporte actual, pero sin perder al que se dio de baja durante este mismo mes).
     const allLineClients = clientsRes.data ?? [];
-    const activeLineClients = allLineClients.filter(c => !c.deleted_at);
+    const activeLineClients = allLineClients.filter(c => clientInMonth(c, year, month));
     setClients(allLineClients);
 
     const allEmployees = employeesRes.data ?? [];
     setCompanyEmployees(allEmployees);
     // Filtrar solo los empleados miembros de esta línea para sincronizar sueldos,
     // igual que FinanzasView. Sin este filtro, syncReportClients recibe [] y borra
-    // las filas de nómina del team al guardar desde esta vista.
+    // las filas de nómina del team al guardar desde esta vista. Se excluyen también
+    // los que ya estaban de baja ANTES de este mes (ver employeeActiveInMonth).
     const memberIds = new Set(line.member_user_ids ?? []);
-    const lineEmployees = allEmployees.filter(e => memberIds.has(e.user_id));
+    const lineEmployees = allEmployees.filter(e => memberIds.has(e.user_id) && employeeActiveInMonth(e, year, month));
+
+    // Un mes ya pasado (o cerrado) es de solo lectura: se muestra tal cual se guardó,
+    // sin reconciliar contra el roster actual (que puede tener altas/bajas posteriores
+    // a ese mes). Ver utils/reportPeriod.js.
+    const frozen = isReportFrozen(year, month, closed);
 
     // Guardar el reporte del mes anterior para mostrarlo en la sección de crecimiento
     setPrevReport(prevRes.data?.data ?? null);
@@ -96,8 +106,12 @@ export default function OperacionesView({ line, companyId, year, month, closed =
     const shouldAutoSync = isReunionesEra && !closed;
 
     if (reportRes.data) {
-      // Sincronizar items con los clientes activos y empleados actuales de la línea
-      const synced = syncReportClients(reportRes.data.data, activeLineClients, lineEmployees);
+      // Mes congelado (pasado o cerrado): se muestra tal cual se guardó, sin reconciliar
+      // contra el roster actual (evita borrar/agregar clientes o empleados retroactivamente).
+      // Mes editable: sincronizar items con los clientes/empleados activos EN ESE MES.
+      const synced = frozen
+        ? structuredClone(reportRes.data.data)
+        : syncReportClients(reportRes.data.data, activeLineClients, lineEmployees);
       // "Realizadas" ya no es editable — siempre refleja el conteo automático (clientes
       // distintos con reunión realizada en el mes), a diferencia del resto de indicadores
       // que quedan congelados al guardar. Excepto en meses previos al módulo Reuniones o
@@ -110,7 +124,7 @@ export default function OperacionesView({ line, companyId, year, month, closed =
       // Inicializar con carry-forward y metas de la línea
       const lineMetas = line?.metas ?? {};
       const fresh = initMetricReport(prevRes.data?.data ?? null, activeLineClients, lineMetas);
-      const synced = syncReportClients(fresh, activeLineClients, lineEmployees);
+      const synced = frozen ? fresh : syncReportClients(fresh, activeLineClients, lineEmployees);
       if (shouldAutoSync) synced.reuniones.realizadas = meetingsCount;
       synced.reuniones.justificativos = pruneJustificativos(synced.reuniones);
       setReport(synced);

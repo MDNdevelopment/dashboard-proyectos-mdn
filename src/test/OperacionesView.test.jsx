@@ -307,6 +307,61 @@ describe('OperacionesView — meta de reuniones topada a la cantidad de marcas a
   })
 })
 
+describe('OperacionesView — meses pasados congelados no reconcilian contra el roster actual', () => {
+  // "Ahora" real es 2026-07-17 (ver contexto de sesión) → julio 2026 es el mes en curso,
+  // junio 2026 ya es un mes pasado y debe congelarse.
+  const CLIENTES_ROSTER = [
+    { id: 'c-1', name: 'Banco Exterior', logo_url: null, deleted_at: null, campaign_budget: 200 },
+    // Se dio de baja el 20 de junio: en junio estuvo activa, en julio ya no.
+    { id: 'c-2', name: 'Marca Archivada', logo_url: null, deleted_at: '2026-06-20T00:00:00Z', campaign_budget: null },
+    // Se agregó recién ahora: no existía cuando se guardó el reporte de junio.
+    { id: 'c-3', name: 'Marca Nueva', logo_url: null, deleted_at: null, campaign_budget: null },
+  ];
+
+  function reportSavedInJune() {
+    // Snapshot tal como habría quedado guardado en junio: solo c-1 y c-2 (c-3 no existía).
+    const data = makeReportData();
+    data.crecimiento.items = [
+      { clienteId: 'c-1', seguidoresGanados: 100, seguidoresGanadosPrev: 50, seguidoresActuales: 500, seguidoresBase: 400, meta: 80 },
+      { clienteId: 'c-2', seguidoresGanados: 20, seguidoresGanadosPrev: 10, seguidoresActuales: 220, seguidoresBase: 200, meta: 50 },
+    ];
+    return data;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockLoadPrevReport.mockResolvedValue({ data: null, error: null });
+    mockLoadClients.mockResolvedValue({ data: CLIENTES_ROSTER, error: null });
+    mockLoadCompanyEmployees.mockResolvedValue({ data: [], error: null });
+    mockUpsertReport.mockResolvedValue({ data: null, error: null });
+    mockLoadAds.mockResolvedValue({ data: [], error: null });
+    mockCountMeetingsHeldForLine.mockResolvedValue({ count: 0, error: null });
+    mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: [], error: null });
+    mockLoadReport.mockResolvedValue({ data: { data: reportSavedInJune() }, error: null });
+  });
+
+  it('junio (mes pasado): conserva a la marca archivada y NO agrega a la marca nueva', async () => {
+    renderView({ month: 6 });
+    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument(); });
+    expect(await screen.findByText('Marca Archivada')).toBeInTheDocument();
+    expect(screen.queryByText('Marca Nueva')).not.toBeInTheDocument();
+  });
+
+  it('julio (mes en curso): descarta a la marca archivada en junio y agrega a la marca nueva', async () => {
+    renderView({ month: 7 });
+    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument(); });
+    expect((await screen.findAllByText('Marca Nueva')).length).toBeGreaterThan(0);
+    expect(screen.queryByText('Marca Archivada')).not.toBeInTheDocument();
+  });
+
+  it('reporte cerrado en el mes en curso también queda congelado (conserva la marca archivada)', async () => {
+    renderView({ month: 7, closed: true });
+    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument(); });
+    expect(await screen.findByText('Marca Archivada')).toBeInTheDocument();
+    expect(screen.queryByText('Marca Nueva')).not.toBeInTheDocument();
+  });
+});
+
 describe('OperacionesView — modal de cobertura de reuniones por marca', () => {
   beforeEach(() => {
     vi.clearAllMocks()
