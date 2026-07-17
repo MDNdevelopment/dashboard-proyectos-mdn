@@ -247,7 +247,12 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
           <div>
             <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Cliente</label>
             {(() => {
-              const lineClients = clients.filter(c => c.line_id === form.team_id)
+              const selectedTeam = teams.find(t => t.id === form.team_id)
+              // El grupo "Independientes" no tiene clientes propios: al elegirlo se
+              // muestran todos los clientes de la empresa (no hay línea que los acote).
+              const lineClients = selectedTeam?.is_general
+                ? clients
+                : clients.filter(c => c.line_id === form.team_id)
               // Tarea heredada: tiene nombre de texto pero sin client_id (pre-migración)
               const hasLegacyName = form.client && !form.client_id
               const clientNotInLine = form.client_id && !lineClients.some(c => c.id === form.client_id)
@@ -270,7 +275,13 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
                     <p className="text-[12.5px] text-[#bbb] mt-1">Selecciona un team para ver los clientes disponibles.</p>
                   )}
                   {form.team_id && lineClients.length === 0 && (
-                    <p className="text-[12.5px] text-[#bbb] mt-1">No hay clientes en esta línea. Agrégalos en <strong>Empresa → Clientes</strong>.</p>
+                    <p className="text-[12.5px] text-[#bbb] mt-1">
+                      {selectedTeam?.is_general ? (
+                        <>No hay clientes creados. Agrégalos en <strong>Empresa → Clientes</strong>.</>
+                      ) : (
+                        <>No hay clientes en esta línea. Agrégalos en <strong>Empresa → Clientes</strong>.</>
+                      )}
+                    </p>
                   )}
                   {(hasLegacyName || clientNotInLine) && (
                     <p className="text-[12.5px] text-[#F0871F] mt-1">
@@ -327,7 +338,11 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
                   />
                   {form.team_id && memberIds.length === 0 && (
                     <p className="text-[12.5px] text-[#bbb] mt-1">
-                      No hay miembros en esta línea. Agrégalos en <strong>Empresa → Líneas</strong>.
+                      {selectedTeam?.is_general ? (
+                        'No hay empleados sin línea asignada por ahora.'
+                      ) : (
+                        <>No hay miembros en esta línea. Agrégalos en <strong>Empresa → Líneas</strong>.</>
+                      )}
                     </p>
                   )}
                 </>

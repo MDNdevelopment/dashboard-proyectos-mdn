@@ -33,6 +33,10 @@ const MOCK_USERS = [
     avatar_url: null, access_level: 1, position: null },
 ]
 
+// Mutable: algunos tests (grupo "Independientes") reasignan la lista de usuarios
+// para simular empleados sin línea. Se resetea a MOCK_USERS en cada beforeEach.
+let mockUsersData = MOCK_USERS
+
 // ── Mock metricsApi ────────────────────────────────────────────────────────────
 const mockLoadLines   = vi.fn().mockResolvedValue({ data: MOCK_LINES, error: null })
 const mockLoadClients = vi.fn().mockResolvedValue({ data: [], error: null })
@@ -60,7 +64,7 @@ vi.mock('../supabase', () => {
     supabase: {
       from: vi.fn((table) => {
         if (table === 'tasks') return makeMockTable(MOCK_TASKS)
-        if (table === 'users') return makeMockTable(MOCK_USERS)
+        if (table === 'users') return makeMockTable(mockUsersData)
         return makeMockTable([])
       }),
       channel:       vi.fn(() => channelStub),
@@ -104,12 +108,13 @@ describe('TareasPage — líneas desde metric_lines', () => {
     vi.clearAllMocks()
     mockLoadLines.mockResolvedValue({ data: MOCK_LINES, error: null })
     mockLoadClients.mockResolvedValue({ data: [], error: null })
+    mockUsersData = MOCK_USERS
   })
 
-  it('llama a loadLines con el company_id del usuario', async () => {
+  it('llama a loadLines con el company_id del usuario, incluyendo la línea general', async () => {
     renderPage()
     await waitFor(() => {
-      expect(mockLoadLines).toHaveBeenCalledWith('co-1')
+      expect(mockLoadLines).toHaveBeenCalledWith('co-1', { includeGeneral: true })
     })
   })
 
@@ -216,6 +221,48 @@ describe('TareasPage — líneas desde metric_lines', () => {
         expect(screen.getByText('Banco Exterior')).toBeInTheDocument()
       })
       expect(screen.getByText('Farmacia Salud')).toBeInTheDocument()
+    })
+  })
+
+  // ── Grupo "Independientes" (empleados sin línea, is_general) ──────────────────
+  describe('grupo "Independientes"', () => {
+    const USER_ID_SIN_LINEA = 'u-sin-linea'
+    const LINES_WITH_GENERAL = [
+      ...MOCK_LINES,
+      { id: 'line-general', company_id: 'co-1', name: 'Independientes', color: '#9CA3AF', sort_order: 9999, is_general: true, member_user_ids: [] },
+    ]
+    const USERS_WITH_UNASSIGNED = [
+      ...MOCK_USERS,
+      { user_id: USER_ID_SIN_LINEA, company_id: 'co-1', first_name: 'Iván', last_name: 'Tech',
+        avatar_url: null, access_level: 2, position: null },
+    ]
+
+    beforeEach(() => {
+      mockLoadLines.mockResolvedValue({ data: LINES_WITH_GENERAL, error: null })
+    })
+
+    it('admin ve el botón "Independientes"', async () => {
+      renderPage({ admin: true, access_level: 1, user_id: 'u-otro' })
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Independientes' })).toBeInTheDocument()
+      })
+    })
+
+    it('un nivel 2 sin línea asignada ve el botón "Independientes" (membresía derivada)', async () => {
+      mockUsersData = USERS_WITH_UNASSIGNED
+      renderPage({ access_level: 2, admin: false, user_id: USER_ID_SIN_LINEA })
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Independientes' })).toBeInTheDocument()
+      })
+      expect(screen.queryByRole('button', { name: 'Georgina' })).not.toBeInTheDocument()
+    })
+
+    it('un nivel 2 que sí pertenece a una línea real NO ve "Independientes"', async () => {
+      renderPage({ access_level: 2, admin: false, user_id: USER_ID_MEMBER })
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Georgina' })).toBeInTheDocument()
+      })
+      expect(screen.queryByRole('button', { name: 'Independientes' })).not.toBeInTheDocument()
     })
   })
 })
