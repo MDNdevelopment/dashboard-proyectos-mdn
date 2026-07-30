@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { createClient, updateClient } from '../metricas/metricsApi'
+import { createClient, updateClient, loadClientPrivate, upsertClientPrivate } from '../metricas/metricsApi'
 import { SOCIAL_NETWORKS, MONTHS } from '../metricas/constants'
 import AvatarUpload from './AvatarUpload'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
@@ -55,11 +55,30 @@ export default function ClientModal({
     designer_id:       client?.designer_id       ?? null,
     audiovisual_ids:   client?.audiovisual_ids   ?? [],
     apoyo_ids:         client?.apoyo_ids         ?? [],
+    phone:             '',
+    instagram_email:   '',
   }))
   const initialForm = useRef(form)
   const { requestClose } = useUnsavedChanges({ value: form, baseline: initialForm.current, onClose })
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState(null)
+
+  // Datos privados (teléfono / correo de Instagram) — solo nivel 3/4/admin.
+  // Se cargan aparte porque viven en metric_client_private (RLS propia).
+  useEffect(() => {
+    if (!privileged || !isEdit) return
+    let cancelled = false
+    loadClientPrivate(client.id).then(({ data }) => {
+      if (cancelled || !data) return
+      const patch = { phone: data.phone ?? '', instagram_email: data.instagram_email ?? '' }
+      setForm(f => ({ ...f, ...patch }))
+      // También actualizar el baseline: este dato llega async después del
+      // primer render, así que sin esto useUnsavedChanges marcaría "cambios
+      // sin guardar" solo por haber abierto el modal.
+      initialForm.current = { ...initialForm.current, ...patch }
+    })
+    return () => { cancelled = true }
+  }, [privileged, isEdit, client?.id])
 
   function set(field, value) {
     setForm(f => ({ ...f, [field]: value }))
@@ -156,6 +175,14 @@ export default function ClientModal({
       ;({ data, error: err } = await updateClient(client.id, payload))
     } else {
       ;({ data, error: err } = await createClient(companyId, payload))
+    }
+
+    if (!err && privileged && data?.id) {
+      const { error: privErr } = await upsertClientPrivate(data.id, {
+        phone: form.phone.trim(),
+        instagram_email: form.instagram_email.trim(),
+      })
+      if (privErr) err = privErr
     }
 
     setSaving(false)
@@ -591,6 +618,39 @@ export default function ClientModal({
               </div>
             )}
           </div>
+
+          {/* Datos privados (cuenta de Instagram) — solo nivel 3/4/admin */}
+          {privileged && (
+            <div className="bg-[#FFB80014] border border-[#FFB80055] rounded-xl p-4">
+              <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-3">
+                Datos privados (cuenta de Instagram)
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-[11.5px] font-mono text-[#aaa] uppercase tracking-wide mb-1">Teléfono</p>
+                  <input
+                    type="tel"
+                    className="input-base"
+                    value={form.phone}
+                    onChange={e => set('phone', e.target.value)}
+                    placeholder="+58 412 0000000"
+                    disabled={readOnly}
+                  />
+                </div>
+                <div>
+                  <p className="text-[11.5px] font-mono text-[#aaa] uppercase tracking-wide mb-1">Correo de Instagram</p>
+                  <input
+                    type="email"
+                    className="input-base"
+                    value={form.instagram_email}
+                    onChange={e => set('instagram_email', e.target.value)}
+                    placeholder="cuenta@ejemplo.com"
+                    disabled={readOnly}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
         </form>
 

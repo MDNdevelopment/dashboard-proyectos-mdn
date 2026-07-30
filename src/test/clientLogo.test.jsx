@@ -20,10 +20,12 @@ const mockUpdateClient = vi.fn().mockResolvedValue({
 })
 
 vi.mock('../components/metricas/metricsApi', () => ({
-  createClient: (...a) => mockCreateClient(...a),
-  updateClient: (...a) => mockUpdateClient(...a),
-  loadLines:    vi.fn(),
-  loadClients:  vi.fn(),
+  createClient:        (...a) => mockCreateClient(...a),
+  updateClient:        (...a) => mockUpdateClient(...a),
+  loadLines:           vi.fn(),
+  loadClients:         vi.fn(),
+  loadClientPrivate:   vi.fn().mockResolvedValue({ data: null, error: null }),
+  upsertClientPrivate: vi.fn().mockResolvedValue({ data: null, error: null }),
 }))
 
 // ── Mock uploadToCloudinary (evita fetch real) ────────────────────────────────

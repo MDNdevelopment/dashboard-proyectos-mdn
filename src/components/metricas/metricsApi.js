@@ -167,6 +167,28 @@ export async function restoreClient(clientId) {
     .eq("id", clientId);
 }
 
+// Datos privados de contacto (teléfono, correo de Instagram). Viven en
+// metric_client_private, con RLS restringida a nivel 3/4/admin — un usuario
+// de nivel menor simplemente recibe 0 filas (no error).
+export async function loadClientPrivate(clientId) {
+  return supabase
+    .from("metric_client_private")
+    .select("phone, instagram_email")
+    .eq("client_id", clientId)
+    .maybeSingle();
+}
+
+export async function upsertClientPrivate(clientId, { phone, instagram_email }) {
+  return supabase
+    .from("metric_client_private")
+    .upsert({
+      client_id: clientId,
+      phone: phone || null,
+      instagram_email: instagram_email || null,
+      updated_at: new Date().toISOString(),
+    });
+}
+
 // ─── Reportes ─────────────────────────────────────────────────────────────────
 
 export async function loadReport(lineId, year, month) {
