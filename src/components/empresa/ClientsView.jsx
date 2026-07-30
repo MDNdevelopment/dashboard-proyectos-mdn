@@ -472,7 +472,7 @@ export default function ClientsView({ companyId, canManage = true }) {
                   {/* Día de pago */}
                   {client.payment_day && (
                     <span
-                      className="text-[12px] font-mono text-[#aaa] flex-shrink-0"
+                      className="hidden sm:inline text-[12px] font-mono text-[#aaa] flex-shrink-0"
                       title="Día de pago mensual"
                     >
                       fecha de pago: {client.payment_day}
@@ -503,7 +503,7 @@ export default function ClientsView({ companyId, canManage = true }) {
                       href={client.website}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-[#ccc] hover:text-[#555] transition-colors flex-shrink-0"
+                      className="hidden sm:inline-flex text-[#ccc] hover:text-[#555] transition-colors flex-shrink-0"
                       title={client.website}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -529,7 +529,7 @@ export default function ClientsView({ companyId, canManage = true }) {
                   {/* Contador de redes */}
                   {client.social_links?.length > 0 && (
                     <span
-                      className="text-[12px] font-mono text-[#aaa] flex-shrink-0"
+                      className="hidden sm:inline text-[12px] font-mono text-[#aaa] flex-shrink-0"
                       title="Redes sociales"
                     >
                       {client.social_links.length} red

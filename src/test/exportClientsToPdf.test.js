@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildClientGroups } from '../utils/exportClientsToPdf'
+import { buildClientGroups, computeClientPdfLayout, wrapToWidth } from '../utils/exportClientsToPdf'
 
 const client = (overrides) => ({
   id: overrides.id ?? 'c',
@@ -114,5 +114,109 @@ describe('buildClientGroups', () => {
       { manager: 'Suelta Zzz', clients: ['Independiente'] },
       { manager: 'Sin social asignado', clients: ['HuérfanoCliente'] },
     ])
+  })
+})
+
+// ── computeClientPdfLayout / wrapToWidth ──────────────────────────────────────
+// Medición determinista sin jsPDF: cada caracter mide 6pt, sin importar el
+// fontSize (alcanza para verificar que nada excede el ancho de columna).
+const measureText = (text) => text.length * 6
+
+const LAYOUT_OPTS = {
+  pageWidth: 595,
+  pageHeight: 842,
+  marginX: 36,
+  marginTop: 70,
+  marginBottom: 36,
+  columns: 3,
+  gap: 16,
+  lineHeight: 14,
+  groupGap: 10,
+  headerFontSize: 11,
+  bodyFontSize: 10.5,
+}
+const COL_WIDTH =
+  (LAYOUT_OPTS.pageWidth - LAYOUT_OPTS.marginX * 2 - LAYOUT_OPTS.gap * (LAYOUT_OPTS.columns - 1)) /
+  LAYOUT_OPTS.columns
+
+function colXFor(col) {
+  return LAYOUT_OPTS.marginX + col * (COL_WIDTH + LAYOUT_OPTS.gap)
+}
+
+describe('wrapToWidth', () => {
+  it('no envuelve texto que ya cabe', () => {
+    expect(wrapToWidth('ADS', 200, 11, measureText)).toEqual(['ADS'])
+  })
+
+  it('envuelve por palabras cuando el texto excede el ancho', () => {
+    const lines = wrapToWidth('MARIA ANTONELLA ROMERO', 100, 11, measureText)
+    expect(lines.length).toBeGreaterThan(1)
+    lines.forEach((line) => expect(measureText(line, 11)).toBeLessThanOrEqual(100))
+  })
+
+  it('parte por caracteres una palabra sola más ancha que el límite', () => {
+    const lines = wrapToWidth('Supercalifragilisticoso', 50, 11, measureText)
+    expect(lines.length).toBeGreaterThan(1)
+    lines.forEach((line) => expect(measureText(line, 11)).toBeLessThanOrEqual(50))
+  })
+})
+
+describe('computeClientPdfLayout', () => {
+  it('ningún texto excede el ancho de su columna (sin solapamiento horizontal)', () => {
+    const groups = [
+      { manager: 'Maria Antonella Romero', clients: ['Cow Rodizio', 'DomiSalud', 'Udimed'] },
+      { manager: 'Bianca Rodríguez', clients: ['Agrolago', 'Fein Kaffee', 'Gelarttesano'] },
+      { manager: 'Maria Almarza', clients: ['Maderas Adidas', 'Minipets'] },
+    ]
+    const { ops } = computeClientPdfLayout(groups, LAYOUT_OPTS, measureText)
+    expect(ops.length).toBeGreaterThan(0)
+    ops.forEach((op) => {
+      const rightEdge = colXFor(op.col) + COL_WIDTH
+      const textWidth = measureText(op.text, op.fontSize)
+      expect(op.x + textWidth).toBeLessThanOrEqual(rightEdge + 0.001)
+    })
+  })
+
+  it('un nombre de social largo se envuelve en varias líneas dentro de su columna', () => {
+    const groups = [{ manager: 'Maria Antonella Romero Fernandez', clients: ['Cow Rodizio'] }]
+    const { ops } = computeClientPdfLayout(groups, LAYOUT_OPTS, measureText)
+    const headerOps = ops.filter((op) => op.bold)
+    expect(headerOps.length).toBeGreaterThan(1)
+    for (let i = 1; i < headerOps.length; i++) {
+      expect(headerOps[i].y).toBeGreaterThan(headerOps[i - 1].y)
+    }
+  })
+
+  it('usa 3 columnas: todas las x pertenecen a las 3 posiciones esperadas', () => {
+    const groups = [
+      { manager: 'Social Uno', clients: Array.from({ length: 30 }, (_, i) => `Cliente ${i + 1}`) },
+      { manager: 'Social Dos', clients: Array.from({ length: 30 }, (_, i) => `Cliente ${i + 1}`) },
+    ]
+    const { ops } = computeClientPdfLayout(groups, LAYOUT_OPTS, measureText)
+    const usedCols = new Set(ops.map((op) => op.col))
+    expect(usedCols.size).toBeGreaterThan(1)
+    ops.forEach((op) => {
+      expect(op.col).toBeGreaterThanOrEqual(0)
+      expect(op.col).toBeLessThan(3)
+    })
+  })
+
+  it('sangría francesa: la segunda línea de una cuenta envuelta arranca más a la derecha que la primera', () => {
+    const groups = [{ manager: 'Social', clients: ['Nombre De Cuenta Muy Largo Que No Cabe'] }]
+    const { ops } = computeClientPdfLayout(groups, LAYOUT_OPTS, measureText)
+    const bodyOps = ops.filter((op) => !op.bold)
+    expect(bodyOps.length).toBeGreaterThan(1)
+    expect(bodyOps[1].x).toBeGreaterThan(bodyOps[0].x)
+  })
+
+  it('salta de columna y de página cuando el contenido excede el alto útil', () => {
+    const groups = Array.from({ length: 20 }, (_, gi) => ({
+      manager: `Social ${gi + 1}`,
+      clients: Array.from({ length: 15 }, (_, i) => `Cliente ${gi}-${i}`),
+    }))
+    const { ops, pageCount } = computeClientPdfLayout(groups, LAYOUT_OPTS, measureText)
+    expect(pageCount).toBeGreaterThan(1)
+    const usedPages = new Set(ops.map((op) => op.page))
+    expect(usedPages.size).toBe(pageCount)
   })
 })

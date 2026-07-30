@@ -65,7 +65,7 @@ const MOCK_USERS = [
 import { useAuth } from '../context/AuthContext'
 import TareasPage from '../pages/TareasPage'
 
-function renderPage(profileOverride = {}) {
+function renderPage(profileOverride = {}, initialEntries = ['/tareas']) {
   useAuth.mockReturnValue({
     userProfile: {
       user_id: 'u1',
@@ -79,7 +79,7 @@ function renderPage(profileOverride = {}) {
     },
   })
   return render(
-    <MemoryRouter initialEntries={['/tareas']}>
+    <MemoryRouter initialEntries={initialEntries}>
       <TareasPage />
     </MemoryRouter>
   )
@@ -250,6 +250,25 @@ describe('TareasPage', () => {
         expect(screen.getByRole('button', { name: 'Dashboard' })).toHaveClass('bg-[#111]')
       })
       expect(screen.getByText('Cumplimiento')).toBeInTheDocument()
+    })
+  })
+
+  describe('deep-link desde notificación (?taskId=)', () => {
+    it('opens TaskModal for the task referenced by ?taskId= and cleans the URL param', async () => {
+      renderPage({}, ['/tareas?taskId=task-1'])
+      await waitFor(() => {
+        expect(screen.getByText('Editar tarea')).toBeInTheDocument()
+      })
+      // El descripción de la tarea mockeada confirma que se abrió la tarea correcta.
+      expect(screen.getByDisplayValue('Crear story para instagram')).toBeInTheDocument()
+    })
+
+    it('does nothing when ?taskId= does not match any loaded task', async () => {
+      renderPage({}, ['/tareas?taskId=does-not-exist'])
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Georgina' })).toBeInTheDocument()
+      })
+      expect(screen.queryByText('Editar tarea')).not.toBeInTheDocument()
     })
   })
 })

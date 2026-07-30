@@ -118,6 +118,16 @@ export const MODULES = [
       { key: 'reuniones.manage', label: 'Crear / editar / eliminar reuniones' },
     ],
   },
+  {
+    key: 'leads',
+    label: 'Leads',
+    routePrefix: '/leads',
+    description: 'Leads del formulario de contacto de la web',
+    tabs: [],
+    manageActions: [
+      { key: 'leads.manage', label: 'Cambiar estado de leads' },
+    ],
+  },
 ]
 
 /** Mapa rápido key → módulo */

@@ -58,6 +58,8 @@ La granularidad es `módulo`, `módulo.tab` y `módulo.acción`:
 | `reportes.close` | modificar | Cerrar permanentemente un reporte mensual (nivel 4/admin) |
 | `ads.manage` | modificar | Crear/editar/eliminar campañas |
 | `proyectos.manage` | modificar | Crear/editar/eliminar proyectos |
+| `leads` | módulo | Acceso al módulo Leads (formularios de contacto de la web) |
+| `leads.manage` | modificar | Cambiar el estado de un lead |
 | … | … | (ver `src/config/modules.js → capabilitiesForModule()`) |
 
 **Invariantes del evaluador** (`src/lib/permissions.js` → `canAccessModule()` / alias `can()`):
@@ -88,6 +90,7 @@ La granularidad es `módulo`, `módulo.tab` y `módulo.acción`:
 - `ads.manage` → `min_level 3`
 - `reportes.manage` → `min_level 3`
 - `reportes.close` → `min_level 4` (seed `20260721000001`)
+- `leads`, `leads.manage` → `min_level 3` (seed `20260730010000`)
 - Todo lo no sembrado queda **abierto** y es configurable en la UI.
 
 **RLS de escritura** (migración `20260706000001`):
@@ -103,6 +106,11 @@ La granularidad es `módulo`, `módulo.tab` y `módulo.acción`:
   porque el dato (teléfono/correo de Instagram del cliente) es sensible y RLS es por fila: la
   única forma de que no llegue al navegador de un usuario de nivel bajo es aislarlo en su propia
   tabla con su propia policy de SELECT.
+- `leads` (migración `20260730010000`): mismo patrón — SELECT/UPDATE gated por
+  `leads_can_access()` (admin o `access_level >= 3`), función calcada de
+  `client_private_can_access()`. Sin política de INSERT/DELETE: los leads entran desde la
+  web con `service_role` (bypassa RLS) y no se borran desde el panel. Es otra excepción a
+  "SELECT abierto a autenticados": los datos de contacto de un lead son sensibles.
 
 **Fallback en tests:** si `useAuth()` no devuelve `can`, las páginas usan `can = () => true`
 (abierto por defecto, consistente con "sin reglas = abierto"). Los tests de restricciones de nivel
@@ -307,6 +315,21 @@ Realtime habilitado en todas.
 | **Permisos** | Ver: cualquier autenticado. Crear/editar/eliminar/cancelar: capability `reuniones.manage` (default `access_level ≥ 2`, igual que `tareas.manage`). |
 | **WhatsApp (pendiente)** | No implementado. El enganche sería idéntico al de correo (§2.9): una edge function nueva disparada por el mismo patrón de trigger sobre `notifications`, sin rehacer nada de lo existente. |
 
+### 2.12 Leads
+
+| | |
+|---|---|
+| **Propósito** | Da seguimiento comercial a los leads enviados desde el formulario de contacto de la web (que ya se guardaban en `leads` vía `service_role`, sin ser visibles en el panel): cada lead nace `pendiente` y un usuario autorizado lo mueve a `contactado` o `cancelado`. |
+| **Archivos principales** | `src/pages/LeadsPage.jsx` (host, realtime, tabs por estado local, `LeadDetailModal`) · `src/components/leads/leadsApi.js` (`loadLeads`, `updateLeadStatus`) · `src/components/leads/LeadsTable.jsx` (tabla con sorting/filtros) · `src/components/leads/constants.js` (`STATUS_LABELS`/`STATUS_OPTIONS`/`STATUS_BADGE`, compartidas) · `src/components/leads/LeadsStatsView.jsx` (estadísticas) |
+| **Tabla** | `leads` (`id, created_at, nombre, empresa, telefono, email, servicios text[], objetivo, mensaje, source, tipo_pagina, status ('pendiente'\|'contactado'\|'cancelado'), updated_at, updated_by→users`) — la tabla y sus columnas de captura preexistían (alimentadas por la web); migración `20260730010000_leads_status_rls.sql` añade `status`/`updated_at`/`updated_by` y las políticas RLS. Sin `company_id` (tabla global, no aislada por empresa). Habilitada en `supabase_realtime`. |
+| **Rutas** | `/leads` (única ruta) |
+| **Tabs** | Conmutador por estado local (`useState`, patrón de `AdsPage.jsx`, sin sub-rutas): **Leads** (selector de periodo + cards de resumen + lista) y **Estadísticas** (`LeadsStatsView`). |
+| **Tab Leads — periodo y cards** | Selector de periodo mes/año (mismo patrón/markup que el de `AdsPage.jsx`, `periodo` en estado local, default mes/año actual) filtra tanto la lista como las 4 cards de resumen por `created_at` del lead (helper local `leadInPeriod`, mismo criterio que `inPeriod` de Ads). Cards: **Ver todos** (muestra el total del periodo, resetea solo `statusFilter` a `'todas'` — NO cambia el periodo) + Pendientes/Contactados/Cancelados (toggle de `statusFilter`, patrón ya existente). |
+| **Tab Leads — tabla y detalle** | `LeadsTable.jsx` renderiza una tabla HTML real (`<table>`), mismo patrón que `AdsList.jsx`: columnas declarativas (Nombre/Empresa/Servicios-Página/Estado/Recibido) con sorting por header (click + flecha, `sortKey`/`sortAsc`) y su propia toolbar de refinamiento (buscador de texto con lupa sobre nombre/empresa/email/teléfono/mensaje + dropdown de filtro por servicio, patrón `BaseView.jsx`/`AdsList.jsx`), independiente del periodo/estado que ya filtran los leads que le llegan desde `LeadsPage`. Click en una fila (`<tr onClick>`, patrón `AdsCard.jsx`) abre `LeadDetailModal` (vista de solo lectura, mismo patrón que `MeetingDetail.jsx`: `fixed inset-0` + `backdrop-blur`, `role="dialog"`, estado local `selectedLead` en `LeadsPage` — `undefined` cerrado / objeto abierto) con todos los campos (contacto, servicios/tipo_pagina, mensaje, objetivo, auditoría de quién/cuándo cambió el estado) y el `<select>` de estado (gated por `canManage`, igual que antes). |
+| **Estadísticas** | `LeadsStatsView` calcula todo **client-side** con `useMemo` sobre los leads ya cargados por `LeadsPage` (sin queries nuevas): KPIs (total, % por estado, tasa de conversión = % contactados), dona por estado y barras "leads por mes" (agrupado por `created_at.slice(0,7)`) con **recharts** (ya usado en `tickets/analytics/`, mismo patrón visual), y ranking de servicios más solicitados (cuenta de `lead.servicios`). |
+| **Permisos** | Ver y cambiar estado: **nivel 3, 4 o admin únicamente** — capabilities `leads`/`leads.manage` (default `min_level 3`) reforzadas por RLS (`leads_can_access()`, ver §Modelo de permisos). A diferencia del resto de módulos, no hay ningún acceso de nivel 1/2: sin política de SELECT abierta, esos usuarios no ven filas. El tab Estadísticas no tiene capability propia (mismo criterio que el tab Ads/Tácticas). |
+| **Sidebar** | Botón directo (sin submenú), mismo patrón que Reuniones/Ads — gateado por `canR('leads')`. |
+
 ---
 
 ## 3. Modelo de datos y relaciones
@@ -328,6 +351,7 @@ Realtime habilitado en todas.
 | `notifications` | `20260703000000` | Notificaciones in-app y de correo. RLS: lectura/actualización solo del destinatario (`auth.uid()::text = user_id`). Realtime habilitado. Índice único parcial sobre `dedupe_key` para idempotencia de las notificaciones de fecha. |
 | `module_permissions` | `20260705000000` | Reglas de acceso por módulo (DNF: grupos OR de condiciones AND). Una fila por `(company_id, module_key)`. Estructura `rules jsonb`: `{"rules":[{"all":[{"type":"department","ids":[...]},{"type":"min_level","value":N},...]},...]}`. Sin filas = módulo abierto. RLS: SELECT abierto a `authenticated`; INSERT/UPDATE/DELETE solo si `is_company_admin()` (función SECURITY DEFINER). |
 | `meetings` | `20260717000000` (+ `20260717000001` para triggers/cron de notificación, + `20260718000000` para `minuta_url`) | Reuniones agendadas. FK `client_id→metric_clients` (SET NULL), `line_id→metric_lines` (SET NULL, snapshot resuelto desde el cliente). `attendee_ids text[]` sin FK (convención igual que `tasks.assignee_ids`). `status` de 3 valores (`programada`/`realizada`/`cancelada`) marcado a mano — ver §2.11. `minuta_url` (texto libre, link de Google Drive) opcional al marcar `realizada`. RLS: SELECT abierto a autenticados; INSERT/UPDATE/DELETE gated por `user_can('reuniones.manage')`. Habilitada en `supabase_realtime`. |
+| `leads` | preexistente (captura) + `20260730010000` (`status`/`updated_at`/`updated_by`→`users` + RLS) | Leads del formulario de contacto de la web (`nombre, empresa, telefono, email, servicios text[], objetivo, mensaje, source, tipo_pagina`), alimentada por `service_role`. `status` (`pendiente`/`contactado`/`cancelado`, default `pendiente`) + `updated_at`/`updated_by` registran el último cambio de seguimiento. Sin `company_id`. RLS: SELECT/UPDATE gated por `leads_can_access()` (admin o `access_level >= 3`); sin política de INSERT/DELETE (altas vía `service_role`, sin borrado desde el panel) — ver §2.12. |
 
 ### 3.2 Tablas externas (base compartida — no en migraciones)
 

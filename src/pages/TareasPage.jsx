@@ -43,7 +43,7 @@ const VIEWS = [
 
 export default function TareasPage() {
   const { userProfile, can = () => true } = useAuth()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const location = useLocation()
   const [teams, setTeams] = useState([])
@@ -175,6 +175,21 @@ export default function TareasPage() {
       setTasks(prev => prev.map(t => t.id === task.id ? task : t))
     }
   }
+
+  // Abrir el detalle de una tarea específica desde ?taskId=uuid (deeplink desde la
+  // campanita de notificaciones — mismo patrón que ?meetingId= en ReunionesPage).
+  useEffect(() => {
+    const taskId = searchParams.get('taskId')
+    if (!taskId || tasks.length === 0) return
+    const task = tasks.find(t => t.id === taskId)
+    if (task) openEditTask(task)
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      next.delete('taskId')
+      return next
+    }, { replace: true })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, tasks])
 
   function openNewTask() { setTaskModal(undefined) }
   function openEditTask(task) { setTaskModal(task) }

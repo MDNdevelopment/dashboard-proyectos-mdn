@@ -20,7 +20,15 @@ const { MOCK_LINES, MOCK_CLIENTS } = vi.hoisted(() => ({
     { id: 'l2', name: 'Línea Audiovisual', color: '#4488FF' },
   ],
   MOCK_CLIENTS: [
-    { id: 'c1', name: 'Cliente Uno', line_id: 'l1', deleted_at: null, social_links: [] },
+    {
+      id: 'c1',
+      name: 'Cliente Uno',
+      line_id: 'l1',
+      deleted_at: null,
+      payment_day: 15,
+      website: 'https://cliente-uno.com',
+      social_links: ['ig'],
+    },
     { id: 'c2', name: 'Cliente Dos', line_id: 'l2', deleted_at: null, social_links: [] },
   ],
 }))
@@ -69,5 +77,33 @@ describe('ClientsView — deep-link ?line=<id> desde Inicio', () => {
       expect(screen.getByText('Cliente Uno')).toBeInTheDocument()
     })
     expect(screen.getByText('Cliente Dos')).toBeInTheDocument()
+  })
+})
+
+describe('ClientsView — responsive: fila de cliente en móvil', () => {
+  it('oculta día de pago, ícono web y contador de redes en móvil (hidden sm:*), pero mantiene nombre y chip de línea', async () => {
+    renderAt('/empresa/clientes')
+    await waitFor(() => {
+      expect(screen.getByText('Cliente Uno')).toBeInTheDocument()
+    })
+
+    // Nombre y chip de línea siempre visibles.
+    expect(screen.getByText('Cliente Uno')).toBeInTheDocument()
+    expect(screen.getByText('Línea Redes')).toBeInTheDocument()
+
+    // Día de pago: oculto en móvil, visible desde sm:.
+    const paymentDay = screen.getByTitle('Día de pago mensual')
+    expect(paymentDay).toHaveClass('hidden')
+    expect(paymentDay).toHaveClass('sm:inline')
+
+    // Ícono web: oculto en móvil, visible desde sm:.
+    const websiteLink = screen.getByTitle('https://cliente-uno.com')
+    expect(websiteLink).toHaveClass('hidden')
+    expect(websiteLink).toHaveClass('sm:inline-flex')
+
+    // Contador de redes: oculto en móvil, visible desde sm:.
+    const socialCount = screen.getByTitle('Redes sociales')
+    expect(socialCount).toHaveClass('hidden')
+    expect(socialCount).toHaveClass('sm:inline')
   })
 })

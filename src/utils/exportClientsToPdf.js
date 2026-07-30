@@ -88,6 +88,181 @@ export function buildClientGroups(clients, employees = [], lines = []) {
 }
 
 /**
+ * Parte `text` en varias líneas para que ninguna exceda `maxWidth`, usando
+ * `measureText(text, fontSize)` para medir anchos. Corta por palabras y, si
+ * una sola palabra ya excede `maxWidth`, la parte por caracteres (evita
+ * bucles infinitos con nombres sin espacios más anchos que la columna).
+ *
+ * Separada de jsPDF para poder testearla con una medición determinista.
+ */
+export function wrapToWidth(text, maxWidth, fontSize, measureText) {
+  const words = text.split(" ").filter(Boolean);
+  if (words.length === 0) return [""];
+
+  const lines = [];
+  let current = "";
+
+  function fits(str) {
+    return measureText(str, fontSize) <= maxWidth;
+  }
+
+  function splitLongWord(word) {
+    // Parte una palabra sin espacios que por sí sola excede maxWidth.
+    const parts = [];
+    let chunk = "";
+    for (const char of word) {
+      const candidate = chunk + char;
+      if (chunk !== "" && !fits(candidate)) {
+        parts.push(chunk);
+        chunk = char;
+      } else {
+        chunk = candidate;
+      }
+    }
+    if (chunk) parts.push(chunk);
+    return parts;
+  }
+
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (fits(candidate)) {
+      current = candidate;
+      continue;
+    }
+    if (current) {
+      lines.push(current);
+      current = "";
+    }
+    if (fits(word)) {
+      current = word;
+    } else {
+      const chunks = splitLongWord(word);
+      chunks.slice(0, -1).forEach((c) => lines.push(c));
+      current = chunks[chunks.length - 1] ?? "";
+    }
+  }
+  if (current) lines.push(current);
+
+  return lines.length > 0 ? lines : [""];
+}
+
+/**
+ * Calcula el layout (posiciones de cada línea de texto a dibujar) para el
+ * PDF de clientes por social, sin depender de jsPDF. Cada nombre de social o
+ * de cuenta que exceda el ancho de columna se envuelve a varias líneas
+ * (con sangría francesa para las cuentas numeradas), de forma que ningún
+ * texto invade la columna vecina.
+ *
+ * @param {Array<{manager: string, clients: string[]}>} groups
+ * @param {object} opts - { pageWidth, pageHeight, marginX, marginTop,
+ *   marginBottom, columns, gap, lineHeight, groupGap, headerFontSize,
+ *   bodyFontSize }
+ * @param {(text: string, fontSize: number) => number} measureText - ancho en pt
+ * @returns {{ ops: Array<{page:number, col:number, x:number, y:number, text:string, bold:boolean, fontSize:number}>, pageCount: number }}
+ */
+export function computeClientPdfLayout(groups, opts, measureText) {
+  const {
+    pageWidth,
+    pageHeight,
+    marginX,
+    marginTop,
+    marginBottom,
+    columns,
+    gap,
+    lineHeight,
+    groupGap,
+    headerFontSize,
+    bodyFontSize,
+  } = opts;
+
+  const colWidth = (pageWidth - marginX * 2 - gap * (columns - 1)) / columns;
+
+  function colX(c) {
+    return marginX + c * (colWidth + gap);
+  }
+
+  const ops = [];
+  let page = 0;
+  let col = 0;
+  let y = marginTop;
+  let counter = 1;
+
+  function nextColumn() {
+    col += 1;
+    counter = 1;
+    if (col >= columns) {
+      col = 0;
+      page += 1;
+    }
+    y = marginTop;
+  }
+
+  function headerLines(text) {
+    return wrapToWidth(text, colWidth, headerFontSize, measureText);
+  }
+
+  // Ancho disponible para el texto de una cuenta tras "N. " (sangría francesa).
+  function bodyLines(prefix, name) {
+    const indent = measureText(prefix, bodyFontSize);
+    const firstLines = wrapToWidth(name, colWidth - indent, bodyFontSize, measureText);
+    return { indent, lines: firstLines };
+  }
+
+  function pushHeader(text) {
+    const lines = headerLines(text);
+    const blockHeight = lines.length * lineHeight;
+    if (y + blockHeight > pageHeight - marginBottom && y > marginTop) {
+      nextColumn();
+    }
+    const x = colX(col);
+    lines.forEach((line) => {
+      ops.push({ page, col, x, y, text: line, bold: true, fontSize: headerFontSize });
+      y += lineHeight;
+    });
+  }
+
+  for (const group of groups) {
+    // Estimación conservadora del alto del grupo (sin contar aún el wrap de
+    // cuentas individuales) para decidir si conviene saltar de columna antes
+    // de empezar a dibujarlo.
+    const estimatedHeight =
+      headerLines(group.manager.toUpperCase()).length * lineHeight +
+      group.clients.length * lineHeight +
+      groupGap;
+    if (y + estimatedHeight > pageHeight - marginBottom && y > marginTop) {
+      nextColumn();
+    }
+
+    pushHeader(group.manager.toUpperCase());
+
+    for (const name of group.clients) {
+      const prefix = `${counter}. `;
+      const { indent, lines } = bodyLines(prefix, name);
+      const blockHeight = lines.length * lineHeight;
+
+      if (y + blockHeight > pageHeight - marginBottom && y > marginTop) {
+        nextColumn();
+        // El nombre del social se repite al reiniciar columna, para no perder contexto.
+        pushHeader(`${group.manager.toUpperCase()} (cont.)`);
+      }
+
+      const x = colX(col);
+      lines.forEach((line, i) => {
+        const text = i === 0 ? `${prefix}${line}` : line;
+        const lineX = i === 0 ? x : x + indent;
+        ops.push({ page, col, x: lineX, y, text, bold: false, fontSize: bodyFontSize });
+        y += lineHeight;
+      });
+      counter += 1;
+    }
+
+    y += groupGap;
+  }
+
+  return { ops, pageCount: page + 1 };
+}
+
+/**
  * Genera y descarga el PDF de clientes por social. Incluye siempre todos
  * los clientes activos (no archivados), sin depender de los filtros de
  * pantalla.
@@ -100,68 +275,41 @@ export async function exportClientsToPdf({ clients, employees, lines }) {
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
 
-  const marginX = 36;
-  const marginTop = 70;
-  const marginBottom = 36;
-  const columns = 4;
-  const gap = 16;
-  const colWidth = (pageWidth - marginX * 2 - gap * (columns - 1)) / columns;
-  const lineHeight = 14;
-  const groupGap = 10;
+  const opts = {
+    pageWidth,
+    pageHeight,
+    marginX: 36,
+    marginTop: 70,
+    marginBottom: 36,
+    columns: 3,
+    gap: 16,
+    lineHeight: 14,
+    groupGap: 10,
+    headerFontSize: 11,
+    bodyFontSize: 10.5,
+  };
+
+  function measureText(text, fontSize) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(fontSize);
+    return doc.getTextWidth(text);
+  }
+
+  const { ops } = computeClientPdfLayout(groups, opts, measureText);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
-  doc.text("Clientes por social — MDN Publicidad", marginX, 40);
+  doc.text("Clientes por social — MDN Publicidad", opts.marginX, 40);
 
-  let col = 0;
-  let y = marginTop;
-  let counter = 1;
-
-  function colX(c) {
-    return marginX + c * (colWidth + gap);
-  }
-
-  function nextColumn() {
-    col += 1;
-    counter = 1;
-    if (col >= columns) {
-      col = 0;
+  let currentPage = 0;
+  for (const op of ops) {
+    if (op.page > currentPage) {
       doc.addPage();
+      currentPage = op.page;
     }
-    y = marginTop;
-  }
-
-  for (const group of groups) {
-    const blockHeight = lineHeight + group.clients.length * lineHeight + groupGap;
-    if (y + blockHeight > pageHeight - marginBottom && y > marginTop) {
-      nextColumn();
-    }
-
-    const x = colX(col);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.text(group.manager.toUpperCase(), x, y);
-    y += lineHeight;
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10.5);
-    for (const name of group.clients) {
-      if (y > pageHeight - marginBottom) {
-        nextColumn();
-        // El nombre del social se repite al reiniciar columna, para no perder contexto.
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(11);
-        doc.text(`${group.manager.toUpperCase()} (cont.)`, colX(col), y);
-        y += lineHeight;
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(10.5);
-      }
-      doc.text(`${counter}. ${name}`, colX(col), y);
-      counter += 1;
-      y += lineHeight;
-    }
-
-    y += groupGap;
+    doc.setFont("helvetica", op.bold ? "bold" : "normal");
+    doc.setFontSize(op.fontSize);
+    doc.text(op.text, op.x, op.y);
   }
 
   doc.save("clientes-por-social.pdf");

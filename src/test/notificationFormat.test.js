@@ -81,8 +81,17 @@ describe('notifLabel', () => {
 // ── notifRoute ───────────────────────────────────────────────────────────────
 
 describe('notifRoute', () => {
-  it('routes task_assigned to /tareas', () => {
+  it('routes task types to /tareas?taskId=<id> (deeplink al detalle de la tarea)', () => {
     expect(notifRoute({ type: 'task_assigned', entity_type: 'task', entity_id: 'abc' }))
+      .toBe('/tareas?taskId=abc')
+    expect(notifRoute({ type: 'task_comment', entity_type: 'task', entity_id: 'abc' }))
+      .toBe('/tareas?taskId=abc')
+    expect(notifRoute({ type: 'checklist_item_assigned', entity_type: 'task', entity_id: 'abc' }))
+      .toBe('/tareas?taskId=abc')
+  })
+
+  it('routes task types to /tareas (sin query) cuando no hay entity_id', () => {
+    expect(notifRoute({ type: 'task_assigned', entity_type: 'task', entity_id: null }))
       .toBe('/tareas')
   })
 

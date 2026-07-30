@@ -62,7 +62,11 @@ export function notifLabel(type) {
 export function notifRoute(notif) {
   const { type, entity_type, entity_id } = notif
 
-  if (type === 'task_assigned' || type === 'task_comment' || type === 'checklist_item_assigned') return '/tareas'
+  if (type === 'task_assigned' || type === 'task_comment' || type === 'checklist_item_assigned') {
+    // Deep-link al detalle de la tarea vía ?taskId=uuid (TareasPage lo lee y abre TaskModal)
+    if (entity_id) return `/tareas?taskId=${entity_id}`
+    return '/tareas'
+  }
   if (type === 'meeting_invite' || type === 'meeting_reminder_day' || type === 'meeting_reminder_hour') {
     // Deep-link al detalle de solo lectura de la reunión vía ?meetingId=uuid (ReunionesPage lo lee)
     if (entity_id) return `/reuniones?meetingId=${entity_id}`
