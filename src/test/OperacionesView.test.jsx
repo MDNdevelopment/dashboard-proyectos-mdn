@@ -362,6 +362,55 @@ describe('OperacionesView — meses pasados congelados no reconcilian contra el 
   });
 });
 
+describe('OperacionesView — alineación de columnas en "Crecimiento de seguidores"', () => {
+  // Regresión: el encabezado (JUNIO|JULIO) y cada fila de cliente son grillas CSS
+  // independientes. Si sus columnas usan tracks "auto", el ancho de cada una depende del
+  // contenido de esa fila (badge "—" vs "✓ Cumple 173%", "$0.00" vs "$400.00 / $400.00"),
+  // por lo que filas distintas quedan desalineadas entre sí y con el encabezado.
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockLoadPrevReport.mockResolvedValue({ data: null, error: null })
+    mockLoadClients.mockResolvedValue({ data: MOCK_CLIENTS, error: null })
+    mockLoadCompanyEmployees.mockResolvedValue({ data: [], error: null })
+    mockUpsertReport.mockResolvedValue({ data: null, error: null })
+    mockCountMeetingsHeldForLine.mockResolvedValue({ count: 0, error: null })
+    mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: [], error: null })
+    mockLoadAds.mockResolvedValue({ data: [], error: null })
+
+    const data = makeReportData()
+    // c-1: badge + % (contenido "largo"). c-2: sin datos → badge "—" sin %, y sin presupuesto.
+    data.crecimiento.items = [
+      { clienteId: 'c-1', seguidoresGanados: 100, seguidoresGanadosPrev: 50, seguidoresActuales: 500, seguidoresBase: 400, meta: 80 },
+      { clienteId: 'c-2', seguidoresGanados: null, seguidoresGanadosPrev: null, seguidoresActuales: null, seguidoresBase: null, meta: 50 },
+    ]
+    mockLoadReport.mockResolvedValue({ data: { data }, error: null })
+  })
+
+  it('el encabezado y todas las filas de cliente comparten el mismo grid-template-columns fijo (sin "auto")', async () => {
+    renderView()
+    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+
+    const sectionTitle = await screen.findByText('3. Crecimiento de seguidores')
+    const section = sectionTitle.closest('div.bg-white')
+
+    const headerCell = within(section).getByText('Julio')
+    const headerGrid = headerCell.closest('div.grid')
+    expect(headerGrid).toBeTruthy()
+    expect(headerGrid.className).not.toContain('auto')
+
+    const clienteRow = within(section).getByText('Banco Exterior').closest('div.grid')
+    const clienteRow2 = within(section).getByText('Pepsi').closest('div.grid')
+    expect(clienteRow.className).not.toContain('auto')
+    expect(clienteRow2.className).not.toContain('auto')
+
+    // Mismo template de columnas para el encabezado y ambas filas, sin importar si tienen badge+% o no.
+    const gridColsOf = (cls) => cls.match(/grid-cols-\[[^\]]+\]/)?.[0]
+    expect(gridColsOf(headerGrid.className)).toBeTruthy()
+    expect(gridColsOf(clienteRow.className)).toBe(gridColsOf(headerGrid.className))
+    expect(gridColsOf(clienteRow2.className)).toBe(gridColsOf(headerGrid.className))
+  })
+})
+
 describe('OperacionesView — modal de cobertura de reuniones por marca', () => {
   beforeEach(() => {
     vi.clearAllMocks()

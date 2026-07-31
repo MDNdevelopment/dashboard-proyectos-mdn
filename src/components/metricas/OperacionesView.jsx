@@ -405,6 +405,12 @@ export default function OperacionesView({ line, companyId, year, month, closed =
         const currMonthName = MONTHS[month - 1];
         // seedMode: no hay reporte previo → todas las columnas del periodo pasado son editables
         const seedMode = !prevReport;
+        // Anchos fijos (no "auto") para que el encabezado y cada fila —cada uno su propia
+        // grilla— alineen columna a columna sin importar si el badge/% o Inversión Ads
+        // tienen contenido más largo o más corto en una fila que en otra.
+        // 200px: 2×92px inputs + gap-2 (mes anterior). 210px: ídem + border-l/pl-2 (mes actual).
+        // 88px: Meta (input !w-20). 104px: badge de cumplimiento + %. 120px: Inversión Ads.
+        const GROW_COLS = "grid-cols-[minmax(110px,1fr)_200px_210px_88px_104px_120px]";
         return (
           <Section
             title="3. Crecimiento de seguidores"
@@ -433,7 +439,7 @@ export default function OperacionesView({ line, companyId, year, month, closed =
                 ) : (
                   <>
                     {/* Fila de encabezados de columna */}
-                    <div className="grid grid-cols-[minmax(110px,1fr)_auto_auto_auto_auto_auto] gap-x-3 gap-y-0 items-end mb-1">
+                    <div className={`grid ${GROW_COLS} gap-x-3 gap-y-0 items-center mb-1`}>
                       <div />
                       {/* Título único mes anterior (centrado sobre las 2 columnas del grupo) */}
                       <div className="text-center">
@@ -464,7 +470,7 @@ export default function OperacionesView({ line, companyId, year, month, closed =
                         const prevGanados = hasPrevGanados ? prevItem.seguidoresGanados : (item.seguidoresGanadosPrev ?? "");
                         const prevTotales = hasPrevTotales ? prevItem.seguidoresActuales : (item.seguidoresBase ?? "");
                         return (
-                          <div key={item.clienteId} className="grid grid-cols-[minmax(110px,1fr)_auto_auto_auto_auto_auto] gap-x-3 items-center">
+                          <div key={item.clienteId} className={`grid ${GROW_COLS} gap-x-3 items-center`}>
                             <ClientLink clienteId={item.clienteId} />
 
                             {/* Mes anterior — editable si no hay dato en el reporte del mes anterior */}
@@ -532,7 +538,7 @@ export default function OperacionesView({ line, companyId, year, month, closed =
                             </div>
 
                             {/* Indicador de cumplimiento + % */}
-                            <div className="flex flex-col items-center gap-0.5 min-w-[80px]">
+                            <div className="flex flex-col items-center gap-0.5">
                               {cumple === null ? (
                                 <span
                                   className="text-[12px] text-[#bbb] font-mono"
@@ -549,11 +555,10 @@ export default function OperacionesView({ line, companyId, year, month, closed =
                                   title={ganados !== null ? `${ganados} seguidores ganados` : ""}
                                 >Pendiente</span>
                               )}
-                              {pct !== null && (
-                                <span className={`text-[11px] font-mono font-semibold ${cumple ? "text-green-600" : "text-red-500"}`}>
-                                  {Math.round(pct)}%
-                                </span>
-                              )}
+                              {/* Altura reservada aunque no haya %, para que todas las filas midan igual */}
+                              <span className={`text-[11px] font-mono font-semibold leading-none ${pct !== null ? (cumple ? "text-green-600" : "text-red-500") : "invisible"}`}>
+                                {pct !== null ? `${Math.round(pct)}%` : "0%"}
+                              </span>
                             </div>
 
                             {/* Inversión en pauta (auto desde paid_campaigns, por start_date) vs presupuesto del cliente */}
