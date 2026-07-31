@@ -5,6 +5,7 @@ import { STATUSES, PRIORITIES } from './constants'
 import UserPickerSingle from '../tareas/UserPickerSingle'
 import { loadClients } from '../metricas/metricsApi'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
+import DateInput from '../common/DateInput'
 
 export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
   const { userProfile } = useAuth()
@@ -123,11 +124,10 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
             {/* Fecha inicio */}
             <div>
               <label className={labelClass}>Fecha inicio</label>
-              <input
-                type="date"
-                className="input-base w-full"
+              <DateInput
+                className="w-full"
                 value={fields.start_date}
-                onChange={e => set('start_date', e.target.value)}
+                onChange={v => set('start_date', v)}
                 required
               />
             </div>
@@ -135,11 +135,10 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
             {/* Fecha fin */}
             <div>
               <label className={labelClass}>Fecha fin</label>
-              <input
-                type="date"
-                className="input-base w-full"
+              <DateInput
+                className="w-full"
                 value={fields.end_date}
-                onChange={e => set('end_date', e.target.value)}
+                onChange={v => set('end_date', v)}
                 required
               />
             </div>

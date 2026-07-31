@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import ProjectCard from './ProjectCard'
+import DateInput from './common/DateInput'
 import { getGlobalProgress } from '../utils/projectProgress'
 import { filterProjects } from '../utils/filterProjects'
 
@@ -65,22 +66,20 @@ function DateRangePicker({ dateFrom, dateTo, onChange }) {
           <div className="space-y-2.5">
             <div>
               <label className="block text-[12px] text-[#aaa] mb-1">Desde</label>
-              <input
-                type="date"
+              <DateInput
                 value={dateFrom}
                 max={dateTo || undefined}
-                onChange={e => onChange(e.target.value, dateTo)}
-                className="input-base text-[14px] py-2"
+                onChange={v => onChange(v, dateTo)}
+                className="text-[14px] py-2"
               />
             </div>
             <div>
               <label className="block text-[12px] text-[#aaa] mb-1">Hasta</label>
-              <input
-                type="date"
+              <DateInput
                 value={dateTo}
                 min={dateFrom || undefined}
-                onChange={e => onChange(dateFrom, e.target.value)}
-                className="input-base text-[14px] py-2"
+                onChange={v => onChange(dateFrom, v)}
+                className="text-[14px] py-2"
               />
             </div>
           </div>

@@ -181,10 +181,10 @@ describe('AdsForm — cliente y responsable', () => {
     )
     await user.selectOptions(clientSelect, 'c-1')
 
-    // Poner fechas (los date inputs no tienen placeholder texto, los buscamos por tipo)
-    const dateInputs = document.querySelectorAll('input[type="date"]')
-    await user.type(dateInputs[0], '2026-06-01')
-    await user.type(dateInputs[1], '2026-06-30')
+    // Poner fechas (DateInput muestra/acepta DD/MM/YYYY, ver src/components/common/DateInput.jsx)
+    const dateInputs = screen.getAllByPlaceholderText('dd/mm/aaaa')
+    await user.type(dateInputs[0], '01/06/2026')
+    await user.type(dateInputs[1], '30/06/2026')
 
     await user.click(screen.getByRole('button', { name: 'Crear campaña' }))
 
@@ -223,9 +223,9 @@ describe('AdsForm — cliente y responsable', () => {
     await user.click(screen.getByText('Ana García'))
 
     // Fechas
-    const dateInputs = document.querySelectorAll('input[type="date"]')
-    await user.type(dateInputs[0], '2026-06-01')
-    await user.type(dateInputs[1], '2026-06-30')
+    const dateInputs = screen.getAllByPlaceholderText('dd/mm/aaaa')
+    await user.type(dateInputs[0], '01/06/2026')
+    await user.type(dateInputs[1], '30/06/2026')
 
     await user.click(screen.getByRole('button', { name: 'Crear campaña' }))
 

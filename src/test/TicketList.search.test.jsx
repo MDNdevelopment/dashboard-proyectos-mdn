@@ -55,19 +55,18 @@ describe('TicketList — busqueda y filtros de fecha', () => {
 
   it('filtra por fecha desde', async () => {
     render(<TicketList tickets={tickets} loading={false} onSelect={() => {}} isIT={false} />)
-    const dateInputs = screen.getAllByDisplayValue('')
+    const dateInputs = screen.getAllByRole('textbox').filter(i => i.placeholder === 'dd/mm/aaaa')
     // dateFrom is after the first ticket
-    await userEvent.type(dateInputs.find(i => i.type === 'date'), '2026-05-15')
+    await userEvent.type(dateInputs[0], '15/05/2026')
     expect(screen.getByText('Acceso VPN denegado')).toBeInTheDocument()
     expect(screen.queryByText('Impresora no funciona')).not.toBeInTheDocument()
   })
 
   it('filtra por fecha hasta', async () => {
     render(<TicketList tickets={tickets} loading={false} onSelect={() => {}} isIT={false} />)
-    const dateInputs = screen.getAllByDisplayValue('')
-    const dateToInputs = dateInputs.filter(i => i.type === 'date')
+    const dateInputs = screen.getAllByRole('textbox').filter(i => i.placeholder === 'dd/mm/aaaa')
     // dateTo before second ticket
-    await userEvent.type(dateToInputs[1], '2026-05-12')
+    await userEvent.type(dateInputs[1], '12/05/2026')
     expect(screen.getByText('Impresora no funciona')).toBeInTheDocument()
     expect(screen.queryByText('Acceso VPN denegado')).not.toBeInTheDocument()
   })

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { format, parseISO } from 'date-fns'
 import { supabase } from '../../supabase'
 import ConfirmDeleteDialog from '../common/ConfirmDeleteDialog'
+import DateInput from '../common/DateInput'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 
 const STATUS_MAP = {
@@ -165,11 +166,9 @@ export default function VacationsDialog({ employee, onClose }) {
                     <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1">
                       Inicio *
                     </label>
-                    <input
-                      type="date"
-                      className="input-base"
+                    <DateInput
                       value={newVac.start_date}
-                      onChange={e => setNewVac(n => ({ ...n, start_date: e.target.value }))}
+                      onChange={v => setNewVac(n => ({ ...n, start_date: v }))}
                       required
                     />
                   </div>
@@ -177,12 +176,10 @@ export default function VacationsDialog({ employee, onClose }) {
                     <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1">
                       Fin *
                     </label>
-                    <input
-                      type="date"
-                      className="input-base"
+                    <DateInput
                       value={newVac.end_date}
                       min={newVac.start_date}
-                      onChange={e => setNewVac(n => ({ ...n, end_date: e.target.value }))}
+                      onChange={v => setNewVac(n => ({ ...n, end_date: v }))}
                       required
                     />
                   </div>

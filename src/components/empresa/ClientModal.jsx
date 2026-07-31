@@ -9,6 +9,7 @@ import UserPickerSingle from '../tareas/UserPickerSingle'
 import UserPickerMulti from '../tareas/UserPickerMulti'
 import { teamMemberUsers } from '../../utils/lineFilters'
 import { EmployeeChip, EmployeeChipList } from '../common/EmployeeChip'
+import DateInput from '../common/DateInput'
 
 /**
  * Modal crear/editar/ver cliente (marca).
@@ -429,11 +430,9 @@ export default function ClientModal({
               <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
                 Aniversario empresa
               </label>
-              <input
-                type="date"
-                className="input-base"
+              <DateInput
                 value={form.anniversary_date}
-                onChange={e => set('anniversary_date', e.target.value)}
+                onChange={v => set('anniversary_date', v)}
                 disabled={readOnly}
               />
             </div>
@@ -441,11 +440,9 @@ export default function ClientModal({
               <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
                 Cliente MDN desde
               </label>
-              <input
-                type="date"
-                className="input-base"
+              <DateInput
                 value={form.mdn_since}
-                onChange={e => set('mdn_since', e.target.value)}
+                onChange={v => set('mdn_since', v)}
                 disabled={readOnly}
               />
             </div>

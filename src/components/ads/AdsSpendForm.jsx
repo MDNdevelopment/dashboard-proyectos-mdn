@@ -5,6 +5,7 @@ import { loadClients } from '../metricas/metricsApi'
 import { createAd, updateAd, durationDays, spentByClientInPeriod, loadAdsResponsables } from './campaignSpendApi'
 import { fmtUSD } from '../../utils/metricsFinance'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
+import DateInput from '../common/DateInput'
 
 /**
  * Modal crear/editar de un Ad (pauta pagada).
@@ -347,11 +348,10 @@ export default function AdsSpendForm({ ad, ads = [], companyId, onClose, onCreat
             {/* Fecha inicio */}
             <div>
               <label className={labelClass}>Plazo — inicio</label>
-              <input
-                type="date"
-                className="input-base w-full"
+              <DateInput
+                className="w-full"
                 value={fields.start_date}
-                onChange={e => handleStartDateChange(e.target.value)}
+                onChange={v => handleStartDateChange(v)}
                 required
               />
             </div>
@@ -359,12 +359,13 @@ export default function AdsSpendForm({ ad, ads = [], companyId, onClose, onCreat
             {/* Fecha fin */}
             <div>
               <label className={labelClass}>Plazo — fin</label>
-              <input
-                type="date"
-                className="input-base w-full"
+              {/* Sin `min`: el rango inválido se valida explícitamente abajo
+                  (dateRangeInvalid) para mostrar el mensaje de error y no solo
+                  bloquear la selección en silencio. */}
+              <DateInput
+                className="w-full"
                 value={fields.end_date}
-                min={fields.start_date || undefined}
-                onChange={e => set('end_date', e.target.value)}
+                onChange={v => set('end_date', v)}
                 required
               />
               {dateRangeInvalid && (

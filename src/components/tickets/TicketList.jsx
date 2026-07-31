@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import TicketCard from './TicketCard'
+import DateInput from '../common/DateInput'
 import { STATUSES, PRIORITIES, CATEGORIES, STATUS, PRIORITY, CATEGORY } from './constants'
 
 export default function TicketList({ tickets, loading, onSelect, isIT }) {
@@ -81,22 +82,18 @@ export default function TicketList({ tickets, loading, onSelect, isIT }) {
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <div className="flex items-center gap-1.5">
           <span className="text-[13px] font-mono text-[#888]">Desde</span>
-          <input
-            type="date"
+          <DateInput
             value={dateFrom}
-            onChange={e => setDateFrom(e.target.value)}
-            className="input-base text-[14px] py-1.5"
-            style={{ width: 'auto' }}
+            onChange={setDateFrom}
+            className="text-[14px] py-1.5"
           />
         </div>
         <div className="flex items-center gap-1.5">
           <span className="text-[13px] font-mono text-[#888]">Hasta</span>
-          <input
-            type="date"
+          <DateInput
             value={dateTo}
-            onChange={e => setDateTo(e.target.value)}
-            className="input-base text-[14px] py-1.5"
-            style={{ width: 'auto' }}
+            onChange={setDateTo}
+            className="text-[14px] py-1.5"
           />
         </div>
       </div>

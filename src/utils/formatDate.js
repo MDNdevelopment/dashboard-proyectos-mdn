@@ -13,3 +13,32 @@ export function fmtDate(iso) {
   if (isNaN(d)) return ''
   return d.toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
+
+/**
+ * Convierte una fecha ISO "solo fecha" (YYYY-MM-DD) a texto DD/MM/YYYY para
+ * mostrarla en un campo editable. A diferencia de fmtDate(), no normaliza a
+ * mediodía UTC porque aquí interesa el valor tal cual, sin ambigüedad de zona
+ * horaria (es una fecha pura, no un timestamp).
+ */
+export function isoToDdmmyyyy(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? '')
+  if (!m) return ''
+  const [, y, mo, d] = m
+  return `${d}/${mo}/${y}`
+}
+
+/**
+ * Parsea un texto DD/MM/YYYY (venezolano) a ISO YYYY-MM-DD.
+ * Devuelve null si el texto no representa una fecha calendario válida
+ * (incluye rechazo de fechas como 31/02/2026).
+ */
+export function parseDdmmyyyy(text) {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec((text ?? '').trim())
+  if (!m) return null
+  const day = Number(m[1]), month = Number(m[2]), year = Number(m[3])
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null
+  const daysInMonth = new Date(year, month, 0).getDate()
+  if (day > daysInMonth) return null
+  const pad = n => String(n).padStart(2, '0')
+  return `${year}-${pad(month)}-${pad(day)}`
+}

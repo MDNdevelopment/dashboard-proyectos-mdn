@@ -65,9 +65,9 @@ async function fillRequiredFields(user, { amount }) {
   await user.selectOptions(clientSelect, 'c-1')
   await user.type(screen.getByPlaceholderText('Nombre de la campaña'), 'Campaña Ads Test')
   await user.type(screen.getByPlaceholderText('0.00'), String(amount))
-  const dateInputs = document.querySelectorAll('input[type="date"]')
-  await user.type(dateInputs[0], '2026-07-05')
-  await user.type(dateInputs[1], '2026-07-15')
+  const dateInputs = screen.getAllByPlaceholderText('dd/mm/aaaa')
+  await user.type(dateInputs[0], '05/07/2026')
+  await user.type(dateInputs[1], '15/07/2026')
 }
 
 describe('AdsSpendForm', () => {
@@ -156,8 +156,8 @@ describe('AdsSpendForm', () => {
     await waitFor(() => screen.getByRole('option', { name: 'Banco Exterior' }))
     const clientSelect = screen.getAllByRole('combobox')[0]
     await user.selectOptions(clientSelect, 'c-1')
-    const dateInputs = document.querySelectorAll('input[type="date"]')
-    await user.type(dateInputs[0], '2026-07-05')
+    const dateInputs = screen.getAllByPlaceholderText('dd/mm/aaaa')
+    await user.type(dateInputs[0], '05/07/2026')
 
     // Presupuesto 100 - invertido 20 = disponible 80
     await waitFor(() => {
@@ -183,8 +183,8 @@ describe('AdsSpendForm', () => {
     await waitFor(() => screen.getByRole('option', { name: 'Banco Exterior' }))
     const clientSelect = screen.getAllByRole('combobox')[0]
     await user.selectOptions(clientSelect, 'c-1')
-    const dateInputs = document.querySelectorAll('input[type="date"]')
-    await user.type(dateInputs[0], '2026-07-05')
+    const dateInputs = screen.getAllByPlaceholderText('dd/mm/aaaa')
+    await user.type(dateInputs[0], '05/07/2026')
     await user.type(screen.getByPlaceholderText('0.00'), '999')
 
     // Sin ads previos, disponible sigue siendo el presupuesto completo ($100.00),
@@ -297,27 +297,19 @@ describe('AdsSpendForm', () => {
   })
 
   describe('validación de plazo (fin no puede ser anterior a inicio)', () => {
-    it('el input de fecha fin tiene un min ligado a la fecha de inicio', async () => {
-      const user = userEvent.setup()
-      renderForm()
-      await waitFor(() => screen.getByRole('option', { name: 'Banco Exterior' }))
-
-      const dateInputs = document.querySelectorAll('input[type="date"]')
-      await user.type(dateInputs[0], '2026-07-10')
-
-      expect(dateInputs[1]).toHaveAttribute('min', '2026-07-10')
-    })
-
     it('muestra un error y deshabilita el envío si el fin queda antes del inicio', async () => {
       const user = userEvent.setup()
       renderForm()
 
       await fillRequiredFields(user, { amount: 40 })
-      const dateInputs = document.querySelectorAll('input[type="date"]')
+      const dateInputs = screen.getAllByPlaceholderText('dd/mm/aaaa')
 
-      // Forzamos un fin anterior al inicio saltándonos el min del input (fireEvent directo)
+      // Fin anterior al inicio (2026-07-05). El campo fin ya no tiene un
+      // `min` ligado al inicio (ver AdsSpendForm.jsx) precisamente para que
+      // este caso sea alcanzable y quede cubierto por la validación explícita
+      // de la app (dateRangeInvalid) en vez de bloquearse en silencio.
       await user.clear(dateInputs[1])
-      await user.type(dateInputs[1], '2026-07-01') // antes del inicio (2026-07-05)
+      await user.type(dateInputs[1], '01/07/2026')
 
       expect(screen.getByText('La fecha de fin no puede ser anterior a la fecha de inicio.')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Crear ad' })).toBeDisabled()
@@ -329,9 +321,9 @@ describe('AdsSpendForm', () => {
       renderForm()
       await fillRequiredFields(user, { amount: 40 }) // inicio 2026-07-05, fin 2026-07-15
 
-      const dateInputs = document.querySelectorAll('input[type="date"]')
+      const dateInputs = screen.getAllByPlaceholderText('dd/mm/aaaa')
       await user.clear(dateInputs[0])
-      await user.type(dateInputs[0], '2026-07-20') // después del fin ya elegido
+      await user.type(dateInputs[0], '20/07/2026') // después del fin ya elegido
 
       expect(dateInputs[1]).toHaveValue('')
       expect(screen.queryByText('La fecha de fin no puede ser anterior a la fecha de inicio.')).not.toBeInTheDocument()

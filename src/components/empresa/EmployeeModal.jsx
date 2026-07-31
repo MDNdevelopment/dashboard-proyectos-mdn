@@ -4,6 +4,7 @@ import AvatarUpload from './AvatarUpload'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import { useAuth } from '../../context/AuthContext'
 import { isFinancePrivileged } from '../../lib/permissions'
+import DateInput from '../common/DateInput'
 
 /**
  * Modal editar empleado (solo edición — la creación es Fase 4).
@@ -186,22 +187,18 @@ export default function EmployeeModal({ employee, departments, positions, onClos
               <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
                 Fecha de nacimiento
               </label>
-              <input
-                type="date"
-                className="input-base"
+              <DateInput
                 value={form.birth_date}
-                onChange={e => set('birth_date', e.target.value)}
+                onChange={v => set('birth_date', v)}
               />
             </div>
             <div>
               <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
                 Fecha de ingreso
               </label>
-              <input
-                type="date"
-                className="input-base"
+              <DateInput
                 value={form.hire_date}
-                onChange={e => set('hire_date', e.target.value)}
+                onChange={v => set('hire_date', v)}
               />
             </div>
           </div>

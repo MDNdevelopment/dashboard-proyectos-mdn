@@ -1,3 +1,5 @@
+import DateInput from '../../common/DateInput'
+
 const PRESETS = [
   { label: '7 dias',  days: 7  },
   { label: '30 dias', days: 30 },
@@ -42,21 +44,19 @@ export default function TimeRangeSelector({ startDate, endDate, onChange }) {
         })}
       </div>
       <div className="flex items-center gap-2">
-        <input
-          type="date"
+        <DateInput
           value={startDate}
           max={endDate || today}
-          onChange={e => onChange(e.target.value, endDate)}
-          className="input-base text-[14px] py-1.5"
+          onChange={v => onChange(v, endDate)}
+          className="text-[14px] py-1.5"
         />
         <span className="text-[14px] text-[#888] font-mono">—</span>
-        <input
-          type="date"
+        <DateInput
           value={endDate}
           min={startDate}
           max={today}
-          onChange={e => onChange(startDate, e.target.value)}
-          className="input-base text-[14px] py-1.5"
+          onChange={v => onChange(startDate, v)}
+          className="text-[14px] py-1.5"
         />
       </div>
     </div>

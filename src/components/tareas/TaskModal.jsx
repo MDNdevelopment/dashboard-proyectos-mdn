@@ -7,6 +7,7 @@ import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import UserPickerSingle from './UserPickerSingle'
 import UserPickerMulti from './UserPickerMulti'
 import { teamMemberUsers } from '../../utils/lineFilters'
+import DateInput from '../common/DateInput'
 
 const EMPTY = {
   team_id: '',
@@ -368,11 +369,11 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Fecha solicitud *</label>
-              <input type="date" className="input-base" value={form.request_date} onChange={e => set('request_date', e.target.value)} required />
+              <DateInput value={form.request_date} onChange={v => set('request_date', v)} required />
             </div>
             <div>
               <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Fecha entrega</label>
-              <input type="date" className="input-base" value={form.due_date} onChange={e => set('due_date', e.target.value)} />
+              <DateInput value={form.due_date} onChange={v => set('due_date', v)} />
             </div>
           </div>
 
@@ -414,7 +415,7 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
           {form.status === 'Terminado' && (
             <div>
               <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">Fecha de cierre *</label>
-              <input type="date" className="input-base" value={form.closed_date} onChange={e => set('closed_date', e.target.value)} required />
+              <DateInput value={form.closed_date} onChange={v => set('closed_date', v)} required />
             </div>
           )}
 
@@ -493,16 +494,15 @@ export default function TaskModal({ task = null, teams = [], clients = [], users
                       </div>
                       <div className="flex-shrink-0">
                         <label className="block text-[11px] font-mono font-bold tracking-[0.1em] uppercase text-[#aaa] mb-0.5">Fecha de entrega</label>
-                        <input
-                          type="date"
+                        <DateInput
                           value={item.due_date}
                           min={form.request_date || undefined}
                           max={form.due_date || undefined}
-                          onChange={e => {
-                            const clamped = clampItemDueDate(e.target.value, form)
+                          onChange={v => {
+                            const clamped = clampItemDueDate(v, form)
                             setChecklistItem(item.id, { due_date: clamped })
                           }}
-                          className="input-base text-[13px] py-1 px-2 w-[140px]"
+                          className="text-[13px] py-1 px-2 w-[140px]"
                         />
                         {clamped && (
                           <p className="text-[11px] text-[#F0871F] mt-0.5">Fecha ajustada al rango de la tarea</p>
