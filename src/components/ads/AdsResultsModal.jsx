@@ -13,19 +13,22 @@ import { updateAd } from './campaignSpendApi'
  */
 export default function AdsResultsModal({ ad, onClose, onSaved }) {
   const [selected, setSelected] = useState(
-    () => new Set(RESULT_FIELDS.filter(f => ad?.[f.key] != null).map(f => f.key))
+    () => new Set(RESULT_FIELDS.filter((f) => ad?.[f.key] != null).map((f) => f.key)),
   )
   const [values, setValues] = useState(
-    Object.fromEntries(RESULT_FIELDS.map(f => [f.key, ad?.[f.key] ?? '']))
+    Object.fromEntries(RESULT_FIELDS.map((f) => [f.key, ad?.[f.key] ?? ''])),
   )
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
 
-  const canSave = selected.size > 0
-    && RESULT_FIELDS.every(f => !selected.has(f.key) || (values[f.key] !== '' && values[f.key] != null))
+  const canSave =
+    selected.size > 0 &&
+    RESULT_FIELDS.every(
+      (f) => !selected.has(f.key) || (values[f.key] !== '' && values[f.key] != null),
+    )
 
   function toggle(key) {
-    setSelected(prev => {
+    setSelected((prev) => {
       const next = new Set(prev)
       if (next.has(key)) next.delete(key)
       else next.add(key)
@@ -34,7 +37,7 @@ export default function AdsResultsModal({ ad, onClose, onSaved }) {
   }
 
   function set(key, val) {
-    setValues(prev => ({ ...prev, [key]: val }))
+    setValues((prev) => ({ ...prev, [key]: val }))
   }
 
   async function handleSubmit(e) {
@@ -43,16 +46,20 @@ export default function AdsResultsModal({ ad, onClose, onSaved }) {
     setSubmitting(true)
     setError(null)
     const payload = { status: 'Finalizado' }
-    RESULT_FIELDS.forEach(f => {
+    RESULT_FIELDS.forEach((f) => {
       payload[f.key] = selected.has(f.key) ? Number(values[f.key]) : null
     })
     const { data, error: err } = await updateAd(ad.id, payload)
     setSubmitting(false)
-    if (err) { setError('Error al guardar los resultados.'); return }
+    if (err) {
+      setError('Error al guardar los resultados.')
+      return
+    }
     onSaved(data)
   }
 
-  const labelClass = 'block text-[13px] font-mono font-bold tracking-widest uppercase text-[#888] mb-1.5'
+  const labelClass =
+    'block text-[13px] font-mono font-bold tracking-widest uppercase text-[#888] mb-1.5'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-black/30">
@@ -61,19 +68,30 @@ export default function AdsResultsModal({ ad, onClose, onSaved }) {
           <div>
             <h2 className="text-[19px] font-bold text-[#111]">Resultados del ad</h2>
             <p className="text-[13px] text-[#888] mt-0.5">
-              Elige al menos un indicador para marcar "{ad.name}" como Finalizado.
+              Elige al menos un indicador para marcar &ldquo;{ad.name}&rdquo; como Finalizado.
             </p>
           </div>
           <button onClick={onClose} className="text-[#999] hover:text-[#111] transition-colors p-1">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
               <path d="M2 2l12 12M14 2L2 14" strokeLinecap="round" />
             </svg>
           </button>
         </div>
 
-        <form id="ads-results-form" onSubmit={handleSubmit} className="px-6 py-5 overflow-y-auto flex-1">
+        <form
+          id="ads-results-form"
+          onSubmit={handleSubmit}
+          className="px-6 py-5 overflow-y-auto flex-1"
+        >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {RESULT_FIELDS.map(f => {
+            {RESULT_FIELDS.map((f) => {
               const isSelected = selected.has(f.key)
               return (
                 <div key={f.key}>
@@ -88,7 +106,7 @@ export default function AdsResultsModal({ ad, onClose, onSaved }) {
                       type="checkbox"
                       checked={isSelected}
                       onChange={() => toggle(f.key)}
-                      onClick={e => e.stopPropagation()}
+                      onClick={(e) => e.stopPropagation()}
                       aria-label={`Incluir ${f.label}`}
                       className="h-4 w-4 rounded border-[#e0ddd4] accent-[#FFB800]"
                     />
@@ -96,7 +114,9 @@ export default function AdsResultsModal({ ad, onClose, onSaved }) {
                   </div>
                   {isSelected && (
                     <>
-                      <label htmlFor={`ad-result-${f.key}`} className="sr-only">{f.label}</label>
+                      <label htmlFor={`ad-result-${f.key}`} className="sr-only">
+                        {f.label}
+                      </label>
                       <input
                         id={`ad-result-${f.key}`}
                         type="number"
@@ -104,7 +124,7 @@ export default function AdsResultsModal({ ad, onClose, onSaved }) {
                         step="1"
                         className="input-base w-full"
                         value={values[f.key]}
-                        onChange={e => set(f.key, e.target.value)}
+                        onChange={(e) => set(f.key, e.target.value)}
                         required
                       />
                     </>

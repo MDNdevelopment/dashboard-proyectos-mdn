@@ -7,7 +7,9 @@ function isIOS() {
 }
 
 function isInStandaloneMode() {
-  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true
+  return (
+    window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true
+  )
 }
 
 export default function InstallBanner() {
@@ -57,9 +59,18 @@ export default function InstallBanner() {
     <div className="fixed bottom-4 left-3 right-3 z-50 lg:hidden">
       <div className="bg-[#0d0d0d] text-white rounded-2xl px-4 py-3 flex items-center gap-3 shadow-xl">
         <div className="w-9 h-9 bg-[#FFB800] rounded-xl flex items-center justify-center shrink-0">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0d0d0d" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="5" y="2" width="14" height="20" rx="2"/>
-            <line x1="12" y1="18" x2="12" y2="18" strokeWidth="3"/>
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#0d0d0d"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <rect x="5" y="2" width="14" height="20" rx="2" />
+            <line x1="12" y1="18" x2="12" y2="18" strokeWidth="3" />
           </svg>
         </div>
 
@@ -68,12 +79,20 @@ export default function InstallBanner() {
           {platform === 'ios' ? (
             <p className="text-[13px] text-white/60 mt-0.5 leading-tight">
               Toca{' '}
-              <svg className="inline w-3 h-3 mb-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
-                <polyline points="16 6 12 2 8 6"/>
-                <line x1="12" y1="2" x2="12" y2="15"/>
-              </svg>
-              {' '}y luego "Añadir a inicio"
+              <svg
+                className="inline w-3 h-3 mb-0.5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+                <polyline points="16 6 12 2 8 6" />
+                <line x1="12" y1="2" x2="12" y2="15" />
+              </svg>{' '}
+              y luego &ldquo;Añadir a inicio&rdquo;
             </p>
           ) : (
             <p className="text-[13px] text-white/60 mt-0.5 leading-tight">Instálala como una app</p>
@@ -89,10 +108,21 @@ export default function InstallBanner() {
           </button>
         )}
 
-        <button onClick={dismiss} className="text-white/40 hover:text-white/70 transition-colors shrink-0 ml-1">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-            <line x1="18" y1="6" x2="6" y2="18"/>
-            <line x1="6" y1="6" x2="18" y2="18"/>
+        <button
+          onClick={dismiss}
+          className="text-white/40 hover:text-white/70 transition-colors shrink-0 ml-1"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+          >
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
           </svg>
         </button>
       </div>

@@ -20,8 +20,22 @@ function makeReportData() {
     productividad: { tareas: [] },
     crecimiento: {
       items: [
-        { clienteId: 'c-1', seguidoresGanados: 100, seguidoresGanadosPrev: 50, seguidoresActuales: 500, seguidoresBase: 400, meta: 80 },
-        { clienteId: 'c-2', seguidoresGanados: 20, seguidoresGanadosPrev: 10, seguidoresActuales: 220, seguidoresBase: 200, meta: 50 },
+        {
+          clienteId: 'c-1',
+          seguidoresGanados: 100,
+          seguidoresGanadosPrev: 50,
+          seguidoresActuales: 500,
+          seguidoresBase: 400,
+          meta: 80,
+        },
+        {
+          clienteId: 'c-2',
+          seguidoresGanados: 20,
+          seguidoresGanadosPrev: 10,
+          seguidoresActuales: 220,
+          seguidoresBase: 200,
+          meta: 50,
+        },
       ],
     },
     solicitudes: { solicitudes: 0, editadas: 0 },
@@ -71,9 +85,7 @@ import OperacionesView from '../components/metricas/OperacionesView'
 const LINE = { id: 'line-1', name: 'Georgina', member_user_ids: [], metas: {} }
 
 function renderView(props = {}) {
-  return render(
-    <OperacionesView line={LINE} companyId="co-1" year={2026} month={7} {...props} />
-  )
+  return render(<OperacionesView line={LINE} companyId="co-1" year={2026} month={7} {...props} />)
 }
 
 describe('OperacionesView — columna Inversión Ads (Crecimiento de seguidores)', () => {
@@ -92,25 +104,47 @@ describe('OperacionesView — columna Inversión Ads (Crecimiento de seguidores)
   it('muestra la suma de campañas del cliente cuyo start_date cae en el mes del reporte', async () => {
     mockLoadAds.mockResolvedValue({
       data: [
-        { id: 'ad-1', client_id: 'c-1', amount: 80, start_date: '2026-07-05', end_date: '2026-07-15' },
-        { id: 'ad-2', client_id: 'c-1', amount: 45.5, start_date: '2026-07-20', end_date: '2026-07-25' },
+        {
+          id: 'ad-1',
+          client_id: 'c-1',
+          amount: 80,
+          start_date: '2026-07-05',
+          end_date: '2026-07-15',
+        },
+        {
+          id: 'ad-2',
+          client_id: 'c-1',
+          amount: 45.5,
+          start_date: '2026-07-20',
+          end_date: '2026-07-25',
+        },
       ],
       error: null,
     })
     renderView()
-    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
     expect(await screen.findByText('$125.50')).toBeInTheDocument()
   })
 
   it('muestra el presupuesto del cliente (campaign_budget) junto al gasto, en fuente más pequeña', async () => {
     mockLoadAds.mockResolvedValue({
       data: [
-        { id: 'ad-1', client_id: 'c-1', amount: 80, start_date: '2026-07-05', end_date: '2026-07-15' },
+        {
+          id: 'ad-1',
+          client_id: 'c-1',
+          amount: 80,
+          start_date: '2026-07-05',
+          end_date: '2026-07-15',
+        },
       ],
       error: null,
     })
     renderView()
-    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
     const spentEl = await screen.findByText('$80.00')
     const budgetEl = await screen.findByText('/ $200.00')
     expect(spentEl).toBeInTheDocument()
@@ -124,7 +158,9 @@ describe('OperacionesView — columna Inversión Ads (Crecimiento de seguidores)
   it('muestra $0.00 cuando el cliente no tiene campañas ese mes', async () => {
     mockLoadAds.mockResolvedValue({ data: [], error: null })
     renderView()
-    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
     // Un $0.00 por cada cliente sin pauta en la columna Inversión Ads (Banco Exterior y Pepsi)
     const zeros = await screen.findAllByText('$0.00')
     expect(zeros.length).toBeGreaterThanOrEqual(2)
@@ -133,12 +169,20 @@ describe('OperacionesView — columna Inversión Ads (Crecimiento de seguidores)
   it('no cuenta campañas cuyo start_date cae en otro mes', async () => {
     mockLoadAds.mockResolvedValue({
       data: [
-        { id: 'ad-3', client_id: 'c-1', amount: 999, start_date: '2026-06-15', end_date: '2026-06-20' },
+        {
+          id: 'ad-3',
+          client_id: 'c-1',
+          amount: 999,
+          start_date: '2026-06-15',
+          end_date: '2026-06-20',
+        },
       ],
       error: null,
     })
     renderView()
-    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
     expect(screen.queryByText('$999.00')).not.toBeInTheDocument()
     const zeros = await screen.findAllByText('$0.00')
     expect(zeros.length).toBeGreaterThanOrEqual(2)
@@ -162,7 +206,9 @@ describe('OperacionesView — "Reuniones realizadas" (solo lectura, siempre deri
     mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
     mockCountMeetingsHeldForLine.mockResolvedValue({ count: 5, error: null })
     renderView()
-    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
     const realizadasInput = document.querySelectorAll('input[type="number"]')[0]
     expect(realizadasInput.value).toBe('5')
   })
@@ -173,7 +219,9 @@ describe('OperacionesView — "Reuniones realizadas" (solo lectura, siempre deri
     mockLoadReport.mockResolvedValue({ data: { data }, error: null })
     mockCountMeetingsHeldForLine.mockResolvedValue({ count: 7, error: null })
     renderView()
-    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
     const realizadasInput = document.querySelectorAll('input[type="number"]')[0]
     expect(realizadasInput.value).toBe('7')
   })
@@ -182,7 +230,9 @@ describe('OperacionesView — "Reuniones realizadas" (solo lectura, siempre deri
     mockLoadReport.mockResolvedValue({ data: null, error: null })
     mockCountMeetingsHeldForLine.mockResolvedValue({ count: 3, error: null })
     renderView()
-    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
     const realizadasInput = document.querySelectorAll('input[type="number"]')[0]
     expect(realizadasInput.value).toBe('3')
   })
@@ -191,7 +241,9 @@ describe('OperacionesView — "Reuniones realizadas" (solo lectura, siempre deri
     mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
     mockCountMeetingsHeldForLine.mockResolvedValue({ count: 10, error: null })
     renderView()
-    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
     const realizadasInput = document.querySelectorAll('input[type="number"]')[0]
     expect(realizadasInput).toBeDisabled()
     expect(screen.queryByText(/usar automático/)).not.toBeInTheDocument()
@@ -215,7 +267,9 @@ describe('OperacionesView — meses previos al módulo Reuniones conservan el va
     mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
     mockCountMeetingsHeldForLine.mockResolvedValue({ count: 0, error: null })
     renderView({ month: 6 })
-    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
     const realizadasInput = document.querySelectorAll('input[type="number"]')[0]
     expect(realizadasInput.value).toBe('10')
   })
@@ -224,7 +278,9 @@ describe('OperacionesView — meses previos al módulo Reuniones conservan el va
     mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
     mockCountMeetingsHeldForLine.mockResolvedValue({ count: 4, error: null })
     renderView({ month: 7 })
-    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
     const realizadasInput = document.querySelectorAll('input[type="number"]')[0]
     expect(realizadasInput.value).toBe('4')
   })
@@ -245,7 +301,9 @@ describe('OperacionesView — reporte cerrado (prop "closed")', () => {
     mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
     mockCountMeetingsHeldForLine.mockResolvedValue({ count: 999, error: null })
     renderView({ month: 7, closed: true })
-    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
     const realizadasInput = document.querySelectorAll('input[type="number"]')[0]
     expect(realizadasInput.value).toBe('10')
   })
@@ -254,17 +312,21 @@ describe('OperacionesView — reporte cerrado (prop "closed")', () => {
     mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
     mockCountMeetingsHeldForLine.mockResolvedValue({ count: 0, error: null })
     renderView({ month: 7, closed: true })
-    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
     const inputs = document.querySelectorAll('input, textarea')
     expect(inputs.length).toBeGreaterThan(0)
-    inputs.forEach(input => expect(input).toBeDisabled())
+    inputs.forEach((input) => expect(input).toBeDisabled())
   })
 
   it('deshabilita el botón "Guardar reporte"', async () => {
     mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
     mockCountMeetingsHeldForLine.mockResolvedValue({ count: 0, error: null })
     renderView({ month: 7, closed: true })
-    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
     expect(screen.getByText('Guardar reporte')).toBeDisabled()
   })
 })
@@ -284,7 +346,9 @@ describe('OperacionesView — meta de reuniones topada a la cantidad de marcas a
   it('clampa un valor tipeado por encima de la cantidad de marcas activas', async () => {
     mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
     renderView()
-    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
     const metaInput = document.querySelectorAll('input[type="number"]')[1]
     fireEvent.change(metaInput, { target: { value: '9' } })
     expect(metaInput.value).toBe('2') // MOCK_CLIENTS tiene 2 marcas
@@ -293,7 +357,9 @@ describe('OperacionesView — meta de reuniones topada a la cantidad de marcas a
   it('permite un valor dentro del límite', async () => {
     mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
     renderView()
-    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
     const metaInput = document.querySelectorAll('input[type="number"]')[1]
     fireEvent.change(metaInput, { target: { value: '1' } })
     expect(metaInput.value).toBe('1')
@@ -302,65 +368,101 @@ describe('OperacionesView — meta de reuniones topada a la cantidad de marcas a
   it('muestra el hint con el máximo permitido', async () => {
     mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
     renderView()
-    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
     expect(screen.getByText('Máx. 2 (1 por marca activa de la línea)')).toBeInTheDocument()
   })
 })
 
 describe('OperacionesView — meses pasados congelados no reconcilian contra el roster actual', () => {
-  // "Ahora" real es 2026-07-17 (ver contexto de sesión) → julio 2026 es el mes en curso,
-  // junio 2026 ya es un mes pasado y debe congelarse.
+  // Fija "hoy" en 2026-07-17 para que julio 2026 sea el mes en curso y junio 2026
+  // sea un mes pasado, sin depender de la fecha real del sistema al correr el test.
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date('2026-07-17T12:00:00'))
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   const CLIENTES_ROSTER = [
     { id: 'c-1', name: 'Banco Exterior', logo_url: null, deleted_at: null, campaign_budget: 200 },
     // Se dio de baja el 20 de junio: en junio estuvo activa, en julio ya no.
-    { id: 'c-2', name: 'Marca Archivada', logo_url: null, deleted_at: '2026-06-20T00:00:00Z', campaign_budget: null },
+    {
+      id: 'c-2',
+      name: 'Marca Archivada',
+      logo_url: null,
+      deleted_at: '2026-06-20T00:00:00Z',
+      campaign_budget: null,
+    },
     // Se agregó recién ahora: no existía cuando se guardó el reporte de junio.
     { id: 'c-3', name: 'Marca Nueva', logo_url: null, deleted_at: null, campaign_budget: null },
-  ];
+  ]
 
   function reportSavedInJune() {
     // Snapshot tal como habría quedado guardado en junio: solo c-1 y c-2 (c-3 no existía).
-    const data = makeReportData();
+    const data = makeReportData()
     data.crecimiento.items = [
-      { clienteId: 'c-1', seguidoresGanados: 100, seguidoresGanadosPrev: 50, seguidoresActuales: 500, seguidoresBase: 400, meta: 80 },
-      { clienteId: 'c-2', seguidoresGanados: 20, seguidoresGanadosPrev: 10, seguidoresActuales: 220, seguidoresBase: 200, meta: 50 },
-    ];
-    return data;
+      {
+        clienteId: 'c-1',
+        seguidoresGanados: 100,
+        seguidoresGanadosPrev: 50,
+        seguidoresActuales: 500,
+        seguidoresBase: 400,
+        meta: 80,
+      },
+      {
+        clienteId: 'c-2',
+        seguidoresGanados: 20,
+        seguidoresGanadosPrev: 10,
+        seguidoresActuales: 220,
+        seguidoresBase: 200,
+        meta: 50,
+      },
+    ]
+    return data
   }
 
   beforeEach(() => {
-    vi.clearAllMocks();
-    mockLoadPrevReport.mockResolvedValue({ data: null, error: null });
-    mockLoadClients.mockResolvedValue({ data: CLIENTES_ROSTER, error: null });
-    mockLoadCompanyEmployees.mockResolvedValue({ data: [], error: null });
-    mockUpsertReport.mockResolvedValue({ data: null, error: null });
-    mockLoadAds.mockResolvedValue({ data: [], error: null });
-    mockCountMeetingsHeldForLine.mockResolvedValue({ count: 0, error: null });
-    mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: [], error: null });
-    mockLoadReport.mockResolvedValue({ data: { data: reportSavedInJune() }, error: null });
-  });
+    vi.clearAllMocks()
+    mockLoadPrevReport.mockResolvedValue({ data: null, error: null })
+    mockLoadClients.mockResolvedValue({ data: CLIENTES_ROSTER, error: null })
+    mockLoadCompanyEmployees.mockResolvedValue({ data: [], error: null })
+    mockUpsertReport.mockResolvedValue({ data: null, error: null })
+    mockLoadAds.mockResolvedValue({ data: [], error: null })
+    mockCountMeetingsHeldForLine.mockResolvedValue({ count: 0, error: null })
+    mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: [], error: null })
+    mockLoadReport.mockResolvedValue({ data: { data: reportSavedInJune() }, error: null })
+  })
 
   it('junio (mes pasado): conserva a la marca archivada y NO agrega a la marca nueva', async () => {
-    renderView({ month: 6 });
-    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument(); });
-    expect(await screen.findByText('Marca Archivada')).toBeInTheDocument();
-    expect(screen.queryByText('Marca Nueva')).not.toBeInTheDocument();
-  });
+    renderView({ month: 6 })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
+    expect(await screen.findByText('Marca Archivada')).toBeInTheDocument()
+    expect(screen.queryByText('Marca Nueva')).not.toBeInTheDocument()
+  })
 
   it('julio (mes en curso): descarta a la marca archivada en junio y agrega a la marca nueva', async () => {
-    renderView({ month: 7 });
-    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument(); });
-    expect((await screen.findAllByText('Marca Nueva')).length).toBeGreaterThan(0);
-    expect(screen.queryByText('Marca Archivada')).not.toBeInTheDocument();
-  });
+    renderView({ month: 7 })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
+    expect((await screen.findAllByText('Marca Nueva')).length).toBeGreaterThan(0)
+    expect(screen.queryByText('Marca Archivada')).not.toBeInTheDocument()
+  })
 
   it('reporte cerrado en el mes en curso también queda congelado (conserva la marca archivada)', async () => {
-    renderView({ month: 7, closed: true });
-    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument(); });
-    expect(await screen.findByText('Marca Archivada')).toBeInTheDocument();
-    expect(screen.queryByText('Marca Nueva')).not.toBeInTheDocument();
-  });
-});
+    renderView({ month: 7, closed: true })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
+    expect(await screen.findByText('Marca Archivada')).toBeInTheDocument()
+    expect(screen.queryByText('Marca Nueva')).not.toBeInTheDocument()
+  })
+})
 
 describe('OperacionesView — alineación de columnas en "Crecimiento de seguidores"', () => {
   // Regresión: el encabezado (JUNIO|JULIO) y cada fila de cliente son grillas CSS
@@ -380,15 +482,31 @@ describe('OperacionesView — alineación de columnas en "Crecimiento de seguido
     const data = makeReportData()
     // c-1: badge + % (contenido "largo"). c-2: sin datos → badge "—" sin %, y sin presupuesto.
     data.crecimiento.items = [
-      { clienteId: 'c-1', seguidoresGanados: 100, seguidoresGanadosPrev: 50, seguidoresActuales: 500, seguidoresBase: 400, meta: 80 },
-      { clienteId: 'c-2', seguidoresGanados: null, seguidoresGanadosPrev: null, seguidoresActuales: null, seguidoresBase: null, meta: 50 },
+      {
+        clienteId: 'c-1',
+        seguidoresGanados: 100,
+        seguidoresGanadosPrev: 50,
+        seguidoresActuales: 500,
+        seguidoresBase: 400,
+        meta: 80,
+      },
+      {
+        clienteId: 'c-2',
+        seguidoresGanados: null,
+        seguidoresGanadosPrev: null,
+        seguidoresActuales: null,
+        seguidoresBase: null,
+        meta: 50,
+      },
     ]
     mockLoadReport.mockResolvedValue({ data: { data }, error: null })
   })
 
   it('el encabezado y todas las filas de cliente comparten el mismo grid-template-columns fijo (sin "auto")', async () => {
     renderView()
-    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
 
     const sectionTitle = await screen.findByText('3. Crecimiento de seguidores')
     const section = sectionTitle.closest('div.bg-white')
@@ -426,7 +544,9 @@ describe('OperacionesView — modal de cobertura de reuniones por marca', () => 
   it('el botón "Ver marcas" abre el modal con check para la marca cubierta y select para la otra', async () => {
     mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: ['c-1'], error: null })
     renderView()
-    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
 
     fireEvent.click(screen.getByRole('button', { name: /Ver marcas/ }))
 
@@ -443,31 +563,40 @@ describe('OperacionesView — modal de cobertura de reuniones por marca', () => 
   it('el botón "Ver marcas" muestra la cantidad de marcas sin reunión', async () => {
     mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: ['c-1'], error: null })
     renderView()
-    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
     expect(screen.getByRole('button', { name: /Ver marcas \(1 sin reunión\)/ })).toBeInTheDocument()
   })
 
   it('elegir un justificativo lo persiste en report.reuniones.justificativos', async () => {
     mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: ['c-1'], error: null })
     renderView()
-    await waitFor(() => { expect(screen.getByText('Guardar reporte')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
     fireEvent.click(screen.getByRole('button', { name: /Ver marcas/ }))
     await screen.findByText('Cobertura de reuniones por marca')
 
     const select = screen.getByRole('combobox')
     fireEvent.change(select, { target: { value: 'no_cumplio' } })
 
-    await waitFor(() => { expect(select.value).toBe('no_cumplio') })
+    await waitFor(() => {
+      expect(select.value).toBe('no_cumplio')
+    })
 
     fireEvent.click(screen.getByText('Guardar reporte'))
     await waitFor(() => {
       expect(mockUpsertReport).toHaveBeenCalledWith(
-        'co-1', 'line-1', 2026, 7,
+        'co-1',
+        'line-1',
+        2026,
+        7,
         expect.objectContaining({
           reuniones: expect.objectContaining({
             justificativos: { 'c-2': 'no_cumplio' },
           }),
-        })
+        }),
       )
     })
   })

@@ -6,15 +6,18 @@ import DateInput from '../common/DateInput'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 
 const STATUS_MAP = {
-  pending:   { label: 'Pendiente',  cls: 'bg-yellow-100 text-yellow-800' },
-  approved:  { label: 'Aprobado',   cls: 'bg-green-100 text-green-800'  },
-  rejected:  { label: 'Rechazado',  cls: 'bg-red-100 text-red-800'      },
-  completed: { label: 'Completado', cls: 'bg-[#f0ede3] text-[#666]'     },
+  pending: { label: 'Pendiente', cls: 'bg-yellow-100 text-yellow-800' },
+  approved: { label: 'Aprobado', cls: 'bg-green-100 text-green-800' },
+  rejected: { label: 'Rechazado', cls: 'bg-red-100 text-red-800' },
+  completed: { label: 'Completado', cls: 'bg-[#f0ede3] text-[#666]' },
 }
 
 function fmtDate(dateStr) {
-  try { return format(parseISO(dateStr), 'dd/MM/yyyy') }
-  catch { return dateStr }
+  try {
+    return format(parseISO(dateStr), 'dd/MM/yyyy')
+  } catch {
+    return dateStr
+  }
 }
 
 /**
@@ -39,11 +42,17 @@ export default function VacationsDialog({ employee, onClose }) {
   const [updatingId, setUpdatingId] = useState(null)
 
   const initialVac = useRef(newVac)
-  const { requestClose } = useUnsavedChanges({ value: newVac, baseline: initialVac.current, onClose })
+  const { requestClose } = useUnsavedChanges({
+    value: newVac,
+    baseline: initialVac.current,
+    onClose,
+  })
 
   // Escape para cerrar
   useEffect(() => {
-    const fn = e => { if (e.key === 'Escape') requestClose() }
+    const fn = (e) => {
+      if (e.key === 'Escape') requestClose()
+    }
     document.addEventListener('keydown', fn)
     return () => document.removeEventListener('keydown', fn)
   }, [requestClose])
@@ -78,11 +87,20 @@ export default function VacationsDialog({ employee, onClose }) {
     setFormError(null)
     const { data, error } = await supabase
       .from('vacations')
-      .insert({ user_id: employee.user_id, start_date: newVac.start_date, end_date: newVac.end_date, status: 'pending' })
+      .insert({
+        user_id: employee.user_id,
+        start_date: newVac.start_date,
+        end_date: newVac.end_date,
+        status: 'pending',
+      })
       .select()
       .single()
-    if (error) { setFormError(error.message); setSavingNew(false); return }
-    setVacations(prev => [data, ...prev])
+    if (error) {
+      setFormError(error.message)
+      setSavingNew(false)
+      return
+    }
+    setVacations((prev) => [data, ...prev])
     setNewVac({ start_date: '', end_date: '' })
     setShowForm(false)
     setSavingNew(false)
@@ -98,7 +116,7 @@ export default function VacationsDialog({ employee, onClose }) {
       .select()
       .single()
     if (!error && data) {
-      setVacations(prev => prev.map(v => v.id === vacId ? data : v))
+      setVacations((prev) => prev.map((v) => (v.id === vacId ? data : v)))
     }
     setUpdatingId(null)
   }
@@ -108,17 +126,14 @@ export default function VacationsDialog({ employee, onClose }) {
     if (!deleteDialog) return
     setDeleting(true)
     await supabase.from('vacations').delete().eq('id', deleteDialog.id)
-    setVacations(prev => prev.filter(v => v.id !== deleteDialog.id))
+    setVacations((prev) => prev.filter((v) => v.id !== deleteDialog.id))
     setDeleting(false)
     setDeleteDialog(null)
   }
 
   return (
     <>
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25 backdrop-blur-[3px]"
-        
-      >
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25 backdrop-blur-[3px]">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col">
           {/* Header */}
           <div className="flex-shrink-0 flex items-center justify-between px-6 pt-5 pb-4 border-b border-[#ece9df]">
@@ -131,7 +146,10 @@ export default function VacationsDialog({ employee, onClose }) {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => { setShowForm(true); setFormError(null) }}
+                onClick={() => {
+                  setShowForm(true)
+                  setFormError(null)
+                }}
                 className="px-3 py-1.5 rounded-lg text-[14px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors"
               >
                 + Nueva
@@ -142,7 +160,14 @@ export default function VacationsDialog({ employee, onClose }) {
                 className="w-7 h-7 flex items-center justify-center rounded-lg text-[#999] hover:text-[#111] hover:bg-[#f0ede3] transition-colors"
                 aria-label="Cerrar"
               >
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 14 14"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                >
                   <path d="M2 2l10 10M12 2L2 12" />
                 </svg>
               </button>
@@ -153,14 +178,9 @@ export default function VacationsDialog({ employee, onClose }) {
           <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
             {/* Formulario nueva vacación */}
             {showForm && (
-              <form
-                onSubmit={handleCreate}
-                className="bg-[#f5f3eb] rounded-xl p-4 space-y-3"
-              >
+              <form onSubmit={handleCreate} className="bg-[#f5f3eb] rounded-xl p-4 space-y-3">
                 <p className="text-[14px] font-semibold text-[#555]">Nueva vacación</p>
-                {formError && (
-                  <p className="text-[14px] text-red-600">{formError}</p>
-                )}
+                {formError && <p className="text-[14px] text-red-600">{formError}</p>}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1">
@@ -168,7 +188,7 @@ export default function VacationsDialog({ employee, onClose }) {
                     </label>
                     <DateInput
                       value={newVac.start_date}
-                      onChange={v => setNewVac(n => ({ ...n, start_date: v }))}
+                      onChange={(v) => setNewVac((n) => ({ ...n, start_date: v }))}
                       required
                     />
                   </div>
@@ -179,7 +199,7 @@ export default function VacationsDialog({ employee, onClose }) {
                     <DateInput
                       value={newVac.end_date}
                       min={newVac.start_date}
-                      onChange={v => setNewVac(n => ({ ...n, end_date: v }))}
+                      onChange={(v) => setNewVac((n) => ({ ...n, end_date: v }))}
                       required
                     />
                   </div>
@@ -187,7 +207,10 @@ export default function VacationsDialog({ employee, onClose }) {
                 <div className="flex justify-end gap-2">
                   <button
                     type="button"
-                    onClick={() => { setShowForm(false); setFormError(null) }}
+                    onClick={() => {
+                      setShowForm(false)
+                      setFormError(null)
+                    }}
                     className="px-3 py-1.5 rounded-lg text-[14px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-white transition-colors"
                   >
                     Cancelar
@@ -213,21 +236,31 @@ export default function VacationsDialog({ employee, onClose }) {
                 <p className="text-[16px] font-semibold text-[#888] mb-1">
                   Sin vacaciones registradas
                 </p>
-                <p className="text-[14px] text-[#bbb]">Usa "+ Nueva" para agregar una.</p>
+                <p className="text-[14px] text-[#bbb]">
+                  Usa &ldquo;+ Nueva&rdquo; para agregar una.
+                </p>
               </div>
             ) : (
               <div className="space-y-2">
-                {vacations.map(v => {
-                  const st = STATUS_MAP[v.status] ?? { label: v.status, cls: 'bg-gray-100 text-gray-600' }
+                {vacations.map((v) => {
+                  const st = STATUS_MAP[v.status] ?? {
+                    label: v.status,
+                    cls: 'bg-gray-100 text-gray-600',
+                  }
                   const isUpdating = updatingId === v.id
                   return (
-                    <div key={v.id} className="bg-white border border-[#e0ddd4] rounded-xl px-4 py-3">
+                    <div
+                      key={v.id}
+                      className="bg-white border border-[#e0ddd4] rounded-xl px-4 py-3"
+                    >
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-[15px] font-semibold text-[#111]">
                             {fmtDate(v.start_date)} – {fmtDate(v.end_date)}
                           </p>
-                          <span className={`inline-block mt-1 text-[13px] font-semibold px-2 py-0.5 rounded-full ${st.cls}`}>
+                          <span
+                            className={`inline-block mt-1 text-[13px] font-semibold px-2 py-0.5 rounded-full ${st.cls}`}
+                          >
                             {st.label}
                           </span>
                         </div>
@@ -290,7 +323,14 @@ export default function VacationsDialog({ employee, onClose }) {
                             className="w-6 h-6 flex items-center justify-center rounded text-[#bbb] hover:text-red-500 hover:bg-red-50 transition-colors"
                             aria-label={`Eliminar vacación ${v.start_date}`}
                           >
-                            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
+                            <svg
+                              width="11"
+                              height="11"
+                              viewBox="0 0 16 16"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.7"
+                            >
                               <path d="M3 4h10M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M13 4l-1 9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1L3 4" />
                             </svg>
                           </button>

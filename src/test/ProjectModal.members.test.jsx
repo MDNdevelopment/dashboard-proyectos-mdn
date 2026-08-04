@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
 
@@ -44,7 +44,7 @@ function renderModal(props = {}) {
       onClose={() => {}}
       onSave={vi.fn().mockResolvedValue()}
       {...props}
-    />
+    />,
   )
 }
 
@@ -79,9 +79,15 @@ describe('ProjectModal — member picker', () => {
   it('filtra la lista al escribir en el buscador', async () => {
     renderModal()
     await openPicker()
-    await userEvent.type(screen.getByPlaceholderText(/buscar miembro/i), 'ana')
-    expect(screen.getByRole('button', { name: /Ana García/i })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Carlos López/i })).not.toBeInTheDocument()
+    // fireEvent.change en vez de userEvent.type: el input filtra sincrónicamente
+    // sin debounce, y tipear carácter a carácter es una carrera innecesaria bajo
+    // carga (jsdom puede perder una tecla intermedia). Setear el valor final de
+    // una vez prueba lo mismo (el filtro) sin depender de timing.
+    fireEvent.change(screen.getByPlaceholderText(/buscar miembro/i), { target: { value: 'ana' } })
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Ana García/i })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /Carlos López/i })).not.toBeInTheDocument()
+    })
   })
 
   it('agregar un usuario muestra su chip y el checkmark en el popover', async () => {
@@ -121,9 +127,11 @@ describe('ProjectModal — member picker', () => {
     await userEvent.click(screen.getByRole('button', { name: /crear proyecto/i }))
 
     await waitFor(() => {
-      expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
-        members: ['u1', 'u2'],
-      }))
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({
+          members: ['u1', 'u2'],
+        }),
+      )
     })
   })
 
