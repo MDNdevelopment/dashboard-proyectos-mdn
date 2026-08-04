@@ -15,7 +15,7 @@ vi.mock('../supabase', () => {
     order: vi.fn().mockResolvedValue({ data: result, error: null }),
   })
 
-  mockFrom.mockImplementation(table => {
+  mockFrom.mockImplementation((table) => {
     if (table === 'metric_lines') return makeQuery(MOCK_TEAMS)
     if (table === 'tasks') return makeQuery(MOCK_TASKS)
     if (table === 'users') return makeQuery(MOCK_USERS)
@@ -39,8 +39,20 @@ vi.mock('../context/AuthContext', () => ({
 // ── Test data ────────────────────────────────────────────────────────────────
 // Supabase retorna { members: [{user_id}] } desde metric_line_members; loadLines normaliza a member_user_ids
 const MOCK_TEAMS = [
-  { id: 'team-1', name: 'Georgina', company_id: 'co-1', created_at: '2026-01-01T00:00:00Z', members: [{ user_id: 'u1' }] },
-  { id: 'team-2', name: 'Bianca',   company_id: 'co-1', created_at: '2026-01-02T00:00:00Z', members: [{ user_id: 'u1' }] },
+  {
+    id: 'team-1',
+    name: 'Georgina',
+    company_id: 'co-1',
+    created_at: '2026-01-01T00:00:00Z',
+    members: [{ user_id: 'u1' }],
+  },
+  {
+    id: 'team-2',
+    name: 'Bianca',
+    company_id: 'co-1',
+    created_at: '2026-01-02T00:00:00Z',
+    members: [{ user_id: 'u1' }],
+  },
 ]
 const MOCK_TASKS = [
   {
@@ -81,7 +93,7 @@ function renderPage(profileOverride = {}, initialEntries = ['/tareas']) {
   return render(
     <MemoryRouter initialEntries={initialEntries}>
       <TareasPage />
-    </MemoryRouter>
+    </MemoryRouter>,
   )
 }
 
@@ -109,7 +121,7 @@ function renderPageWithBack(profileOverride = {}) {
     <MemoryRouter initialEntries={['/tareas']}>
       <BackButton />
       <TareasPage />
-    </MemoryRouter>
+    </MemoryRouter>,
   )
 }
 
@@ -165,7 +177,9 @@ describe('TareasPage', () => {
     const todosBtn = screen.getByRole('button', { name: 'Todos' })
     expect(todosBtn.className).toMatch(/\[#FFB800\]/)
     // Contenido de PanoramaView (cartelera global): KPI "Cumplimiento"
-    expect(screen.getByText('Cumplimiento')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('Cumplimiento')).toBeInTheDocument()
+    })
   })
 
   it('shows the period selector on Dashboard/Base/Kanban but not on Stand-up', async () => {
