@@ -29,10 +29,10 @@ inter-module relationships must also update the relevant sections of `ARQUITECTU
 
 Supabase config is injected via two env vars. Copy to `.env.local` for local dev:
 
-| Variable | Description |
-|---|---|
-| `VITE_SUPABASE_URL` | Supabase project URL (`https://xxx.supabase.co`) |
-| `VITE_SUPABASE_ANON_KEY` | Supabase public anon key |
+| Variable                 | Description                                      |
+| ------------------------ | ------------------------------------------------ |
+| `VITE_SUPABASE_URL`      | Supabase project URL (`https://xxx.supabase.co`) |
+| `VITE_SUPABASE_ANON_KEY` | Supabase public anon key                         |
 
 These are accessed via `import.meta.env` in `src/supabase.js`.
 
@@ -91,6 +91,61 @@ RLS: all authenticated users can read and write any project (no per-user or per-
   capture, or where it can feed other modules. Suggest this explicitly — for example, deriving
   Métricas indicators from the `tasks` table by line/client/month instead of manual inputs. This
   rule applies whenever a module is being designed, not only in plan mode.
+- **Mantener `src/data/changelog.js`:** toda corrección de bug o feature DEBE agregar un ítem al
+  changelog en el mismo commit, igual que los tests. Ver sección "Changelog de novedades" abajo.
+
+## Changelog de novedades
+
+Al iniciar sesión, el dashboard muestra **una sola vez** el modal "Novedades" con las versiones
+que el usuario aún no ha visto. Persistencia en `localStorage` (clave `mdn_whatsnew_seen_version`,
+sin backend). Implementación: `src/lib/whatsNew.js` (lógica pura + storage),
+`src/hooks/useWhatsNew.js` (orquestación) y `src/components/WhatsNewModal.jsx` (UI). Se monta en
+`AppLayout.jsx`.
+
+### Regla al terminar una feature o bug fix
+
+Agregar un ítem a `src/data/changelog.js` con lenguaje **sencillo para usuarios finales** (UI en
+español), sin jerga técnica: "Corregido el filtro de fechas en Reportes" en vez de "fix del state
+del date range picker". Es parte de "feature complete", como los tests y `ARQUITECTURA.md`.
+
+### Agrupación por versión y trabajo en varias sesiones de IA
+
+Objetivo: **una entrada por VERSIÓN desplegada, no una por cambio.** En un repositorio con
+N fixes/features en desarrollo debe existir **exactamente una** entrada en desarrollo
+(`CHANGELOG[0]` sin `date`). Todo el trabajo de varias sesiones se acumula en ella.
+
+Estado de una entrada: **en desarrollo** = sin `date` (o `date: null`); **publicada** = con `date`.
+
+**Regla para CUALQUIER sesión de IA al terminar un fix o feature (decisión determinística):**
+
+1. Lee `CHANGELOG[0]`.
+2. Si `CHANGELOG[0]` **NO tiene `date`** (está en desarrollo) →
+   agrega la descripción a `CHANGELOG[0].changes` y detente. No crees entradas nuevas,
+   no cambies `version`, no cambies `date`, no reordenes el array.
+3. Si `CHANGELOG[0]` **SÍ tiene `date`** (caso raro: no hay versión en desarrollo abierta,
+   p.ej. tras un release mal cerrado) → abre la siguiente versión creando **una** entrada
+   nueva arriba con `version` = siguiente semver (feature → minor, bug fix → patch),
+   `date` sin valor, `title` corto del trabajo en curso y `changes: [la descripción]`.
+   Detente. En el flujo normal esta entrada siempre existe (se crea al publicar la anterior).
+
+**Nunca:** crear una entrada nueva por cada feature/fix (produce decenas de versiones),
+editar una entrada publicada (el usuario ya la vio), ni abrir una versión nueva cuando
+`CHANGELOG[0]` ya está en desarrollo.
+
+### Publicación (release)
+
+Proceso humano o de una sesión dedicada; es el **único** momento en que se crea una entrada nueva:
+
+1. Asignar `date` (hoy) a la entrada actual en desarrollo y ajustar `title` si hace falta.
+2. Crear una entrada nueva arriba **sin `date`**, con el siguiente semver
+   (fixes → patch, features → minor; ej. tras publicar `1.2.0` → `1.2.1` si solo hubo fixes).
+3. Desplegar. Los usuarios verán el modal una vez con todos los ítems agrupados de la versión.
+
+**La IA NUNCA publica una versión por iniciativa propia.** Solo ejecuta el release cuando el
+usuario lo solicite explícitamente (p.ej. "haz un release", "publica la versión"). En cualquier
+otro momento, al terminar un fix o feature debe dejar `CHANGELOG[0]` en desarrollo (sin `date`)
+y solo acumular cambios en su array `changes`. Ante cualquier duda, NO publicar: preguntar al
+usuario.
 
 ## Deployment
 
