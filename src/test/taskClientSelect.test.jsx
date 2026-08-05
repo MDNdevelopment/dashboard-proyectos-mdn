@@ -9,35 +9,25 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
+import { createSupabaseMock } from './helpers/supabaseMock'
 
 // ── Datos de prueba ────────────────────────────────────────────────────────────
 const MOCK_TEAMS = [
-  { id: 'line-1', name: 'Georgina',  color: '#FAB51A' },
+  { id: 'line-1', name: 'Georgina', color: '#FAB51A' },
   { id: 'line-2', name: 'Daniellys', color: '#3B82F6' },
 ]
 
 const MOCK_CLIENTS = [
   { id: 'c-1', company_id: 'co-1', line_id: 'line-1', name: 'Banco Exterior', logo_url: null },
   { id: 'c-2', company_id: 'co-1', line_id: 'line-1', name: 'Hotel Tamanaco', logo_url: null },
-  { id: 'c-3', company_id: 'co-1', line_id: 'line-2', name: 'Pepsi',          logo_url: null },
+  { id: 'c-3', company_id: 'co-1', line_id: 'line-2', name: 'Pepsi', logo_url: null },
 ]
 
 const MOCK_USERS = []
 
 // ── Mocks ──────────────────────────────────────────────────────────────────────
 vi.mock('../supabase', () => ({
-  supabase: {
-    from: vi.fn().mockReturnValue({
-      insert: vi.fn().mockReturnThis(),
-      update: vi.fn().mockReturnThis(),
-      delete: vi.fn().mockReturnThis(),
-      select: vi.fn().mockReturnThis(),
-      eq:     vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: null, error: null }),
-    }),
-    channel:       vi.fn(() => ({ on: vi.fn().mockReturnThis(), subscribe: vi.fn().mockReturnThis() })),
-    removeChannel: vi.fn(),
-  },
+  supabase: createSupabaseMock(),
 }))
 
 vi.mock('../context/AuthContext', () => ({
@@ -69,9 +59,9 @@ describe('TaskModal — desplegable de cliente', () => {
     renderModal()
     // Hay dos selects: Team y Cliente (y luego Estatus). El de Cliente debe tener 'Sin cliente'.
     const selects = screen.getAllByRole('combobox')
-    const clientSelect = selects.find(s => s.querySelector
-      ? Array.from(s.options ?? []).some(o => o.text === 'Sin cliente')
-      : false)
+    const clientSelect = selects.find((s) =>
+      s.querySelector ? Array.from(s.options ?? []).some((o) => o.text === 'Sin cliente') : false,
+    )
     // Si el querySelector no está disponible, buscamos por la option directamente
     expect(screen.getByRole('option', { name: 'Sin cliente' })).toBeInTheDocument()
   })
@@ -110,7 +100,7 @@ describe('TaskModal — desplegable de cliente', () => {
   })
 
   it('muestra hint cuando la línea no tiene clientes', () => {
-    const clientsSinLinea = MOCK_CLIENTS.filter(c => c.line_id !== 'line-1')
+    const clientsSinLinea = MOCK_CLIENTS.filter((c) => c.line_id !== 'line-1')
     renderModal({ clients: clientsSinLinea })
     // line-1 no tiene clientes en este subset → hint visible
     expect(screen.getByText(/No hay clientes en esta línea/i)).toBeInTheDocument()
@@ -118,12 +108,20 @@ describe('TaskModal — desplegable de cliente', () => {
 
   it('muestra hint de cliente heredado cuando la tarea tiene nombre pero no client_id', () => {
     const legacyTask = {
-      id: 'task-old', company_id: 'co-1',
-      team_id: 'line-1', client_id: null, client: 'Pepsi Antiguo',
-      description: 'Hacer algo', status: 'En proceso',
-      assignee_id: null, support_id: null,
-      request_date: null, due_date: null, closed_date: null,
-      source: null, created_by: null,
+      id: 'task-old',
+      company_id: 'co-1',
+      team_id: 'line-1',
+      client_id: null,
+      client: 'Pepsi Antiguo',
+      description: 'Hacer algo',
+      status: 'En proceso',
+      assignee_id: null,
+      support_id: null,
+      request_date: null,
+      due_date: null,
+      closed_date: null,
+      source: null,
+      created_by: null,
     }
     renderModal({ task: legacyTask })
     expect(screen.getByText(/Cliente previo/i)).toBeInTheDocument()

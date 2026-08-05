@@ -7,11 +7,18 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
+import { createSupabaseMock } from './helpers/supabaseMock'
 
 const MOCK_TEAMS = [
   { id: 'line-1', name: 'Georgina', color: '#FAB51A', member_user_ids: [] },
   { id: 'line-2', name: 'Daniellys', color: '#3B82F6', member_user_ids: [] },
-  { id: 'line-general', name: 'Independientes', color: '#9CA3AF', is_general: true, member_user_ids: [] },
+  {
+    id: 'line-general',
+    name: 'Independientes',
+    color: '#9CA3AF',
+    is_general: true,
+    member_user_ids: [],
+  },
 ]
 
 const MOCK_CLIENTS = [
@@ -20,18 +27,7 @@ const MOCK_CLIENTS = [
 ]
 
 vi.mock('../supabase', () => ({
-  supabase: {
-    from: vi.fn().mockReturnValue({
-      insert: vi.fn().mockReturnThis(),
-      update: vi.fn().mockReturnThis(),
-      delete: vi.fn().mockReturnThis(),
-      select: vi.fn().mockReturnThis(),
-      eq:     vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: null, error: null }),
-    }),
-    channel:       vi.fn(() => ({ on: vi.fn().mockReturnThis(), subscribe: vi.fn().mockReturnThis() })),
-    removeChannel: vi.fn(),
-  },
+  supabase: createSupabaseMock(),
 }))
 
 vi.mock('../context/AuthContext', () => ({

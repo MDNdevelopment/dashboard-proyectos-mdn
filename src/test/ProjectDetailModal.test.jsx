@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { vi, describe, it, expect } from 'vitest'
+import { createSupabaseMock, makeQuery } from './helpers/supabaseMock'
 
 const { mockUsers } = vi.hoisted(() => ({
   mockUsers: [
@@ -9,12 +10,11 @@ const { mockUsers } = vi.hoisted(() => ({
 }))
 
 vi.mock('../supabase', () => ({
-  supabase: {
-    from: vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockResolvedValue({ data: mockUsers, error: null }),
-    }),
-  },
+  supabase: createSupabaseMock({
+    tables: {
+      users: () => makeQuery(mockUsers),
+    },
+  }),
 }))
 
 vi.mock('../context/AuthContext', () => ({

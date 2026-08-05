@@ -1,8 +1,9 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { vi } from 'vitest'
+import { createSupabaseMock } from './helpers/supabaseMock'
 
 vi.mock('../supabase', () => ({
-  supabase: { from: vi.fn() },
+  supabase: createSupabaseMock(),
 }))
 
 import { supabase } from '../supabase'
@@ -88,8 +89,8 @@ describe('useTicketAnalytics', () => {
     await waitFor(() => expect(result.current.loading).toBe(false))
 
     const days = result.current.metrics.ticketsPerDay
-    expect(days.find(d => d.date === '2026-05-20')?.count).toBe(1)
-    expect(days.find(d => d.date === '2026-05-21')?.count).toBe(1)
+    expect(days.find((d) => d.date === '2026-05-20')?.count).toBe(1)
+    expect(days.find((d) => d.date === '2026-05-21')?.count).toBe(1)
   })
 
   it('genera staffPerformance correctamente', async () => {

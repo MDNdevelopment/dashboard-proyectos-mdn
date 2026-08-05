@@ -2,41 +2,22 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { vi } from 'vitest'
+import { createSupabaseMock, makeQuery } from './helpers/supabaseMock'
 
 // ── Mock supabase ─────────────────────────────────────────────────────────────
-vi.mock('../supabase', () => {
-  const channel = { on: vi.fn().mockReturnThis(), subscribe: vi.fn().mockReturnThis() }
-
-  const mockFrom = vi.fn()
-  const makeQuery = (result = []) => ({
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    order: vi.fn().mockResolvedValue({ data: result, error: null }),
-    insert: vi.fn().mockReturnThis(),
-    update: vi.fn().mockReturnThis(),
-    delete: vi.fn().mockReturnThis(),
-    single: vi.fn().mockResolvedValue({ data: result[0] ?? null, error: null }),
-  })
-
-  mockFrom.mockImplementation(table => {
-    if (table === 'users')       return makeQuery(MOCK_USERS)
-    if (table === 'departments') return makeQuery(MOCK_DEPARTMENTS)
-    if (table === 'positions')   return makeQuery(MOCK_POSITIONS)
-    if (table === 'vacations')   return makeQuery(MOCK_VACATIONS)
-    return makeQuery([])
-  })
-
-  return {
-    supabase: {
-      from: mockFrom,
-      channel: vi.fn(() => channel),
-      removeChannel: vi.fn(),
-      auth: {
-        getSession: vi.fn().mockResolvedValue({ data: { session: { access_token: 'test-token' } } }),
-      },
+vi.mock('../supabase', () => ({
+  supabase: createSupabaseMock({
+    tables: {
+      users: () => makeQuery(MOCK_USERS),
+      departments: () => makeQuery(MOCK_DEPARTMENTS),
+      positions: () => makeQuery(MOCK_POSITIONS),
+      vacations: () => makeQuery(MOCK_VACATIONS),
     },
-  }
-})
+    auth: {
+      getSession: vi.fn().mockResolvedValue({ data: { session: { access_token: 'test-token' } } }),
+    },
+  }),
+}))
 
 // ── Mock AuthContext ──────────────────────────────────────────────────────────
 vi.mock('../context/AuthContext', () => ({
@@ -49,7 +30,12 @@ const MOCK_DEPARTMENTS = [
   { department_id: 'd2', department_name: 'Redes', company_id: 'co-1', dashboard_visible: true },
 ]
 const MOCK_POSITIONS = [
-  { position_id: 'p1', position_name: 'Diseñador Gráfico', department_id: 'd1', company_id: 'co-1' },
+  {
+    position_id: 'p1',
+    position_name: 'Diseñador Gráfico',
+    department_id: 'd1',
+    company_id: 'co-1',
+  },
   { position_id: 'p2', position_name: 'Social Media', department_id: 'd2', company_id: 'co-1' },
 ]
 const MOCK_USERS = [
@@ -154,14 +140,20 @@ function renderAsAdmin(path = '/empresa/empleados') {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <EmpresaPage />
-    </MemoryRouter>
+    </MemoryRouter>,
   )
 }
 
 // Capabilities restringidas para nivel 1 según los defaults sembrados
 const LEVEL1_RESTRICTED = [
-  'empresa.departamentos', 'empresa.empleados', 'empresa.preguntas', 'empresa.permisos',
-  'empresa.clientes', 'empresa.lineas', 'empresa.clientes.manage', 'empresa.lineas.manage',
+  'empresa.departamentos',
+  'empresa.empleados',
+  'empresa.preguntas',
+  'empresa.permisos',
+  'empresa.clientes',
+  'empresa.lineas',
+  'empresa.clientes.manage',
+  'empresa.lineas.manage',
 ]
 
 function renderAsNonAdmin() {
@@ -179,7 +171,7 @@ function renderAsNonAdmin() {
   return render(
     <MemoryRouter initialEntries={['/empresa']}>
       <EmpresaPage />
-    </MemoryRouter>
+    </MemoryRouter>,
   )
 }
 
@@ -213,7 +205,9 @@ describe('EmployeesView', () => {
 
   it('por defecto agrupa a los empleados en columnas por nivel', async () => {
     renderAsAdmin()
-    await waitFor(() => { expect(screen.getByText('Ana Pérez')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
+    })
 
     expect(screen.getByText('Nivel 1')).toBeInTheDocument()
     expect(screen.getByText('Nivel 2')).toBeInTheDocument()
@@ -226,7 +220,9 @@ describe('EmployeesView', () => {
   it('cambia a vista lista al hacer click en el icono de lista y persiste la elección', async () => {
     const user = userEvent.setup()
     renderAsAdmin()
-    await waitFor(() => { expect(screen.getByText('Ana Pérez')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
+    })
 
     await user.click(screen.getByRole('button', { name: 'Vista lista' }))
 
@@ -234,23 +230,33 @@ describe('EmployeesView', () => {
     await waitFor(() => {
       expect(screen.getByText('ana@test.com')).toBeInTheDocument()
     })
-    expect(screen.getByRole('button', { name: 'Vista lista' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Vista lista' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
     expect(localStorage.getItem('empresa.empleados.view')).toBe('lista')
   })
 
   it('recuerda la vista lista guardada en localStorage al montar', async () => {
     localStorage.setItem('empresa.empleados.view', 'lista')
     renderAsAdmin()
-    await waitFor(() => { expect(screen.getByText('Ana Pérez')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
+    })
 
     expect(screen.getByText('ana@test.com')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Vista lista' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Vista lista' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
   })
 
   it('la búsqueda filtra por nombre', async () => {
     const user = userEvent.setup()
     renderAsAdmin()
-    await waitFor(() => { expect(screen.getByText('Ana Pérez')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
+    })
 
     const input = screen.getByPlaceholderText(/buscar/i)
     await user.type(input, 'Ana')
@@ -262,7 +268,9 @@ describe('EmployeesView', () => {
   it('la búsqueda filtra por email', async () => {
     const user = userEvent.setup()
     renderAsAdmin()
-    await waitFor(() => { expect(screen.getByText('Carlos López')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Carlos López')).toBeInTheDocument()
+    })
 
     const input = screen.getByPlaceholderText(/buscar/i)
     await user.type(input, 'carlos@')
@@ -274,7 +282,9 @@ describe('EmployeesView', () => {
   it('la búsqueda filtra por cargo', async () => {
     const user = userEvent.setup()
     renderAsAdmin()
-    await waitFor(() => { expect(screen.getByText('Carlos López')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Carlos López')).toBeInTheDocument()
+    })
 
     const input = screen.getByPlaceholderText(/buscar/i)
     await user.type(input, 'Social Media')
@@ -286,7 +296,9 @@ describe('EmployeesView', () => {
   it('la búsqueda filtra por departamento', async () => {
     const user = userEvent.setup()
     renderAsAdmin()
-    await waitFor(() => { expect(screen.getByText('Carlos López')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Carlos López')).toBeInTheDocument()
+    })
 
     const input = screen.getByPlaceholderText(/buscar/i)
     await user.type(input, 'Redes')
@@ -298,7 +310,9 @@ describe('EmployeesView', () => {
   it('al hacer click en un empleado (vista columnas) se abre su ficha de detalle', async () => {
     const user = userEvent.setup()
     renderAsAdmin()
-    await waitFor(() => { expect(screen.getByText('Ana Pérez')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
+    })
 
     await user.click(screen.getByRole('button', { name: 'Ver ficha de Ana Pérez' }))
 
@@ -309,7 +323,9 @@ describe('EmployeesView', () => {
   it('la ficha de detalle muestra la descripción del cargo y sus funciones', async () => {
     const user = userEvent.setup()
     renderAsAdmin()
-    await waitFor(() => { expect(screen.getByText('Ana Pérez')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
+    })
 
     await user.click(screen.getByRole('button', { name: 'Ver ficha de Ana Pérez' }))
 
@@ -320,7 +336,9 @@ describe('EmployeesView', () => {
 
   it('cada columna de nivel muestra el total con la etiqueta "Total:"', async () => {
     renderAsAdmin()
-    await waitFor(() => { expect(screen.getByText('Ana Pérez')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
+    })
 
     // Cada nivel mockeado tiene exactamente 1 empleado
     expect(screen.getAllByText('Total: 1').length).toBe(4)
@@ -329,7 +347,9 @@ describe('EmployeesView', () => {
   it('al hacer click en un empleado (vista lista) se abre su ficha de detalle', async () => {
     const user = userEvent.setup()
     renderAsAdmin()
-    await waitFor(() => { expect(screen.getByText('Ana Pérez')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
+    })
     await user.click(screen.getByRole('button', { name: 'Vista lista' }))
 
     await user.click(screen.getByRole('button', { name: 'Ver ficha de Ana Pérez' }))
@@ -340,7 +360,9 @@ describe('EmployeesView', () => {
   it('en vista columnas, click en los iconos Editar/Vacaciones no abre la ficha', async () => {
     const user = userEvent.setup()
     renderAsAdmin()
-    await waitFor(() => { expect(screen.getByText('Ana Pérez')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
+    })
 
     await user.click(screen.getByRole('button', { name: 'Editar Ana Pérez' }))
 
@@ -369,7 +391,7 @@ describe('EmployeesView', () => {
     render(
       <MemoryRouter initialEntries={['/empresa/empleados']}>
         <EmpresaPage />
-      </MemoryRouter>
+      </MemoryRouter>,
     )
     expect(screen.getByRole('button', { name: 'Inicio' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Empleados' })).not.toBeInTheDocument()
@@ -378,7 +400,9 @@ describe('EmployeesView', () => {
   it('abre el modal de edición al hacer click en Editar (vista lista)', async () => {
     const user = userEvent.setup()
     renderAsAdmin()
-    await waitFor(() => { expect(screen.getByText('Ana Pérez')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
+    })
     await user.click(screen.getByRole('button', { name: 'Vista lista' }))
 
     const editButtons = screen.getAllByRole('button', { name: 'Editar' })
@@ -390,7 +414,9 @@ describe('EmployeesView', () => {
   it('el modal de edición muestra los campos del empleado pre-rellenados', async () => {
     const user = userEvent.setup()
     renderAsAdmin()
-    await waitFor(() => { expect(screen.getByText('Ana Pérez')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
+    })
     await user.click(screen.getByRole('button', { name: 'Vista lista' }))
 
     const anaRow = screen.getByText('Ana Pérez').closest('div.flex.items-center.gap-3')
@@ -403,7 +429,9 @@ describe('EmployeesView', () => {
   it('abre el diálogo de vacaciones al hacer click en Vacaciones (vista lista)', async () => {
     const user = userEvent.setup()
     renderAsAdmin()
-    await waitFor(() => { expect(screen.getByText('Ana Pérez')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
+    })
     await user.click(screen.getByRole('button', { name: 'Vista lista' }))
 
     const vacButtons = screen.getAllByRole('button', { name: 'Vacaciones' })
@@ -416,7 +444,9 @@ describe('EmployeesView', () => {
   it('el diálogo de vacaciones lista las vacaciones del empleado', async () => {
     const user = userEvent.setup()
     renderAsAdmin()
-    await waitFor(() => { expect(screen.getByText('Ana Pérez')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
+    })
     await user.click(screen.getByRole('button', { name: 'Vista lista' }))
 
     const anaRow = screen.getByText('Ana Pérez').closest('div.flex.items-center.gap-3')
@@ -432,7 +462,9 @@ describe('EmployeesView', () => {
   it('en vista columnas (por defecto), editar y vacaciones abren los modales correctos', async () => {
     const user = userEvent.setup()
     renderAsAdmin()
-    await waitFor(() => { expect(screen.getByText('Ana Pérez')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
+    })
 
     await user.click(screen.getByRole('button', { name: 'Editar Ana Pérez' }))
     expect(screen.getByText('Editar empleado')).toBeInTheDocument()
@@ -452,7 +484,9 @@ describe('EmployeesView', () => {
 
     it('el botón de eliminar es un icono (sin texto "Eliminar" visible en la card)', async () => {
       renderAsAdmin()
-      await waitFor(() => { expect(screen.getByText('Ana Pérez')).toBeInTheDocument() })
+      await waitFor(() => {
+        expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
+      })
 
       // Accesible por aria-label, pero sin texto "Eliminar" plano en el DOM
       expect(screen.getByRole('button', { name: 'Eliminar Ana Pérez' })).toBeInTheDocument()
@@ -462,7 +496,9 @@ describe('EmployeesView', () => {
     it('abre el diálogo de confirmación al hacer click en el icono de eliminar', async () => {
       const user = userEvent.setup()
       renderAsAdmin()
-      await waitFor(() => { expect(screen.getByText('Ana Pérez')).toBeInTheDocument() })
+      await waitFor(() => {
+        expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
+      })
 
       await user.click(screen.getByRole('button', { name: 'Eliminar Ana Pérez' }))
 
@@ -471,13 +507,15 @@ describe('EmployeesView', () => {
 
     it('archiva al empleado tras confirmar con su nombre completo', async () => {
       const user = userEvent.setup()
-      const ana = MOCK_USERS.find(u => u.user_id === 'u10')
+      const ana = MOCK_USERS.find((u) => u.user_id === 'u10')
       global.fetch.mockResolvedValue({
         ok: true,
         json: async () => ({ ...ana, deleted_at: '2026-07-15T00:00:00.000Z' }),
       })
       renderAsAdmin()
-      await waitFor(() => { expect(screen.getByText('Ana Pérez')).toBeInTheDocument() })
+      await waitFor(() => {
+        expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
+      })
 
       await user.click(screen.getByRole('button', { name: 'Eliminar Ana Pérez' }))
 
@@ -487,10 +525,13 @@ describe('EmployeesView', () => {
       await user.click(screen.getByRole('button', { name: 'Eliminar' }))
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith('/api/employees/manage', expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({ user_id: 'u10', action: 'archive' }),
-        }))
+        expect(global.fetch).toHaveBeenCalledWith(
+          '/api/employees/manage',
+          expect.objectContaining({
+            method: 'POST',
+            body: JSON.stringify({ user_id: 'u10', action: 'archive' }),
+          }),
+        )
       })
       // Ana desaparece de la lista activa (búsqueda por defecto)
       await waitFor(() => {
@@ -501,18 +542,22 @@ describe('EmployeesView', () => {
 
     it('el toggle "Ver eliminados" muestra solo a los empleados eliminados', async () => {
       const user = userEvent.setup()
-      const ana = MOCK_USERS.find(u => u.user_id === 'u10')
+      const ana = MOCK_USERS.find((u) => u.user_id === 'u10')
       global.fetch.mockResolvedValue({
         ok: true,
         json: async () => ({ ...ana, deleted_at: '2026-07-15T00:00:00.000Z' }),
       })
       renderAsAdmin()
-      await waitFor(() => { expect(screen.getByText('Ana Pérez')).toBeInTheDocument() })
+      await waitFor(() => {
+        expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
+      })
 
       await user.click(screen.getByRole('button', { name: 'Eliminar Ana Pérez' }))
       await user.type(screen.getByPlaceholderText('Ana Pérez'), 'Ana Pérez')
       await user.click(screen.getByRole('button', { name: 'Eliminar' }))
-      await waitFor(() => { expect(screen.queryByText('Ana Pérez')).not.toBeInTheDocument() })
+      await waitFor(() => {
+        expect(screen.queryByText('Ana Pérez')).not.toBeInTheDocument()
+      })
 
       await user.click(screen.getByRole('button', { name: /ver eliminados/i }))
 
@@ -523,7 +568,7 @@ describe('EmployeesView', () => {
 
     it('restaura a un empleado archivado', async () => {
       const user = userEvent.setup()
-      const ana = MOCK_USERS.find(u => u.user_id === 'u10')
+      const ana = MOCK_USERS.find((u) => u.user_id === 'u10')
       global.fetch
         .mockResolvedValueOnce({
           ok: true,
@@ -534,21 +579,28 @@ describe('EmployeesView', () => {
           json: async () => ({ ...ana, deleted_at: null }),
         })
       renderAsAdmin()
-      await waitFor(() => { expect(screen.getByText('Ana Pérez')).toBeInTheDocument() })
+      await waitFor(() => {
+        expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
+      })
 
       await user.click(screen.getByRole('button', { name: 'Eliminar Ana Pérez' }))
       await user.type(screen.getByPlaceholderText('Ana Pérez'), 'Ana Pérez')
       await user.click(screen.getByRole('button', { name: 'Eliminar' }))
-      await waitFor(() => { expect(screen.queryByText('Ana Pérez')).not.toBeInTheDocument() })
+      await waitFor(() => {
+        expect(screen.queryByText('Ana Pérez')).not.toBeInTheDocument()
+      })
 
       await user.click(screen.getByRole('button', { name: /ver eliminados/i }))
       await user.click(screen.getByRole('button', { name: 'Restaurar' }))
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenLastCalledWith('/api/employees/manage', expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({ user_id: 'u10', action: 'restore' }),
-        }))
+        expect(global.fetch).toHaveBeenLastCalledWith(
+          '/api/employees/manage',
+          expect.objectContaining({
+            method: 'POST',
+            body: JSON.stringify({ user_id: 'u10', action: 'restore' }),
+          }),
+        )
       })
 
       // De vuelta en la vista de activos, Ana reaparece
@@ -570,9 +622,11 @@ describe('EmployeesView', () => {
       render(
         <MemoryRouter initialEntries={['/empresa/empleados']}>
           <EmpresaPage />
-        </MemoryRouter>
+        </MemoryRouter>,
       )
-      await waitFor(() => { expect(screen.getByText('Ana Pérez')).toBeInTheDocument() })
+      await waitFor(() => {
+        expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
+      })
 
       expect(screen.queryByRole('button', { name: 'Eliminar Ana Pérez' })).not.toBeInTheDocument()
       // Los otros 3 empleados sí tienen su icono de eliminar

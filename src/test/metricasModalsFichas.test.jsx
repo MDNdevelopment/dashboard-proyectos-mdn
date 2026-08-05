@@ -10,46 +10,40 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { vi } from 'vitest'
+import { createSupabaseMock } from './helpers/supabaseMock'
 
 // ── Mocks globales ─────────────────────────────────────────────────────────────
 
 vi.mock('../supabase', () => ({
-  supabase: {
-    from: vi.fn().mockReturnValue({
-      select:      vi.fn().mockReturnThis(),
-      insert:      vi.fn().mockReturnThis(),
-      update:      vi.fn().mockReturnThis(),
-      delete:      vi.fn().mockReturnThis(),
-      upsert:      vi.fn().mockReturnThis(),
-      eq:          vi.fn().mockReturnThis(),
-      order:       vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-      single:      vi.fn().mockResolvedValue({ data: null, error: null }),
-    }),
-    channel: vi.fn(() => ({ on: vi.fn().mockReturnThis(), subscribe: vi.fn().mockReturnThis() })),
-    removeChannel: vi.fn(),
-  },
+  supabase: createSupabaseMock(),
 }))
 
 vi.mock('../context/AuthContext', () => ({
   useAuth: vi.fn(() => ({
-    userProfile: { user_id: 'u-1', company_id: 'co-1', access_level: 4, admin: true, first_name: 'Admin', last_name: 'Test' },
+    userProfile: {
+      user_id: 'u-1',
+      company_id: 'co-1',
+      access_level: 4,
+      admin: true,
+      first_name: 'Admin',
+      last_name: 'Test',
+    },
     can: () => true,
     signOut: vi.fn(),
   })),
 }))
 
 vi.mock('recharts', () => ({
-  LineChart:           ({ children }) => <div data-testid="line-chart">{children}</div>,
-  BarChart:            ({ children }) => <div data-testid="bar-chart">{children}</div>,
-  Line:                () => null,
-  Bar:                 ({ children }) => <>{children}</>,
-  XAxis:               () => null,
-  YAxis:               () => null,
-  Tooltip:             () => null,
-  Legend:              () => null,
-  CartesianGrid:       () => null,
-  LabelList:           () => null,
+  LineChart: ({ children }) => <div data-testid="line-chart">{children}</div>,
+  BarChart: ({ children }) => <div data-testid="bar-chart">{children}</div>,
+  Line: () => null,
+  Bar: ({ children }) => <>{children}</>,
+  XAxis: () => null,
+  YAxis: () => null,
+  Tooltip: () => null,
+  Legend: () => null,
+  CartesianGrid: () => null,
+  LabelList: () => null,
   ResponsiveContainer: ({ children }) => <div>{children}</div>,
 }))
 
@@ -62,49 +56,70 @@ const mockLoadYearReports = vi.fn().mockResolvedValue({ data: [], error: null })
 const mockLoadCompanyEmployees = vi.fn().mockResolvedValue({
   data: [
     {
-      user_id: 'u-2', first_name: 'María', last_name: 'González',
+      user_id: 'u-2',
+      first_name: 'María',
+      last_name: 'González',
       avatar_url: null,
-      position:   { position_name: 'Diseñadora' },
+      position: { position_name: 'Diseñadora' },
       department: { department_name: 'Diseño' },
-      email: 'maria@mdn.com', phone_number: null,
-      hire_date: null, birth_date: null, access_level: 2, admin: false,
+      email: 'maria@mdn.com',
+      phone_number: null,
+      hire_date: null,
+      birth_date: null,
+      access_level: 2,
+      admin: false,
     },
   ],
   error: null,
 })
 const mockLoadClients = vi.fn().mockResolvedValue({
   data: [
-    { id: 'c-1', name: 'Pepsi', monthly_fee: 1500, payment_day: 5,
-      logo_url: null, line_id: 'l-1', contacts: [], social_links: [] },
+    {
+      id: 'c-1',
+      name: 'Pepsi',
+      monthly_fee: 1500,
+      payment_day: 5,
+      logo_url: null,
+      line_id: 'l-1',
+      contacts: [],
+      social_links: [],
+    },
   ],
   error: null,
 })
-const mockLoadReport    = vi.fn().mockResolvedValue({ data: null, error: null })
+const mockLoadReport = vi.fn().mockResolvedValue({ data: null, error: null })
 const mockLoadPrevReport = vi.fn().mockResolvedValue({ data: null, error: null })
-const mockUpsertReport  = vi.fn().mockResolvedValue({ data: null, error: null })
+const mockUpsertReport = vi.fn().mockResolvedValue({ data: null, error: null })
 
 vi.mock('../components/metricas/metricsApi', () => ({
-  loadYearReports:      (...a) => mockLoadYearReports(...a),
+  loadYearReports: (...a) => mockLoadYearReports(...a),
   loadCompanyEmployees: (...a) => mockLoadCompanyEmployees(...a),
-  loadClients:          (...a) => mockLoadClients(...a),
-  loadReport:           (...a) => mockLoadReport(...a),
-  loadPrevReport:       (...a) => mockLoadPrevReport(...a),
-  loadRecentReports:    vi.fn().mockResolvedValue({ data: [], error: null }),
-  upsertReport:         (...a) => mockUpsertReport(...a),
-  loadCompanyUsers:     vi.fn().mockResolvedValue({ data: [], error: null }),
-  seedMetricsIfEmpty:   vi.fn().mockResolvedValue(null),
-  loadLines:            vi.fn().mockResolvedValue({ data: [], error: null }),
+  loadClients: (...a) => mockLoadClients(...a),
+  loadReport: (...a) => mockLoadReport(...a),
+  loadPrevReport: (...a) => mockLoadPrevReport(...a),
+  loadRecentReports: vi.fn().mockResolvedValue({ data: [], error: null }),
+  upsertReport: (...a) => mockUpsertReport(...a),
+  loadCompanyUsers: vi.fn().mockResolvedValue({ data: [], error: null }),
+  seedMetricsIfEmpty: vi.fn().mockResolvedValue(null),
+  loadLines: vi.fn().mockResolvedValue({ data: [], error: null }),
 }))
 
 vi.mock('../utils/metricsFinance', () => ({
   calcFinanzas: vi.fn(() => ({
-    totIngresos: 1700, totGastosOperativos: 0,
-    totSueldos: 0, totOtrosGastos: 0, totEgresos: 0, diferencia: 1700,
+    totIngresos: 1700,
+    totGastosOperativos: 0,
+    totSueldos: 0,
+    totOtrosGastos: 0,
+    totEgresos: 0,
+    diferencia: 1700,
   })),
   calcConsolidado: vi.fn(() => []),
-  calcConsolidadoConGasto: vi.fn(() => ({ rows: [], totals: { ingresos: 0, gastos: 0, diferencia: 0 } })),
+  calcConsolidadoConGasto: vi.fn(() => ({
+    rows: [],
+    totals: { ingresos: 0, gastos: 0, diferencia: 0 },
+  })),
   ensureFinanzas: vi.fn(),
-  fmtUSD: vi.fn(v => `$${v}`),
+  fmtUSD: vi.fn((v) => `$${v}`),
   lastNMonths: vi.fn(() => []),
   buildFinanceTrend: vi.fn(() => []),
 }))
@@ -123,13 +138,13 @@ vi.mock('../components/reuniones/meetingsApi', () => ({
 // ── Fixtures ───────────────────────────────────────────────────────────────────
 
 const MINIMAL_REPORT_DATA = {
-  reuniones:     { realizadas: 0, meta: 15 },
+  reuniones: { realizadas: 0, meta: 15 },
   productividad: { tareas: [] },
-  crecimiento:   { items: [] },
-  solicitudes:   { solicitudes: 0, editadas: 0 },
-  pautas:        { items: [] },
-  piezas:        { piezas: 0, editadas: 0 },
-  finanzas:      { ingresos: [], gastosOperativos: [], sueldos: [], otrosGastos: [] },
+  crecimiento: { items: [] },
+  solicitudes: { solicitudes: 0, editadas: 0 },
+  pautas: { items: [] },
+  piezas: { piezas: 0, editadas: 0 },
+  finanzas: { ingresos: [], gastosOperativos: [], sueldos: [], otrosGastos: [] },
 }
 
 const FINANZAS_REPORT_DATA = {
@@ -137,7 +152,7 @@ const FINANZAS_REPORT_DATA = {
   finanzas: {
     ingresos: [
       { id: 'i-1', clienteId: 'c-1', descripcion: 'Pepsi', monto: 1500 },
-      { id: 'i-2', clienteId: null,   descripcion: 'Otro ingreso', monto: 200 },
+      { id: 'i-2', clienteId: null, descripcion: 'Otro ingreso', monto: 200 },
     ],
     gastosOperativos: [],
     sueldos: [],
@@ -158,22 +173,22 @@ function wrap(ui, initialEntry = '/') {
 import EmployeeInfoModal from '../components/metricas/EmployeeInfoModal'
 
 const MOCK_EMPLOYEE = {
-  user_id:      'u-2',
-  first_name:   'María',
-  last_name:    'González',
-  email:        'maria@mdn.com',
+  user_id: 'u-2',
+  first_name: 'María',
+  last_name: 'González',
+  email: 'maria@mdn.com',
   phone_number: '+58 412 1234567',
-  hire_date:    '2023-03-15',
-  birth_date:   '1995-07-22',
+  hire_date: '2023-03-15',
+  birth_date: '1995-07-22',
   access_level: 2,
-  admin:        false,
-  avatar_url:   null,
+  admin: false,
+  avatar_url: null,
   position: {
-    position_name:        'Diseñadora',
+    position_name: 'Diseñadora',
     position_description: 'Responsable de identidad visual de las marcas.',
-    position_functions:   ['Crear piezas gráficas', 'Revisar calendarios', 'Coordinar con clientes'],
+    position_functions: ['Crear piezas gráficas', 'Revisar calendarios', 'Coordinar con clientes'],
   },
-  department:   { department_name: 'Diseño' },
+  department: { department_name: 'Diseño' },
 }
 
 describe('EmployeeInfoModal — ficha del empleado', () => {
@@ -255,32 +270,48 @@ describe('EmployeeInfoModal — ficha del empleado', () => {
 import ClientFichaModal from '../components/metricas/ClientFichaModal'
 
 const MOCK_CLIENT = {
-  id:               'c-1',
-  name:             'Pepsi',
-  line_id:          'l-1',
-  monthly_fee:      1500,
-  payment_day:      5,
-  website:          'https://pepsi.com',
+  id: 'c-1',
+  name: 'Pepsi',
+  line_id: 'l-1',
+  monthly_fee: 1500,
+  payment_day: 5,
+  website: 'https://pepsi.com',
   anniversary_date: '2019-04-01',
-  mdn_since:        '2021-06-15',
-  logo_url:         null,
+  mdn_since: '2021-06-15',
+  logo_url: null,
   social_manager_id: 'u-social',
-  designer_id:       'u-design',
-  audiovisual_ids:   ['u-av1'],
-  apoyo_ids:         [],
-  contacts: [
-    { name: 'Carlos Rodríguez', role: 'Marketing', birth_day: 10, birth_month: 3 },
-  ],
+  designer_id: 'u-design',
+  audiovisual_ids: ['u-av1'],
+  apoyo_ids: [],
+  contacts: [{ name: 'Carlos Rodríguez', role: 'Marketing', birth_day: 10, birth_month: 3 }],
   social_links: [
     { red: 'Instagram', link: 'https://instagram.com/pepsi' },
-    { red: 'TikTok',    link: 'https://tiktok.com/@pepsi' },
+    { red: 'TikTok', link: 'https://tiktok.com/@pepsi' },
   ],
 }
 
 const MOCK_EMPLOYEES = [
-  { user_id: 'u-social', first_name: 'Ana',   last_name: 'García',   avatar_url: null, department_id: 1 },
-  { user_id: 'u-design', first_name: 'Pedro',  last_name: 'López',    avatar_url: null, department_id: 3 },
-  { user_id: 'u-av1',    first_name: 'Camila', last_name: 'Torres',   avatar_url: null, department_id: 2 },
+  {
+    user_id: 'u-social',
+    first_name: 'Ana',
+    last_name: 'García',
+    avatar_url: null,
+    department_id: 1,
+  },
+  {
+    user_id: 'u-design',
+    first_name: 'Pedro',
+    last_name: 'López',
+    avatar_url: null,
+    department_id: 3,
+  },
+  {
+    user_id: 'u-av1',
+    first_name: 'Camila',
+    last_name: 'Torres',
+    avatar_url: null,
+    department_id: 2,
+  },
 ]
 
 describe('ClientFichaModal — ficha técnica del cliente (usuario privilegiado)', () => {
@@ -349,7 +380,14 @@ describe('ClientFichaModal — gating para usuarios sin privilegio (nivel < 4, n
   afterEach(() => {
     // Restaurar el mock original con admin: true
     useAuthImport.mockReturnValue({
-      userProfile: { user_id: 'u-1', company_id: 'co-1', access_level: 4, admin: true, first_name: 'Admin', last_name: 'Test' },
+      userProfile: {
+        user_id: 'u-1',
+        company_id: 'co-1',
+        access_level: 4,
+        admin: true,
+        first_name: 'Admin',
+        last_name: 'Test',
+      },
       can: () => true,
       signOut: vi.fn(),
     })
@@ -378,22 +416,50 @@ describe('ClientFichaModal — gating para usuarios sin privilegio (nivel < 4, n
 
 describe('ClientFichaModal — equipo asignado (con lista de empleados)', () => {
   it('muestra la sección Equipo asignado cuando se pasan empleados y el cliente tiene equipo', () => {
-    wrap(<ClientFichaModal client={MOCK_CLIENT} line={MOCK_LINE} onClose={vi.fn()} employees={MOCK_EMPLOYEES} />)
+    wrap(
+      <ClientFichaModal
+        client={MOCK_CLIENT}
+        line={MOCK_LINE}
+        onClose={vi.fn()}
+        employees={MOCK_EMPLOYEES}
+      />,
+    )
     expect(screen.getByText('Equipo asignado')).toBeInTheDocument()
   })
 
   it('muestra el nombre del Social Asignado resuelto por user_id', () => {
-    wrap(<ClientFichaModal client={MOCK_CLIENT} line={MOCK_LINE} onClose={vi.fn()} employees={MOCK_EMPLOYEES} />)
+    wrap(
+      <ClientFichaModal
+        client={MOCK_CLIENT}
+        line={MOCK_LINE}
+        onClose={vi.fn()}
+        employees={MOCK_EMPLOYEES}
+      />,
+    )
     expect(screen.getByText('Ana García')).toBeInTheDocument()
   })
 
   it('muestra el nombre del Diseñador Asignado resuelto por user_id', () => {
-    wrap(<ClientFichaModal client={MOCK_CLIENT} line={MOCK_LINE} onClose={vi.fn()} employees={MOCK_EMPLOYEES} />)
+    wrap(
+      <ClientFichaModal
+        client={MOCK_CLIENT}
+        line={MOCK_LINE}
+        onClose={vi.fn()}
+        employees={MOCK_EMPLOYEES}
+      />,
+    )
     expect(screen.getByText('Pedro López')).toBeInTheDocument()
   })
 
   it('muestra el nombre del miembro audiovisual resuelto por user_id', () => {
-    wrap(<ClientFichaModal client={MOCK_CLIENT} line={MOCK_LINE} onClose={vi.fn()} employees={MOCK_EMPLOYEES} />)
+    wrap(
+      <ClientFichaModal
+        client={MOCK_CLIENT}
+        line={MOCK_LINE}
+        onClose={vi.fn()}
+        employees={MOCK_EMPLOYEES}
+      />,
+    )
     expect(screen.getByText('Camila Torres')).toBeInTheDocument()
   })
 })
@@ -487,9 +553,7 @@ describe('OperacionesView — sin sección Feedback', () => {
   })
 
   it('no renderiza el título "7. Feedback de clientes"', async () => {
-    wrap(
-      <OperacionesView line={MOCK_LINE} companyId="co-1" year={2026} month={6} />,
-    )
+    wrap(<OperacionesView line={MOCK_LINE} companyId="co-1" year={2026} month={6} />)
     await waitFor(() => {
       expect(screen.getByText(/Reuniones realizadas/i)).toBeInTheDocument()
     })
@@ -497,9 +561,7 @@ describe('OperacionesView — sin sección Feedback', () => {
   })
 
   it('sí renderiza las 6 secciones restantes', async () => {
-    wrap(
-      <OperacionesView line={MOCK_LINE} companyId="co-1" year={2026} month={6} />,
-    )
+    wrap(<OperacionesView line={MOCK_LINE} companyId="co-1" year={2026} month={6} />)
     await waitFor(() => {
       expect(screen.getByText(/Reuniones realizadas/i)).toBeInTheDocument()
     })
@@ -578,8 +640,16 @@ describe('OperacionesView — Crecimiento seguidores: editabilidad por campo', (
     mockLoadReport.mockResolvedValue({ data: { data: CRECIMIENTO_REPORT_DATA }, error: null })
     mockLoadClients.mockResolvedValue({
       data: [
-        { id: 'c-1', name: 'Pepsi', monthly_fee: 1500, payment_day: 5,
-          logo_url: null, line_id: 'l-1', contacts: [], social_links: [] },
+        {
+          id: 'c-1',
+          name: 'Pepsi',
+          monthly_fee: 1500,
+          payment_day: 5,
+          logo_url: null,
+          line_id: 'l-1',
+          contacts: [],
+          social_links: [],
+        },
       ],
       error: null,
     })
@@ -605,7 +675,9 @@ describe('OperacionesView — Crecimiento seguidores: editabilidad por campo', (
     await waitFor(() => {
       expect(screen.getByText(/Crecimiento de seguidores/i)).toBeInTheDocument()
     })
-    expect(screen.queryByText(/algunos valores del mes anterior están vacíos/i)).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/algunos valores del mes anterior están vacíos/i),
+    ).not.toBeInTheDocument()
     const ganSpan = screen.getByText(/Gan\. May/)
     const ganInput = ganSpan.closest('div').querySelector('input')
     expect(ganInput).toBeDisabled()
@@ -655,14 +727,29 @@ describe('FinanzasView — toggle Lista/Tarjetas + KPIs + Nómina', () => {
     mockLoadPrevReport.mockResolvedValue({ data: null, error: null })
     mockLoadClients.mockResolvedValue({
       data: [
-        { id: 'c-1', name: 'Pepsi', monthly_fee: 1500, payment_day: 5,
-          logo_url: null, line_id: 'l-1', contacts: [], social_links: [] },
+        {
+          id: 'c-1',
+          name: 'Pepsi',
+          monthly_fee: 1500,
+          payment_day: 5,
+          logo_url: null,
+          line_id: 'l-1',
+          contacts: [],
+          social_links: [],
+        },
       ],
       error: null,
     })
     // Restaurar auth privilegiado
     useAuthImport.mockReturnValue({
-      userProfile: { user_id: 'u-1', company_id: 'co-1', access_level: 4, admin: true, first_name: 'Admin', last_name: 'Test' },
+      userProfile: {
+        user_id: 'u-1',
+        company_id: 'co-1',
+        access_level: 4,
+        admin: true,
+        first_name: 'Admin',
+        last_name: 'Test',
+      },
       can: () => true,
       signOut: vi.fn(),
     })
@@ -738,13 +825,28 @@ describe('FinanzasView — reporte cerrado (prop "closed")', () => {
     mockLoadPrevReport.mockResolvedValue({ data: null, error: null })
     mockLoadClients.mockResolvedValue({
       data: [
-        { id: 'c-1', name: 'Pepsi', monthly_fee: 1500, payment_day: 5,
-          logo_url: null, line_id: 'l-1', contacts: [], social_links: [] },
+        {
+          id: 'c-1',
+          name: 'Pepsi',
+          monthly_fee: 1500,
+          payment_day: 5,
+          logo_url: null,
+          line_id: 'l-1',
+          contacts: [],
+          social_links: [],
+        },
       ],
       error: null,
     })
     useAuthImport.mockReturnValue({
-      userProfile: { user_id: 'u-1', company_id: 'co-1', access_level: 4, admin: true, first_name: 'Admin', last_name: 'Test' },
+      userProfile: {
+        user_id: 'u-1',
+        company_id: 'co-1',
+        access_level: 4,
+        admin: true,
+        first_name: 'Admin',
+        last_name: 'Test',
+      },
       can: () => true,
       signOut: vi.fn(),
     })
@@ -752,16 +854,20 @@ describe('FinanzasView — reporte cerrado (prop "closed")', () => {
 
   it('deshabilita todos los inputs y el botón "Guardar finanzas"', async () => {
     wrap(<FinanzasView line={MOCK_LINE} companyId="co-1" year={2026} month={6} closed />)
-    await waitFor(() => { expect(screen.getByText('Guardar finanzas')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar finanzas')).toBeInTheDocument()
+    })
     expect(screen.getByText('Guardar finanzas')).toBeDisabled()
     const inputs = document.querySelectorAll('input, textarea, select')
     expect(inputs.length).toBeGreaterThan(0)
-    inputs.forEach(input => expect(input).toBeDisabled())
+    inputs.forEach((input) => expect(input).toBeDisabled())
   })
 
   it('sin "closed" (default) los inputs y el botón "Guardar finanzas" siguen habilitados', async () => {
     wrap(<FinanzasView line={MOCK_LINE} companyId="co-1" year={2026} month={6} />)
-    await waitFor(() => { expect(screen.getByText('Guardar finanzas')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar finanzas')).toBeInTheDocument()
+    })
     expect(screen.getByText('Guardar finanzas')).not.toBeDisabled()
   })
 })
@@ -772,24 +878,26 @@ describe('FinanzasView — reporte cerrado (prop "closed")', () => {
 
 describe('FinanzasView — Sueldos toggle Lista/Tarjetas y foto de perfil', () => {
   const EMPLOYEE_WITH_AVATAR = {
-    user_id:    'u-2',
+    user_id: 'u-2',
     first_name: 'María',
-    last_name:  'González',
+    last_name: 'González',
     avatar_url: 'https://res.cloudinary.com/test/image/upload/maria.jpg',
-    position:   { position_name: 'Diseñadora' },
+    position: { position_name: 'Diseñadora' },
     department: { department_name: 'Diseño' },
-    email: 'maria@mdn.com', phone_number: null,
-    hire_date: null, birth_date: null, access_level: 2, admin: false,
+    email: 'maria@mdn.com',
+    phone_number: null,
+    hire_date: null,
+    birth_date: null,
+    access_level: 2,
+    admin: false,
   }
 
   const SUELDOS_REPORT = {
     ...MINIMAL_REPORT_DATA,
     finanzas: {
-      ingresos:         [],
+      ingresos: [],
       gastosOperativos: [],
-      sueldos: [
-        { id: 'sue-u-2', empleadoId: 'u-2', descripcion: 'María González', monto: 1200 },
-      ],
+      sueldos: [{ id: 'sue-u-2', empleadoId: 'u-2', descripcion: 'María González', monto: 1200 }],
       otrosGastos: [],
     },
   }
@@ -800,7 +908,14 @@ describe('FinanzasView — Sueldos toggle Lista/Tarjetas y foto de perfil', () =
     mockLoadClients.mockResolvedValue({ data: [], error: null })
     mockLoadCompanyEmployees.mockResolvedValue({ data: [EMPLOYEE_WITH_AVATAR], error: null })
     useAuthImport.mockReturnValue({
-      userProfile: { user_id: 'u-1', company_id: 'co-1', access_level: 4, admin: true, first_name: 'Admin', last_name: 'Test' },
+      userProfile: {
+        user_id: 'u-1',
+        company_id: 'co-1',
+        access_level: 4,
+        admin: true,
+        first_name: 'Admin',
+        last_name: 'Test',
+      },
       can: () => true,
       signOut: vi.fn(),
     })
@@ -811,12 +926,18 @@ describe('FinanzasView — Sueldos toggle Lista/Tarjetas y foto de perfil', () =
     mockLoadCompanyEmployees.mockResolvedValue({
       data: [
         {
-          user_id: 'u-2', first_name: 'María', last_name: 'González',
+          user_id: 'u-2',
+          first_name: 'María',
+          last_name: 'González',
           avatar_url: null,
-          position:   { position_name: 'Diseñadora' },
+          position: { position_name: 'Diseñadora' },
           department: { department_name: 'Diseño' },
-          email: 'maria@mdn.com', phone_number: null,
-          hire_date: null, birth_date: null, access_level: 2, admin: false,
+          email: 'maria@mdn.com',
+          phone_number: null,
+          hire_date: null,
+          birth_date: null,
+          access_level: 2,
+          admin: false,
         },
       ],
       error: null,
@@ -891,7 +1012,7 @@ describe('FinanzasView — Sueldos toggle Lista/Tarjetas y foto de perfil', () =
     await waitFor(() => expect(screen.getByText('Sueldos / Nómina')).toBeInTheDocument())
     await waitFor(() => {
       expect(screen.queryByAltText('MG')).not.toBeInTheDocument() // no hay <img>
-      expect(screen.getByText('MG')).toBeInTheDocument()           // se muestran iniciales
+      expect(screen.getByText('MG')).toBeInTheDocument() // se muestran iniciales
     })
   })
 })
@@ -913,7 +1034,7 @@ describe('FinanzasView — scroll a sección desde ?section=', () => {
       <MemoryRouter initialEntries={[`/reportes/linea/l-1${search}`]}>
         <FinanzasView line={MOCK_LINE} companyId="co-1" year={2026} month={month} />
         <LocationSpy />
-      </MemoryRouter>
+      </MemoryRouter>,
     )
   }
 
@@ -922,13 +1043,28 @@ describe('FinanzasView — scroll a sección desde ?section=', () => {
     mockLoadPrevReport.mockResolvedValue({ data: null, error: null })
     mockLoadClients.mockResolvedValue({
       data: [
-        { id: 'c-1', name: 'Pepsi', monthly_fee: 1500, payment_day: 5,
-          logo_url: null, line_id: 'l-1', contacts: [], social_links: [] },
+        {
+          id: 'c-1',
+          name: 'Pepsi',
+          monthly_fee: 1500,
+          payment_day: 5,
+          logo_url: null,
+          line_id: 'l-1',
+          contacts: [],
+          social_links: [],
+        },
       ],
       error: null,
     })
     useAuthImport.mockReturnValue({
-      userProfile: { user_id: 'u-1', company_id: 'co-1', access_level: 4, admin: true, first_name: 'Admin', last_name: 'Test' },
+      userProfile: {
+        user_id: 'u-1',
+        company_id: 'co-1',
+        access_level: 4,
+        admin: true,
+        first_name: 'Admin',
+        last_name: 'Test',
+      },
       can: () => true,
       signOut: vi.fn(),
     })
@@ -963,7 +1099,7 @@ describe('FinanzasView — scroll a sección desde ?section=', () => {
       <MemoryRouter initialEntries={['/reportes/linea/l-1?tab=finanzas&section=ingresos']}>
         <FinanzasView line={MOCK_LINE} companyId="co-1" year={2026} month={7} />
         <LocationSpy />
-      </MemoryRouter>
+      </MemoryRouter>,
     )
     await waitFor(() => expect(screen.getByText('Ingresos')).toBeInTheDocument())
     expect(scrollSpy).toHaveBeenCalledTimes(1)

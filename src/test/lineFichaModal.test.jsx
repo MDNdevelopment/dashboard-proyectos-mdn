@@ -9,30 +9,24 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { vi } from 'vitest'
+import { createSupabaseMock } from './helpers/supabaseMock'
 
 // ── Mocks globales ─────────────────────────────────────────────────────────────
 
 vi.mock('../supabase', () => ({
-  supabase: {
-    from: vi.fn().mockReturnValue({
-      select:      vi.fn().mockReturnThis(),
-      insert:      vi.fn().mockReturnThis(),
-      update:      vi.fn().mockReturnThis(),
-      delete:      vi.fn().mockReturnThis(),
-      upsert:      vi.fn().mockReturnThis(),
-      eq:          vi.fn().mockReturnThis(),
-      order:       vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-      single:      vi.fn().mockResolvedValue({ data: null, error: null }),
-    }),
-    channel: vi.fn(() => ({ on: vi.fn().mockReturnThis(), subscribe: vi.fn().mockReturnThis() })),
-    removeChannel: vi.fn(),
-  },
+  supabase: createSupabaseMock(),
 }))
 
 vi.mock('../context/AuthContext', () => ({
   useAuth: vi.fn(() => ({
-    userProfile: { user_id: 'u-1', company_id: 'co-1', access_level: 4, admin: true, first_name: 'Admin', last_name: 'Test' },
+    userProfile: {
+      user_id: 'u-1',
+      company_id: 'co-1',
+      access_level: 4,
+      admin: true,
+      first_name: 'Admin',
+      last_name: 'Test',
+    },
     can: () => true,
     signOut: vi.fn(),
   })),
@@ -53,32 +47,66 @@ vi.mock('../components/common/ConfirmDeleteDialog', () => ({
 
 // ── Fixtures ───────────────────────────────────────────────────────────────────
 
-const MOCK_LINE = { id: 'l-1', name: 'Georgina', color: '#FAB51A', member_user_ids: ['u-2'], lead_user_id: null, sort_order: 0 }
+const MOCK_LINE = {
+  id: 'l-1',
+  name: 'Georgina',
+  color: '#FAB51A',
+  member_user_ids: ['u-2'],
+  lead_user_id: null,
+  sort_order: 0,
+}
 
 const MOCK_EMPLOYEE = {
-  user_id: 'u-2', first_name: 'María', last_name: 'González',
+  user_id: 'u-2',
+  first_name: 'María',
+  last_name: 'González',
   avatar_url: null,
-  position:   { position_name: 'Diseñadora', position_description: 'Diseña piezas gráficas', position_functions: ['Crear artes'] },
+  position: {
+    position_name: 'Diseñadora',
+    position_description: 'Diseña piezas gráficas',
+    position_functions: ['Crear artes'],
+  },
   department: { department_name: 'Diseño' },
-  email: 'maria@mdn.com', phone_number: null,
-  hire_date: null, birth_date: null, access_level: 2, admin: false,
+  email: 'maria@mdn.com',
+  phone_number: null,
+  hire_date: null,
+  birth_date: null,
+  access_level: 2,
+  admin: false,
 }
 
 // Empleado NO asignado a MOCK_LINE — disponible para agregar desde la ficha
 const MOCK_EMPLOYEE_2 = {
-  user_id: 'u-3', first_name: 'Carlos', last_name: 'Pérez',
+  user_id: 'u-3',
+  first_name: 'Carlos',
+  last_name: 'Pérez',
   avatar_url: null,
-  position:   { position_name: 'Redactor', position_description: 'Escribe contenido', position_functions: [] },
+  position: {
+    position_name: 'Redactor',
+    position_description: 'Escribe contenido',
+    position_functions: [],
+  },
   department: { department_name: 'Redes' },
-  email: 'carlos@mdn.com', phone_number: null,
-  hire_date: null, birth_date: null, access_level: 1, admin: false,
+  email: 'carlos@mdn.com',
+  phone_number: null,
+  hire_date: null,
+  birth_date: null,
+  access_level: 1,
+  admin: false,
 }
 
 const MOCK_CLIENT = {
-  id: 'c-1', name: 'Pepsi', monthly_fee: 1500, payment_day: 5,
-  logo_url: null, line_id: 'l-1', website: 'https://pepsi.com',
+  id: 'c-1',
+  name: 'Pepsi',
+  monthly_fee: 1500,
+  payment_day: 5,
+  logo_url: null,
+  line_id: 'l-1',
+  website: 'https://pepsi.com',
   contacts: [{ name: 'Juan Pérez', role: 'Gerente', birth_day: 5, birth_month: 3 }],
-  social_links: [], mdn_since: null, anniversary_date: null,
+  social_links: [],
+  mdn_since: null,
+  anniversary_date: null,
 }
 
 // Reportes del año: meses 1 y 2 de la línea l-1 + un reporte de otra línea,
@@ -86,60 +114,85 @@ const MOCK_CLIENT = {
 const CURRENT_YEAR = new Date().getFullYear()
 const MOCK_REPORTS = [
   {
-    id: 'r-1', line_id: 'l-1', year: CURRENT_YEAR, month: 1,
-    data: { finanzas: { ingresos: [{ id: 'i-0', descripcion: 'Viejo', monto: 500 }], gastosOperativos: [], sueldos: [], otrosGastos: [] } },
-  },
-  {
-    id: 'r-2', line_id: 'l-1', year: CURRENT_YEAR, month: 2,
+    id: 'r-1',
+    line_id: 'l-1',
+    year: CURRENT_YEAR,
+    month: 1,
     data: {
       finanzas: {
-        ingresos:         [{ id: 'i-1', descripcion: 'Pepsi', monto: 1000 }],
-        gastosOperativos: [{ id: 'g-1', descripcion: 'Hosting', monto: 400 }],
-        sueldos:          [],
-        otrosGastos:      [],
+        ingresos: [{ id: 'i-0', descripcion: 'Viejo', monto: 500 }],
+        gastosOperativos: [],
+        sueldos: [],
+        otrosGastos: [],
       },
     },
   },
   {
-    id: 'r-3', line_id: 'l-otra', year: CURRENT_YEAR, month: 3,
-    data: { finanzas: { ingresos: [{ id: 'i-9', descripcion: 'Ajena', monto: 9999 }], gastosOperativos: [], sueldos: [], otrosGastos: [] } },
+    id: 'r-2',
+    line_id: 'l-1',
+    year: CURRENT_YEAR,
+    month: 2,
+    data: {
+      finanzas: {
+        ingresos: [{ id: 'i-1', descripcion: 'Pepsi', monto: 1000 }],
+        gastosOperativos: [{ id: 'g-1', descripcion: 'Hosting', monto: 400 }],
+        sueldos: [],
+        otrosGastos: [],
+      },
+    },
+  },
+  {
+    id: 'r-3',
+    line_id: 'l-otra',
+    year: CURRENT_YEAR,
+    month: 3,
+    data: {
+      finanzas: {
+        ingresos: [{ id: 'i-9', descripcion: 'Ajena', monto: 9999 }],
+        gastosOperativos: [],
+        sueldos: [],
+        otrosGastos: [],
+      },
+    },
   },
 ]
 
 // Mock de metricsApi centralizado
-const mockLoadLines            = vi.fn().mockResolvedValue({ data: [MOCK_LINE], error: null })
-const mockLoadCompanyUsers     = vi.fn().mockResolvedValue({
+const mockLoadLines = vi.fn().mockResolvedValue({ data: [MOCK_LINE], error: null })
+const mockLoadCompanyUsers = vi.fn().mockResolvedValue({
   data: [{ user_id: 'u-2', first_name: 'María', last_name: 'González', avatar_url: null }],
   error: null,
 })
-const mockLoadCompanyEmployees = vi.fn().mockResolvedValue({ data: [MOCK_EMPLOYEE, MOCK_EMPLOYEE_2], error: null })
-const mockLoadClients          = vi.fn().mockResolvedValue({ data: [MOCK_CLIENT], error: null })
-const mockUpdateLine           = vi.fn().mockResolvedValue({ data: null, error: null })
-const mockDeleteLine           = vi.fn().mockResolvedValue({ error: null })
-const mockLoadYearReports      = vi.fn().mockResolvedValue({ data: MOCK_REPORTS, error: null })
-const mockAddLineMember        = vi.fn().mockResolvedValue({ data: null, error: null })
-const mockRemoveLineMember     = vi.fn().mockResolvedValue({ data: null, error: null })
-const mockSetLineLeader        = vi.fn().mockResolvedValue({ data: null, error: null })
-const mockRemoveLineLeader     = vi.fn().mockResolvedValue({ data: null, error: null })
+const mockLoadCompanyEmployees = vi
+  .fn()
+  .mockResolvedValue({ data: [MOCK_EMPLOYEE, MOCK_EMPLOYEE_2], error: null })
+const mockLoadClients = vi.fn().mockResolvedValue({ data: [MOCK_CLIENT], error: null })
+const mockUpdateLine = vi.fn().mockResolvedValue({ data: null, error: null })
+const mockDeleteLine = vi.fn().mockResolvedValue({ error: null })
+const mockLoadYearReports = vi.fn().mockResolvedValue({ data: MOCK_REPORTS, error: null })
+const mockAddLineMember = vi.fn().mockResolvedValue({ data: null, error: null })
+const mockRemoveLineMember = vi.fn().mockResolvedValue({ data: null, error: null })
+const mockSetLineLeader = vi.fn().mockResolvedValue({ data: null, error: null })
+const mockRemoveLineLeader = vi.fn().mockResolvedValue({ data: null, error: null })
 
 vi.mock('../components/metricas/metricsApi', () => ({
-  loadLines:            (...a) => mockLoadLines(...a),
-  loadCompanyUsers:     (...a) => mockLoadCompanyUsers(...a),
+  loadLines: (...a) => mockLoadLines(...a),
+  loadCompanyUsers: (...a) => mockLoadCompanyUsers(...a),
   loadCompanyEmployees: (...a) => mockLoadCompanyEmployees(...a),
-  loadClients:          (...a) => mockLoadClients(...a),
-  updateLine:           (...a) => mockUpdateLine(...a),
-  deleteLine:           (...a) => mockDeleteLine(...a),
-  loadYearReports:      (...a) => mockLoadYearReports(...a),
-  addLineMember:        (...a) => mockAddLineMember(...a),
-  removeLineMember:     (...a) => mockRemoveLineMember(...a),
-  setLineLeader:        (...a) => mockSetLineLeader(...a),
-  removeLineLeader:     (...a) => mockRemoveLineLeader(...a),
+  loadClients: (...a) => mockLoadClients(...a),
+  updateLine: (...a) => mockUpdateLine(...a),
+  deleteLine: (...a) => mockDeleteLine(...a),
+  loadYearReports: (...a) => mockLoadYearReports(...a),
+  addLineMember: (...a) => mockAddLineMember(...a),
+  removeLineMember: (...a) => mockRemoveLineMember(...a),
+  setLineLeader: (...a) => mockSetLineLeader(...a),
+  removeLineLeader: (...a) => mockRemoveLineLeader(...a),
 }))
 
 // calcFinanzas real (suma los montos de los fixtures) + fmtUSD simplificado
-vi.mock('../utils/metricsFinance', async importOriginal => ({
+vi.mock('../utils/metricsFinance', async (importOriginal) => ({
   ...(await importOriginal()),
-  fmtUSD: vi.fn(v => `$${v}`),
+  fmtUSD: vi.fn((v) => `$${v}`),
 }))
 
 import LinesView from '../components/empresa/LinesView'
@@ -160,7 +213,7 @@ async function renderFicha(onClose = vi.fn()) {
     <>
       <LineFichaModal line={MOCK_LINE} companyId="co-1" onClose={onClose} />
       <LocationSpy />
-    </>
+    </>,
   )
   await waitFor(() => expect(screen.getByText('Miembros')).toBeInTheDocument())
   return onClose
@@ -170,12 +223,22 @@ beforeEach(() => {
   mockLoadYearReports.mockClear()
   mockUpdateLine.mockClear()
   mockLoadCompanyEmployees.mockClear()
-  mockLoadCompanyEmployees.mockResolvedValue({ data: [MOCK_EMPLOYEE, MOCK_EMPLOYEE_2], error: null })
+  mockLoadCompanyEmployees.mockResolvedValue({
+    data: [MOCK_EMPLOYEE, MOCK_EMPLOYEE_2],
+    error: null,
+  })
 })
 
 afterEach(() => {
   vi.mocked(useAuth).mockReturnValue({
-    userProfile: { user_id: 'u-1', company_id: 'co-1', access_level: 4, admin: true, first_name: 'Admin', last_name: 'Test' },
+    userProfile: {
+      user_id: 'u-1',
+      company_id: 'co-1',
+      access_level: 4,
+      admin: true,
+      first_name: 'Admin',
+      last_name: 'Test',
+    },
     can: () => true,
     signOut: vi.fn(),
   })
@@ -242,14 +305,20 @@ describe('LinesView — apertura de la ficha de línea', () => {
     await renderLines()
     await userEvent.click(screen.getByRole('button', { name: 'Ver ficha de Georgina' }))
     await waitFor(() => expect(screen.getByText('Miembros')).toBeInTheDocument())
-    expect(screen.getByRole('combobox', { name: 'Agregar empleado a Georgina' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('combobox', { name: 'Agregar empleado a Georgina' }),
+    ).toBeInTheDocument()
   })
 
   it('asignar empleado desde la ficha llama a addLineMember', async () => {
     const user = userEvent.setup()
     await renderLines()
     await user.click(screen.getByRole('button', { name: 'Ver ficha de Georgina' }))
-    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Agregar empleado a Georgina' })).toBeInTheDocument())
+    await waitFor(() =>
+      expect(
+        screen.getByRole('combobox', { name: 'Agregar empleado a Georgina' }),
+      ).toBeInTheDocument(),
+    )
 
     await user.selectOptions(
       screen.getByRole('combobox', { name: 'Agregar empleado a Georgina' }),
@@ -280,23 +349,32 @@ describe('LinesView — apertura de la ficha de línea', () => {
     await user.click(screen.getByRole('button', { name: 'Ver ficha de Georgina' }))
     await waitFor(() => expect(screen.getByText('María González')).toBeInTheDocument())
 
-    await user.click(screen.getByRole('button', { name: 'Marcar a María González como jefa de línea' }))
+    await user.click(
+      screen.getByRole('button', { name: 'Marcar a María González como jefa de línea' }),
+    )
 
     await waitFor(() => {
       expect(mockSetLineLeader).toHaveBeenCalledWith('l-1', 'u-2')
     })
     // Tras marcarla, el botón cambia a la variante "quitar"
-    expect(screen.getByRole('button', { name: 'Quitar a María González como jefa de línea' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Quitar a María González como jefa de línea' }),
+    ).toBeInTheDocument()
   })
 
   it('quitar el liderazgo de la jefa actual llama a removeLineLeader', async () => {
     const user = userEvent.setup()
-    mockLoadLines.mockResolvedValueOnce({ data: [{ ...MOCK_LINE, lead_user_id: 'u-2' }], error: null })
+    mockLoadLines.mockResolvedValueOnce({
+      data: [{ ...MOCK_LINE, lead_user_id: 'u-2' }],
+      error: null,
+    })
     await renderLines()
     await user.click(screen.getByRole('button', { name: 'Ver ficha de Georgina' }))
     await waitFor(() => expect(screen.getByText('María González')).toBeInTheDocument())
 
-    await user.click(screen.getByRole('button', { name: 'Quitar a María González como jefa de línea' }))
+    await user.click(
+      screen.getByRole('button', { name: 'Quitar a María González como jefa de línea' }),
+    )
 
     await waitFor(() => {
       expect(mockRemoveLineLeader).toHaveBeenCalledWith('l-1', 'u-2')
@@ -395,11 +473,13 @@ describe('LineFichaModal — drill-down en un solo modal', () => {
         canManage={true}
         onRemoveMember={vi.fn()}
         onClose={vi.fn()}
-      />
+      />,
     )
     await waitFor(() => expect(screen.getByText('María González')).toBeInTheDocument())
     expect(screen.queryByRole('button', { name: /jefa de línea/ })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Quitar a María González de la línea' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Quitar a María González de la línea' }),
+    ).toBeInTheDocument()
   })
 })
 
@@ -475,16 +555,49 @@ describe('LineFichaModal — resumen de finanzas del último período', () => {
     // Si estamos en Diciembre (12), este test no es aplicable (no hay mes futuro en el año)
     if (FUTURE_MONTH > 12) return
 
-    const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+    const MONTHS_ES = [
+      'Enero',
+      'Febrero',
+      'Marzo',
+      'Abril',
+      'Mayo',
+      'Junio',
+      'Julio',
+      'Agosto',
+      'Septiembre',
+      'Octubre',
+      'Noviembre',
+      'Diciembre',
+    ]
     mockLoadYearReports.mockResolvedValueOnce({
       data: [
         {
-          id: 'r-fut', line_id: 'l-1', year: CURRENT_YEAR, month: FUTURE_MONTH,
-          data: { finanzas: { ingresos: [{ id: 'x', descripcion: 'Futuro', monto: 9999 }], gastosOperativos: [], sueldos: [], otrosGastos: [] } },
+          id: 'r-fut',
+          line_id: 'l-1',
+          year: CURRENT_YEAR,
+          month: FUTURE_MONTH,
+          data: {
+            finanzas: {
+              ingresos: [{ id: 'x', descripcion: 'Futuro', monto: 9999 }],
+              gastosOperativos: [],
+              sueldos: [],
+              otrosGastos: [],
+            },
+          },
         },
         {
-          id: 'r-2', line_id: 'l-1', year: CURRENT_YEAR, month: 2,
-          data: { finanzas: { ingresos: [{ id: 'i-1', descripcion: 'Real', monto: 1000 }], gastosOperativos: [{ id: 'g-1', descripcion: 'x', monto: 123 }], sueldos: [], otrosGastos: [] } },
+          id: 'r-2',
+          line_id: 'l-1',
+          year: CURRENT_YEAR,
+          month: 2,
+          data: {
+            finanzas: {
+              ingresos: [{ id: 'i-1', descripcion: 'Real', monto: 1000 }],
+              gastosOperativos: [{ id: 'g-1', descripcion: 'x', monto: 123 }],
+              sueldos: [],
+              otrosGastos: [],
+            },
+          },
         },
       ],
       error: null,
@@ -492,7 +605,9 @@ describe('LineFichaModal — resumen de finanzas del último período', () => {
     await renderFicha()
     // Debe mostrar Febrero (mes 2), no el mes futuro
     expect(screen.getByText(`Finanzas · Febrero ${CURRENT_YEAR}`)).toBeInTheDocument()
-    expect(screen.queryByText(`Finanzas · ${MONTHS_ES[FUTURE_MONTH - 1]} ${CURRENT_YEAR}`)).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(`Finanzas · ${MONTHS_ES[FUTURE_MONTH - 1]} ${CURRENT_YEAR}`),
+    ).not.toBeInTheDocument()
     // Los KPIs del mes futuro ($9999) no deben aparecer
     expect(screen.queryByText('$9999')).not.toBeInTheDocument()
   })
@@ -502,27 +617,62 @@ describe('LineFichaModal — resumen de finanzas del último período', () => {
     // Necesitamos al menos dos meses pasados para este test
     if (CURRENT_MONTH_IN_TEST < 2) return
 
-    const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+    const MONTHS_ES = [
+      'Enero',
+      'Febrero',
+      'Marzo',
+      'Abril',
+      'Mayo',
+      'Junio',
+      'Julio',
+      'Agosto',
+      'Septiembre',
+      'Octubre',
+      'Noviembre',
+      'Diciembre',
+    ]
     mockLoadYearReports.mockResolvedValueOnce({
       data: [
         {
-          id: 'r-incomp', line_id: 'l-1', year: CURRENT_YEAR, month: CURRENT_MONTH_IN_TEST,
+          id: 'r-incomp',
+          line_id: 'l-1',
+          year: CURRENT_YEAR,
+          month: CURRENT_MONTH_IN_TEST,
           data: {
             incompleto: true,
-            finanzas: { ingresos: [{ id: 'y', descripcion: 'Incompleto', monto: 5000 }], gastosOperativos: [], sueldos: [], otrosGastos: [] },
+            finanzas: {
+              ingresos: [{ id: 'y', descripcion: 'Incompleto', monto: 5000 }],
+              gastosOperativos: [],
+              sueldos: [],
+              otrosGastos: [],
+            },
           },
         },
         {
-          id: 'r-prev', line_id: 'l-1', year: CURRENT_YEAR, month: CURRENT_MONTH_IN_TEST - 1,
-          data: { finanzas: { ingresos: [{ id: 'z', descripcion: 'Previo', monto: 2500 }], gastosOperativos: [{ id: 'g-2', descripcion: 'x', monto: 300 }], sueldos: [], otrosGastos: [] } },
+          id: 'r-prev',
+          line_id: 'l-1',
+          year: CURRENT_YEAR,
+          month: CURRENT_MONTH_IN_TEST - 1,
+          data: {
+            finanzas: {
+              ingresos: [{ id: 'z', descripcion: 'Previo', monto: 2500 }],
+              gastosOperativos: [{ id: 'g-2', descripcion: 'x', monto: 300 }],
+              sueldos: [],
+              otrosGastos: [],
+            },
+          },
         },
       ],
       error: null,
     })
     await renderFicha()
     // Debe mostrar el mes anterior al incompleto, no el mes incompleto
-    expect(screen.getByText(`Finanzas · ${MONTHS_ES[CURRENT_MONTH_IN_TEST - 2]} ${CURRENT_YEAR}`)).toBeInTheDocument()
-    expect(screen.queryByText(`Finanzas · ${MONTHS_ES[CURRENT_MONTH_IN_TEST - 1]} ${CURRENT_YEAR}`)).not.toBeInTheDocument()
+    expect(
+      screen.getByText(`Finanzas · ${MONTHS_ES[CURRENT_MONTH_IN_TEST - 2]} ${CURRENT_YEAR}`),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText(`Finanzas · ${MONTHS_ES[CURRENT_MONTH_IN_TEST - 1]} ${CURRENT_YEAR}`),
+    ).not.toBeInTheDocument()
     // El valor único del mes incompleto ($5000) no debe aparecer
     expect(screen.queryByText('$5000')).not.toBeInTheDocument()
   })
@@ -537,22 +687,24 @@ describe('LineFichaModal — navegación a la sección de Finanzas', () => {
     const onClose = await renderFicha()
     await userEvent.click(screen.getByTitle('Ir a ingresos'))
     expect(onClose).toHaveBeenCalledTimes(1)
-    expect(screen.getByTestId('location').textContent)
-      .toBe('/reportes/linea/l-1?tab=finanzas&section=ingresos')
+    expect(screen.getByTestId('location').textContent).toBe(
+      '/reportes/linea/l-1?tab=finanzas&section=ingresos',
+    )
   })
 
   it('click en "Total egresos" navega con section=gastos', async () => {
     const onClose = await renderFicha()
     await userEvent.click(screen.getByTitle('Ir a gastos'))
     expect(onClose).toHaveBeenCalledTimes(1)
-    expect(screen.getByTestId('location').textContent)
-      .toBe('/reportes/linea/l-1?tab=finanzas&section=gastos')
+    expect(screen.getByTestId('location').textContent).toBe(
+      '/reportes/linea/l-1?tab=finanzas&section=gastos',
+    )
   })
 
   it('sin can("reportes"): los KPIs se ven pero no son navegables', async () => {
     vi.mocked(useAuth).mockReturnValue({
       userProfile: { user_id: 'u-1', company_id: 'co-1', access_level: 4, admin: true },
-      can: k => k !== 'reportes',
+      can: (k) => k !== 'reportes',
       signOut: vi.fn(),
     })
     await renderFicha()
@@ -578,18 +730,19 @@ describe('LineFichaModal — botón Ver reporte → tab Resumen', () => {
     const onClose = await renderFicha()
     await userEvent.click(screen.getByRole('button', { name: /Ver reporte de la línea/i }))
     expect(onClose).toHaveBeenCalledTimes(1)
-    expect(screen.getByTestId('location').textContent)
-      .toBe('/reportes/linea/l-1?tab=hub')
+    expect(screen.getByTestId('location').textContent).toBe('/reportes/linea/l-1?tab=hub')
   })
 
   it('sin can("reportes") el botón NO aparece', async () => {
     vi.mocked(useAuth).mockReturnValue({
       userProfile: { user_id: 'u-1', company_id: 'co-1', access_level: 4, admin: true },
-      can: k => k !== 'reportes',
+      can: (k) => k !== 'reportes',
       signOut: vi.fn(),
     })
     await renderFicha()
-    expect(screen.queryByRole('button', { name: /Ver reporte de la línea/i })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /Ver reporte de la línea/i }),
+    ).not.toBeInTheDocument()
   })
 })
 
@@ -603,7 +756,7 @@ describe('LinesView — círculo de salud navega al reporte sin abrir la ficha',
       <>
         <LinesView companyId="co-1" canManage={true} />
         <LocationSpy />
-      </>
+      </>,
     )
   }
 
@@ -614,19 +767,20 @@ describe('LinesView — círculo de salud navega al reporte sin abrir la ficha',
     const dialBtn = screen.getByRole('button', { name: 'Ver reporte de Georgina' })
     await userEvent.click(dialBtn)
 
-    expect(screen.getByTestId('location').textContent)
-      .toBe('/reportes/linea/l-1?tab=hub')
+    expect(screen.getByTestId('location').textContent).toBe('/reportes/linea/l-1?tab=hub')
     expect(screen.queryByText('Miembros')).not.toBeInTheDocument()
   })
 
   it('sin can("reportes") el dial NO es un botón (no interactivo)', async () => {
     vi.mocked(useAuth).mockReturnValue({
       userProfile: { user_id: 'u-1', company_id: 'co-1', access_level: 4, admin: true },
-      can: k => k !== 'reportes',
+      can: (k) => k !== 'reportes',
       signOut: vi.fn(),
     })
     renderLinesWithSpy()
     await waitFor(() => expect(screen.getByText('Georgina')).toBeInTheDocument())
-    expect(screen.queryByRole('button', { name: 'Ver reporte de Georgina' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Ver reporte de Georgina' }),
+    ).not.toBeInTheDocument()
   })
 })

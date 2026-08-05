@@ -8,40 +8,38 @@
  */
 import { render, screen } from '@testing-library/react'
 import { vi } from 'vitest'
+import { createSupabaseMock } from './helpers/supabaseMock'
 
 // ── Datos de prueba ────────────────────────────────────────────────────────────
-const MOCK_TEAMS = [
-  { id: 'line-1', name: 'Georgina', color: '#FAB51A' },
-]
+const MOCK_TEAMS = [{ id: 'line-1', name: 'Georgina', color: '#FAB51A' }]
 
 const MOCK_CLIENTS = []
 
 const MOCK_USERS = []
 
 const MOCK_TASK = {
-  id: 'task-1', company_id: 'co-1',
-  team_id: 'line-1', client_id: null, client: null,
-  description: 'Hacer algo', status: 'En proceso',
-  assignee_id: null, support_id: null,
-  request_date: null, due_date: null, closed_date: null,
-  source: null, created_by: null,
+  id: 'task-1',
+  company_id: 'co-1',
+  team_id: 'line-1',
+  client_id: null,
+  client: null,
+  description: 'Hacer algo',
+  status: 'En proceso',
+  assignee_id: null,
+  support_id: null,
+  request_date: null,
+  due_date: null,
+  closed_date: null,
+  source: null,
+  created_by: null,
   checklist: [],
 }
 
 // ── Mocks ──────────────────────────────────────────────────────────────────────
+// El mock original respondía igual (data: null) para cualquier tabla; el factory
+// ya hace lo mismo por defecto (tabla no listada → makeQuery([]), single() → null).
 vi.mock('../supabase', () => ({
-  supabase: {
-    from: vi.fn().mockReturnValue({
-      insert: vi.fn().mockReturnThis(),
-      update: vi.fn().mockReturnThis(),
-      delete: vi.fn().mockReturnThis(),
-      select: vi.fn().mockReturnThis(),
-      eq:     vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: null, error: null }),
-    }),
-    channel:       vi.fn(() => ({ on: vi.fn().mockReturnThis(), subscribe: vi.fn().mockReturnThis() })),
-    removeChannel: vi.fn(),
-  },
+  supabase: createSupabaseMock(),
 }))
 
 vi.mock('../context/AuthContext', () => ({
@@ -79,10 +77,10 @@ describe('TaskModal — orden de Actividades/Comentarios vs. botones de acción'
     // DOCUMENT_POSITION_FOLLOWING (4) → el nodo comparado sigue al nodo de referencia.
     // Es decir: actividadesHeading y comentariosHeading deben venir ANTES que saveButton.
     expect(
-      actividadesHeading.compareDocumentPosition(saveButton) & Node.DOCUMENT_POSITION_FOLLOWING
+      actividadesHeading.compareDocumentPosition(saveButton) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
     expect(
-      comentariosHeading.compareDocumentPosition(saveButton) & Node.DOCUMENT_POSITION_FOLLOWING
+      comentariosHeading.compareDocumentPosition(saveButton) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
   })
 

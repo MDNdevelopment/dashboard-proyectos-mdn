@@ -3,16 +3,14 @@
  */
 import { render, screen } from '@testing-library/react'
 import { vi } from 'vitest'
+import { createSupabaseMock, makeQuery } from './helpers/supabaseMock'
 
 vi.mock('../supabase', () => ({
-  supabase: {
-    from: vi.fn().mockReturnValue({
-      update: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      select: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: null, error: null }),
-    }),
-  },
+  supabase: createSupabaseMock({
+    tables: {
+      tasks: () => makeQuery(null),
+    },
+  }),
 }))
 
 vi.mock('../components/tareas/taskStatus', () => ({
@@ -24,7 +22,10 @@ import KanbanView from '../components/tareas/KanbanView'
 const TEAM = { id: 't1', name: 'Redes', member_user_ids: ['u-ana'] }
 
 const USERS_MAP = new Map([
-  ['u-ana', { user_id: 'u-ana', first_name: 'Ana', last_name: 'Gómez', access_level: 1, avatar_url: null }],
+  [
+    'u-ana',
+    { user_id: 'u-ana', first_name: 'Ana', last_name: 'Gómez', access_level: 1, avatar_url: null },
+  ],
 ])
 
 function makeTask(overrides) {
@@ -49,9 +50,26 @@ const JAN_2026 = 2026 * 12 + 0
 const MAR_2026 = 2026 * 12 + 2
 
 const MONTH_TASKS = [
-  makeTask({ id: 'jan-open', description: 'Iniciada en enero, abierta', request_date: '2026-01-05', status: 'En proceso' }),
-  makeTask({ id: 'jan-closed', description: 'Cerrada en enero', request_date: '2026-01-05', due_date: '2026-01-20', closed_date: '2026-01-20', status: 'Terminado' }),
-  makeTask({ id: 'mar-new', description: 'Nace en marzo', request_date: '2026-03-02', status: 'Pendiente' }),
+  makeTask({
+    id: 'jan-open',
+    description: 'Iniciada en enero, abierta',
+    request_date: '2026-01-05',
+    status: 'En proceso',
+  }),
+  makeTask({
+    id: 'jan-closed',
+    description: 'Cerrada en enero',
+    request_date: '2026-01-05',
+    due_date: '2026-01-20',
+    closed_date: '2026-01-20',
+    status: 'Terminado',
+  }),
+  makeTask({
+    id: 'mar-new',
+    description: 'Nace en marzo',
+    request_date: '2026-03-02',
+    status: 'Pendiente',
+  }),
 ]
 
 function renderKanban(monthIdx) {

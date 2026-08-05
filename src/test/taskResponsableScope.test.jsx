@@ -9,21 +9,13 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
+import { createSupabaseMock } from './helpers/supabaseMock'
 
 // ── Mocks ──────────────────────────────────────────────────────────────────────
+// El mock original respondía igual (data: null) para cualquier tabla; el factory
+// ya hace lo mismo por defecto (tabla no listada → makeQuery([]), single() → null).
 vi.mock('../supabase', () => ({
-  supabase: {
-    from: vi.fn().mockReturnValue({
-      insert: vi.fn().mockReturnThis(),
-      update: vi.fn().mockReturnThis(),
-      delete: vi.fn().mockReturnThis(),
-      select: vi.fn().mockReturnThis(),
-      eq:     vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: null, error: null }),
-    }),
-    channel:       vi.fn(() => ({ on: vi.fn().mockReturnThis(), subscribe: vi.fn().mockReturnThis() })),
-    removeChannel: vi.fn(),
-  },
+  supabase: createSupabaseMock(),
 }))
 
 vi.mock('../context/AuthContext', () => ({
@@ -36,16 +28,44 @@ import TaskModal from '../components/tareas/TaskModal'
 
 // ── Datos de prueba ────────────────────────────────────────────────────────────
 const MOCK_TEAMS = [
-  { id: 'line-1', name: 'Georgina',  color: '#FAB51A', member_user_ids: ['u-ana', 'u-bruno'] },
+  { id: 'line-1', name: 'Georgina', color: '#FAB51A', member_user_ids: ['u-ana', 'u-bruno'] },
   { id: 'line-2', name: 'Daniellys', color: '#3B82F6', member_user_ids: ['u-carlos'] },
   { id: 'line-3', name: 'Sin miembros', color: '#aaa', member_user_ids: [] },
 ]
 
 const MOCK_USERS = [
-  { user_id: 'u-ana',    first_name: 'Ana',    last_name: 'García',  access_level: 1, avatar_url: null, position: null },
-  { user_id: 'u-bruno',  first_name: 'Bruno',  last_name: 'López',   access_level: 1, avatar_url: null, position: null },
-  { user_id: 'u-carlos', first_name: 'Carlos', last_name: 'Pérez',   access_level: 1, avatar_url: null, position: null },
-  { user_id: 'u-dir',    first_name: 'Diana',  last_name: 'Ruiz',    access_level: 4, avatar_url: null, position: null },
+  {
+    user_id: 'u-ana',
+    first_name: 'Ana',
+    last_name: 'García',
+    access_level: 1,
+    avatar_url: null,
+    position: null,
+  },
+  {
+    user_id: 'u-bruno',
+    first_name: 'Bruno',
+    last_name: 'López',
+    access_level: 1,
+    avatar_url: null,
+    position: null,
+  },
+  {
+    user_id: 'u-carlos',
+    first_name: 'Carlos',
+    last_name: 'Pérez',
+    access_level: 1,
+    avatar_url: null,
+    position: null,
+  },
+  {
+    user_id: 'u-dir',
+    first_name: 'Diana',
+    last_name: 'Ruiz',
+    access_level: 4,
+    avatar_url: null,
+    position: null,
+  },
 ]
 
 const MOCK_CLIENTS = []
@@ -104,14 +124,21 @@ describe('TaskModal — scope de Responsable al team seleccionado', () => {
   it('edición de tarea legacy: responsable fuera del team sigue visible en el picker', async () => {
     const user = userEvent.setup()
     const legacyTask = {
-      id: 'task-1', company_id: 'co-1',
+      id: 'task-1',
+      company_id: 'co-1',
       team_id: 'line-1',
       // Carlos es de line-2, pero estaba asignado antes de la migración (campo legacy)
-      assignee_id: 'u-carlos', support_id: null,
-      client_id: null, client: null,
-      description: 'Tarea antigua', status: 'En proceso',
-      request_date: null, due_date: null, closed_date: null,
-      source: null, created_by: null,
+      assignee_id: 'u-carlos',
+      support_id: null,
+      client_id: null,
+      client: null,
+      description: 'Tarea antigua',
+      status: 'En proceso',
+      request_date: null,
+      due_date: null,
+      closed_date: null,
+      source: null,
+      created_by: null,
     }
     renderModal({ task: legacyTask })
 

@@ -2,39 +2,20 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { vi } from 'vitest'
+import { createSupabaseMock, makeQuery } from './helpers/supabaseMock'
 
 // ── Mock supabase ─────────────────────────────────────────────────────────────
-vi.mock('../supabase', () => {
-  const channel = { on: vi.fn().mockReturnThis(), subscribe: vi.fn().mockReturnThis() }
-
-  const mockFrom = vi.fn()
-  const makeQuery = (result = []) => ({
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    order: vi.fn().mockResolvedValue({ data: result, error: null }),
-    insert: vi.fn().mockReturnThis(),
-    update: vi.fn().mockReturnThis(),
-    delete: vi.fn().mockReturnThis(),
-    single: vi.fn().mockResolvedValue({ data: result[0] ?? null, error: null }),
-  })
-
-  mockFrom.mockImplementation(table => {
-    if (table === 'questions')          return makeQuery(MOCK_QUESTIONS)
-    if (table === 'departments')        return makeQuery(MOCK_DEPARTMENTS)
-    if (table === 'positions')          return makeQuery(MOCK_POSITIONS)
-    if (table === 'question_positions') return makeQuery([])
-    if (table === 'question_tags')      return makeQuery([])
-    return makeQuery([])
-  })
-
-  return {
-    supabase: {
-      from: mockFrom,
-      channel: vi.fn(() => channel),
-      removeChannel: vi.fn(),
+vi.mock('../supabase', () => ({
+  supabase: createSupabaseMock({
+    tables: {
+      questions: () => makeQuery(MOCK_QUESTIONS),
+      departments: () => makeQuery(MOCK_DEPARTMENTS),
+      positions: () => makeQuery(MOCK_POSITIONS),
+      question_positions: () => makeQuery([]),
+      question_tags: () => makeQuery([]),
     },
-  }
-})
+  }),
+}))
 
 // ── Mock AuthContext ──────────────────────────────────────────────────────────
 vi.mock('../context/AuthContext', () => ({
@@ -43,12 +24,27 @@ vi.mock('../context/AuthContext', () => ({
 
 // ── Datos de prueba ───────────────────────────────────────────────────────────
 const MOCK_DEPARTMENTS = [
-  { department_id: 'd1', department_name: 'Diseño',     company_id: 'co-1', dashboard_visible: true },
-  { department_id: 'd2', department_name: 'Tecnología', company_id: 'co-1', dashboard_visible: true },
+  { department_id: 'd1', department_name: 'Diseño', company_id: 'co-1', dashboard_visible: true },
+  {
+    department_id: 'd2',
+    department_name: 'Tecnología',
+    company_id: 'co-1',
+    dashboard_visible: true,
+  },
 ]
 const MOCK_POSITIONS = [
-  { position_id: 'p1', position_name: 'Diseñador Gráfico', department_id: 'd1', company_id: 'co-1' },
-  { position_id: 'p2', position_name: 'Desarrollador Web',  department_id: 'd2', company_id: 'co-1' },
+  {
+    position_id: 'p1',
+    position_name: 'Diseñador Gráfico',
+    department_id: 'd1',
+    company_id: 'co-1',
+  },
+  {
+    position_id: 'p2',
+    position_name: 'Desarrollador Web',
+    department_id: 'd2',
+    company_id: 'co-1',
+  },
 ]
 const MOCK_QUESTIONS = [
   {
@@ -87,14 +83,20 @@ function renderAsAdmin(path = '/empresa/preguntas') {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <EmpresaPage />
-    </MemoryRouter>
+    </MemoryRouter>,
   )
 }
 
 // Capabilities restringidas para nivel 1 según los defaults sembrados
 const LEVEL1_RESTRICTED = [
-  'empresa.departamentos', 'empresa.empleados', 'empresa.preguntas', 'empresa.permisos',
-  'empresa.clientes', 'empresa.lineas', 'empresa.clientes.manage', 'empresa.lineas.manage',
+  'empresa.departamentos',
+  'empresa.empleados',
+  'empresa.preguntas',
+  'empresa.permisos',
+  'empresa.clientes',
+  'empresa.lineas',
+  'empresa.clientes.manage',
+  'empresa.lineas.manage',
 ]
 
 function renderAsNonAdmin() {
@@ -112,7 +114,7 @@ function renderAsNonAdmin() {
   return render(
     <MemoryRouter initialEntries={['/empresa']}>
       <EmpresaPage />
-    </MemoryRouter>
+    </MemoryRouter>,
   )
 }
 
@@ -252,7 +254,7 @@ describe('QuestionsView', () => {
     render(
       <MemoryRouter initialEntries={['/empresa/preguntas']}>
         <EmpresaPage />
-      </MemoryRouter>
+      </MemoryRouter>,
     )
     expect(screen.getByRole('button', { name: 'Inicio' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '+ Nueva pregunta' })).not.toBeInTheDocument()
