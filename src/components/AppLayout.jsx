@@ -8,6 +8,8 @@ import ProjectDetailModal from './ProjectDetailModal'
 import MDNLogo from './MDNLogo'
 import InstallBanner from './InstallBanner'
 import NotificationBell from './notifications/NotificationBell'
+import WhatsNewModal from './WhatsNewModal'
+import { useWhatsNew } from '../hooks/useWhatsNew'
 import { exportProjectsToMarkdown, downloadMarkdown } from '../utils/exportProjectsToMarkdown'
 
 const normalize = (row) => ({ ...row, createdAt: row.created_at })
@@ -22,9 +24,12 @@ export default function AppLayout() {
   const [modalProject, setModalProject] = useState(undefined)
   const [detailId, setDetailId] = useState(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const detailProject = detailId ? projects.find(p => p.id === detailId) : null
+  const { entries: whatsNewEntries, dismiss: dismissWhatsNew } = useWhatsNew()
+  const detailProject = detailId ? projects.find((p) => p.id === detailId) : null
 
-  useEffect(() => { setSidebarOpen(false) }, [location.pathname])
+  useEffect(() => {
+    setSidebarOpen(false)
+  }, [location.pathname])
 
   useEffect(() => {
     // Channel is created synchronously so the cleanup always has a reference to it,
@@ -32,10 +37,14 @@ export default function AppLayout() {
     const channel = supabase
       .channel('projects-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, (payload) => {
-        setProjects(prev => {
-          if (payload.eventType === 'INSERT') return prev.some(p => p.id === payload.new.id) ? prev : [normalize(payload.new), ...prev]
-          if (payload.eventType === 'UPDATE') return prev.map(p => p.id === payload.new.id ? normalize(payload.new) : p)
-          if (payload.eventType === 'DELETE') return prev.filter(p => p.id !== payload.old.id)
+        setProjects((prev) => {
+          if (payload.eventType === 'INSERT')
+            return prev.some((p) => p.id === payload.new.id)
+              ? prev
+              : [normalize(payload.new), ...prev]
+          if (payload.eventType === 'UPDATE')
+            return prev.map((p) => (p.id === payload.new.id ? normalize(payload.new) : p))
+          if (payload.eventType === 'DELETE') return prev.filter((p) => p.id !== payload.old.id)
           return prev
         })
       })
@@ -46,13 +55,19 @@ export default function AppLayout() {
       .select('*')
       .order('created_at', { ascending: false })
       .then(({ data, error }) => {
-        if (error) { setLoading(false); setConnected(false); return }
+        if (error) {
+          setLoading(false)
+          setConnected(false)
+          return
+        }
         setProjects(data.map(normalize))
         setLoading(false)
         setConnected(true)
       })
 
-    return () => { supabase.removeChannel(channel) }
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   const createProject = async (data) => {
@@ -60,11 +75,12 @@ export default function AppLayout() {
   }
 
   const duplicateProject = async (project) => {
-    const regenIds = (phases) => (phases ?? []).map(ph => ({
-      ...ph,
-      id: Math.random().toString(36).slice(2),
-      tasks: (ph.tasks ?? []).map(t => ({ ...t, id: Math.random().toString(36).slice(2) })),
-    }))
+    const regenIds = (phases) =>
+      (phases ?? []).map((ph) => ({
+        ...ph,
+        id: Math.random().toString(36).slice(2),
+        tasks: (ph.tasks ?? []).map((t) => ({ ...t, id: Math.random().toString(36).slice(2) })),
+      }))
     const { data, error } = await supabase
       .from('projects')
       .insert({
@@ -79,7 +95,7 @@ export default function AppLayout() {
       .select()
       .single()
     if (error || !data) return
-    setProjects(prev => prev.some(p => p.id === data.id) ? prev : [normalize(data), ...prev])
+    setProjects((prev) => (prev.some((p) => p.id === data.id) ? prev : [normalize(data), ...prev]))
   }
 
   const updateProject = async (id, updates) => {
@@ -96,22 +112,23 @@ export default function AppLayout() {
   useEffect(() => {
     const projectId = searchParams.get('projectId')
     if (!projectId || projects.length === 0) return
-    const project = projects.find(p => p.id === projectId)
+    const project = projects.find((p) => p.id === projectId)
     if (project) setModalProject(project)
     // Limpiar el param del URL después de procesar
-    setSearchParams(prev => {
-      const next = new URLSearchParams(prev)
-      next.delete('projectId')
-      return next
-    }, { replace: true })
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete('projectId')
+        return next
+      },
+      { replace: true },
+    )
   }, [searchParams, projects])
 
   const exportProjects = async () => {
-    const { data: users } = await supabase
-      .from('users')
-      .select('user_id, first_name, last_name')
+    const { data: users } = await supabase.from('users').select('user_id, first_name, last_name')
     const usersMap = new Map(
-      (users ?? []).map(u => [u.user_id, `${u.first_name} ${u.last_name}`.trim()])
+      (users ?? []).map((u) => [u.user_id, `${u.first_name} ${u.last_name}`.trim()]),
     )
     const today = new Date().toISOString().slice(0, 10)
     downloadMarkdown(`proyectos-mdn-${today}.md`, exportProjectsToMarkdown(projects, usersMap))
@@ -126,16 +143,28 @@ export default function AppLayout() {
         />
       )}
 
-      <div className={`fixed lg:sticky top-0 h-screen z-50 transition-transform duration-200 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+      <div
+        className={`fixed lg:sticky top-0 h-screen z-50 transition-transform duration-200 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
+      >
         <Sidebar />
       </div>
 
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Mobile top bar — visible on all routes */}
         <div className="lg:hidden flex items-center px-5 py-3.5 bg-white border-b border-[#e8e5db] sticky top-0 z-30">
-          <button onClick={() => setSidebarOpen(o => !o)} className="text-[#777] hover:text-[#111] transition-colors flex-shrink-0">
-            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d="M3 5h14M3 10h14M3 15h14" strokeLinecap="round"/>
+          <button
+            onClick={() => setSidebarOpen((o) => !o)}
+            className="text-[#777] hover:text-[#111] transition-colors flex-shrink-0"
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 20 20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+            >
+              <path d="M3 5h14M3 10h14M3 15h14" strokeLinecap="round" />
             </svg>
           </button>
           <div className="flex-1 flex justify-center">
@@ -144,28 +173,35 @@ export default function AppLayout() {
           <NotificationBell />
         </div>
 
-        <Outlet context={{
-          projects,
-          loading,
-          onNewProject: () => setModalProject(null),
-          onEditProject: (p) => setModalProject(p),
-          onViewProject: (p) => setDetailId(p.id),
-          onUpdateProject: updateProject,
-          onDeleteProject: deleteProject,
-          onDuplicateProject: duplicateProject,
-          onMenuToggle: () => setSidebarOpen(o => !o),
-          onExport: exportProjects,
-        }} />
+        <Outlet
+          context={{
+            projects,
+            loading,
+            onNewProject: () => setModalProject(null),
+            onEditProject: (p) => setModalProject(p),
+            onViewProject: (p) => setDetailId(p.id),
+            onUpdateProject: updateProject,
+            onDeleteProject: deleteProject,
+            onDuplicateProject: duplicateProject,
+            onMenuToggle: () => setSidebarOpen((o) => !o),
+            onExport: exportProjects,
+          }}
+        />
       </div>
 
       <InstallBanner />
+
+      <WhatsNewModal entries={whatsNewEntries} onClose={dismissWhatsNew} />
 
       {detailProject && (
         <ProjectDetailModal
           project={detailProject}
           onClose={() => setDetailId(null)}
           onUpdate={(u) => updateProject(detailProject.id, u)}
-          onEdit={() => { setDetailId(null); setModalProject(detailProject) }}
+          onEdit={() => {
+            setDetailId(null)
+            setModalProject(detailProject)
+          }}
         />
       )}
 
