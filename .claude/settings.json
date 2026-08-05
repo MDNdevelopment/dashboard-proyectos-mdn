@@ -1,9 +1,32 @@
 {
   "permissions": {
-    "allow": [
-      "Bash(npm test)",
-      "Bash(npm test *)",
-      "mcp__supabase__list_projects"
+    "allow": ["Bash(npm test)", "Bash(npm test *)", "mcp__supabase__list_projects"]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/post-edit-check.sh",
+            "timeout": 60,
+            "statusMessage": "Lint + tests relacionados..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/stop-test-check.sh",
+            "timeout": 120,
+            "statusMessage": "Verificando suite de tests..."
+          }
+        ]
+      }
     ]
   }
 }

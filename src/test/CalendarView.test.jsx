@@ -25,7 +25,7 @@ function renderCalendar(props = {}) {
       onMeetingClick={vi.fn()}
       onToggleHeld={vi.fn()}
       {...props}
-    />
+    />,
   )
 }
 
@@ -74,7 +74,7 @@ describe('CalendarView', () => {
     renderCalendar({ onDayClick })
     // Día 10 de julio 2026 no tiene reuniones (único "10" en el grid: no hay overflow
     // de junio/agosto que llegue a ese número en este mes)
-    await user.click(screen.getByText('10'));
+    await user.click(screen.getByText('10'))
     expect(onDayClick).toHaveBeenCalled()
   })
 })
@@ -86,45 +86,63 @@ describe('CalendarView — estados visuales por status', () => {
   // cuándo corra la suite, pasando el year/month correspondiente a renderCalendar.
 
   it('una reunión "programada" futura se ve azul, sin ícono de toggle', () => {
-    const meetings = [{ id: 'm-1', title: 'Futura', starts_at: '2099-01-25T14:00:00', status: 'programada' }]
+    const meetings = [
+      { id: 'm-1', title: 'Futura', starts_at: '2099-01-25T14:00:00', status: 'programada' },
+    ]
     renderCalendar({ meetings, year: 2099, month: 1 })
     const pill = screen.getByText(/14:00 Futura/).closest('[role="button"]')
     expect(pill.className).toContain('bg-blue-50')
     expect(pill.className).not.toContain('line-through')
-    expect(screen.queryByRole('button', { name: /Marcar "Futura" como realizada/ })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /Marcar "Futura" como realizada/ }),
+    ).not.toBeInTheDocument()
   })
 
   it('una reunión "realizada" muestra ✓ y texto normal (no tachado)', () => {
-    const meetings = [{ id: 'm-1', title: 'Hecha', starts_at: '2020-01-10T14:00:00', status: 'realizada' }]
+    const meetings = [
+      { id: 'm-1', title: 'Hecha', starts_at: '2020-01-10T14:00:00', status: 'realizada' },
+    ]
     renderCalendar({ meetings, year: 2020, month: 1 })
     const pill = screen.getByText(/Hecha/).closest('[role="button"]')
     expect(pill.className).not.toContain('line-through')
-    expect(screen.getByRole('button', { name: /Desmarcar "Hecha" como realizada/ })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /Desmarcar "Hecha" como realizada/ }),
+    ).toBeInTheDocument()
   })
 
   it('una reunión "programada" con fecha vencida se ve en estado de alerta', () => {
-    const meetings = [{ id: 'm-1', title: 'Vencida', starts_at: '2020-01-10T14:00:00', status: 'programada' }]
+    const meetings = [
+      { id: 'm-1', title: 'Vencida', starts_at: '2020-01-10T14:00:00', status: 'programada' },
+    ]
     renderCalendar({ meetings, year: 2020, month: 1 })
     const pill = screen.getByText(/Vencida/).closest('[role="button"]')
     expect(pill.className).toContain('red')
     // No hay botón de marcar directo — el ícono de alerta es solo decorativo, click abre el detalle
-    expect(screen.queryByRole('button', { name: /Marcar "Vencida" como realizada/ })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /Marcar "Vencida" como realizada/ }),
+    ).not.toBeInTheDocument()
   })
 
   it('una reunión de HOY con la hora ya pasada NO se ve en alerta (vence recién al día siguiente)', () => {
     const today = new Date()
     today.setHours(0, 0, 1, 0) // temprano en el día — casi seguro ya "pasó" respecto a la hora actual
-    const meetings = [{ id: 'm-1', title: 'DeHoy', starts_at: today.toISOString(), status: 'programada' }]
+    const meetings = [
+      { id: 'm-1', title: 'DeHoy', starts_at: today.toISOString(), status: 'programada' },
+    ]
     renderCalendar({ meetings, year: today.getFullYear(), month: today.getMonth() + 1 })
     const pill = screen.getByText(/DeHoy/).closest('[role="button"]')
     expect(pill.className).not.toContain('red')
-    expect(screen.queryByRole('button', { name: /Marcar "DeHoy" como realizada/ })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /Marcar "DeHoy" como realizada/ }),
+    ).not.toBeInTheDocument()
   })
 
   it('una reunión de AYER sí se ve en alerta (el día ya pasó)', () => {
     const yesterday = new Date()
     yesterday.setDate(yesterday.getDate() - 1)
-    const meetings = [{ id: 'm-1', title: 'DeAyer', starts_at: yesterday.toISOString(), status: 'programada' }]
+    const meetings = [
+      { id: 'm-1', title: 'DeAyer', starts_at: yesterday.toISOString(), status: 'programada' },
+    ]
     renderCalendar({ meetings, year: yesterday.getFullYear(), month: yesterday.getMonth() + 1 })
     const pill = screen.getByText(/DeAyer/).closest('[role="button"]')
     expect(pill.className).toContain('red')
@@ -134,7 +152,12 @@ describe('CalendarView — estados visuales por status', () => {
     const user = userEvent.setup()
     const onMeetingClick = vi.fn()
     const onToggleHeld = vi.fn()
-    const meeting = { id: 'm-1', title: 'Hecha', starts_at: '2020-01-10T14:00:00', status: 'realizada' }
+    const meeting = {
+      id: 'm-1',
+      title: 'Hecha',
+      starts_at: '2020-01-10T14:00:00',
+      status: 'realizada',
+    }
     renderCalendar({ meetings: [meeting], year: 2020, month: 1, onMeetingClick, onToggleHeld })
     await user.click(screen.getByRole('button', { name: /Desmarcar "Hecha" como realizada/ }))
     expect(onToggleHeld).toHaveBeenCalledWith(meeting)
@@ -145,7 +168,12 @@ describe('CalendarView — estados visuales por status', () => {
     const user = userEvent.setup()
     const onMeetingClick = vi.fn()
     const onToggleHeld = vi.fn()
-    const meeting = { id: 'm-1', title: 'Vencida', starts_at: '2020-01-10T14:00:00', status: 'programada' }
+    const meeting = {
+      id: 'm-1',
+      title: 'Vencida',
+      starts_at: '2020-01-10T14:00:00',
+      status: 'programada',
+    }
     renderCalendar({ meetings: [meeting], year: 2020, month: 1, onMeetingClick, onToggleHeld })
     await user.click(screen.getByText(/Vencida/))
     expect(onMeetingClick).toHaveBeenCalledWith(meeting)
@@ -153,7 +181,9 @@ describe('CalendarView — estados visuales por status', () => {
   })
 
   it('una reunión cancelada no ofrece toggle de realizada', () => {
-    const meetings = [{ id: 'm-1', title: 'Cancelada', starts_at: '2026-07-20T10:00:00', status: 'cancelada' }]
+    const meetings = [
+      { id: 'm-1', title: 'Cancelada', starts_at: '2026-07-20T10:00:00', status: 'cancelada' },
+    ]
     renderCalendar({ meetings })
     expect(screen.queryByRole('button', { name: /realizada/i })).not.toBeInTheDocument()
   })
@@ -161,30 +191,64 @@ describe('CalendarView — estados visuales por status', () => {
 
 describe('CalendarView — ícono de "me incluye"', () => {
   it('muestra el ícono de persona en una reunión donde el usuario actual es asistente', () => {
-    const meetings = [{ id: 'm-1', title: 'Conmigo', starts_at: '2026-07-15T14:00:00', status: 'programada', attendee_ids: ['u1', 'u2'] }]
+    const meetings = [
+      {
+        id: 'm-1',
+        title: 'Conmigo',
+        starts_at: '2026-07-15T14:00:00',
+        status: 'programada',
+        attendee_ids: ['u1', 'u2'],
+      },
+    ]
     renderCalendar({ meetings, currentUserId: 'u1' })
     const pill = screen.getByText(/14:00 Conmigo/).closest('[role="button"]')
     expect(pill.querySelector('svg[aria-label="Te incluye como participante"]')).toBeInTheDocument()
   })
 
   it('NO muestra el ícono de persona cuando el usuario actual no es asistente', () => {
-    const meetings = [{ id: 'm-1', title: 'SinMi', starts_at: '2026-07-15T14:00:00', status: 'programada', attendee_ids: ['u2'] }]
+    const meetings = [
+      {
+        id: 'm-1',
+        title: 'SinMi',
+        starts_at: '2026-07-15T14:00:00',
+        status: 'programada',
+        attendee_ids: ['u2'],
+      },
+    ]
     renderCalendar({ meetings, currentUserId: 'u1' })
     const pill = screen.getByText(/14:00 SinMi/).closest('[role="button"]')
-    expect(pill.querySelector('svg')).not.toBeInTheDocument()
+    expect(
+      pill.querySelector('svg[aria-label="Te incluye como participante"]'),
+    ).not.toBeInTheDocument()
   })
 })
 
 describe('CalendarView — nombre de cliente en la pill', () => {
   it('muestra el nombre del cliente en vez del título cuando la reunión tiene client_name', () => {
-    const meetings = [{ id: 'm-1', title: 'Kickoff', client_name: 'Acme Corp', starts_at: '2026-07-15T14:00:00', status: 'programada' }]
+    const meetings = [
+      {
+        id: 'm-1',
+        title: 'Kickoff',
+        client_name: 'Acme Corp',
+        starts_at: '2026-07-15T14:00:00',
+        status: 'programada',
+      },
+    ]
     renderCalendar({ meetings })
     expect(screen.getByText(/14:00 Acme Corp/)).toBeInTheDocument()
     expect(screen.queryByText(/14:00 Kickoff/)).not.toBeInTheDocument()
   })
 
   it('usa el título como fallback cuando la reunión no tiene client_name', () => {
-    const meetings = [{ id: 'm-1', title: 'Kickoff', client_name: null, starts_at: '2026-07-15T14:00:00', status: 'programada' }]
+    const meetings = [
+      {
+        id: 'm-1',
+        title: 'Kickoff',
+        client_name: null,
+        starts_at: '2026-07-15T14:00:00',
+        status: 'programada',
+      },
+    ]
     renderCalendar({ meetings })
     expect(screen.getByText(/14:00 Kickoff/)).toBeInTheDocument()
   })
@@ -213,7 +277,15 @@ describe('CalendarView — vista compacta de móvil (puntos)', () => {
   })
 
   it('un punto usa el nombre del cliente como title si está presente', () => {
-    const meetings = [{ id: 'm-1', title: 'Kickoff', client_name: 'Acme Corp', starts_at: '2026-07-15T09:00:00', status: 'programada' }]
+    const meetings = [
+      {
+        id: 'm-1',
+        title: 'Kickoff',
+        client_name: 'Acme Corp',
+        starts_at: '2026-07-15T09:00:00',
+        status: 'programada',
+      },
+    ]
     renderCalendar({ meetings })
     expect(screen.getByTitle('Acme Corp')).toBeInTheDocument()
   })

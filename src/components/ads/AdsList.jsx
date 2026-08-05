@@ -4,32 +4,46 @@ import AdsCard from './AdsCard'
 import { STATUSES, PRIORITIES } from './constants'
 
 const COLUMNS = [
-  { key: 'client',     label: 'Cliente',    sortable: true  },
-  { key: 'name',       label: 'Táctica',    sortable: true  },
-  { key: 'assignee',   label: 'Responsable',sortable: true  },
-  { key: 'start_date', label: 'Inicio',     sortable: true  },
-  { key: 'end_date',   label: 'Fecha fin',  sortable: true  },
-  { key: 'priority',   label: 'Prioridad',  sortable: true  },
-  { key: 'status',     label: 'Estado',     sortable: true  },
-  { key: 'actions',    label: '',           sortable: false },
+  { key: 'client', label: 'Cliente', sortable: true },
+  { key: 'name', label: 'Táctica', sortable: true },
+  { key: 'assignee', label: 'Responsable', sortable: true },
+  { key: 'start_date', label: 'Inicio', sortable: true },
+  { key: 'end_date', label: 'Fecha fin', sortable: true },
+  { key: 'priority', label: 'Prioridad', sortable: true },
+  { key: 'status', label: 'Estado', sortable: true },
+  { key: 'actions', label: '', sortable: false },
 ]
 
 const PRIORITY_ORDER = { Alta: 0, Media: 1, Baja: 2 }
 
-const AdsList = forwardRef(function AdsList({ campaigns, loading, canManage, usersMap, clientsById, periodo, onSelect, onUpdated, onDeleted, onEdit }, ref) {
-  const [search, setSearch]               = useState('')
-  const [filterStatus, setFilterStatus]   = useState('all')
+const AdsList = forwardRef(function AdsList(
+  {
+    campaigns,
+    loading,
+    canManage,
+    usersMap,
+    clientsById,
+    periodo,
+    onSelect,
+    onUpdated,
+    onDeleted,
+    onEdit,
+  },
+  ref,
+) {
+  const [search, setSearch] = useState('')
+  const [filterStatus, setFilterStatus] = useState('all')
   const [filterPriority, setFilterPriority] = useState('all')
-  const [filterClient, setFilterClient]   = useState('all')
-  const [sortKey, setSortKey]             = useState('start_date')
-  const [sortAsc, setSortAsc]             = useState(false)
-  const [inlineEditId, setInlineEditId]   = useState(null)
+  const [filterClient, setFilterClient] = useState('all')
+  const [sortKey, setSortKey] = useState('start_date')
+  const [sortAsc, setSortAsc] = useState(false)
+  const [inlineEditId, setInlineEditId] = useState(null)
   const [inlineEditValue, setInlineEditValue] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(null)
 
-  const clients = [...new Set(campaigns.map(c => c.client))].sort()
+  const clients = [...new Set(campaigns.map((c) => c.client))].sort()
 
-  const filtered = campaigns.filter(c => {
+  const filtered = campaigns.filter((c) => {
     if (filterStatus !== 'all' && c.status !== filterStatus) return false
     if (filterPriority !== 'all' && c.priority !== filterPriority) return false
     if (filterClient !== 'all' && c.client !== filterClient) return false
@@ -41,7 +55,8 @@ const AdsList = forwardRef(function AdsList({ campaigns, loading, canManage, use
         !c.client?.toLowerCase().includes(q) &&
         !resolvedName.toLowerCase().includes(q) &&
         !c.notes?.toLowerCase().includes(q)
-      ) return false
+      )
+        return false
     }
     return true
   })
@@ -62,12 +77,18 @@ const AdsList = forwardRef(function AdsList({ campaigns, loading, canManage, use
   })
 
   function handleSort(key) {
-    if (sortKey === key) setSortAsc(a => !a)
-    else { setSortKey(key); setSortAsc(true) }
+    if (sortKey === key) setSortAsc((a) => !a)
+    else {
+      setSortKey(key)
+      setSortAsc(true)
+    }
   }
 
   function clearFilters() {
-    setSearch(''); setFilterStatus('all'); setFilterPriority('all'); setFilterClient('all')
+    setSearch('')
+    setFilterStatus('all')
+    setFilterPriority('all')
+    setFilterClient('all')
   }
 
   useImperativeHandle(ref, () => ({
@@ -117,13 +138,17 @@ const AdsList = forwardRef(function AdsList({ campaigns, loading, canManage, use
     const active = sortKey === col.key
     return (
       <svg
-        width="8" height="8" viewBox="0 0 8 8" fill="none"
+        width="8"
+        height="8"
+        viewBox="0 0 8 8"
+        fill="none"
         className={`inline ml-1 flex-shrink-0 ${active ? 'opacity-100' : 'opacity-30'}`}
       >
-        {sortAsc && active
-          ? <path d="M4 1L7 6H1L4 1Z" fill="currentColor"/>
-          : <path d="M4 7L1 2H7L4 7Z" fill="currentColor"/>
-        }
+        {sortAsc && active ? (
+          <path d="M4 1L7 6H1L4 1Z" fill="currentColor" />
+        ) : (
+          <path d="M4 7L1 2H7L4 7Z" fill="currentColor" />
+        )}
       </svg>
     )
   }
@@ -135,37 +160,52 @@ const AdsList = forwardRef(function AdsList({ campaigns, loading, canManage, use
         <input
           type="text"
           value={search}
-          onChange={e => setSearch(e.target.value)}
+          onChange={(e) => setSearch(e.target.value)}
           placeholder="Buscar táctica, cliente, responsable..."
           className="input-base text-[14px] py-1.5 flex-1 min-w-[160px] sm:min-w-[200px]"
         />
         <div className="flex gap-2">
           <select
             value={filterStatus}
-            onChange={e => setFilterStatus(e.target.value)}
+            onChange={(e) => setFilterStatus(e.target.value)}
             className="input-base text-[14px] py-1.5"
           >
             <option value="all">Todos los estados</option>
-            {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
           </select>
           <select
             value={filterPriority}
-            onChange={e => setFilterPriority(e.target.value)}
+            onChange={(e) => setFilterPriority(e.target.value)}
             className="input-base text-[14px] py-1.5"
           >
             <option value="all">Todas las prioridades</option>
-            {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
+            {PRIORITIES.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
           </select>
           <select
             value={filterClient}
-            onChange={e => setFilterClient(e.target.value)}
+            onChange={(e) => setFilterClient(e.target.value)}
             className="input-base text-[14px] py-1.5"
           >
             <option value="all">Todos los clientes</option>
-            {clients.map(c => <option key={c} value={c}>{c}</option>)}
+            {clients.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
           </select>
         </div>
-        {(search || filterStatus !== 'all' || filterPriority !== 'all' || filterClient !== 'all') && (
+        {(search ||
+          filterStatus !== 'all' ||
+          filterPriority !== 'all' ||
+          filterClient !== 'all') && (
           <button
             onClick={clearFilters}
             className="px-3 py-1.5 rounded-lg border border-[#e0ddd4] text-[14px] font-medium text-[#555] hover:bg-[#f5f3eb] transition-colors"
@@ -184,7 +224,9 @@ const AdsList = forwardRef(function AdsList({ campaigns, loading, canManage, use
       {sorted.length === 0 ? (
         <div className="text-center py-16">
           <p className="text-[16px] font-medium text-[#888]">
-            {campaigns.length === 0 ? 'No hay campañas aún' : 'Sin resultados para los filtros aplicados'}
+            {campaigns.length === 0
+              ? 'No hay campañas aún'
+              : 'Sin resultados para los filtros aplicados'}
           </p>
         </div>
       ) : (
@@ -192,7 +234,7 @@ const AdsList = forwardRef(function AdsList({ campaigns, loading, canManage, use
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-[#ece9df] bg-[#fafaf7]">
-                {COLUMNS.map(col => (
+                {COLUMNS.map((col) => (
                   <th
                     key={col.key}
                     onClick={col.sortable ? () => handleSort(col.key) : undefined}
@@ -218,10 +260,13 @@ const AdsList = forwardRef(function AdsList({ campaigns, loading, canManage, use
                   onSelect={onSelect}
                   onStatusChange={handleStatusChange}
                   onEdit={onEdit}
-                  onDelete={campaign => setConfirmDelete(campaign)}
+                  onDelete={(campaign) => setConfirmDelete(campaign)}
                   inlineEditId={inlineEditId}
                   inlineEditValue={inlineEditValue}
-                  onInlineEditStart={(id, val) => { setInlineEditId(id); setInlineEditValue(val) }}
+                  onInlineEditStart={(id, val) => {
+                    setInlineEditId(id)
+                    setInlineEditValue(val)
+                  }}
                   onInlineEditChange={setInlineEditValue}
                   onInlineEditSave={handleInlineEditSave}
                 />
@@ -237,7 +282,8 @@ const AdsList = forwardRef(function AdsList({ campaigns, loading, canManage, use
           <div className="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full">
             <p className="text-[17px] font-semibold text-[#111] mb-1">¿Eliminar campaña?</p>
             <p className="text-[15px] text-[#666] mb-5">
-              Se eliminará <span className="font-semibold">"{confirmDelete.name}"</span> de forma permanente.
+              Se eliminará <span className="font-semibold">&ldquo;{confirmDelete.name}&rdquo;</span>{' '}
+              de forma permanente.
             </p>
             <div className="flex gap-3">
               <button
