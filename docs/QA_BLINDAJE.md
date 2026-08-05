@@ -173,7 +173,7 @@ cercana a "¿puedo confiar en estos tests sin leerlos?".
 > enfocándolo primero en la lógica pura de alto riesgo (`src/lib/`: permisos, SLA,
 > progreso, scoring — donde un bug silencioso hace más daño).
 
-### 2.3 Factory de mock de Supabase compartido
+### 2.3 Factory de mock de Supabase compartido — 🟡 parcial (2026-08-05, 23/45 archivos)
 
 Hoy el mock de Supabase está **duplicado inline en 47 archivos** con dos estilos distintos.
 Riesgo: cada test simula el backend a su manera, y un mock inconsistente puede pasar un
@@ -183,6 +183,26 @@ Extraer un único `src/test/helpers/supabaseMock.js` (basado en el patrón `make
 thenable que ya existe en `EvaluacionesPage.test.jsx`, el más completo) que todos importen.
 Un solo lugar donde el mock es correcto = los 123 tests comparten la misma verdad sobre el
 backend.
+
+**Hecho:** `src/test/helpers/supabaseMock.js` creado (`makeQuery`, `makeChannel`,
+`createSupabaseMock`). Migrados los 23 archivos con mocks "mecánicos" (switch estático
+por tabla, o un solo `from` genérico): `EvaluacionesPage`, `EmpresaDepartments`,
+`EmpresaEmployees`, `EmpresaQuestions`, `EvaluationModal`, `HomePage`, `TareasPage`,
+`AppLayout`, `AvatarUpload`, `BaseView`, `KanbanView`, `lineFichaModal`,
+`metricasModalsFichas`, `metricasNavigation`, `NotificationPreferencesPage`,
+`ProjectDetailModal`, `taskClientSelect`, `taskModalClientPicker`, `taskModalLayout`,
+`taskResponsableScope`, `TicketDetail`, `updateEmployeeSalaries`, `useTicketAnalytics`.
+
+**Pendiente (22 archivos):** `AdsDetail`, `AdsForm`, `AdsList`, `AdsPage`, `AdsSpendView`,
+`AiEvaluation`, `AuthContext`, `campaignSpendApi`, `ClientsView`, `EmpresaClientes`,
+`EmpresaLineas`, `LeadsPage`, `LinesView`, `meetingsApi`, `metricsApiClose`,
+`metricsApiLoadClients`, `metricsApiLoadLines`, `NewEmployeeDialog`,
+`ProjectModal.members`, `ProjectModal.reorder`, `ResetPasswordPage`, `ReunionesPage`,
+`tareasLineas`, `TicketForm`. Son en su mayoría mocks auth-only/minimalistas o con
+chains anidados muy específicos (ej. `insert().select().single()` con lógica por
+llamada) — forzarlos al factory genérico agregaría abstracción sin ganancia real.
+Migrar caso por caso cuando se toquen esos archivos por otro motivo, o en una pasada
+dedicada si el mismo patrón se repite en varios.
 
 > **Por qué importa para "no revisar":** si cada test miente distinto sobre Supabase, no
 > podés confiar en el conjunto sin leerlos uno por uno. Un mock canónico hace que "el test

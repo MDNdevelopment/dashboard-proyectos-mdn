@@ -1,45 +1,18 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { vi } from 'vitest'
+import { createSupabaseMock, makeQuery } from './helpers/supabaseMock'
 
 // ── Mock supabase ─────────────────────────────────────────────────────────────
-vi.mock('../supabase', () => {
-  const channel = { on: vi.fn().mockReturnThis(), subscribe: vi.fn().mockReturnThis() }
-
-  const makeQuery = (result = []) => {
-    const q = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      neq: vi.fn().mockReturnThis(),
-      is: vi.fn().mockReturnThis(),
-      order: vi.fn().mockResolvedValue({ data: result, error: null }),
-      insert: vi.fn().mockReturnThis(),
-      update: vi.fn().mockReturnThis(),
-      delete: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: result[0] ?? null, error: null }),
-    }
-    // Hace el objeto thenable para que `await supabase.from(...).select().eq()` resuelva
-    q.then = (resolve) => resolve({ data: result, error: null })
-    return q
-  }
-
-  const mockFrom = vi.fn()
-  mockFrom.mockImplementation(table => {
-    if (table === 'users')               return makeQuery(MOCK_USERS)
-    if (table === 'evaluation_sessions') return makeQuery([])
-    if (table === 'employee_evaluation_summary_last_month') return makeQuery([])
-    return makeQuery([])
-  })
-
-  return {
-    supabase: {
-      from: mockFrom,
-      channel: vi.fn(() => channel),
-      removeChannel: vi.fn(),
-      rpc: vi.fn().mockResolvedValue({ data: [], error: null }),
+// Las tablas se resuelven de forma perezosa (funciones) porque MOCK_USERS se
+// declara más abajo: vi.mock se hoistea por encima de esa declaración.
+vi.mock('../supabase', () => ({
+  supabase: createSupabaseMock({
+    tables: {
+      users: () => makeQuery(MOCK_USERS),
     },
-  }
-})
+  }),
+}))
 
 // ── Mock AuthContext ──────────────────────────────────────────────────────────
 vi.mock('../context/AuthContext', () => ({
@@ -83,7 +56,7 @@ function renderWithAuth(userProfile, path = '/evaluaciones') {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <EvaluacionesPage />
-    </MemoryRouter>
+    </MemoryRouter>,
   )
 }
 

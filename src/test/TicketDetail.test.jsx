@@ -1,11 +1,10 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
+import { createSupabaseMock } from './helpers/supabaseMock'
 
 vi.mock('../supabase', () => ({
-  supabase: {
-    from: vi.fn(),
-  },
+  supabase: createSupabaseMock(),
 }))
 
 vi.mock('../context/AuthContext', () => ({
@@ -83,7 +82,7 @@ describe('TicketDetail', () => {
     await userEvent.click(screen.getByRole('button', { name: '' }))
     // Use the SVG close button
     const buttons = screen.getAllByRole('button')
-    const closeBtn = buttons.find(b => b.querySelector('svg path[d="M2 2l12 12M14 2L2 14"]'))
+    const closeBtn = buttons.find((b) => b.querySelector('svg path[d="M2 2l12 12M14 2L2 14"]'))
     await userEvent.click(closeBtn)
     expect(onClose).toHaveBeenCalled()
   })

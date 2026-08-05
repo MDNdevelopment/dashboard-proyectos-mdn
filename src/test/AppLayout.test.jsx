@@ -1,6 +1,7 @@
 import { render, screen, waitFor, act } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { vi } from 'vitest'
+import { createSupabaseMock } from './helpers/supabaseMock'
 
 // Capture the onSave prop AppLayout passes to ProjectModal
 let capturedModalOnSave = null
@@ -12,19 +13,12 @@ vi.mock('../components/ProjectModal', () => ({
 }))
 
 // Must mock before importing AppLayout
-vi.mock('../supabase', () => {
-  const channelMock = {
-    on: vi.fn().mockReturnThis(),
-    subscribe: vi.fn().mockReturnThis(),
-  }
-  return {
-    supabase: {
-      from: vi.fn(),
-      channel: vi.fn(() => channelMock),
-      removeChannel: vi.fn(),
-    },
-  }
-})
+// Este archivo reasigna `supabase.from.mockImplementation(...)` en cada test
+// (vía buildFromChain) para simular el chain real de projects, así que basta
+// con que el factory provea `from`/`channel`/`removeChannel` como vi.fn().
+vi.mock('../supabase', () => ({
+  supabase: createSupabaseMock(),
+}))
 
 vi.mock('../context/AuthContext', () => ({
   useAuth: vi.fn(() => ({ userProfile: {}, session: {}, loading: false })),
@@ -75,7 +69,7 @@ function renderLayout() {
           <Route index element={<div data-testid="outlet" />} />
         </Route>
       </Routes>
-    </MemoryRouter>
+    </MemoryRouter>,
   )
 }
 
@@ -103,7 +97,6 @@ describe('AppLayout — carga inicial', () => {
     unmount()
     expect(supabase.removeChannel).toHaveBeenCalled()
   })
-
 })
 
 describe('AppLayout — CRUD', () => {
@@ -117,10 +110,19 @@ describe('AppLayout — CRUD', () => {
       <MemoryRouter initialEntries={['/']}>
         <Routes>
           <Route element={<AppLayout />}>
-            <Route index element={<CaptureContext onCapture={(c) => { capturedCtx = c }} />} />
+            <Route
+              index
+              element={
+                <CaptureContext
+                  onCapture={(c) => {
+                    capturedCtx = c
+                  }}
+                />
+              }
+            />
           </Route>
         </Routes>
-      </MemoryRouter>
+      </MemoryRouter>,
     )
 
     await waitFor(() => expect(capturedCtx).toBeDefined())
@@ -139,10 +141,19 @@ describe('AppLayout — CRUD', () => {
       <MemoryRouter initialEntries={['/']}>
         <Routes>
           <Route element={<AppLayout />}>
-            <Route index element={<CaptureContext onCapture={(c) => { capturedCtx = c }} />} />
+            <Route
+              index
+              element={
+                <CaptureContext
+                  onCapture={(c) => {
+                    capturedCtx = c
+                  }}
+                />
+              }
+            />
           </Route>
         </Routes>
-      </MemoryRouter>
+      </MemoryRouter>,
     )
 
     await waitFor(() => expect(capturedCtx).toBeDefined())
@@ -160,10 +171,19 @@ describe('AppLayout — CRUD', () => {
       <MemoryRouter initialEntries={['/']}>
         <Routes>
           <Route element={<AppLayout />}>
-            <Route index element={<CaptureContext onCapture={(c) => { capturedCtx = c }} />} />
+            <Route
+              index
+              element={
+                <CaptureContext
+                  onCapture={(c) => {
+                    capturedCtx = c
+                  }}
+                />
+              }
+            />
           </Route>
         </Routes>
-      </MemoryRouter>
+      </MemoryRouter>,
     )
 
     await waitFor(() => expect(capturedCtx).toBeDefined())
@@ -183,10 +203,19 @@ describe('AppLayout — CRUD', () => {
       <MemoryRouter initialEntries={['/']}>
         <Routes>
           <Route element={<AppLayout />}>
-            <Route index element={<CaptureContext onCapture={(c) => { capturedCtx = c }} />} />
+            <Route
+              index
+              element={
+                <CaptureContext
+                  onCapture={(c) => {
+                    capturedCtx = c
+                  }}
+                />
+              }
+            />
           </Route>
         </Routes>
-      </MemoryRouter>
+      </MemoryRouter>,
     )
 
     await waitFor(() => expect(capturedCtx).toBeDefined())
@@ -197,14 +226,23 @@ describe('AppLayout — CRUD', () => {
   })
 
   it('duplicateProject llama a insert con status Pendiente y sin id ni created_at', async () => {
-    const insertedRow = { ...sampleProject, id: 'uuid-dup', status: 'Pendiente', created_at: '2026-05-26T00:00:00Z' }
+    const insertedRow = {
+      ...sampleProject,
+      id: 'uuid-dup',
+      status: 'Pendiente',
+      created_at: '2026-05-26T00:00:00Z',
+    }
     const { insertMock, singleMock } = buildFromChain({ selectData: [insertedRow] })
 
     const sourceProject = {
       ...sampleProject,
       status: 'Completado',
       phases: [
-        { id: 'phase-1', name: 'Fase A', tasks: [{ id: 'task-1', name: 'Tarea 1', status: 'completada' }] },
+        {
+          id: 'phase-1',
+          name: 'Fase A',
+          tasks: [{ id: 'task-1', name: 'Tarea 1', status: 'completada' }],
+        },
       ],
     }
 
@@ -213,10 +251,19 @@ describe('AppLayout — CRUD', () => {
       <MemoryRouter initialEntries={['/']}>
         <Routes>
           <Route element={<AppLayout />}>
-            <Route index element={<CaptureContext onCapture={(c) => { capturedCtx = c }} />} />
+            <Route
+              index
+              element={
+                <CaptureContext
+                  onCapture={(c) => {
+                    capturedCtx = c
+                  }}
+                />
+              }
+            />
           </Route>
         </Routes>
-      </MemoryRouter>
+      </MemoryRouter>,
     )
 
     await waitFor(() => expect(capturedCtx).toBeDefined())
@@ -250,7 +297,12 @@ describe('AppLayout — realtime payload handling', () => {
   })
 
   it('INSERT agrega el proyecto al estado', async () => {
-    const newProject = { ...sampleProject, id: 'uuid-2', name: 'Nuevo proyecto', created_at: '2026-05-25T01:00:00Z' }
+    const newProject = {
+      ...sampleProject,
+      id: 'uuid-2',
+      name: 'Nuevo proyecto',
+      created_at: '2026-05-25T01:00:00Z',
+    }
     renderLayout()
     await waitFor(() => expect(realtimeCallback).toBeDefined())
     act(() => realtimeCallback({ eventType: 'INSERT', new: newProject, old: null }))
@@ -260,7 +312,13 @@ describe('AppLayout — realtime payload handling', () => {
   it('UPDATE reemplaza el proyecto en el estado', async () => {
     renderLayout()
     await waitFor(() => expect(realtimeCallback).toBeDefined())
-    act(() => realtimeCallback({ eventType: 'UPDATE', new: { ...sampleProject, status: 'Completado' }, old: sampleProject }))
+    act(() =>
+      realtimeCallback({
+        eventType: 'UPDATE',
+        new: { ...sampleProject, status: 'Completado' },
+        old: sampleProject,
+      }),
+    )
   })
 
   it('DELETE elimina el proyecto del estado', async () => {
@@ -275,10 +333,19 @@ describe('AppLayout — realtime payload handling', () => {
       <MemoryRouter initialEntries={['/']}>
         <Routes>
           <Route element={<AppLayout />}>
-            <Route index element={<CaptureContext onCapture={(c) => { capturedCtx = c }} />} />
+            <Route
+              index
+              element={
+                <CaptureContext
+                  onCapture={(c) => {
+                    capturedCtx = c
+                  }}
+                />
+              }
+            />
           </Route>
         </Routes>
-      </MemoryRouter>
+      </MemoryRouter>,
     )
     await waitFor(() => expect(realtimeCallback).toBeDefined())
     await waitFor(() => expect(capturedCtx).toBeDefined())

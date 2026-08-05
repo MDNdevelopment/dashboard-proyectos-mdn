@@ -8,6 +8,7 @@
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { createSupabaseMock } from './helpers/supabaseMock'
 
 // ─── Datos de prueba ──────────────────────────────────────────────────────────
 const CLOUD = 'mdnclientes'
@@ -23,10 +24,11 @@ const MOCK_USER = {
 }
 
 // ─── Mocks globales ───────────────────────────────────────────────────────────
+// El factory compartido no cubre `functions` (Edge Functions) — se añade aquí
+// porque este archivo es el único que ejerce ese flujo (firma de Cloudinary).
 vi.mock('../supabase', () => ({
   supabase: {
-    from: vi.fn(),
-    auth: { getSession: vi.fn() },
+    ...createSupabaseMock({ auth: { getSession: vi.fn() } }),
     functions: { invoke: vi.fn() },
   },
 }))
@@ -37,9 +39,9 @@ vi.mock('../context/AuthContext', () => ({ useAuth: vi.fn() }))
 // Nota: vi.mock se hoista, no puede usar vars del scope externo — usar literales
 vi.mock('../utils/uploadToCloudinary', () => ({
   cropToBlob: vi.fn().mockResolvedValue(new Blob(['fake-img'], { type: 'image/webp' })),
-  uploadToCloudinary: vi.fn().mockResolvedValue(
-    'https://res.cloudinary.com/mdnclientes/image/upload/v1/avatar.webp',
-  ),
+  uploadToCloudinary: vi
+    .fn()
+    .mockResolvedValue('https://res.cloudinary.com/mdnclientes/image/upload/v1/avatar.webp'),
 }))
 
 // react-image-crop: devuelve un área completada cuando se hace click
@@ -97,10 +99,20 @@ async function selectFile(readerMock) {
 
   // Mockear Image como constructor para que el paso de cuadrado (squaring) funcione en jsdom
   const imgMock = { naturalWidth: 100, naturalHeight: 100, onload: null, src: '' }
-  vi.stubGlobal('Image', vi.fn(function () { return imgMock }))
+  vi.stubGlobal(
+    'Image',
+    vi.fn(function () {
+      return imgMock
+    }),
+  )
 
   // Mockear FileReader como constructor (función regular, no arrow)
-  vi.stubGlobal('FileReader', vi.fn(function () { return readerMock }))
+  vi.stubGlobal(
+    'FileReader',
+    vi.fn(function () {
+      return readerMock
+    }),
+  )
 
   fireEvent.change(input, { target: { files: [file] } })
 
@@ -145,14 +157,19 @@ describe('uploadToCloudinary (helper real)', () => {
   })
 
   it('hace POST a la URL de Cloudinary correcta y devuelve secure_url', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ secure_url: SECURE_URL }),
-    }))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ secure_url: SECURE_URL }),
+      }),
+    )
 
     // Importar la función real (el vi.mock afecta solo a los módulos que lo usan como dep)
-    const { uploadToCloudinary: realUpload } = await import('../utils/uploadToCloudinary?real')
-      .catch(() => import('../utils/uploadToCloudinary'))
+    const { uploadToCloudinary: realUpload } =
+      await import('../utils/uploadToCloudinary?real').catch(
+        () => import('../utils/uploadToCloudinary'),
+      )
 
     const blob = new Blob(['img'], { type: 'image/webp' })
     const result = await realUpload(blob, 'user-123')
@@ -177,16 +194,23 @@ describe('uploadToCloudinary (helper real)', () => {
   })
 
   it('lanza un error cuando la respuesta no es ok', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: false,
-      json: async () => ({}),
-    }))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        json: async () => ({}),
+      }),
+    )
 
-    const { uploadToCloudinary: realUpload } = await import('../utils/uploadToCloudinary?real')
-      .catch(() => import('../utils/uploadToCloudinary'))
+    const { uploadToCloudinary: realUpload } =
+      await import('../utils/uploadToCloudinary?real').catch(
+        () => import('../utils/uploadToCloudinary'),
+      )
 
     const blob = new Blob(['img'], { type: 'image/webp' })
-    await expect(realUpload(blob, 'user-123')).rejects.toThrow('Error al subir la imagen a Cloudinary')
+    await expect(realUpload(blob, 'user-123')).rejects.toThrow(
+      'Error al subir la imagen a Cloudinary',
+    )
   })
 
   it('lanza un error cuando el Edge Function falla al obtener la firma', async () => {
@@ -195,11 +219,15 @@ describe('uploadToCloudinary (helper real)', () => {
       error: new Error('edge function error'),
     })
 
-    const { uploadToCloudinary: realUpload } = await import('../utils/uploadToCloudinary?real')
-      .catch(() => import('../utils/uploadToCloudinary'))
+    const { uploadToCloudinary: realUpload } =
+      await import('../utils/uploadToCloudinary?real').catch(
+        () => import('../utils/uploadToCloudinary'),
+      )
 
     const blob = new Blob(['img'], { type: 'image/webp' })
-    await expect(realUpload(blob, 'user-123')).rejects.toThrow('Error al obtener la firma de Cloudinary')
+    await expect(realUpload(blob, 'user-123')).rejects.toThrow(
+      'Error al obtener la firma de Cloudinary',
+    )
   })
 })
 
@@ -228,7 +256,15 @@ describe('AvatarUpload', () => {
   })
 
   it('oculta el trigger visual cuando size=0 (modo trigger externo)', () => {
-    render(<AvatarUpload user={MOCK_USER} onUploaded={vi.fn()} size={0} label="" triggerRef={{ current: null }} />)
+    render(
+      <AvatarUpload
+        user={MOCK_USER}
+        onUploaded={vi.fn()}
+        size={0}
+        label=""
+        triggerRef={{ current: null }}
+      />,
+    )
     // El file input sigue presente aunque el trigger visual esté oculto
     expect(screen.getByTestId('avatar-file-input')).toBeInTheDocument()
   })

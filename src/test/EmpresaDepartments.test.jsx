@@ -2,32 +2,17 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { vi } from 'vitest'
+import { createSupabaseMock, makeQuery } from './helpers/supabaseMock'
 
 // ── Mock supabase ─────────────────────────────────────────────────────────────
-vi.mock('../supabase', () => {
-  const channel = { on: vi.fn().mockReturnThis(), subscribe: vi.fn().mockReturnThis() }
-
-  const mockFrom = vi.fn()
-  const makeQuery = (result = []) => ({
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    order: vi.fn().mockResolvedValue({ data: result, error: null }),
-  })
-
-  mockFrom.mockImplementation(table => {
-    if (table === 'departments') return makeQuery(MOCK_DEPARTMENTS)
-    if (table === 'positions')   return makeQuery(MOCK_POSITIONS)
-    return makeQuery([])
-  })
-
-  return {
-    supabase: {
-      from: mockFrom,
-      channel: vi.fn(() => channel),
-      removeChannel: vi.fn(),
+vi.mock('../supabase', () => ({
+  supabase: createSupabaseMock({
+    tables: {
+      departments: () => makeQuery(MOCK_DEPARTMENTS),
+      positions: () => makeQuery(MOCK_POSITIONS),
     },
-  }
-})
+  }),
+}))
 
 // ── Mock AuthContext ──────────────────────────────────────────────────────────
 vi.mock('../context/AuthContext', () => ({
@@ -36,11 +21,21 @@ vi.mock('../context/AuthContext', () => ({
 
 // ── Datos de prueba ───────────────────────────────────────────────────────────
 const MOCK_DEPARTMENTS = [
-  { department_id: 'd1', department_name: 'Diseño',     company_id: 'co-1', dashboard_visible: true  },
-  { department_id: 'd2', department_name: 'Tecnología', company_id: 'co-1', dashboard_visible: false },
+  { department_id: 'd1', department_name: 'Diseño', company_id: 'co-1', dashboard_visible: true },
+  {
+    department_id: 'd2',
+    department_name: 'Tecnología',
+    company_id: 'co-1',
+    dashboard_visible: false,
+  },
 ]
 const MOCK_POSITIONS = [
-  { position_id: 'p1', position_name: 'Diseñador Gráfico', department_id: 'd1', company_id: 'co-1' },
+  {
+    position_id: 'p1',
+    position_name: 'Diseñador Gráfico',
+    department_id: 'd1',
+    company_id: 'co-1',
+  },
 ]
 
 import { useAuth } from '../context/AuthContext'
@@ -62,14 +57,20 @@ function renderAsAdmin(path = '/empresa/departamentos') {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <EmpresaPage />
-    </MemoryRouter>
+    </MemoryRouter>,
   )
 }
 
 // Capabilities restringidas para nivel 1 según los defaults sembrados
 const LEVEL1_RESTRICTED = [
-  'empresa.departamentos', 'empresa.empleados', 'empresa.preguntas', 'empresa.permisos',
-  'empresa.clientes', 'empresa.lineas', 'empresa.clientes.manage', 'empresa.lineas.manage',
+  'empresa.departamentos',
+  'empresa.empleados',
+  'empresa.preguntas',
+  'empresa.permisos',
+  'empresa.clientes',
+  'empresa.lineas',
+  'empresa.clientes.manage',
+  'empresa.lineas.manage',
 ]
 
 function renderAsNonAdmin() {
@@ -87,7 +88,7 @@ function renderAsNonAdmin() {
   return render(
     <MemoryRouter initialEntries={['/empresa']}>
       <EmpresaPage />
-    </MemoryRouter>
+    </MemoryRouter>,
   )
 }
 
@@ -147,7 +148,7 @@ describe('ConfirmDeleteDialog', () => {
         itemLabel="departamento"
         onConfirm={onConfirm}
         onCancel={onCancel}
-      />
+      />,
     )
 
     const deleteBtn = screen.getByRole('button', { name: /^eliminar$/i })
@@ -166,7 +167,7 @@ describe('ConfirmDeleteDialog', () => {
         itemLabel="departamento"
         onConfirm={vi.fn()}
         onCancel={vi.fn()}
-      />
+      />,
     )
 
     const deleteBtn = screen.getByRole('button', { name: /^eliminar$/i })
@@ -184,7 +185,7 @@ describe('ConfirmDeleteDialog', () => {
         itemLabel="departamento"
         onConfirm={onConfirm}
         onCancel={vi.fn()}
-      />
+      />,
     )
 
     await user.type(screen.getByPlaceholderText('Diseño'), 'Diseño')
@@ -202,7 +203,7 @@ describe('ConfirmDeleteDialog', () => {
         itemLabel="departamento"
         onConfirm={vi.fn()}
         onCancel={onCancel}
-      />
+      />,
     )
 
     await user.click(screen.getByRole('button', { name: /cancelar/i }))

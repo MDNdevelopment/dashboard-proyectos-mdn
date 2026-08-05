@@ -1,42 +1,19 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
+import { createSupabaseMock, makeQuery } from './helpers/supabaseMock'
 
 // ── Mock supabase ─────────────────────────────────────────────────────────────
-vi.mock('../supabase', () => {
-  const makeQuery = (result = []) => {
-    const q = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      neq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockResolvedValue({ data: result, error: null }),
-      insert: vi.fn().mockReturnThis(),
-      update: vi.fn().mockReturnThis(),
-      delete: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: result[0] ?? null, error: null }),
-    }
-    // Hace el objeto thenable para que `await supabase.from(...).select().eq()` resuelva
-    q.then = (resolve) => resolve({ data: result, error: null })
-    return q
-  }
-
-  const mockFrom = vi.fn()
-  mockFrom.mockImplementation(table => {
-    if (table === 'question_positions') return makeQuery(MOCK_QUESTION_POSITIONS)
-    if (table === 'evaluation_responses') return makeQuery(MOCK_RESPONSES)
-    if (table === 'evaluation_comments') return makeQuery([])
-    if (table === 'evaluation_sessions') return makeQuery(MOCK_SESSIONS)
-    return makeQuery([])
-  })
-
-  return {
-    supabase: {
-      from: mockFrom,
-      channel: vi.fn(() => ({ on: vi.fn().mockReturnThis(), subscribe: vi.fn() })),
-      removeChannel: vi.fn(),
+vi.mock('../supabase', () => ({
+  supabase: createSupabaseMock({
+    tables: {
+      question_positions: () => makeQuery(MOCK_QUESTION_POSITIONS),
+      evaluation_responses: () => makeQuery(MOCK_RESPONSES),
+      evaluation_comments: () => makeQuery([]),
+      evaluation_sessions: () => makeQuery(MOCK_SESSIONS),
     },
-  }
-})
+  }),
+}))
 
 // ── Datos de prueba ───────────────────────────────────────────────────────────
 const MOCK_QUESTIONS = [
@@ -45,13 +22,19 @@ const MOCK_QUESTIONS = [
   { id: 'q3', text: '¿Se comunica bien?', removed: false },
 ]
 
-const MOCK_QUESTION_POSITIONS = MOCK_QUESTIONS.map(q => ({
+const MOCK_QUESTION_POSITIONS = MOCK_QUESTIONS.map((q) => ({
   question_id: q.id,
   questions: q,
 }))
 
 const MOCK_SESSIONS = [
-  { id: 'sess-1', manager_id: 'mgr-1', employee_id: 'emp-1', period: '2026-05-01', total_score: 4.0 },
+  {
+    id: 'sess-1',
+    manager_id: 'mgr-1',
+    employee_id: 'emp-1',
+    period: '2026-05-01',
+    total_score: 4.0,
+  },
 ]
 
 const MOCK_RESPONSES = [
@@ -79,7 +62,7 @@ describe('EvaluationModal', () => {
         managerId="mgr-1"
         onClose={vi.fn()}
         onSaved={vi.fn()}
-      />
+      />,
     )
     await waitFor(() => {
       expect(screen.getByText('¿Cumple los plazos?')).toBeInTheDocument()
@@ -97,7 +80,7 @@ describe('EvaluationModal', () => {
         managerId="mgr-1"
         onClose={vi.fn()}
         onSaved={vi.fn()}
-      />
+      />,
     )
     await waitFor(() => {
       expect(screen.getByText('¿Cumple los plazos?')).toBeInTheDocument()
@@ -123,7 +106,7 @@ describe('EvaluationModal', () => {
         managerId="mgr-1"
         onClose={vi.fn()}
         onSaved={vi.fn()}
-      />
+      />,
     )
     await waitFor(() => {
       expect(screen.getByText('¿Cumple los plazos?')).toBeInTheDocument()
@@ -145,7 +128,7 @@ describe('EvaluationModal', () => {
         managerId="mgr-1"
         onClose={vi.fn()}
         onSaved={vi.fn()}
-      />
+      />,
     )
     await waitFor(() => {
       expect(screen.getByText('¿Cumple los plazos?')).toBeInTheDocument()
@@ -162,7 +145,7 @@ describe('EvaluationModal', () => {
         managerId="mgr-1"
         onClose={vi.fn()}
         onSaved={vi.fn()}
-      />
+      />,
     )
     await waitFor(() => {
       expect(screen.getByText('¿Cumple los plazos?')).toBeInTheDocument()
@@ -204,7 +187,7 @@ describe('EvaluationModal', () => {
         managerId="mgr-1"
         onClose={vi.fn()}
         onSaved={vi.fn()}
-      />
+      />,
     )
     // El spinner debe estar presente antes de que resuelvan los mocks
     expect(document.querySelector('.animate-spin')).toBeInTheDocument()
@@ -218,7 +201,7 @@ describe('EvaluationModal', () => {
         managerId="mgr-1"
         onClose={vi.fn()}
         onSaved={vi.fn()}
-      />
+      />,
     )
     expect(screen.getByText('Ana López')).toBeInTheDocument()
   })

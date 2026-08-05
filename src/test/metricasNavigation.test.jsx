@@ -12,28 +12,17 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { vi } from 'vitest'
+import { createSupabaseMock } from './helpers/supabaseMock'
 
 // ── Mocks globales ─────────────────────────────────────────────────────────────
 
 vi.mock('../supabase', () => ({
-  supabase: {
-    from: vi.fn().mockReturnValue({
-      select:  vi.fn().mockReturnThis(),
-      insert:  vi.fn().mockReturnThis(),
-      update:  vi.fn().mockReturnThis(),
-      delete:  vi.fn().mockReturnThis(),
-      upsert:  vi.fn().mockReturnThis(),
-      eq:      vi.fn().mockReturnThis(),
-      order:   vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-      single:  vi.fn().mockResolvedValue({ data: null, error: null }),
-    }),
-    channel: vi.fn(() => ({
-      on: vi.fn().mockReturnThis(),
-      subscribe: vi.fn().mockReturnThis(),
-    })),
-    removeChannel: vi.fn(),
-  },
+  supabase: createSupabaseMock({
+    tables: {
+      // Comportamiento original: from(cualquier tabla) devuelve siempre null/[]
+      // vía single()/maybeSingle()/await, cubierto por makeQuery([]).
+    },
+  }),
 }))
 
 const MOCK_USER = {
@@ -80,11 +69,7 @@ vi.mock('../components/metricas/ScoreDial', () => ({
 // ── Helpers de render ──────────────────────────────────────────────────────────
 
 function renderWithRouter(ui, { initialEntry = '/' } = {}) {
-  return render(
-    <MemoryRouter initialEntries={[initialEntry]}>
-      {ui}
-    </MemoryRouter>,
-  )
+  return render(<MemoryRouter initialEntries={[initialEntry]}>{ui}</MemoryRouter>)
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -107,36 +92,32 @@ const MOCK_LINE = { id: 'l-1', name: 'Georgina', color: '#FAB51A', member_user_i
 
 describe('LineView — sub-pestaña desde URL ?tab=', () => {
   it('muestra Resumen por defecto cuando no hay ?tab=', () => {
-    renderWithRouter(
-      <LineView line={MOCK_LINE} companyId="co-1" />,
-      { initialEntry: '/reportes/linea/l-1' },
-    )
+    renderWithRouter(<LineView line={MOCK_LINE} companyId="co-1" />, {
+      initialEntry: '/reportes/linea/l-1',
+    })
     expect(screen.getByTestId('hub-view')).toBeInTheDocument()
     expect(screen.queryByTestId('finanzas-view')).not.toBeInTheDocument()
   })
 
   it('muestra Finanzas cuando ?tab=finanzas', () => {
-    renderWithRouter(
-      <LineView line={MOCK_LINE} companyId="co-1" />,
-      { initialEntry: '/reportes/linea/l-1?tab=finanzas' },
-    )
+    renderWithRouter(<LineView line={MOCK_LINE} companyId="co-1" />, {
+      initialEntry: '/reportes/linea/l-1?tab=finanzas',
+    })
     expect(screen.getByTestId('finanzas-view')).toBeInTheDocument()
     expect(screen.queryByTestId('hub-view')).not.toBeInTheDocument()
   })
 
   it('muestra Operaciones cuando ?tab=operaciones', () => {
-    renderWithRouter(
-      <LineView line={MOCK_LINE} companyId="co-1" />,
-      { initialEntry: '/reportes/linea/l-1?tab=operaciones' },
-    )
+    renderWithRouter(<LineView line={MOCK_LINE} companyId="co-1" />, {
+      initialEntry: '/reportes/linea/l-1?tab=operaciones',
+    })
     expect(screen.getByTestId('operaciones-view')).toBeInTheDocument()
   })
 
   it('cae a Resumen cuando ?tab= tiene un valor inválido', () => {
-    renderWithRouter(
-      <LineView line={MOCK_LINE} companyId="co-1" />,
-      { initialEntry: '/reportes/linea/l-1?tab=inexistente' },
-    )
+    renderWithRouter(<LineView line={MOCK_LINE} companyId="co-1" />, {
+      initialEntry: '/reportes/linea/l-1?tab=inexistente',
+    })
     expect(screen.getByTestId('hub-view')).toBeInTheDocument()
   })
 })
@@ -147,35 +128,32 @@ describe('LineView — sub-pestaña desde URL ?tab=', () => {
 
 describe('LineView — persistencia de ?year= y ?month= en la URL', () => {
   it('inicializa el selector de año con el valor de ?year=', () => {
-    renderWithRouter(
-      <LineView line={MOCK_LINE} companyId="co-1" />,
-      { initialEntry: '/reportes/linea/l-1?tab=operaciones&year=2024' },
-    )
+    renderWithRouter(<LineView line={MOCK_LINE} companyId="co-1" />, {
+      initialEntry: '/reportes/linea/l-1?tab=operaciones&year=2024',
+    })
     // Los <select> no tienen label; el de año es el que tiene opciones de 4 dígitos
-    const yearSelect = [...document.querySelectorAll('select')].find(s =>
-      [...s.options].some(o => o.value === '2024')
+    const yearSelect = [...document.querySelectorAll('select')].find((s) =>
+      [...s.options].some((o) => o.value === '2024'),
     )
     expect(yearSelect).toBeTruthy()
     expect(yearSelect.value).toBe('2024')
   })
 
   it('inicializa el selector de mes con el valor de ?month=', () => {
-    renderWithRouter(
-      <LineView line={MOCK_LINE} companyId="co-1" />,
-      { initialEntry: '/reportes/linea/l-1?tab=finanzas&month=3' },
-    )
-    const monthSelect = [...document.querySelectorAll('select')].find(s =>
-      [...s.options].some(o => o.value === '3' && o.text === 'Marzo')
+    renderWithRouter(<LineView line={MOCK_LINE} companyId="co-1" />, {
+      initialEntry: '/reportes/linea/l-1?tab=finanzas&month=3',
+    })
+    const monthSelect = [...document.querySelectorAll('select')].find((s) =>
+      [...s.options].some((o) => o.value === '3' && o.text === 'Marzo'),
     )
     expect(monthSelect).toBeTruthy()
     expect(monthSelect.value).toBe('3')
   })
 
   it('no muestra los selectores de mes/año en el tab Resumen (hub)', () => {
-    renderWithRouter(
-      <LineView line={MOCK_LINE} companyId="co-1" />,
-      { initialEntry: '/reportes/linea/l-1?tab=hub' },
-    )
+    renderWithRouter(<LineView line={MOCK_LINE} companyId="co-1" />, {
+      initialEntry: '/reportes/linea/l-1?tab=hub',
+    })
     // En hub no se renderizan los <select> de mes/año
     const selects = document.querySelectorAll('select')
     expect(selects.length).toBe(0)
@@ -189,10 +167,9 @@ describe('LineView — persistencia de ?year= y ?month= en la URL', () => {
 describe('LineView — click en tab actualiza ?tab= en la URL', () => {
   it('hacer click en Operaciones muestra el componente de operaciones', async () => {
     const user = userEvent.setup()
-    renderWithRouter(
-      <LineView line={MOCK_LINE} companyId="co-1" />,
-      { initialEntry: '/reportes/linea/l-1' },
-    )
+    renderWithRouter(<LineView line={MOCK_LINE} companyId="co-1" />, {
+      initialEntry: '/reportes/linea/l-1',
+    })
 
     // Inicialmente en hub (Resumen)
     expect(screen.getByTestId('hub-view')).toBeInTheDocument()
@@ -205,10 +182,9 @@ describe('LineView — click en tab actualiza ?tab= en la URL', () => {
 
   it('hacer click en Finanzas muestra el componente de finanzas', async () => {
     const user = userEvent.setup()
-    renderWithRouter(
-      <LineView line={MOCK_LINE} companyId="co-1" />,
-      { initialEntry: '/reportes/linea/l-1' },
-    )
+    renderWithRouter(<LineView line={MOCK_LINE} companyId="co-1" />, {
+      initialEntry: '/reportes/linea/l-1',
+    })
 
     await user.click(screen.getByRole('button', { name: 'Finanzas' }))
 
@@ -224,7 +200,7 @@ describe('LineView — click en tab actualiza ?tab= en la URL', () => {
 // consulta directamente con loadReport/closeReport).
 vi.mock('../components/metricas/metricsApi', () => ({
   loadYearReports: vi.fn().mockResolvedValue({ data: [], error: null }),
-  loadClients:     vi.fn().mockResolvedValue({ data: [], error: null }),
+  loadClients: vi.fn().mockResolvedValue({ data: [], error: null }),
   loadCompanyUsers: vi.fn().mockResolvedValue({ data: [], error: null }),
   seedMetricsIfEmpty: vi.fn().mockResolvedValue(null),
   loadLines: vi.fn().mockResolvedValue({ data: [], error: null }),
@@ -250,9 +226,7 @@ vi.mock('../utils/aggregateMetricsDashboard', () => ({
 
 import DashboardView from '../components/metricas/DashboardView'
 
-const MOCK_LINES = [
-  { id: 'l-1', name: 'Georgina', color: '#FAB51A', member_user_ids: ['u-2'] },
-]
+const MOCK_LINES = [{ id: 'l-1', name: 'Georgina', color: '#FAB51A', member_user_ids: ['u-2'] }]
 
 describe('DashboardView — KPI "Línea líder" y tarjetas financieras clickeables', () => {
   it('el KPI "Línea líder" se renderiza como botón con el nombre de la línea', async () => {
@@ -288,34 +262,32 @@ describe('DashboardView — KPI "Línea líder" y tarjetas financieras clickeabl
 // 1d. LineView — filtrado de meses futuros en el selector
 // ══════════════════════════════════════════════════════════════════════════════
 
-const REAL_CURRENT_YEAR  = new Date().getFullYear()
+const REAL_CURRENT_YEAR = new Date().getFullYear()
 const REAL_CURRENT_MONTH = new Date().getMonth() + 1
 
 describe('LineView — selector de mes oculta periodos futuros', () => {
   it('con el año actual, el selector de mes solo muestra meses hasta el mes en curso', () => {
-    renderWithRouter(
-      <LineView line={MOCK_LINE} companyId="co-1" />,
-      { initialEntry: `/reportes/linea/l-1?tab=operaciones&year=${REAL_CURRENT_YEAR}` },
-    )
-    const monthSelect = [...document.querySelectorAll('select')].find(s =>
-      [...s.options].every(o => Number(o.value) <= 12)
+    renderWithRouter(<LineView line={MOCK_LINE} companyId="co-1" />, {
+      initialEntry: `/reportes/linea/l-1?tab=operaciones&year=${REAL_CURRENT_YEAR}`,
+    })
+    const monthSelect = [...document.querySelectorAll('select')].find((s) =>
+      [...s.options].every((o) => Number(o.value) <= 12),
     )
     expect(monthSelect).toBeTruthy()
-    const values = [...monthSelect.options].map(o => Number(o.value))
+    const values = [...monthSelect.options].map((o) => Number(o.value))
     // No debe haber ningún mes mayor al mes actual
-    expect(values.every(v => v <= REAL_CURRENT_MONTH)).toBe(true)
+    expect(values.every((v) => v <= REAL_CURRENT_MONTH)).toBe(true)
     // Debe haber exactamente REAL_CURRENT_MONTH opciones
     expect(values.length).toBe(REAL_CURRENT_MONTH)
   })
 
   it('con un año pasado, el selector de mes muestra los 12 meses', () => {
     const pastYear = REAL_CURRENT_YEAR - 1
-    renderWithRouter(
-      <LineView line={MOCK_LINE} companyId="co-1" />,
-      { initialEntry: `/reportes/linea/l-1?tab=operaciones&year=${pastYear}` },
-    )
-    const monthSelect = [...document.querySelectorAll('select')].find(s =>
-      [...s.options].some(o => o.value === '12')
+    renderWithRouter(<LineView line={MOCK_LINE} companyId="co-1" />, {
+      initialEntry: `/reportes/linea/l-1?tab=operaciones&year=${pastYear}`,
+    })
+    const monthSelect = [...document.querySelectorAll('select')].find((s) =>
+      [...s.options].some((o) => o.value === '12'),
     )
     expect(monthSelect).toBeTruthy()
     expect(monthSelect.options.length).toBe(12)
@@ -325,12 +297,11 @@ describe('LineView — selector de mes oculta periodos futuros', () => {
     // Solo tiene sentido si no estamos en Diciembre
     if (REAL_CURRENT_MONTH >= 12) return
     const futureMonth = REAL_CURRENT_MONTH + 1
-    renderWithRouter(
-      <LineView line={MOCK_LINE} companyId="co-1" />,
-      { initialEntry: `/reportes/linea/l-1?tab=operaciones&year=${REAL_CURRENT_YEAR}&month=${futureMonth}` },
-    )
-    const monthSelect = [...document.querySelectorAll('select')].find(s =>
-      [...s.options].every(o => Number(o.value) <= 12)
+    renderWithRouter(<LineView line={MOCK_LINE} companyId="co-1" />, {
+      initialEntry: `/reportes/linea/l-1?tab=operaciones&year=${REAL_CURRENT_YEAR}&month=${futureMonth}`,
+    })
+    const monthSelect = [...document.querySelectorAll('select')].find((s) =>
+      [...s.options].every((o) => Number(o.value) <= 12),
     )
     expect(monthSelect).toBeTruthy()
     // El valor efectivo debe ser el mes actual (clamped), no el futuro
@@ -383,16 +354,44 @@ import BaseView from '../components/tareas/BaseView'
 // Las 3 tareas caen en el mismo mes (junio 2026) para que este suite, enfocado en el
 // filtro ?client=, sea independiente del filtro por mes que aplica BaseView.
 const MOCK_TASKS = [
-  { id: 't-1', team_id: 'l-1', client: 'Pepsi',    client_id: 'c-1', description: 'Tarea A', status: 'En proceso', request_date: '2026-06-01', assignee_ids: [] },
-  { id: 't-2', team_id: 'l-1', client: 'Coca-Cola', client_id: 'c-2', description: 'Tarea B', status: 'Pendiente',  request_date: '2026-06-02', assignee_ids: [] },
-  { id: 't-3', team_id: 'l-1', client: 'Pepsi',    client_id: 'c-1', description: 'Tarea C', status: 'Terminado',  request_date: '2026-06-01', closed_date: '2026-06-15', assignee_ids: [] },
+  {
+    id: 't-1',
+    team_id: 'l-1',
+    client: 'Pepsi',
+    client_id: 'c-1',
+    description: 'Tarea A',
+    status: 'En proceso',
+    request_date: '2026-06-01',
+    assignee_ids: [],
+  },
+  {
+    id: 't-2',
+    team_id: 'l-1',
+    client: 'Coca-Cola',
+    client_id: 'c-2',
+    description: 'Tarea B',
+    status: 'Pendiente',
+    request_date: '2026-06-02',
+    assignee_ids: [],
+  },
+  {
+    id: 't-3',
+    team_id: 'l-1',
+    client: 'Pepsi',
+    client_id: 'c-1',
+    description: 'Tarea C',
+    status: 'Terminado',
+    request_date: '2026-06-01',
+    closed_date: '2026-06-15',
+    assignee_ids: [],
+  },
 ]
 const MOCK_TASKS_MONTH_IDX = 2026 * 12 + 5 // junio 2026 (0-based: mayo=4, junio=5)
 
 const MOCK_TEAM = { id: 'l-1', name: 'Georgina', color: '#FAB51A', member_user_ids: [] }
 
 const MOCK_CLIENTS_MAP = new Map([
-  ['c-1', { id: 'c-1', name: 'Pepsi',    line_id: 'l-1' }],
+  ['c-1', { id: 'c-1', name: 'Pepsi', line_id: 'l-1' }],
   ['c-2', { id: 'c-2', name: 'Coca-Cola', line_id: 'l-1' }],
 ])
 

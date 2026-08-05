@@ -2,34 +2,18 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useNavigate } from 'react-router-dom'
 import { vi } from 'vitest'
+import { createSupabaseMock, makeQuery } from './helpers/supabaseMock'
 
 // ── Mock supabase ────────────────────────────────────────────────────────────
-vi.mock('../supabase', () => {
-  const channel = { on: vi.fn().mockReturnThis(), subscribe: vi.fn().mockReturnThis() }
-
-  const mockFrom = vi.fn()
-  const makeQuery = (result = []) => ({
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    is: vi.fn().mockReturnThis(),
-    order: vi.fn().mockResolvedValue({ data: result, error: null }),
-  })
-
-  mockFrom.mockImplementation((table) => {
-    if (table === 'metric_lines') return makeQuery(MOCK_TEAMS)
-    if (table === 'tasks') return makeQuery(MOCK_TASKS)
-    if (table === 'users') return makeQuery(MOCK_USERS)
-    return makeQuery([])
-  })
-
-  return {
-    supabase: {
-      from: mockFrom,
-      channel: vi.fn(() => channel),
-      removeChannel: vi.fn(),
+vi.mock('../supabase', () => ({
+  supabase: createSupabaseMock({
+    tables: {
+      metric_lines: () => makeQuery(MOCK_TEAMS),
+      tasks: () => makeQuery(MOCK_TASKS),
+      users: () => makeQuery(MOCK_USERS),
     },
-  }
-})
+  }),
+}))
 
 // ── Mock AuthContext ──────────────────────────────────────────────────────────
 vi.mock('../context/AuthContext', () => ({

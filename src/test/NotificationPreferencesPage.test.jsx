@@ -1,11 +1,10 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
+import { createSupabaseMock } from './helpers/supabaseMock'
 
 vi.mock('../supabase', () => ({
-  supabase: {
-    from: vi.fn(),
-  },
+  supabase: createSupabaseMock(),
 }))
 
 vi.mock('../context/AuthContext', () => ({
@@ -22,8 +21,20 @@ const itNonAdmin = { department_id: 0, access_level: 1, admin: false }
 const nonIT = { department_id: 1, access_level: 3, admin: false }
 
 const itStaff = [
-  { user_id: 'u1', first_name: 'Carlos', last_name: 'Perez', email: 'carlos@mdn.com', receive_ticket_notifications: true },
-  { user_id: 'u2', first_name: 'Maria', last_name: 'Lopez', email: 'maria@mdn.com', receive_ticket_notifications: false },
+  {
+    user_id: 'u1',
+    first_name: 'Carlos',
+    last_name: 'Perez',
+    email: 'carlos@mdn.com',
+    receive_ticket_notifications: true,
+  },
+  {
+    user_id: 'u2',
+    first_name: 'Maria',
+    last_name: 'Lopez',
+    email: 'maria@mdn.com',
+    receive_ticket_notifications: false,
+  },
 ]
 
 // Query chain: from('users').select(...).eq('department_id', 0).order('first_name')
@@ -107,7 +118,7 @@ describe('NotificationPreferencesPage', () => {
   })
 
   it('muestra advertencia cuando todos los toggles están desactivados', async () => {
-    const allOff = itStaff.map(u => ({ ...u, receive_ticket_notifications: false }))
+    const allOff = itStaff.map((u) => ({ ...u, receive_ticket_notifications: false }))
     useAuth.mockReturnValue({ userProfile: itAdmin })
     mockSupabaseSelect(allOff)
     render(<NotificationPreferencesPage />)

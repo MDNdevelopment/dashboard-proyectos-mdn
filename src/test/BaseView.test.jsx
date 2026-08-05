@@ -5,16 +5,14 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
+import { createSupabaseMock, makeQuery } from './helpers/supabaseMock'
 
 vi.mock('../supabase', () => ({
-  supabase: {
-    from: vi.fn().mockReturnValue({
-      update: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      select: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: null, error: null }),
-    }),
-  },
+  supabase: createSupabaseMock({
+    tables: {
+      tasks: () => makeQuery(null),
+    },
+  }),
 }))
 
 vi.mock('../components/tareas/taskStatus', () => ({
@@ -32,10 +30,40 @@ const TEAM = {
 }
 
 const USERS_MAP = new Map([
-  ['u-ana',   { user_id: 'u-ana',   first_name: 'Ana',   last_name: 'Gómez',  access_level: 1, avatar_url: null }],
-  ['u-bruno', { user_id: 'u-bruno', first_name: 'Bruno', last_name: 'López',  access_level: 1, avatar_url: null }],
-  ['u-dir1',  { user_id: 'u-dir1',  first_name: 'Diana', last_name: 'Ruiz',   access_level: 4, avatar_url: null }],
-  ['u-dir2',  { user_id: 'u-dir2',  first_name: 'Pedro', last_name: 'Castro', access_level: 3, avatar_url: null }],
+  [
+    'u-ana',
+    { user_id: 'u-ana', first_name: 'Ana', last_name: 'Gómez', access_level: 1, avatar_url: null },
+  ],
+  [
+    'u-bruno',
+    {
+      user_id: 'u-bruno',
+      first_name: 'Bruno',
+      last_name: 'López',
+      access_level: 1,
+      avatar_url: null,
+    },
+  ],
+  [
+    'u-dir1',
+    {
+      user_id: 'u-dir1',
+      first_name: 'Diana',
+      last_name: 'Ruiz',
+      access_level: 4,
+      avatar_url: null,
+    },
+  ],
+  [
+    'u-dir2',
+    {
+      user_id: 'u-dir2',
+      first_name: 'Pedro',
+      last_name: 'Castro',
+      access_level: 3,
+      avatar_url: null,
+    },
+  ],
 ])
 
 function makeTask(overrides) {
@@ -178,9 +206,26 @@ describe('BaseView — filtro por mes (monthIdx)', () => {
   const MAR_2026 = 2026 * 12 + 2
 
   const MONTH_TASKS = [
-    makeTask({ id: 'jan-open', description: 'Iniciada en enero, abierta', request_date: '2026-01-05', status: 'En proceso' }),
-    makeTask({ id: 'jan-closed', description: 'Cerrada en enero', request_date: '2026-01-05', due_date: '2026-01-20', closed_date: '2026-01-20', status: 'Terminado' }),
-    makeTask({ id: 'mar-new', description: 'Nace en marzo', request_date: '2026-03-02', status: 'Pendiente' }),
+    makeTask({
+      id: 'jan-open',
+      description: 'Iniciada en enero, abierta',
+      request_date: '2026-01-05',
+      status: 'En proceso',
+    }),
+    makeTask({
+      id: 'jan-closed',
+      description: 'Cerrada en enero',
+      request_date: '2026-01-05',
+      due_date: '2026-01-20',
+      closed_date: '2026-01-20',
+      status: 'Terminado',
+    }),
+    makeTask({
+      id: 'mar-new',
+      description: 'Nace en marzo',
+      request_date: '2026-03-02',
+      status: 'Pendiente',
+    }),
   ]
 
   function renderBaseWithMonth(monthIdx) {
@@ -221,7 +266,13 @@ describe('BaseView — checkbox "Ocultar completadas"', () => {
   const TODAY_MONTH_TASK_DATE = new Date().toISOString().slice(0, 10)
   const COMPLETED_TASKS = [
     makeTask({ id: 'open-1', description: 'Tarea abierta', status: 'En proceso' }),
-    makeTask({ id: 'done-1', description: 'Tarea terminada', status: 'Terminado', request_date: TODAY_MONTH_TASK_DATE, closed_date: TODAY_MONTH_TASK_DATE }),
+    makeTask({
+      id: 'done-1',
+      description: 'Tarea terminada',
+      status: 'Terminado',
+      request_date: TODAY_MONTH_TASK_DATE,
+      closed_date: TODAY_MONTH_TASK_DATE,
+    }),
   ]
 
   function renderBaseAt(initialEntry) {
