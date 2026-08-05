@@ -23,3 +23,7 @@ Thumbs.db
 
 # Coverage reports
 coverage/
+
+# Mutation testing (Stryker)
+reports/
+.stryker-tmp/

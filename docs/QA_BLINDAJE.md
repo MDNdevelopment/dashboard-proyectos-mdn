@@ -155,7 +155,7 @@ una obligación mecánica.
 > regla de "no bajar nunca" (`ratcheting`). Sube solo, nunca baja. Menos fricción, mismo
 > efecto a largo plazo.
 
-### 2.2 Mutation testing (Stryker) — _el que verifica a los tests_
+### 2.2 Mutation testing (Stryker) — ✅ implementado (2026-08-05) — _el que verifica a los tests_
 
 Cobertura mide **qué líneas se ejecutan**, no si el test **notaría** un bug ahí. Un test
 que corre una línea pero no afirma nada da 100% de cobertura y cero protección.
@@ -172,6 +172,26 @@ cercana a "¿puedo confiar en estos tests sin leerlos?".
 > sino sobre los archivos cambiados en el PR (`--since`), o en un job nocturno programado,
 > enfocándolo primero en la lógica pura de alto riesgo (`src/lib/`: permisos, SLA,
 > progreso, scoring — donde un bug silencioso hace más daño).
+
+**Hecho:** `stryker.conf.json` corre `@stryker-mutator/vitest-runner` acotado a la lógica
+pura de más riesgo: `permissions.js`, `authError.js`, `employees.js` (`src/lib/`),
+`metricsScore.js`, `scoreScale.js`, `projectProgress.js` (`src/utils/`) y `slaUtils.js`
+(`src/components/tickets/`). Script `npm run test:mutation`. No corre en cada PR (tarda
+~6 min sobre estos 7 archivos); corre semanalmente vía `.github/workflows/mutation.yml`
+(cron lunes 06:00 UTC + `workflow_dispatch` manual), sube el reporte HTML como artifact,
+no bloquea merges.
+
+**Línea base medida (2026-08-05): mutation score global 90.13%** (420 killed / 39
+survived / 7 sin cobertura, de 466 mutantes cubiertos). Por archivo: `employees.js` 100%,
+`projectProgress.js` 98.21%, `authError.js` 94.29%, `scoreScale.js` 93.42%,
+`slaUtils.js` 91.67%, `permissions.js` 91.57%, `metricsScore.js` 84.49% (el más flojo —
+25 mutantes sobrevivientes, mayormente ramas de cálculo de score sin asserts que
+distingan valores cercanos).
+
+> **Backlog de tests faltantes** (mutantes sobrevivientes = tests que no notarían el bug):
+> revisar `reports/mutation/mutation.html` (local, gitignored) tras correr
+> `npm run test:mutation`. No se corrigieron en esta pasada — es trabajo de escritura de
+> tests, no de infraestructura, y queda para una iteración dedicada por archivo.
 
 ### 2.3 Factory de mock de Supabase compartido — 🟡 parcial (2026-08-05, 23/45 archivos)
 
