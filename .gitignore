@@ -20,3 +20,6 @@ Thumbs.db
 # Vite cache
 .vite/
 .netlify/
+
+# Coverage reports
+coverage/

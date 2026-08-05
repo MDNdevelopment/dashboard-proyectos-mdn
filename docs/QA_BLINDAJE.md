@@ -133,11 +133,18 @@ la IA no pueda declarar "listo" con la suite en rojo (refuerza la regla que ya t
 > 123 archivos en verde no significan nada si no ejercitan la lógica que importa. Esta fase
 > responde a la pregunta honesta: _"¿mis tests son lo bastante buenos como para no revisar?"_
 
-### 2.1 Cobertura con umbral que bloquea
+### 2.1 Cobertura con umbral que bloquea — ✅ implementado (2026-08-05)
 
 Añadir `@vitest/coverage-v8` y un bloque `coverage` en `vite.config.js` con **thresholds**
 (ej. 70% líneas/ramas al inicio, subiendo con el tiempo). Script `test:coverage`. En CI,
 si la cobertura baja del umbral, **el build falla**.
+
+Línea base real medida: 71.2% statements / 65.97% branches / 64.34% functions / 74.43%
+lines. Umbral fijado con ~1-2pp de margen (`statements: 70, branches: 65, functions: 63,
+lines: 73`). El job `test` de CI corre `npm run test:coverage` en vez de `npm test`, así
+que una baja de cobertura tumba el CI. Verificado subiendo el umbral a 99% a propósito:
+el comando sale con exit 1 y el mensaje `ERROR: Coverage for statements (...) does not
+meet global threshold`.
 
 Esto le pone un piso al agente: _no puede agregar código nuevo sin tests que lo cubran_,
 porque tumbaría el umbral y el CI lo rechazaría. Convierte "escribí tests, por favor" en
