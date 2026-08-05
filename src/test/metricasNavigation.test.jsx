@@ -214,7 +214,7 @@ vi.mock('../utils/aggregateMetricsDashboard', () => ({
     currentMonth: 6,
     promAnual: 85,
     promMesActual: 82,
-    lider: { line: { id: 'l-1', name: 'Georgina', color: '#FAB51A' }, prom: 85 },
+    lider: { line: { id: 'l-1', name: 'Georgina', color: '#FAB51A' }, score: 85 },
     cobertura: 100,
     ranking: [],
     rankingMonth: 6,

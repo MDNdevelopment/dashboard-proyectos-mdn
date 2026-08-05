@@ -1,91 +1,119 @@
-import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
-import SectionTotal from "../common/SectionTotal";
-import { useAuth } from "../../context/AuthContext";
+import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
+import SectionTotal from '../common/SectionTotal'
+import { useAuth } from '../../context/AuthContext'
 import {
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, Legend, CartesianGrid, LabelList,
-} from "recharts";
-import { loadYearReports, loadClients } from "./metricsApi";
-import { calcTotal, sumScore } from "../../utils/metricsScore";
-import { calcFinanzas, fmtUSD } from "../../utils/metricsFinance";
-import { aggregateMetricsDashboard } from "../../utils/aggregateMetricsDashboard";
-import { MONTHS } from "./constants";
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+  CartesianGrid,
+  LabelList,
+} from 'recharts'
+import { loadYearReports, loadClients } from './metricsApi'
+import { calcTotal, sumScore } from '../../utils/metricsScore'
+import { calcFinanzas, fmtUSD } from '../../utils/metricsFinance'
+import { aggregateMetricsDashboard } from '../../utils/aggregateMetricsDashboard'
+import { MONTHS } from './constants'
 
-const CURRENT_YEAR = new Date().getFullYear();
-const CURRENT_MONTH = new Date().getMonth() + 1;
-const PREV_MONTH = CURRENT_MONTH === 1 ? 12 : CURRENT_MONTH - 1;
-const DEFAULT_YEAR = CURRENT_MONTH === 1 ? CURRENT_YEAR - 1 : CURRENT_YEAR;
-const YEARS = Array.from({ length: 4 }, (_, i) => CURRENT_YEAR - i);
+const CURRENT_YEAR = new Date().getFullYear()
+const CURRENT_MONTH = new Date().getMonth() + 1
+const PREV_MONTH = CURRENT_MONTH === 1 ? 12 : CURRENT_MONTH - 1
+const DEFAULT_YEAR = CURRENT_MONTH === 1 ? CURRENT_YEAR - 1 : CURRENT_YEAR
+const YEARS = Array.from({ length: 4 }, (_, i) => CURRENT_YEAR - i)
 
 export default function DashboardView({ companyId, lines }) {
-  const navigate = useNavigate();
-  const { can = () => true } = useAuth();
-  const [year, setYear] = useState(DEFAULT_YEAR);
-  const [selectedMonth, setSelectedMonth] = useState(PREV_MONTH);
-  const [reports, setReports] = useState([]);
-  const [clients, setClients] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const navigate = useNavigate()
+  const { can = () => true } = useAuth()
+  const [year, setYear] = useState(DEFAULT_YEAR)
+  const [selectedMonth, setSelectedMonth] = useState(PREV_MONTH)
+  const [reports, setReports] = useState([])
+  const [clients, setClients] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   const load = useCallback(async () => {
-    if (!companyId) return;
-    setLoading(true);
-    setError(null);
+    if (!companyId) return
+    setLoading(true)
+    setError(null)
     const [reportsRes, clientsRes] = await Promise.all([
       loadYearReports(companyId, year),
       loadClients(companyId),
-    ]);
-    if (reportsRes.error) { setError(reportsRes.error.message); setLoading(false); return; }
-    setReports(reportsRes.data ?? []);
-    setClients(clientsRes.data ?? []);
-    setLoading(false);
-  }, [companyId, year]);
+    ])
+    if (reportsRes.error) {
+      setError(reportsRes.error.message)
+      setLoading(false)
+      return
+    }
+    setReports(reportsRes.data ?? [])
+    setClients(clientsRes.data ?? [])
+    setLoading(false)
+  }, [companyId, year])
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load()
+  }, [load])
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
         <div className="w-6 h-6 border-2 border-[#FFB800] border-t-transparent rounded-full animate-spin" />
       </div>
-    );
+    )
   }
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 text-red-700 text-[15px] rounded-xl px-4 py-3">{error}</div>
-    );
+      <div className="bg-red-50 border border-red-200 text-red-700 text-[15px] rounded-xl px-4 py-3">
+        {error}
+      </div>
+    )
   }
 
-  const agg = aggregateMetricsDashboard(lines, reports, year, calcTotal, sumScore, calcFinanzas, selectedMonth);
-  const {
-    matrix, currentMonth, promMesActual, lider,
-    ranking, rankingMonth, finTotalesPorLinea,
-  } = agg;
+  const agg = aggregateMetricsDashboard(
+    lines,
+    reports,
+    year,
+    calcTotal,
+    sumScore,
+    calcFinanzas,
+    selectedMonth,
+  )
+  const { matrix, currentMonth, promMesActual, lider, ranking, rankingMonth, finTotalesPorLinea } =
+    agg
 
   // Datos para el LineChart de scores
   const lineChartData = MONTHS.map((mes, i) => {
-    const row = { mes: mes.slice(0, 3) };
-    lines.forEach(line => { row[line.name] = matrix[line.id][i]; });
-    return row;
-  });
+    const row = { mes: mes.slice(0, 3) }
+    lines.forEach((line) => {
+      row[line.name] = matrix[line.id][i]
+    })
+    return row
+  })
 
   // Datos para comparativa financiera
-  const finChartData = lines.map(line => {
-    const f = finTotalesPorLinea[line.id] ?? { ingresos: 0, egresos: 0, diferencia: 0 };
+  const finChartData = lines.map((line) => {
+    const f = finTotalesPorLinea[line.id] ?? { ingresos: 0, egresos: 0, diferencia: 0 }
     return {
       name: line.name,
       Ingresos: f.ingresos,
       Egresos: f.egresos,
       Diferencia: f.diferencia,
-    };
-  });
+    }
+  })
 
   const scoreColor = (s) =>
-    s == null ? "text-[#bbb]" :
-    s >= 80   ? "text-green-600" :
-    s >= 60   ? "text-[#b45309]" :
-    "text-red-600";
+    s == null
+      ? 'text-[#bbb]'
+      : s >= 80
+        ? 'text-green-600'
+        : s >= 60
+          ? 'text-[#b45309]'
+          : 'text-red-600'
 
   return (
     <div className="space-y-6">
@@ -95,21 +123,33 @@ export default function DashboardView({ companyId, lines }) {
           Comparativa anual de las {lines.length} líneas operativas
         </p>
         <div className="flex items-center gap-2">
-          <span className="text-[13px] font-mono font-bold uppercase tracking-[0.1em] text-[#888]">Mes</span>
+          <span className="text-[13px] font-mono font-bold uppercase tracking-[0.1em] text-[#888]">
+            Mes
+          </span>
           <select
             className="input-base py-1 text-[15px]"
             value={selectedMonth}
-            onChange={e => setSelectedMonth(Number(e.target.value))}
+            onChange={(e) => setSelectedMonth(Number(e.target.value))}
           >
-            {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+            {MONTHS.map((m, i) => (
+              <option key={i} value={i + 1}>
+                {m}
+              </option>
+            ))}
           </select>
-          <span className="text-[13px] font-mono font-bold uppercase tracking-[0.1em] text-[#888]">Año</span>
+          <span className="text-[13px] font-mono font-bold uppercase tracking-[0.1em] text-[#888]">
+            Año
+          </span>
           <select
             className="input-base py-1 text-[15px]"
             value={year}
-            onChange={e => setYear(Number(e.target.value))}
+            onChange={(e) => setYear(Number(e.target.value))}
           >
-            {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+            {YEARS.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
           </select>
         </div>
       </div>
@@ -118,14 +158,14 @@ export default function DashboardView({ companyId, lines }) {
       <div className="grid grid-cols-2 gap-3">
         <KpiCard
           label={`Mes actual (${MONTHS[currentMonth - 1]})`}
-          value={promMesActual != null ? promMesActual.toFixed(1) : "—"}
+          value={promMesActual != null ? promMesActual.toFixed(1) : '—'}
           sub="/100 prom. este mes"
-          color={promMesActual != null ? scoreColor(promMesActual) : "text-[#bbb]"}
+          color={promMesActual != null ? scoreColor(promMesActual) : 'text-[#bbb]'}
         />
         <KpiCard
           label="Línea líder"
-          value={lider?.line.name ?? "—"}
-          sub={lider ? "Team líder del año" : "Sin datos aún"}
+          value={lider?.line.name ?? '—'}
+          sub={lider ? `Mejor score de ${MONTHS[selectedMonth - 1]}` : 'Sin datos aún'}
           color="text-[#111]"
           onClick={lider ? () => navigate(`/reportes/linea/${lider.line.id}`) : undefined}
         />
@@ -142,14 +182,25 @@ export default function DashboardView({ companyId, lines }) {
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={lineChartData} margin={{ top: 4, right: 20, left: 0, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0ede3" />
-              <XAxis dataKey="mes" tick={{ fontSize: 11, fontFamily: "DM Mono, monospace", fill: "#888" }} />
-              <YAxis domain={[0, 100]} tick={{ fontSize: 10, fontFamily: "DM Mono, monospace", fill: "#888" }} />
-              <Tooltip
-                contentStyle={{ fontSize: 12, fontFamily: "DM Mono, monospace", borderRadius: 8, border: "1px solid #e0ddd4" }}
-                formatter={(val) => val != null ? val.toFixed(1) : "—"}
+              <XAxis
+                dataKey="mes"
+                tick={{ fontSize: 11, fontFamily: 'DM Mono, monospace', fill: '#888' }}
               />
-              <Legend wrapperStyle={{ fontSize: 12, fontFamily: "DM Mono, monospace" }} />
-              {lines.map(line => (
+              <YAxis
+                domain={[0, 100]}
+                tick={{ fontSize: 10, fontFamily: 'DM Mono, monospace', fill: '#888' }}
+              />
+              <Tooltip
+                contentStyle={{
+                  fontSize: 12,
+                  fontFamily: 'DM Mono, monospace',
+                  borderRadius: 8,
+                  border: '1px solid #e0ddd4',
+                }}
+                formatter={(val) => (val != null ? val.toFixed(1) : '—')}
+              />
+              <Legend wrapperStyle={{ fontSize: 12, fontFamily: 'DM Mono, monospace' }} />
+              {lines.map((line) => (
                 <Line
                   key={line.id}
                   type="monotone"
@@ -162,8 +213,8 @@ export default function DashboardView({ companyId, lines }) {
                   <LabelList
                     dataKey={line.name}
                     position="top"
-                    style={{ fontSize: 9, fill: line.color, fontFamily: "DM Mono, monospace" }}
-                    formatter={v => v != null ? v.toFixed(0) : ""}
+                    style={{ fontSize: 9, fill: line.color, fontFamily: 'DM Mono, monospace' }}
+                    formatter={(v) => (v != null ? v.toFixed(0) : '')}
                   />
                 </Line>
               ))}
@@ -185,7 +236,9 @@ export default function DashboardView({ companyId, lines }) {
                 onClick={() => navigate(`/reportes/linea/${line.id}`)}
                 className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-[#fafaf7] transition-colors text-left"
               >
-                <span className="text-[13px] font-mono text-[#bbb] w-5 flex-shrink-0">{idx + 1}</span>
+                <span className="text-[13px] font-mono text-[#bbb] w-5 flex-shrink-0">
+                  {idx + 1}
+                </span>
                 <span
                   className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                   style={{ background: line.color }}
@@ -207,22 +260,33 @@ export default function DashboardView({ companyId, lines }) {
         <p className="text-[13px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] mb-4">
           Comparativa financiera · {MONTHS[selectedMonth - 1]} {year}
         </p>
-        {finChartData.every(d => d.Ingresos === 0 && d.Egresos === 0) ? (
-          <p className="text-[15px] text-[#aaa] text-center py-8">Sin datos financieros para este mes</p>
+        {finChartData.every((d) => d.Ingresos === 0 && d.Egresos === 0) ? (
+          <p className="text-[15px] text-[#aaa] text-center py-8">
+            Sin datos financieros para este mes
+          </p>
         ) : (
           <>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={finChartData} margin={{ top: 4, right: 20, left: 0, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0ede3" />
-                <XAxis dataKey="name" tick={{ fontSize: 12, fontFamily: "DM Mono, monospace", fill: "#555" }} />
-                <YAxis tick={{ fontSize: 10, fontFamily: "DM Mono, monospace", fill: "#888" }}
-                  tickFormatter={v => v >= 1000 ? `$${(v/1000).toFixed(0)}k` : `$${v}`}
+                <XAxis
+                  dataKey="name"
+                  tick={{ fontSize: 12, fontFamily: 'DM Mono, monospace', fill: '#555' }}
+                />
+                <YAxis
+                  tick={{ fontSize: 10, fontFamily: 'DM Mono, monospace', fill: '#888' }}
+                  tickFormatter={(v) => (v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`)}
                 />
                 <Tooltip
-                  contentStyle={{ fontSize: 12, fontFamily: "DM Mono, monospace", borderRadius: 8, border: "1px solid #e0ddd4" }}
+                  contentStyle={{
+                    fontSize: 12,
+                    fontFamily: 'DM Mono, monospace',
+                    borderRadius: 8,
+                    border: '1px solid #e0ddd4',
+                  }}
                   formatter={(val) => fmtUSD(val)}
                 />
-                <Legend wrapperStyle={{ fontSize: 12, fontFamily: "DM Mono, monospace" }} />
+                <Legend wrapperStyle={{ fontSize: 12, fontFamily: 'DM Mono, monospace' }} />
                 <Bar dataKey="Ingresos" fill="#10B981" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="Egresos" fill="#EF4444" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="Diferencia" fill="#FAB51A" radius={[4, 4, 0, 0]} />
@@ -230,11 +294,11 @@ export default function DashboardView({ companyId, lines }) {
             </ResponsiveContainer>
             {/* Tabla resumen financiero */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
-              {lines.map(line => {
-                const f = finTotalesPorLinea[line.id] ?? { ingresos: 0, egresos: 0, diferencia: 0 };
-                const positive = f.diferencia >= 0;
-                const cuentas = clients.filter(c => c.line_id === line.id).length;
-                const empleados = line.member_user_ids?.length ?? 0;
+              {lines.map((line) => {
+                const f = finTotalesPorLinea[line.id] ?? { ingresos: 0, egresos: 0, diferencia: 0 }
+                const positive = f.diferencia >= 0
+                const cuentas = clients.filter((c) => c.line_id === line.id).length
+                const empleados = line.member_user_ids?.length ?? 0
                 return (
                   <button
                     key={line.id}
@@ -248,19 +312,25 @@ export default function DashboardView({ companyId, lines }) {
                     </div>
                     <div className="text-[11px] font-mono text-[#bbb] mb-2 flex items-center justify-center gap-2 flex-wrap">
                       <span
-                        onClick={e => { e.stopPropagation(); navigate(`/reportes/linea/${line.id}?tab=operaciones`); }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          navigate(`/reportes/linea/${line.id}?tab=operaciones`)
+                        }}
                         className="hover:text-[#888] hover:underline cursor-pointer"
                         title="Ver clientes de esta línea"
                       >
-                        {cuentas} {cuentas !== 1 ? "cuentas" : "cuenta"}
+                        {cuentas} {cuentas !== 1 ? 'cuentas' : 'cuenta'}
                       </span>
                       <span className="text-[#e0ddd4]">·</span>
                       <span
-                        onClick={e => { e.stopPropagation(); navigate(`/reportes/linea/${line.id}`); }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          navigate(`/reportes/linea/${line.id}`)
+                        }}
                         className="hover:text-[#888] hover:underline cursor-pointer"
                         title="Ver equipo de esta línea"
                       >
-                        {empleados} {empleados !== 1 ? "empleados" : "empleado"}
+                        {empleados} {empleados !== 1 ? 'empleados' : 'empleado'}
                       </span>
                     </div>
                     <div className="text-[12px] text-[#aaa] font-mono">Ingresos</div>
@@ -268,11 +338,13 @@ export default function DashboardView({ companyId, lines }) {
                     <div className="text-[12px] text-[#aaa] font-mono mt-1">Egresos</div>
                     <div className="text-[14px] font-bold text-red-500">{fmtUSD(f.egresos)}</div>
                     <div className="text-[12px] text-[#aaa] font-mono mt-1">Diferencia</div>
-                    <div className={`text-[14px] font-bold ${positive ? "text-green-600" : "text-red-500"}`}>
+                    <div
+                      className={`text-[14px] font-bold ${positive ? 'text-green-600' : 'text-red-500'}`}
+                    >
                       {fmtUSD(f.diferencia)}
                     </div>
                   </button>
-                );
+                )
               })}
             </div>
           </>
@@ -280,20 +352,22 @@ export default function DashboardView({ companyId, lines }) {
         <SectionTotal label="líneas" count={lines.length} />
       </div>
     </div>
-  );
+  )
 }
 
 function KpiCard({ label, value, sub, color, onClick }) {
-  const Wrapper = onClick ? "button" : "div";
+  const Wrapper = onClick ? 'button' : 'div'
   return (
     <Wrapper
-      className={`bg-white rounded-2xl border border-[#e0ddd4] px-4 py-4 text-left w-full${onClick ? " hover:bg-[#fafaf7] hover:border-[#d0ccc0] transition-colors cursor-pointer" : ""}`}
+      className={`bg-white rounded-2xl border border-[#e0ddd4] px-4 py-4 text-left w-full${onClick ? ' hover:bg-[#fafaf7] hover:border-[#d0ccc0] transition-colors cursor-pointer' : ''}`}
       onClick={onClick}
       title={onClick ? `Ir a ${value}` : undefined}
     >
-      <p className="text-[12px] font-mono font-bold uppercase tracking-[0.12em] text-[#aaa] mb-1">{label}</p>
+      <p className="text-[12px] font-mono font-bold uppercase tracking-[0.12em] text-[#aaa] mb-1">
+        {label}
+      </p>
       <p className={`text-[26px] font-bold leading-tight ${color}`}>{value}</p>
       <p className="text-[12px] text-[#bbb] mt-0.5">{sub}</p>
     </Wrapper>
-  );
+  )
 }
