@@ -10,93 +10,112 @@
  * @param {Function} calcFinanzasFn - calcFinanzas(report).
  * @returns {object} Objeto con toda la información para el Dashboard General.
  */
-export function aggregateMetricsDashboard(lines, reports, year, calcTotalFn, sumScoreFn, calcFinanzasFn, referenceMonth = null) {
+export function aggregateMetricsDashboard(
+  lines,
+  reports,
+  year,
+  calcTotalFn,
+  sumScoreFn,
+  calcFinanzasFn,
+  referenceMonth = null,
+) {
   // Índice rápido: (lineId, month) → report
-  const reportIndex = {};
-  reports.forEach(r => {
-    reportIndex[`${r.line_id}__${r.month}`] = r;
-  });
+  const reportIndex = {}
+  reports.forEach((r) => {
+    reportIndex[`${r.line_id}__${r.month}`] = r
+  })
 
   function getReport(lineId, month) {
-    return reportIndex[`${lineId}__${month}`] ?? null;
+    return reportIndex[`${lineId}__${month}`] ?? null
   }
 
   function getPrevReport(lineId, month) {
     // Busca el reporte del mes anterior más cercano (hasta 12 meses atrás)
-    let m = month - 1;
-    let y = year;
+    let m = month - 1
     // Solo buscamos dentro del año cargado (los reportes son del año actual)
-    if (m < 1) return null;
-    return getReport(lineId, m);
+    if (m < 1) return null
+    return getReport(lineId, m)
   }
 
-  const today = new Date();
-  const currentMonth = referenceMonth ?? (today.getFullYear() === year ? today.getMonth() + 1 : 12);
+  const today = new Date()
+  const currentMonth = referenceMonth ?? (today.getFullYear() === year ? today.getMonth() + 1 : 12)
 
   // Matriz línea × mes → score (null si no hay reporte)
-  const matrix = {};
-  lines.forEach(line => {
+  const matrix = {}
+  lines.forEach((line) => {
     matrix[line.id] = Array.from({ length: 12 }, (_, i) => {
-      const r = getReport(line.id, i + 1);
-      if (!r || r.data?.incompleto) return null;
-      const prev = getPrevReport(line.id, i + 1);
-      const scores = calcTotalFn(r.data, prev?.data ?? null);
-      return sumScoreFn(scores);
-    });
-  });
+      const r = getReport(line.id, i + 1)
+      if (!r || r.data?.incompleto) return null
+      const prev = getPrevReport(line.id, i + 1)
+      const scores = calcTotalFn(r.data, prev?.data ?? null)
+      return sumScoreFn(scores)
+    })
+  })
 
   // Promedio anual general (todas las líneas y meses)
-  const todosValores = [];
-  lines.forEach(line => matrix[line.id].forEach(v => { if (v != null) todosValores.push(v); }));
-  const promAnual = todosValores.length > 0
-    ? todosValores.reduce((a, b) => a + b, 0) / todosValores.length
-    : 0;
+  const todosValores = []
+  lines.forEach((line) =>
+    matrix[line.id].forEach((v) => {
+      if (v != null) todosValores.push(v)
+    }),
+  )
+  const promAnual =
+    todosValores.length > 0 ? todosValores.reduce((a, b) => a + b, 0) / todosValores.length : 0
 
   // Promedio mes actual
-  const valoresMesActual = lines.map(l => matrix[l.id][currentMonth - 1]).filter(v => v != null);
-  const promMesActual = valoresMesActual.length > 0
-    ? valoresMesActual.reduce((a, b) => a + b, 0) / valoresMesActual.length
-    : null;
+  const valoresMesActual = lines.map((l) => matrix[l.id][currentMonth - 1]).filter((v) => v != null)
+  const promMesActual =
+    valoresMesActual.length > 0
+      ? valoresMesActual.reduce((a, b) => a + b, 0) / valoresMesActual.length
+      : null
 
-  // Líder del año: línea con mejor promedio anual
-  const promPorLinea = lines.map(line => {
-    const vals = matrix[line.id].filter(v => v != null);
-    return { line, prom: vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null };
-  }).filter(x => x.prom != null);
-  const lider = promPorLinea.length > 0 ? promPorLinea.reduce((a, b) => a.prom >= b.prom ? a : b) : null;
+  // Líder del mes de referencia: línea con mejor score en ese mes (no promedio
+  // anual, que premiaba a líneas con pocos meses cargados sobre las que
+  // reportan todos los meses).
+  const scoresMes = lines
+    .map((line) => ({ line, score: matrix[line.id][currentMonth - 1] }))
+    .filter((x) => x.score != null)
+  const lider =
+    scoresMes.length > 0 ? scoresMes.reduce((a, b) => (a.score >= b.score ? a : b)) : null
 
   // Cobertura: reportes cargados / reportes posibles (líneas × meses transcurridos)
-  const posibles = lines.length * currentMonth;
-  const cargados = todosValores.length;
-  const cobertura = posibles > 0 ? (cargados / posibles) * 100 : 0;
+  const posibles = lines.length * currentMonth
+  const cargados = todosValores.length
+  const cobertura = posibles > 0 ? (cargados / posibles) * 100 : 0
 
   // Ranking del mes más reciente con datos
-  let rankingMonth = currentMonth;
-  while (rankingMonth > 0 && lines.every(l => matrix[l.id][rankingMonth - 1] == null)) rankingMonth--;
+  let rankingMonth = currentMonth
+  while (rankingMonth > 0 && lines.every((l) => matrix[l.id][rankingMonth - 1] == null))
+    rankingMonth--
   const ranking = lines
-    .map(line => ({ line, score: matrix[line.id][rankingMonth - 1] }))
-    .filter(r => r.score != null)
-    .sort((a, b) => b.score - a.score);
+    .map((line) => ({ line, score: matrix[line.id][rankingMonth - 1] }))
+    .filter((r) => r.score != null)
+    .sort((a, b) => b.score - a.score)
 
   // Finanzas agregadas por línea y por mes
-  const finanzasPorLinea = {};
-  lines.forEach(line => {
+  const finanzasPorLinea = {}
+  lines.forEach((line) => {
     const meses = Array.from({ length: 12 }, (_, i) => {
-      const r = getReport(line.id, i + 1);
-      if (!r) return null;
-      return calcFinanzasFn(r.data);
-    });
-    finanzasPorLinea[line.id] = meses;
-  });
+      const r = getReport(line.id, i + 1)
+      if (!r) return null
+      return calcFinanzasFn(r.data)
+    })
+    finanzasPorLinea[line.id] = meses
+  })
 
   // Totales financieros por línea para el mes seleccionado
-  const finTotalesPorLinea = {};
-  lines.forEach(line => {
-    const m = finanzasPorLinea[line.id][currentMonth - 1];
+  const finTotalesPorLinea = {}
+  lines.forEach((line) => {
+    const m = finanzasPorLinea[line.id][currentMonth - 1]
     finTotalesPorLinea[line.id] = m
-      ? { ingresos: m.totIngresos, egresos: m.totEgresos, diferencia: m.diferencia, nomina: m.totSueldos }
-      : { ingresos: 0, egresos: 0, diferencia: 0, nomina: 0 };
-  });
+      ? {
+          ingresos: m.totIngresos,
+          egresos: m.totEgresos,
+          diferencia: m.diferencia,
+          nomina: m.totSueldos,
+        }
+      : { ingresos: 0, egresos: 0, diferencia: 0, nomina: 0 }
+  })
 
   return {
     matrix,
@@ -109,5 +128,5 @@ export function aggregateMetricsDashboard(lines, reports, year, calcTotalFn, sum
     rankingMonth,
     finanzasPorLinea,
     finTotalesPorLinea,
-  };
+  }
 }

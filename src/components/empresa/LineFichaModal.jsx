@@ -1,17 +1,23 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
-import { isFinancePrivileged } from "../../lib/permissions";
-import { calcFinanzas, fmtUSD } from "../../utils/metricsFinance";
-import { MONTHS } from "../metricas/constants";
-import { loadCompanyEmployees, loadClients, loadYearReports } from "../metricas/metricsApi";
-import EmployeeFichaContent from "../metricas/EmployeeFichaContent";
-import ClientFichaContent from "../metricas/ClientFichaContent";
-import EntityGridList, { ViewToggle } from "../common/EntityGridList";
-import { activeEmployees } from "../../lib/employees";
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../../context/AuthContext'
+import { isFinancePrivileged } from '../../lib/permissions'
+import { calcFinanzas, fmtUSD } from '../../utils/metricsFinance'
+import { MONTHS } from '../metricas/constants'
+import { loadCompanyEmployees, loadClients, loadYearReports } from '../metricas/metricsApi'
+import EmployeeFichaContent from '../metricas/EmployeeFichaContent'
+import ClientFichaContent from '../metricas/ClientFichaContent'
+import EntityGridList, { ViewToggle } from '../common/EntityGridList'
+import { activeEmployees } from '../../lib/employees'
 
-const CURRENT_YEAR = new Date().getFullYear();
-const CURRENT_MONTH = new Date().getMonth() + 1;
+const CURRENT_YEAR = new Date().getFullYear()
+
+// Mes anterior fijo — mismo criterio que las cards del grid (LinesView.jsx),
+// para que todas las líneas muestren siempre el mismo período de referencia.
+const _now = new Date()
+const PREV_MONTH_DATE = new Date(_now.getFullYear(), _now.getMonth() - 1, 1)
+const PREV_YEAR = PREV_MONTH_DATE.getFullYear()
+const PREV_MONTH = PREV_MONTH_DATE.getMonth() + 1
 
 /**
  * Ficha de una línea operativa (metric_lines), con drill-down en un solo modal:
@@ -31,94 +37,118 @@ const CURRENT_MONTH = new Date().getMonth() + 1;
  *   onRemoveLeader  — async (userId) → quita el liderazgo de ese miembro (solo cuando canManage)
  *   onClose         — callback para cerrar
  */
-export default function LineFichaModal({ line, companyId, canManage = false, onAssignMember, onRemoveMember, onSetLeader, onRemoveLeader, onClose }) {
-  const navigate = useNavigate();
-  const { userProfile, can = () => true } = useAuth();
-  const privileged = isFinancePrivileged(userProfile);
+export default function LineFichaModal({
+  line,
+  companyId,
+  canManage = false,
+  onAssignMember,
+  onRemoveMember,
+  onSetLeader,
+  onRemoveLeader,
+  onClose,
+}) {
+  const navigate = useNavigate()
+  const { userProfile, can = () => true } = useAuth()
+  const privileged = isFinancePrivileged(userProfile)
 
-  const [allEmployees, setAllEmployees] = useState(null); // null = cargando
-  const [clients, setClients]           = useState(null); // null = cargando
-  const [finReports, setFinReports]     = useState(null); // null = cargando, [] = sin datos
-  const [drill, setDrill]       = useState(null);         // null | { type: 'employee'|'client', entity }
-  const [memberView, setMemberView] = useState("tarjetas");
-  const [clientView, setClientView] = useState("tarjetas");
-  const [saving, setSaving]     = useState(false);
-  const [removingId, setRemovingId] = useState(null);
-  const [togglingLeaderId, setTogglingLeaderId] = useState(null);
+  const [allEmployees, setAllEmployees] = useState(null) // null = cargando
+  const [clients, setClients] = useState(null) // null = cargando
+  const [finReports, setFinReports] = useState(null) // null = cargando, [] = sin datos
+  const [drill, setDrill] = useState(null) // null | { type: 'employee'|'client', entity }
+  const [memberView, setMemberView] = useState('tarjetas')
+  const [clientView, setClientView] = useState('tarjetas')
+  const [saving, setSaving] = useState(false)
+  const [removingId, setRemovingId] = useState(null)
+  const [togglingLeaderId, setTogglingLeaderId] = useState(null)
 
   // Derivados por render (sin refetch al cambiar member_user_ids)
-  const memberIds = line.member_user_ids ?? [];
-  const members   = allEmployees?.filter(u => memberIds.includes(u.user_id)) ?? [];
+  const memberIds = line.member_user_ids ?? []
+  const members = allEmployees?.filter((u) => memberIds.includes(u.user_id)) ?? []
   // Un empleado archivado no puede agregarse como nuevo miembro de la línea.
   const available = activeEmployees(allEmployees ?? [])
-    .filter(u => !memberIds.includes(u.user_id))
-    .sort((a, b) => `${a.first_name ?? ""} ${a.last_name ?? ""}`.localeCompare(`${b.first_name ?? ""} ${b.last_name ?? ""}`, "es", { sensitivity: "base" }));
+    .filter((u) => !memberIds.includes(u.user_id))
+    .sort((a, b) =>
+      `${a.first_name ?? ''} ${a.last_name ?? ''}`.localeCompare(
+        `${b.first_name ?? ''} ${b.last_name ?? ''}`,
+        'es',
+        { sensitivity: 'base' },
+      ),
+    )
 
   // Carga on-mount: todos los empleados de la empresa + clientes de la línea.
   // No depende de member_user_ids para no refetchear al asignar.
   useEffect(() => {
-    let cancelled = false;
+    let cancelled = false
+    // En enero, el mes anterior (diciembre) pertenece al año previo — hay que
+    // traer también ese año para poder mostrarlo.
+    const needsPrevYear = privileged && PREV_YEAR !== CURRENT_YEAR
     Promise.all([
       loadCompanyEmployees(companyId),
       loadClients(companyId, line.id),
       privileged ? loadYearReports(companyId, CURRENT_YEAR) : Promise.resolve({ data: [] }),
-    ]).then(([empRes, cliRes, repRes]) => {
-      if (cancelled) return;
-      setAllEmployees(empRes.data ?? []);
-      setClients(cliRes.data ?? []);
-      setFinReports((repRes.data ?? []).filter(r => r.line_id === line.id));
-    });
-    return () => { cancelled = true; };
-  }, [companyId, line.id, privileged]);
+      needsPrevYear ? loadYearReports(companyId, PREV_YEAR) : Promise.resolve({ data: [] }),
+    ]).then(([empRes, cliRes, repRes, prevRepRes]) => {
+      if (cancelled) return
+      setAllEmployees(empRes.data ?? [])
+      setClients(cliRes.data ?? [])
+      const allReports = [...(repRes.data ?? []), ...(prevRepRes.data ?? [])]
+      setFinReports(allReports.filter((r) => r.line_id === line.id))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [companyId, line.id, privileged])
 
   // Escape: en drill-down vuelve a la raíz; en la raíz cierra el modal
   useEffect(() => {
-    const fn = e => {
-      if (e.key !== "Escape") return;
-      if (drill) setDrill(null);
-      else onClose();
-    };
-    document.addEventListener("keydown", fn);
-    return () => document.removeEventListener("keydown", fn);
-  }, [drill, onClose]);
+    const fn = (e) => {
+      if (e.key !== 'Escape') return
+      if (drill) setDrill(null)
+      else onClose()
+    }
+    document.addEventListener('keydown', fn)
+    return () => document.removeEventListener('keydown', fn)
+  }, [drill, onClose])
 
-  const loading = allEmployees === null || clients === null;
+  const loading = allEmployees === null || clients === null
 
-  // Último período "cerrado": descarta meses futuros y meses marcados como incompletos.
-  const lastReport = (finReports ?? [])
-    .filter(r => r.month <= CURRENT_MONTH && !r.data?.incompleto)
-    .reduce((best, r) => (!best || r.month > best.month ? r : best), null);
+  // Mes anterior fijo (no "último mes con datos"): así todas las líneas se
+  // comparan en el mismo período, aunque alguna ya haya cargado el mes en curso.
+  const lastReport =
+    (finReports ?? []).find(
+      (r) => r.month === PREV_MONTH && r.year === PREV_YEAR && !r.data?.incompleto,
+    ) ?? null
 
   function goFinanzas(section) {
-    onClose();
-    navigate(`/reportes/linea/${line.id}?tab=finanzas&section=${section}`);
+    onClose()
+    navigate(`/reportes/linea/${line.id}?tab=finanzas&section=${section}`)
   }
 
   // Agregar / mover empleado desde la ficha
   async function handleAdd(userId) {
-    if (!userId || !onAssignMember) return;
-    setSaving(true);
-    await onAssignMember(userId);
-    setSaving(false);
+    if (!userId || !onAssignMember) return
+    setSaving(true)
+    await onAssignMember(userId)
+    setSaving(false)
   }
 
   // Quitar empleado de la línea
   async function handleRemove(userId) {
-    if (!onRemoveMember) return;
-    setRemovingId(userId);
-    await onRemoveMember(userId);
-    setRemovingId(null);
+    if (!onRemoveMember) return
+    setRemovingId(userId)
+    await onRemoveMember(userId)
+    setRemovingId(null)
   }
 
   // Marcar/quitar jefa de línea — solo puede haber una a la vez
   async function handleToggleLeader(userId) {
-    setTogglingLeaderId(userId);
+    setTogglingLeaderId(userId)
     if (line.lead_user_id === userId) {
-      await onRemoveLeader?.(userId);
+      await onRemoveLeader?.(userId)
     } else {
-      await onSetLeader?.(userId);
+      await onSetLeader?.(userId)
     }
-    setTogglingLeaderId(null);
+    setTogglingLeaderId(null)
   }
 
   return (
@@ -131,8 +161,15 @@ export default function LineFichaModal({ line, companyId, canManage = false, onA
           className="absolute top-4 right-4 z-10 w-7 h-7 flex items-center justify-center rounded-lg text-[#999] hover:text-[#111] hover:bg-[#f0ede3] transition-colors"
           aria-label="Cerrar"
         >
-          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          <svg
+            width="14"
+            height="14"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2.5}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
 
@@ -145,14 +182,21 @@ export default function LineFichaModal({ line, companyId, canManage = false, onA
                 onClick={() => setDrill(null)}
                 className="flex items-center gap-1.5 text-[13.5px] font-semibold text-[#888] hover:text-[#111] transition-colors"
               >
-                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <path d="M13 8H3M7 4L3 8l4 4" strokeLinecap="round" strokeLinejoin="round"/>
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                >
+                  <path d="M13 8H3M7 4L3 8l4 4" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
                 Volver a {line.name}
               </button>
             </div>
 
-            {drill.type === "employee" ? (
+            {drill.type === 'employee' ? (
               <EmployeeFichaContent employee={drill.entity} line={line} onClose={onClose} />
             ) : (
               <ClientFichaContent client={drill.entity} line={line} onClose={onClose} />
@@ -163,7 +207,7 @@ export default function LineFichaModal({ line, companyId, canManage = false, onA
             {/* Header — mismo estilo del card de LinesView */}
             <div
               className="flex-shrink-0 px-6 pt-5 pb-4 border-b border-[#f0ede3] pr-12"
-              style={{ background: line.color + "14" }}
+              style={{ background: line.color + '14' }}
             >
               <div className="flex items-center gap-2">
                 <span
@@ -174,7 +218,8 @@ export default function LineFichaModal({ line, companyId, canManage = false, onA
               </div>
               {!loading && (
                 <p className="text-[12.5px] font-mono text-[#999] mt-1">
-                  {members.length} {members.length !== 1 ? "miembros" : "miembro"} · {clients.length} {clients.length !== 1 ? "clientes" : "cliente"}
+                  {members.length} {members.length !== 1 ? 'miembros' : 'miembro'} ·{' '}
+                  {clients.length} {clients.length !== 1 ? 'clientes' : 'cliente'}
                 </p>
               )}
             </div>
@@ -185,7 +230,6 @@ export default function LineFichaModal({ line, companyId, canManage = false, onA
               </div>
             ) : (
               <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
-
                 {/* Miembros */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
@@ -200,11 +244,11 @@ export default function LineFichaModal({ line, companyId, canManage = false, onA
                     <p className="text-[13.5px] text-[#bbb]">Sin miembros asignados.</p>
                   ) : onRemoveMember ? (
                     <div className="flex flex-wrap gap-2">
-                      {members.map(u => {
-                        const name = `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim();
-                        const isRemoving = removingId === u.user_id;
-                        const isLeader = line.lead_user_id === u.user_id;
-                        const isTogglingLeader = togglingLeaderId === u.user_id;
+                      {members.map((u) => {
+                        const name = `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim()
+                        const isRemoving = removingId === u.user_id
+                        const isLeader = line.lead_user_id === u.user_id
+                        const isTogglingLeader = togglingLeaderId === u.user_id
                         return (
                           <div
                             key={u.user_id}
@@ -212,19 +256,23 @@ export default function LineFichaModal({ line, companyId, canManage = false, onA
                           >
                             <button
                               type="button"
-                              onClick={() => setDrill({ type: "employee", entity: u })}
+                              onClick={() => setDrill({ type: 'employee', entity: u })}
                               className="flex items-center gap-2 text-left"
                               title={`Ver información de ${name}`}
                             >
                               <span
                                 className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 overflow-hidden"
-                                style={{ background: u.avatar_url ? undefined : line.color + "33" }}
+                                style={{ background: u.avatar_url ? undefined : line.color + '33' }}
                               >
                                 {u.avatar_url ? (
-                                  <img src={u.avatar_url} alt={name} className="w-full h-full object-cover" />
+                                  <img
+                                    src={u.avatar_url}
+                                    alt={name}
+                                    className="w-full h-full object-cover"
+                                  />
                                 ) : (
                                   <span style={{ color: line.color }}>
-                                    {`${u.first_name?.[0] ?? ""}${u.last_name?.[0] ?? ""}`.toUpperCase()}
+                                    {`${u.first_name?.[0] ?? ''}${u.last_name?.[0] ?? ''}`.toUpperCase()}
                                   </span>
                                 )}
                               </span>
@@ -235,17 +283,31 @@ export default function LineFichaModal({ line, companyId, canManage = false, onA
                                 type="button"
                                 disabled={isTogglingLeader || !!togglingLeaderId}
                                 onClick={() => handleToggleLeader(u.user_id)}
-                                aria-label={isLeader ? `Quitar a ${name} como jefa de línea` : `Marcar a ${name} como jefa de línea`}
-                                title={isLeader ? "Jefa de línea" : "Marcar como jefa de línea"}
+                                aria-label={
+                                  isLeader
+                                    ? `Quitar a ${name} como jefa de línea`
+                                    : `Marcar a ${name} como jefa de línea`
+                                }
+                                title={isLeader ? 'Jefa de línea' : 'Marcar como jefa de línea'}
                                 className={`w-5 h-5 flex items-center justify-center rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0 ${
-                                  isLeader ? "text-[#FFB800]" : "text-[#ccc] hover:text-[#FFB800]"
+                                  isLeader ? 'text-[#FFB800]' : 'text-[#ccc] hover:text-[#FFB800]'
                                 }`}
                               >
                                 {isTogglingLeader ? (
                                   <div className="w-3 h-3 border border-[#FFB800] border-t-transparent rounded-full animate-spin" />
                                 ) : (
-                                  <svg width="12" height="12" viewBox="0 0 24 24" fill={isLeader ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.8">
-                                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" strokeLinejoin="round" />
+                                  <svg
+                                    width="12"
+                                    height="12"
+                                    viewBox="0 0 24 24"
+                                    fill={isLeader ? 'currentColor' : 'none'}
+                                    stroke="currentColor"
+                                    strokeWidth="1.8"
+                                  >
+                                    <path
+                                      d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
+                                      strokeLinejoin="round"
+                                    />
                                   </svg>
                                 )}
                               </button>
@@ -260,32 +322,41 @@ export default function LineFichaModal({ line, companyId, canManage = false, onA
                               {isRemoving ? (
                                 <div className="w-3 h-3 border border-[#FFB800] border-t-transparent rounded-full animate-spin" />
                               ) : (
-                                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                                  <path d="M1 1l8 8M9 1L1 9"/>
+                                <svg
+                                  width="10"
+                                  height="10"
+                                  viewBox="0 0 10 10"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                >
+                                  <path d="M1 1l8 8M9 1L1 9" />
                                 </svg>
                               )}
                             </button>
                           </div>
-                        );
+                        )
                       })}
                     </div>
                   ) : (
                     <EntityGridList
-                      items={members.map(u => {
-                        const name = `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim();
+                      items={members.map((u) => {
+                        const name = `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim()
                         return {
                           id: u.user_id,
                           name,
                           secondary: u.position?.position_name,
                           imageUrl: u.avatar_url,
-                          fallbackText: `${u.first_name?.[0] ?? ""}${u.last_name?.[0] ?? ""}`.toUpperCase(),
+                          fallbackText:
+                            `${u.first_name?.[0] ?? ''}${u.last_name?.[0] ?? ''}`.toUpperCase(),
                           fallbackBg: line.color,
                           title: `Ver información de ${name}`,
                           raw: u,
-                        };
+                        }
                       })}
                       view={memberView}
-                      onItemClick={u => setDrill({ type: "employee", entity: u })}
+                      onItemClick={(u) => setDrill({ type: 'employee', entity: u })}
                     />
                   )}
 
@@ -296,19 +367,21 @@ export default function LineFichaModal({ line, companyId, canManage = false, onA
                         className="input-base flex-1 text-[13.5px]"
                         defaultValue=""
                         disabled={saving}
-                        onChange={e => {
-                          const uid = e.target.value;
+                        onChange={(e) => {
+                          const uid = e.target.value
                           if (uid) {
-                            handleAdd(uid);
-                            e.target.value = "";
+                            handleAdd(uid)
+                            e.target.value = ''
                           }
                         }}
                         aria-label={`Agregar empleado a ${line.name}`}
                       >
-                        <option value="" disabled>Agregar empleado…</option>
-                        {available.map(u => (
+                        <option value="" disabled>
+                          Agregar empleado…
+                        </option>
+                        {available.map((u) => (
                           <option key={u.user_id} value={u.user_id}>
-                            {`${u.first_name ?? ""} ${u.last_name ?? ""}`.trim()}
+                            {`${u.first_name ?? ''} ${u.last_name ?? ''}`.trim()}
                           </option>
                         ))}
                       </select>
@@ -333,18 +406,18 @@ export default function LineFichaModal({ line, companyId, canManage = false, onA
                     <p className="text-[13.5px] text-[#bbb]">Sin clientes en esta línea.</p>
                   ) : (
                     <EntityGridList
-                      items={clients.map(c => ({
+                      items={clients.map((c) => ({
                         id: c.id,
                         name: c.name,
                         secondary: null,
                         imageUrl: c.logo_url,
-                        fallbackText: c.name?.[0] ?? "?",
+                        fallbackText: c.name?.[0] ?? '?',
                         fallbackBg: null,
                         title: `Ver ficha de ${c.name}`,
                         raw: c,
                       }))}
                       view={clientView}
-                      onItemClick={c => setDrill({ type: "client", entity: c })}
+                      onItemClick={(c) => setDrill({ type: 'client', entity: c })}
                       gridClass="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2"
                     />
                   )}
@@ -354,47 +427,52 @@ export default function LineFichaModal({ line, companyId, canManage = false, onA
                 {privileged && (
                   <div>
                     <p className="text-[11.5px] font-mono font-bold uppercase tracking-[0.12em] text-[#aaa] mb-2">
-                      Finanzas{lastReport ? ` · ${MONTHS[lastReport.month - 1]} ${CURRENT_YEAR}` : ""}
+                      Finanzas{lastReport ? ` · ${MONTHS[lastReport.month - 1]} ${PREV_YEAR}` : ''}
                     </p>
                     {!lastReport ? (
                       <p className="text-[13.5px] text-[#bbb]">
-                        Sin datos financieros para {CURRENT_YEAR}.
+                        Sin datos financieros para {MONTHS[PREV_MONTH - 1]} {PREV_YEAR}.
                       </p>
-                    ) : (() => {
-                      const f = calcFinanzas(lastReport.data ?? {});
-                      const canGo = can("reportes");
-                      return (
-                        <div className="grid grid-cols-3 gap-2">
-                          <FinKpi
-                            label="Ingresos brutos"
-                            value={fmtUSD(f.totIngresos)}
-                            color="text-green-600"
-                            onClick={canGo ? () => goFinanzas("ingresos") : undefined}
-                            title={canGo ? "Ir a ingresos" : undefined}
-                          />
-                          <FinKpi
-                            label="Total egresos"
-                            value={fmtUSD(f.totEgresos)}
-                            color="text-red-500"
-                            onClick={canGo ? () => goFinanzas("gastos") : undefined}
-                            title={canGo ? "Ir a gastos" : undefined}
-                          />
-                          <FinKpi
-                            label="Diferencia"
-                            value={fmtUSD(f.diferencia)}
-                            color={f.diferencia >= 0 ? "text-green-600" : "text-red-500"}
-                          />
-                        </div>
-                      );
-                    })()}
+                    ) : (
+                      (() => {
+                        const f = calcFinanzas(lastReport.data ?? {})
+                        const canGo = can('reportes')
+                        return (
+                          <div className="grid grid-cols-3 gap-2">
+                            <FinKpi
+                              label="Ingresos brutos"
+                              value={fmtUSD(f.totIngresos)}
+                              color="text-green-600"
+                              onClick={canGo ? () => goFinanzas('ingresos') : undefined}
+                              title={canGo ? 'Ir a ingresos' : undefined}
+                            />
+                            <FinKpi
+                              label="Total egresos"
+                              value={fmtUSD(f.totEgresos)}
+                              color="text-red-500"
+                              onClick={canGo ? () => goFinanzas('gastos') : undefined}
+                              title={canGo ? 'Ir a gastos' : undefined}
+                            />
+                            <FinKpi
+                              label="Diferencia"
+                              value={fmtUSD(f.diferencia)}
+                              color={f.diferencia >= 0 ? 'text-green-600' : 'text-red-500'}
+                            />
+                          </div>
+                        )
+                      })()
+                    )}
                   </div>
                 )}
 
                 {/* Acceso directo al reporte — disponible para todos con acceso a reportes */}
-                {can("reportes") && (
+                {can('reportes') && (
                   <button
                     type="button"
-                    onClick={() => { onClose(); navigate(`/reportes/linea/${line.id}?tab=hub`); }}
+                    onClick={() => {
+                      onClose()
+                      navigate(`/reportes/linea/${line.id}?tab=hub`)
+                    }}
                     className="w-full text-left px-4 py-2.5 rounded-xl bg-[#faf9f5] border border-[#ece9df] text-[13.5px] text-[#666] hover:bg-[#f5f3eb] hover:border-[#d8d4c6] hover:text-[#111] transition-colors"
                   >
                     Ver reporte de la línea →
@@ -406,20 +484,22 @@ export default function LineFichaModal({ line, companyId, canManage = false, onA
         )}
       </div>
     </div>
-  );
+  )
 }
 
 /** Mini-KPI financiero: botón navegable si recibe onClick, div estático si no. */
 function FinKpi({ label, value, color, onClick, title }) {
   const inner = (
     <>
-      <p className="text-[10.5px] font-mono font-bold uppercase tracking-[0.1em] text-[#aaa] mb-0.5">{label}</p>
+      <p className="text-[10.5px] font-mono font-bold uppercase tracking-[0.1em] text-[#aaa] mb-0.5">
+        {label}
+      </p>
       <p className={`text-[15px] font-bold ${color}`}>{value}</p>
     </>
-  );
-  const base = "p-3 rounded-xl bg-[#faf9f5] border border-[#ece9df] text-left";
+  )
+  const base = 'p-3 rounded-xl bg-[#faf9f5] border border-[#ece9df] text-left'
   if (!onClick) {
-    return <div className={base}>{inner}</div>;
+    return <div className={base}>{inner}</div>
   }
   return (
     <button
@@ -430,5 +510,5 @@ function FinKpi({ label, value, color, onClick, title }) {
     >
       {inner}
     </button>
-  );
+  )
 }
