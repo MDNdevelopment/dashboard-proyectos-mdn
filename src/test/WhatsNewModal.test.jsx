@@ -76,7 +76,7 @@ describe('useWhatsNew — integración con localStorage', () => {
   it('dismiss marca LATEST_VERSION y limpia las entradas', () => {
     localStorage.setItem('mdn_whatsnew_seen_version', '1.0.0')
     const { result } = renderHook(() => useWhatsNew())
-    expect(result.current.entries).toHaveLength(1)
+    expect(result.current.entries).toHaveLength(2)
     act(() => result.current.dismiss())
     expect(result.current.entries).toEqual([])
     expect(localStorage.getItem('mdn_whatsnew_seen_version')).toBe(LATEST_VERSION)

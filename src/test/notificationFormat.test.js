@@ -3,12 +3,7 @@
  * Covers notifIcon, notifLabel, notifRoute, notifTimeAgo.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import {
-  notifIcon,
-  notifLabel,
-  notifRoute,
-  notifTimeAgo,
-} from '../utils/notificationFormat'
+import { notifIcon, notifLabel, notifRoute, notifTimeAgo } from '../utils/notificationFormat'
 
 // ── notifIcon ────────────────────────────────────────────────────────────────
 
@@ -43,6 +38,10 @@ describe('notifIcon', () => {
   it('returns ⏰ for meeting_reminder_hour', () => {
     expect(notifIcon('meeting_reminder_hour')).toBe('⏰')
   })
+  it('returns ✅ for campaign_autoclosed and ad_autoclosed', () => {
+    expect(notifIcon('campaign_autoclosed')).toBe('✅')
+    expect(notifIcon('ad_autoclosed')).toBe('✅')
+  })
   it('returns 🔔 for unknown types', () => {
     expect(notifIcon('unknown_type')).toBe('🔔')
     expect(notifIcon('')).toBe('🔔')
@@ -73,6 +72,12 @@ describe('notifLabel', () => {
   it('returns human-readable label for meeting_reminder_hour', () => {
     expect(notifLabel('meeting_reminder_hour')).toBe('Recordatorio de reunión')
   })
+  it('returns human-readable label for campaign_autoclosed', () => {
+    expect(notifLabel('campaign_autoclosed')).toBe('Campaña finalizada')
+  })
+  it('returns human-readable label for ad_autoclosed', () => {
+    expect(notifLabel('ad_autoclosed')).toBe('Ad finalizado')
+  })
   it('returns fallback for unknown types', () => {
     expect(notifLabel('whatever')).toBe('Notificación')
   })
@@ -82,62 +87,84 @@ describe('notifLabel', () => {
 
 describe('notifRoute', () => {
   it('routes task types to /tareas?taskId=<id> (deeplink al detalle de la tarea)', () => {
-    expect(notifRoute({ type: 'task_assigned', entity_type: 'task', entity_id: 'abc' }))
-      .toBe('/tareas?taskId=abc')
-    expect(notifRoute({ type: 'task_comment', entity_type: 'task', entity_id: 'abc' }))
-      .toBe('/tareas?taskId=abc')
-    expect(notifRoute({ type: 'checklist_item_assigned', entity_type: 'task', entity_id: 'abc' }))
-      .toBe('/tareas?taskId=abc')
+    expect(notifRoute({ type: 'task_assigned', entity_type: 'task', entity_id: 'abc' })).toBe(
+      '/tareas?taskId=abc',
+    )
+    expect(notifRoute({ type: 'task_comment', entity_type: 'task', entity_id: 'abc' })).toBe(
+      '/tareas?taskId=abc',
+    )
+    expect(
+      notifRoute({ type: 'checklist_item_assigned', entity_type: 'task', entity_id: 'abc' }),
+    ).toBe('/tareas?taskId=abc')
   })
 
   it('routes task types to /tareas (sin query) cuando no hay entity_id', () => {
-    expect(notifRoute({ type: 'task_assigned', entity_type: 'task', entity_id: null }))
-      .toBe('/tareas')
+    expect(notifRoute({ type: 'task_assigned', entity_type: 'task', entity_id: null })).toBe(
+      '/tareas',
+    )
   })
 
   it('routes project_added to /?projectId=<id> when entity_id is present', () => {
-    const route = notifRoute({ type: 'project_added', entity_type: 'project', entity_id: 'proj-123' })
+    const route = notifRoute({
+      type: 'project_added',
+      entity_type: 'project',
+      entity_id: 'proj-123',
+    })
     expect(route).toBe('/?projectId=proj-123')
   })
 
   it('routes project_added to / when entity_id is null', () => {
-    expect(notifRoute({ type: 'project_added', entity_type: 'project', entity_id: null }))
-      .toBe('/')
+    expect(notifRoute({ type: 'project_added', entity_type: 'project', entity_id: null })).toBe('/')
   })
 
   it('routes client entity types to /empresa/clientes', () => {
-    expect(notifRoute({ type: 'client_anniversary', entity_type: 'client', entity_id: 'c1' }))
-      .toBe('/empresa/clientes')
-    expect(notifRoute({ type: 'client_mdn_anniversary', entity_type: 'client', entity_id: 'c1' }))
-      .toBe('/empresa/clientes')
-    expect(notifRoute({ type: 'client_contact_birthday', entity_type: 'client', entity_id: 'c1' }))
-      .toBe('/empresa/clientes')
+    expect(notifRoute({ type: 'client_anniversary', entity_type: 'client', entity_id: 'c1' })).toBe(
+      '/empresa/clientes',
+    )
+    expect(
+      notifRoute({ type: 'client_mdn_anniversary', entity_type: 'client', entity_id: 'c1' }),
+    ).toBe('/empresa/clientes')
+    expect(
+      notifRoute({ type: 'client_contact_birthday', entity_type: 'client', entity_id: 'c1' }),
+    ).toBe('/empresa/clientes')
   })
 
   it('routes employee entity types to /empresa/empleados', () => {
-    expect(notifRoute({ type: 'employee_birthday', entity_type: 'employee', entity_id: 'u1' }))
-      .toBe('/empresa/empleados')
-    expect(notifRoute({ type: 'employee_mdn_anniversary', entity_type: 'employee', entity_id: 'u1' }))
-      .toBe('/empresa/empleados')
+    expect(
+      notifRoute({ type: 'employee_birthday', entity_type: 'employee', entity_id: 'u1' }),
+    ).toBe('/empresa/empleados')
+    expect(
+      notifRoute({ type: 'employee_mdn_anniversary', entity_type: 'employee', entity_id: 'u1' }),
+    ).toBe('/empresa/empleados')
   })
 
   it('routes meeting types to /reuniones?meetingId=<id> (deeplink al detalle de la reunión)', () => {
-    expect(notifRoute({ type: 'meeting_invite', entity_type: 'meeting', entity_id: 'm1' }))
-      .toBe('/reuniones?meetingId=m1')
-    expect(notifRoute({ type: 'meeting_reminder_day', entity_type: 'meeting', entity_id: 'm1' }))
-      .toBe('/reuniones?meetingId=m1')
-    expect(notifRoute({ type: 'meeting_reminder_hour', entity_type: 'meeting', entity_id: 'm1' }))
-      .toBe('/reuniones?meetingId=m1')
+    expect(notifRoute({ type: 'meeting_invite', entity_type: 'meeting', entity_id: 'm1' })).toBe(
+      '/reuniones?meetingId=m1',
+    )
+    expect(
+      notifRoute({ type: 'meeting_reminder_day', entity_type: 'meeting', entity_id: 'm1' }),
+    ).toBe('/reuniones?meetingId=m1')
+    expect(
+      notifRoute({ type: 'meeting_reminder_hour', entity_type: 'meeting', entity_id: 'm1' }),
+    ).toBe('/reuniones?meetingId=m1')
   })
 
   it('routes meeting types to /reuniones (sin query) cuando no hay entity_id', () => {
-    expect(notifRoute({ type: 'meeting_invite', entity_type: 'meeting', entity_id: null }))
-      .toBe('/reuniones')
+    expect(notifRoute({ type: 'meeting_invite', entity_type: 'meeting', entity_id: null })).toBe(
+      '/reuniones',
+    )
+  })
+
+  it('routes campaign/ad auto-close types to /ads', () => {
+    expect(
+      notifRoute({ type: 'campaign_autoclosed', entity_type: 'campaign', entity_id: 'k1' }),
+    ).toBe('/ads')
+    expect(notifRoute({ type: 'ad_autoclosed', entity_type: 'ad', entity_id: 'a1' })).toBe('/ads')
   })
 
   it('falls back to / for unknown types', () => {
-    expect(notifRoute({ type: 'unknown', entity_type: null, entity_id: null }))
-      .toBe('/')
+    expect(notifRoute({ type: 'unknown', entity_type: null, entity_id: null })).toBe('/')
   })
 })
 
@@ -149,7 +176,9 @@ describe('notifTimeAgo', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-07-03T15:00:00Z'))
   })
-  afterEach(() => { vi.useRealTimers() })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
 
   it('returns "Ahora" for very recent timestamps (< 1 min)', () => {
     expect(notifTimeAgo('2026-07-03T14:59:30Z')).toBe('Ahora')

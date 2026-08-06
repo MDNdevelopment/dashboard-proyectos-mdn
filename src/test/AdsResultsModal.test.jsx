@@ -75,6 +75,7 @@ describe('AdsResultsModal', () => {
     await waitFor(() => {
       expect(mockUpdateAd).toHaveBeenCalledWith('ad-1', {
         status: 'Finalizado',
+        results_pending: false,
         reach: 1000,
         interactions: null,
         followers: null,
@@ -97,14 +98,17 @@ describe('AdsResultsModal', () => {
     await user.click(screen.getByRole('button', { name: 'Guardar y finalizar' }))
 
     await waitFor(() => {
-      expect(mockUpdateAd).toHaveBeenCalledWith('ad-1', expect.objectContaining({
-        reach: 1000,
-        views: 3000,
-        interactions: null,
-        followers: null,
-        impressions: null,
-        profile_visits: null,
-      }))
+      expect(mockUpdateAd).toHaveBeenCalledWith(
+        'ad-1',
+        expect.objectContaining({
+          reach: 1000,
+          views: 3000,
+          interactions: null,
+          followers: null,
+          impressions: null,
+          profile_visits: null,
+        }),
+      )
     })
   })
 

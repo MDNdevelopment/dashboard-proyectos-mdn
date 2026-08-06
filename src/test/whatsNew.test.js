@@ -31,7 +31,7 @@ describe('getUnseenEntries', () => {
   it('con seen=1.0.0 devuelve solo las versiones mayores', () => {
     const seen = CHANGELOG.find((e) => e.version === '1.0.0').version
     const result = getUnseenEntries(seen)
-    expect(result.map((e) => e.version)).toEqual(['1.1.0'])
+    expect(result.map((e) => e.version)).toEqual(['1.2.0', '1.1.0'])
   })
 
   it('con seen igual a la versión más nueva devuelve []', () => {

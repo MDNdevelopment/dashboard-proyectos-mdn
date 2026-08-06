@@ -30,6 +30,7 @@ export function makeQuery(result = [], { error = null } = {}) {
     lte: vi.fn(() => q),
     order: vi.fn(() => q),
     limit: vi.fn(() => q),
+    range: vi.fn(() => q),
     insert: vi.fn(() => q),
     update: vi.fn(() => q),
     upsert: vi.fn(() => q),

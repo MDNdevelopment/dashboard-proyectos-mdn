@@ -45,7 +45,10 @@ export default function AdsResultsModal({ ad, onClose, onSaved }) {
     if (!canSave) return
     setSubmitting(true)
     setError(null)
-    const payload = { status: 'Finalizado' }
+    // results_pending: false limpia el marcador "faltan resultados" que el cron
+    // pone al auto-finalizar un ad (ver enqueue_campaign_closures). Al cargar los
+    // resultados manualmente, el aviso desaparece.
+    const payload = { status: 'Finalizado', results_pending: false }
     RESULT_FIELDS.forEach((f) => {
       payload[f.key] = selected.has(f.key) ? Number(values[f.key]) : null
     })

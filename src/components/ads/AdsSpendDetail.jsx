@@ -18,18 +18,32 @@ import StatusPill from '../common/StatusPill'
  *   onStatusChange — cambio de estado delegado al padre (AdsSpendView.requestStatusChange), que
  *                    decide si persiste directo o exige resultados primero (finalizar)
  */
-export default function AdsSpendDetail({ ad, ads = [], client, responsables = [], onClose, onStatusChange, canManage, onEdit, onRequestDelete }) {
+export default function AdsSpendDetail({
+  ad,
+  ads = [],
+  client,
+  responsables = [],
+  onClose,
+  onStatusChange,
+  canManage,
+  onEdit,
+  onRequestDelete,
+}) {
   const responsableName = (() => {
-    const r = responsables.find(r => r.user_id === ad.responsable_id)
+    const r = responsables.find((r) => r.user_id === ad.responsable_id)
     return r ? `${r.first_name} ${r.last_name}` : '—'
   })()
   const duration = durationDays(ad.start_date, ad.end_date)
   // Solo los indicadores que el usuario eligió capturar al finalizar (los demás quedan null).
-  const capturedResults = RESULT_FIELDS.filter(f => ad[f.key] != null)
+  const capturedResults = RESULT_FIELDS.filter((f) => ad[f.key] != null)
 
   const fmt = (d) =>
     d
-      ? new Date(d + 'T00:00:00').toLocaleDateString('es-VE', { day: 'numeric', month: 'long', year: 'numeric' })
+      ? new Date(d + 'T00:00:00').toLocaleDateString('es-VE', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric',
+        })
       : '—'
 
   // Aviso de sobrepaso: el ad ya está incluido en `ads`, así que no se excluye por id.
@@ -60,7 +74,14 @@ export default function AdsSpendDetail({ ad, ads = [], client, responsables = []
             </div>
           </div>
           <button onClick={onClose} className="text-[#999] hover:text-[#111] transition-colors p-1">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
               <path d="M2 2l12 12M14 2L2 14" strokeLinecap="round" />
             </svg>
           </button>
@@ -70,33 +91,54 @@ export default function AdsSpendDetail({ ad, ads = [], client, responsables = []
         <div className="px-6 py-5 overflow-y-auto flex-1">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 text-[14px]">
             <div>
-              <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-0.5">Cliente</p>
+              <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-0.5">
+                Cliente
+              </p>
               <p className="text-[#333] font-medium">{ad.client}</p>
             </div>
             <div>
-              <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-0.5">Responsable</p>
+              <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-0.5">
+                Responsable
+              </p>
               <p className="text-[#333] font-medium">{responsableName}</p>
             </div>
             <div>
-              <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-0.5">Monto</p>
+              <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-0.5">
+                Monto
+              </p>
               <p className="text-[#333] font-medium">{fmtUSD(ad.amount)}</p>
             </div>
             <div>
-              <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-0.5">Fecha inicio</p>
+              <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-0.5">
+                Fecha inicio
+              </p>
               <p className="text-[#333]">{fmt(ad.start_date)}</p>
             </div>
             <div>
-              <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-0.5">Fecha fin</p>
+              <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-0.5">
+                Fecha fin
+              </p>
               <p className="text-[#333]">{fmt(ad.end_date)}</p>
             </div>
             <div>
-              <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-0.5">Duración</p>
-              <p className="text-[#333]">{duration != null ? `${duration} día${duration !== 1 ? 's' : ''}` : '—'}</p>
+              <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-0.5">
+                Duración
+              </p>
+              <p className="text-[#333]">
+                {duration != null ? `${duration} día${duration !== 1 ? 's' : ''}` : '—'}
+              </p>
             </div>
             <div>
-              <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-0.5">Pieza</p>
+              <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-0.5">
+                Pieza
+              </p>
               {ad.piece_url ? (
-                <a href={ad.piece_url} target="_blank" rel="noopener noreferrer" className="text-[#3B6FE0] hover:underline">
+                <a
+                  href={ad.piece_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#3B6FE0] hover:underline"
+                >
                   Ver pieza
                 </a>
               ) : (
@@ -107,7 +149,9 @@ export default function AdsSpendDetail({ ad, ads = [], client, responsables = []
 
           {ad.objective && (
             <div className="mb-4">
-              <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-1.5">Objetivo</p>
+              <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-1.5">
+                Objetivo
+              </p>
               <p className="text-[15px] text-[#444] whitespace-pre-wrap leading-relaxed bg-[#f5f3eb] rounded-xl p-3">
                 {ad.objective}
               </p>
@@ -118,11 +162,15 @@ export default function AdsSpendDetail({ ad, ads = [], client, responsables = []
               cuáles al finalizar); nunca como columnas de la tabla */}
           {ad.status === 'Finalizado' && capturedResults.length > 0 && (
             <div className="mb-4">
-              <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-1.5">Resultados</p>
+              <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-1.5">
+                Resultados
+              </p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#f5f3eb] rounded-xl p-3">
-                {capturedResults.map(f => (
+                {capturedResults.map((f) => (
                   <div key={f.key}>
-                    <p className="text-[11px] font-mono uppercase tracking-widest text-[#888] mb-0.5">{f.label}</p>
+                    <p className="text-[11px] font-mono uppercase tracking-widest text-[#888] mb-0.5">
+                      {f.label}
+                    </p>
                     <p className="text-[15px] font-semibold text-[#111]">
                       {Number(ad[f.key]).toLocaleString('es-VE')}
                     </p>
@@ -132,14 +180,33 @@ export default function AdsSpendDetail({ ad, ads = [], client, responsables = []
             </div>
           )}
 
-          {/* Aviso de sobrepaso de presupuesto — solo si este cliente ya lo excede este mes */}
-          {overspend && (
-            <div className="mb-4 bg-[#fff3e0] border border-[#f0871f]/40 text-[#8a4a0a] text-[14px] rounded-xl px-4 py-3">
-              Te estás pasando del presupuesto aprobado para este cliente
-              ({fmtUSD(overspend.spent)} de {fmtUSD(overspend.budget)} este mes).
+          {/* Aviso "faltan resultados": el cron auto-finalizó el ad al vencer su fecha
+              sin poder capturar los indicadores. El botón reabre el flujo de resultados
+              (onStatusChange('Finalizado') → AdsResultsModal en el padre). */}
+          {ad.results_pending && (
+            <div className="mb-4 bg-[#fff3e0] border border-[#f0871f]/40 text-[#8a4a0a] text-[14px] rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+              <span>
+                ⚠ Este ad se finalizó automáticamente al vencer su fecha. Faltan cargar los
+                resultados.
+              </span>
+              {canManage && (
+                <button
+                  onClick={() => onStatusChange('Finalizado')}
+                  className="flex-shrink-0 px-3 py-1.5 rounded-lg bg-[#f0871f] text-white text-[13px] font-bold hover:bg-[#d9760f] transition-colors"
+                >
+                  Cargar resultados
+                </button>
+              )}
             </div>
           )}
 
+          {/* Aviso de sobrepaso de presupuesto — solo si este cliente ya lo excede este mes */}
+          {overspend && (
+            <div className="mb-4 bg-[#fff3e0] border border-[#f0871f]/40 text-[#8a4a0a] text-[14px] rounded-xl px-4 py-3">
+              Te estás pasando del presupuesto aprobado para este cliente ({fmtUSD(overspend.spent)}{' '}
+              de {fmtUSD(overspend.budget)} este mes).
+            </div>
+          )}
         </div>
 
         {canManage && (
