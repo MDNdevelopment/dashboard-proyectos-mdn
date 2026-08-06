@@ -33,7 +33,10 @@ import ClientCell from './ClientCell'
  * "Nueva campaña"), por eso este componente expone `openCreate()` vía ref
  * en lugar de renderizar su propio botón de creación.
  */
-const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, periodo }, ref) {
+const AdsSpendView = forwardRef(function AdsSpendView(
+  { companyId, canManage, lineScope = null, periodo },
+  ref,
+) {
   const [ads, setAds] = useState([])
   const [clients, setClients] = useState([])
   const [responsables, setResponsables] = useState([])
@@ -134,6 +137,9 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
 
   const filtered = periodAds.filter((a) => {
     if (clientFilter !== 'all' && a.client_id !== clientFilter) return false
+    // Ámbito de línea (pills en AdsPage). La línea se deriva del cliente
+    // (paid_campaigns no guarda line_id): client_id → metric_clients.line_id.
+    if (lineScope !== null && clientsById.get(a.client_id)?.line_id !== lineScope) return false
     if (statusFilter !== 'all' && a.status !== statusFilter) return false
     if (search) {
       const q = search.toLowerCase()

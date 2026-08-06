@@ -14,8 +14,9 @@ const { MOCK_CLIENTS } = vi.hoisted(() => ({
       name: 'Banco Exterior',
       campaign_budget: 100,
       logo_url: 'https://cdn.example.com/banco.png',
+      line_id: 'line-1',
     },
-    { id: 'c-2', name: 'Pepsi', campaign_budget: null, logo_url: null },
+    { id: 'c-2', name: 'Pepsi', campaign_budget: null, logo_url: null, line_id: 'line-2' },
   ],
 }))
 
@@ -141,6 +142,37 @@ describe('AdsSpendView', () => {
     await user.selectOptions(screen.getByDisplayValue('Todos los clientes'), 'c-1')
     expect(screen.getByText('Ad Julio')).toBeInTheDocument()
     expect(screen.queryByText('Ad Pepsi')).not.toBeInTheDocument()
+  })
+
+  it('la prop lineScope acota la tabla a los ads de clientes de esa línea', async () => {
+    // El scoping por línea vive ahora en las pills de AdsPage y llega como prop lineScope.
+    // Ad Julio → cliente c-1 (line-1); Ad Pepsi → cliente c-2 (line-2).
+    const { rerender } = render(
+      <AdsSpendView
+        companyId="co-1"
+        canManage={true}
+        lineScope="line-1"
+        periodo={{ month: 7, year: 2026 }}
+      />,
+    )
+    await waitFor(() => {
+      expect(screen.getByText('Ad Julio')).toBeInTheDocument()
+    })
+    expect(screen.queryByText('Ad Pepsi')).not.toBeInTheDocument()
+
+    // lineScope=null (Todos) muestra ambos.
+    rerender(
+      <AdsSpendView
+        companyId="co-1"
+        canManage={true}
+        lineScope={null}
+        periodo={{ month: 7, year: 2026 }}
+      />,
+    )
+    await waitFor(() => {
+      expect(screen.getByText('Ad Pepsi')).toBeInTheDocument()
+    })
+    expect(screen.getByText('Ad Julio')).toBeInTheDocument()
   })
 
   it('muestra el tracking de invertido vs. presupuesto al seleccionar un cliente', async () => {
@@ -442,10 +474,14 @@ describe('AdsSpendView', () => {
         expect(screen.getByText('Ad Julio')).toBeInTheDocument()
       })
 
+      // Abre el menú del pill de ad-1 (En Curso, único en el periodo) y elige 'Pendiente'.
       await user.click(screen.getByRole('button', { name: 'En Curso' }))
-      await user.click(screen.getByRole('button', { name: 'Descartado' }))
+      // 'Pendiente' aparece como pill de fila (Pepsi) y como opción de menú; toma la del menú.
+      const pendienteOptions = screen.getAllByRole('button', { name: 'Pendiente' })
+      const menuOption = pendienteOptions.find((b) => b.className.includes('w-full'))
+      await user.click(menuOption)
 
-      expect(mockUpdateAd).toHaveBeenCalledWith('ad-1', { status: 'Descartado' })
+      expect(mockUpdateAd).toHaveBeenCalledWith('ad-1', { status: 'Pendiente' })
     })
   })
 
