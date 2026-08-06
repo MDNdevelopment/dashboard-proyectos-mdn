@@ -10,7 +10,7 @@
 export const CHANGELOG = [
   {
     version: '1.2.0',
-    title: 'Mejoras en Campañas',
+    title: 'Mejoras en Campañas y Empresa',
     changes: [
       'Campañas y Ads ahora se ven por línea de negocio: elige una línea arriba o "Todos". Las jefas de línea ven su línea por defecto.',
       'En Campañas simplificamos los estados a Pendiente, En Curso y Finalizado.',
@@ -18,6 +18,7 @@ export const CHANGELOG = [
       'Al crear un Ad ahora puedes elegir el objetivo "Una combinación de ambas".',
       'Las campañas y los ads pasan solos a "Finalizado" cuando termina su fecha de cierre. Se avisa al responsable y a los Marketing Managers, y en los ads queda un aviso para cargar los resultados.',
       'La campanita de notificaciones ahora tiene un botón "Cargar más" para ver el historial completo, no solo las más recientes.',
+      'En Empresa → Empleados puedes marcar a alguien "En período de prueba", ver cuántos hay y filtrarlos; al pasar a fijo lo desmarcas.',
     ],
   },
   {
