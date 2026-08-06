@@ -11,6 +11,8 @@ import { useState, useEffect } from 'react'
  *   onConfirm  — callback cuando el usuario confirma
  *   onCancel   — callback cuando cancela o cierra
  *   confirming — bool; muestra "Eliminando…" y deshabilita botones mientras se procesa
+ *   children   — contenido opcional que se renderiza en el body, sobre el input de confirmación
+ *                (p.ej. opciones extra específicas del elemento a eliminar)
  */
 export default function ConfirmDeleteDialog({
   itemName,
@@ -19,20 +21,21 @@ export default function ConfirmDeleteDialog({
   onConfirm,
   onCancel,
   confirming = false,
+  children,
 }) {
   const [typed, setTyped] = useState('')
   const canDelete = typed.trim() === itemName
 
   useEffect(() => {
-    const fn = e => { if (e.key === 'Escape') onCancel() }
+    const fn = (e) => {
+      if (e.key === 'Escape') onCancel()
+    }
     document.addEventListener('keydown', fn)
     return () => document.removeEventListener('keydown', fn)
   }, [onCancel])
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25 backdrop-blur-[3px]"
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25 backdrop-blur-[3px]">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-[#ece9df]">
@@ -43,7 +46,14 @@ export default function ConfirmDeleteDialog({
             className="w-7 h-7 flex items-center justify-center rounded-lg text-[#999] hover:text-[#111] hover:bg-[#f0ede3] transition-colors"
             aria-label="Cerrar"
           >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 14 14"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+            >
               <path d="M2 2l10 10M12 2L2 12" />
             </svg>
           </button>
@@ -54,11 +64,13 @@ export default function ConfirmDeleteDialog({
           <p className="text-[15px] text-[#555]">
             {message ?? (
               <>
-                Esta acción <strong>no se puede deshacer</strong>. Para confirmar, escribe el
-                nombre exacto del {itemLabel} a continuación.
+                Esta acción <strong>no se puede deshacer</strong>. Para confirmar, escribe el nombre
+                exacto del {itemLabel} a continuación.
               </>
             )}
           </p>
+
+          {children}
 
           <div>
             <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
@@ -68,7 +80,7 @@ export default function ConfirmDeleteDialog({
               type="text"
               className="input-base"
               value={typed}
-              onChange={e => setTyped(e.target.value)}
+              onChange={(e) => setTyped(e.target.value)}
               placeholder={itemName}
               autoFocus
             />

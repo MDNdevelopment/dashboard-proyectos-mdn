@@ -10,10 +10,16 @@
 export const CHANGELOG = [
   {
     version: '1.2.0',
-    title: 'Cierre automático de campañas',
+    title: 'Mejoras en Campañas y Empresa',
     changes: [
+      'Campañas y Ads ahora se ven por línea de negocio: elige una línea arriba o "Todos". Las jefas de línea ven su línea por defecto.',
+      'En Campañas simplificamos los estados a Pendiente, En Curso y Finalizado.',
+      'Cada Táctica puede tener un checklist de acciones; al ir tildándolas avanza su % de cumplimiento.',
+      'Al crear un Ad ahora puedes elegir el objetivo "Una combinación de ambas".',
       'Las campañas y los ads pasan solos a "Finalizado" cuando termina su fecha de cierre. Se avisa al responsable y a los Marketing Managers, y en los ads queda un aviso para cargar los resultados.',
       'La campanita de notificaciones ahora tiene un botón "Cargar más" para ver el historial completo, no solo las más recientes.',
+      'En Empresa → Empleados puedes marcar a alguien "En período de prueba", ver cuántos hay y filtrarlos; al pasar a fijo lo desmarcas.',
+      'Al eliminar un cliente ahora eliges si sigue contando en el reporte del mes en curso (facturó/trabajó parte del mes) o si se retira de inmediato también de ese mes.',
     ],
   },
   {

@@ -22,16 +22,26 @@ export const handler = async (event) => {
     return json(400, { error: 'Body JSON inválido' })
   }
 
-  const { email, first_name, last_name, department_id, position_id, access_level, admin } = body
+  const {
+    email,
+    first_name,
+    last_name,
+    department_id,
+    position_id,
+    access_level,
+    admin,
+    on_probation,
+  } = body
 
   // Validación básica
-  if (!email?.trim())      return json(400, { error: 'El email es obligatorio' })
+  if (!email?.trim()) return json(400, { error: 'El email es obligatorio' })
   if (!first_name?.trim()) return json(400, { error: 'El nombre es obligatorio' })
-  if (!last_name?.trim())  return json(400, { error: 'El apellido es obligatorio' })
+  if (!last_name?.trim()) return json(400, { error: 'El apellido es obligatorio' })
 
   // 1. Crear cuenta auth via invitación — el empleado recibirá un email para fijar su contraseña
-  const { data: inviteData, error: inviteErr } =
-    await supabase.auth.admin.inviteUserByEmail(email.trim())
+  const { data: inviteData, error: inviteErr } = await supabase.auth.admin.inviteUserByEmail(
+    email.trim(),
+  )
 
   if (inviteErr) return json(400, { error: inviteErr.message })
 
@@ -40,15 +50,16 @@ export const handler = async (event) => {
   const { data: employee, error: insertErr } = await supabase
     .from('users')
     .insert({
-      user_id:      inviteData.user.id,
-      email:        email.trim(),
-      first_name:   first_name.trim(),
-      last_name:    last_name.trim(),
+      user_id: inviteData.user.id,
+      email: email.trim(),
+      first_name: first_name.trim(),
+      last_name: last_name.trim(),
       department_id: department_id || null,
-      position_id:   position_id   || null,
-      access_level:  Number(access_level) || 1,
-      admin:         !!admin,
-      company_id:    caller.company_id,
+      position_id: position_id || null,
+      access_level: Number(access_level) || 1,
+      admin: !!admin,
+      on_probation: !!on_probation,
+      company_id: caller.company_id,
     })
     .select('*, department:departments(department_name), position:positions(position_name)')
     .single()

@@ -6,6 +6,7 @@ import UserPickerSingle from '../tareas/UserPickerSingle'
 import { loadClients } from '../metricas/metricsApi'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import DateInput from '../common/DateInput'
+import CampaignChecklist from './CampaignChecklist'
 
 export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
   const { userProfile } = useAuth()
@@ -13,17 +14,22 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
 
   const [fields, setFields] = useState({
     start_date: campaign?.start_date ?? '',
-    end_date:   campaign?.end_date   ?? '',
-    name:       campaign?.name       ?? '',
-    client:     campaign?.client     ?? '',
-    client_id:  campaign?.client_id  ?? '',
-    assignee:   campaign?.assignee   ?? '',
-    priority:   campaign?.priority   ?? 'Media',
-    status:     campaign?.status     ?? 'Pendiente',
-    notes:      campaign?.notes      ?? '',
+    end_date: campaign?.end_date ?? '',
+    name: campaign?.name ?? '',
+    client: campaign?.client ?? '',
+    client_id: campaign?.client_id ?? '',
+    assignee: campaign?.assignee ?? '',
+    priority: campaign?.priority ?? 'Media',
+    status: campaign?.status ?? 'Pendiente',
+    notes: campaign?.notes ?? '',
+    checklist: campaign?.checklist ?? [],
   })
   const initialFields = useRef(fields)
-  const { requestClose } = useUnsavedChanges({ value: fields, baseline: initialFields.current, onClose })
+  const { requestClose } = useUnsavedChanges({
+    value: fields,
+    baseline: initialFields.current,
+    onClose,
+  })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
 
@@ -35,18 +41,29 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
 
   // Cargar usuarios con avatar/nivel (necesario para UserPickerSingle)
   useEffect(() => {
-    if (!userProfile?.company_id) { setLoadingUsers(false); return }
+    if (!userProfile?.company_id) {
+      setLoadingUsers(false)
+      return
+    }
     supabase
       .from('users')
-      .select('user_id, first_name, last_name, avatar_url, access_level, deleted_at, position:positions(position_name)')
+      .select(
+        'user_id, first_name, last_name, avatar_url, access_level, deleted_at, position:positions(position_name)',
+      )
       .eq('company_id', userProfile.company_id)
       .order('first_name')
-      .then(({ data }) => { setUsers(data ?? []); setLoadingUsers(false) })
+      .then(({ data }) => {
+        setUsers(data ?? [])
+        setLoadingUsers(false)
+      })
   }, [userProfile?.company_id])
 
   // Cargar todos los clientes de la empresa (sin filtro de línea)
   useEffect(() => {
-    if (!userProfile?.company_id) { setLoadingClients(false); return }
+    if (!userProfile?.company_id) {
+      setLoadingClients(false)
+      return
+    }
     loadClients(userProfile.company_id).then(({ data }) => {
       setClients(data ?? [])
       setLoadingClients(false)
@@ -54,13 +71,13 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
   }, [userProfile?.company_id])
 
   function set(key, val) {
-    setFields(prev => ({ ...prev, [key]: val }))
+    setFields((prev) => ({ ...prev, [key]: val }))
   }
 
   function handleClientChange(e) {
     const id = e.target.value
-    const c = clients.find(x => x.id === id)
-    setFields(prev => ({ ...prev, client_id: id, client: c?.name ?? '' }))
+    const c = clients.find((x) => x.id === id)
+    setFields((prev) => ({ ...prev, client_id: id, client: c?.name ?? '' }))
   }
 
   async function handleSubmit(e) {
@@ -77,7 +94,10 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
         .select()
         .single()
       setSubmitting(false)
-      if (err) { setError('Error al actualizar la campaña.'); return }
+      if (err) {
+        setError('Error al actualizar la campaña.')
+        return
+      }
       onUpdated(data)
       onClose()
     } else {
@@ -87,20 +107,26 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
         .select()
         .single()
       setSubmitting(false)
-      if (err) { setError('Error al crear la campaña.'); return }
+      if (err) {
+        setError('Error al crear la campaña.')
+        return
+      }
       onCreated(data)
       onClose()
-      supabase.functions.invoke('notify-campaign-assignee', {
-        body: {
-          assignee_id: fields.assignee,
-          campaign_name: fields.name,
-          created_by_name: `${userProfile.first_name} ${userProfile.last_name}`,
-        },
-      }).catch(console.error)
+      supabase.functions
+        .invoke('notify-campaign-assignee', {
+          body: {
+            assignee_id: fields.assignee,
+            campaign_name: fields.name,
+            created_by_name: `${userProfile.first_name} ${userProfile.last_name}`,
+          },
+        })
+        .catch(console.error)
     }
   }
 
-  const labelClass = 'block text-[13px] font-mono font-bold tracking-widest uppercase text-[#888] mb-1.5'
+  const labelClass =
+    'block text-[13px] font-mono font-bold tracking-widest uppercase text-[#888] mb-1.5'
 
   // ¿La campaña heredada tenía un cliente escrito a mano sin client_id?
   const legacyClientName = isEdit && !campaign.client_id && campaign.client ? campaign.client : null
@@ -112,14 +138,28 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
           <h2 className="text-[19px] font-bold text-[#111]">
             {isEdit ? 'Editar campaña' : 'Nueva campaña'}
           </h2>
-          <button onClick={requestClose} className="text-[#999] hover:text-[#111] transition-colors p-1">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M2 2l12 12M14 2L2 14" strokeLinecap="round"/>
+          <button
+            onClick={requestClose}
+            className="text-[#999] hover:text-[#111] transition-colors p-1"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path d="M2 2l12 12M14 2L2 14" strokeLinecap="round" />
             </svg>
           </button>
         </div>
 
-        <form id="ads-campaign-form" onSubmit={handleSubmit} className="px-6 py-5 overflow-y-auto flex-1">
+        <form
+          id="ads-campaign-form"
+          onSubmit={handleSubmit}
+          className="px-6 py-5 overflow-y-auto flex-1"
+        >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Fecha inicio */}
             <div>
@@ -127,7 +167,7 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
               <DateInput
                 className="w-full"
                 value={fields.start_date}
-                onChange={v => set('start_date', v)}
+                onChange={(v) => set('start_date', v)}
                 required
               />
             </div>
@@ -138,7 +178,7 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
               <DateInput
                 className="w-full"
                 value={fields.end_date}
-                onChange={v => set('end_date', v)}
+                onChange={(v) => set('end_date', v)}
                 required
               />
             </div>
@@ -151,7 +191,7 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
                 className="input-base w-full"
                 placeholder="Nombre de la táctica o campaña"
                 value={fields.name}
-                onChange={e => set('name', e.target.value)}
+                onChange={(e) => set('name', e.target.value)}
                 required
               />
             </div>
@@ -160,7 +200,9 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
             <div>
               <label className={labelClass}>Cliente / Marca</label>
               {loadingClients ? (
-                <div className="input-base w-full text-[#bbb] text-[14.5px]">Cargando clientes…</div>
+                <div className="input-base w-full text-[#bbb] text-[14.5px]">
+                  Cargando clientes…
+                </div>
               ) : clients.length === 0 ? (
                 <div className="input-base w-full text-[#bbb] text-[14.5px]">
                   No hay clientes.{' '}
@@ -175,14 +217,17 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
                     required
                   >
                     <option value="">— Seleccionar cliente —</option>
-                    {clients.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
+                    {clients.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
                     ))}
                   </select>
                   {/* Hint: campaña heredada con nombre pero sin client_id */}
                   {legacyClientName && !fields.client_id && (
                     <p className="mt-1 text-[12.5px] text-[#F0871F]">
-                      Cliente previo: <span className="font-semibold">{legacyClientName}</span> — elige uno de la lista para actualizar el vínculo.
+                      Cliente previo: <span className="font-semibold">{legacyClientName}</span> —
+                      elige uno de la lista para actualizar el vínculo.
                     </p>
                   )}
                 </>
@@ -198,7 +243,7 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
                 <UserPickerSingle
                   users={users}
                   selectedId={fields.assignee || null}
-                  onChange={id => set('assignee', id ?? '')}
+                  onChange={(id) => set('assignee', id ?? '')}
                   placeholder="Asignar responsable..."
                 />
               )}
@@ -210,9 +255,13 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
               <select
                 className="input-base w-full"
                 value={fields.priority}
-                onChange={e => set('priority', e.target.value)}
+                onChange={(e) => set('priority', e.target.value)}
               >
-                {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
+                {PRIORITIES.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -222,9 +271,13 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
               <select
                 className="input-base w-full"
                 value={fields.status}
-                onChange={e => set('status', e.target.value)}
+                onChange={(e) => set('status', e.target.value)}
               >
-                {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                {STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -236,8 +289,13 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
                 rows={3}
                 placeholder="Observaciones adicionales"
                 value={fields.notes}
-                onChange={e => set('notes', e.target.value)}
+                onChange={(e) => set('notes', e.target.value)}
               />
+            </div>
+
+            {/* Checklist de acciones — full width */}
+            <div className="col-span-1 sm:col-span-2">
+              <CampaignChecklist value={fields.checklist} onChange={(v) => set('checklist', v)} />
             </div>
           </div>
 
@@ -255,10 +313,22 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
           <button
             type="submit"
             form="ads-campaign-form"
-            disabled={submitting || !fields.name.trim() || !fields.client_id || !fields.start_date || !fields.end_date}
+            disabled={
+              submitting ||
+              !fields.name.trim() ||
+              !fields.client_id ||
+              !fields.start_date ||
+              !fields.end_date
+            }
             className="flex-1 py-2.5 rounded-xl bg-[#111] text-white text-[15px] font-bold hover:bg-[#222] transition-colors disabled:opacity-50"
           >
-            {submitting ? (isEdit ? 'Guardando...' : 'Creando...') : (isEdit ? 'Guardar cambios' : 'Crear campaña')}
+            {submitting
+              ? isEdit
+                ? 'Guardando...'
+                : 'Creando...'
+              : isEdit
+                ? 'Guardar cambios'
+                : 'Crear campaña'}
           </button>
         </div>
       </div>

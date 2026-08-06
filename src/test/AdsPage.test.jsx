@@ -6,6 +6,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { forwardRef, useImperativeHandle } from 'react'
+import { MemoryRouter } from 'react-router-dom'
 import { vi } from 'vitest'
 
 const { mockOpenCreate } = vi.hoisted(() => ({ mockOpenCreate: vi.fn() }))
@@ -69,6 +70,7 @@ vi.mock('../supabase', () => ({
 
 vi.mock('../components/metricas/metricsApi', () => ({
   loadClients: vi.fn().mockResolvedValue({ data: [], error: null }),
+  loadLines: vi.fn().mockResolvedValue({ data: [], error: null }),
 }))
 
 vi.mock('../components/ads/AdsSpendView', () => ({
@@ -92,10 +94,16 @@ import AdsPage from '../pages/AdsPage'
 
 function renderPage() {
   useAuth.mockReturnValue({
-    userProfile: { user_id: 'u-1', company_id: 'co-1' },
+    // admin ⇒ canViewAll ⇒ arranca en "Todos" y no aplica filtro de línea, así estos
+    // tests (período/estado, no scoping) ven todas las tácticas.
+    userProfile: { user_id: 'u-1', company_id: 'co-1', admin: true },
     can: () => true,
   })
-  return render(<AdsPage />)
+  return render(
+    <MemoryRouter>
+      <AdsPage />
+    </MemoryRouter>,
+  )
 }
 
 describe('AdsPage — tabs Tácticas/Ads', () => {

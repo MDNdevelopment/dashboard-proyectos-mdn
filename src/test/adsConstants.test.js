@@ -1,20 +1,32 @@
 /**
- * Test de src/components/ads/constants.js: confirma que los estados de
- * Tácticas/Ads quedaron consolidados a 4 (Pendiente, En Curso, Finalizado,
- * Descartado) y que los estados eliminados (Revisión, Aprobado, Cancelado)
- * ya no existen.
+ * Test de src/components/ads/constants.js: confirma los estados SELECCIONABLES
+ * (Pendiente, En Curso, Finalizado) y que 'Descartado' quedó como legacy —fuera
+ * de STATUSES pero aún en STATUS (meta) para renderizar filas históricas—, y que
+ * los estados eliminados (Revisión, Aprobado, Cancelado) no existen.
  */
-import { STATUS, STATUSES, RESULT_FIELDS } from '../components/ads/constants'
+import { STATUS, STATUSES, OBJECTIVES, RESULT_FIELDS } from '../components/ads/constants'
 
 describe('constants de Ads/Tácticas — estados', () => {
-  it('STATUSES contiene exactamente los 4 estados vigentes', () => {
-    expect(STATUSES).toEqual(['Pendiente', 'En Curso', 'Finalizado', 'Descartado'])
+  it('STATUSES contiene exactamente los 3 estados seleccionables (sin Descartado)', () => {
+    expect(STATUSES).toEqual(['Pendiente', 'En Curso', 'Finalizado'])
   })
 
-  it('STATUS expone metadata (bg/text/dot) para cada uno de los 4 estados', () => {
-    expect(Object.keys(STATUS)).toEqual(['Pendiente', 'En Curso', 'Finalizado', 'Descartado'])
+  it("'Descartado' es legacy: NO seleccionable pero sigue en STATUS (meta) para renderizar filas viejas", () => {
+    expect(STATUSES).not.toContain('Descartado')
+    expect(STATUS['Descartado']).toMatchObject({
+      label: 'Descartado',
+      bg: expect.any(String),
+      text: expect.any(String),
+    })
+  })
+
+  it('STATUS expone metadata (bg/text/dot) para cada estado seleccionable', () => {
     for (const key of STATUSES) {
-      expect(STATUS[key]).toMatchObject({ label: key, bg: expect.any(String), text: expect.any(String) })
+      expect(STATUS[key]).toMatchObject({
+        label: key,
+        bg: expect.any(String),
+        text: expect.any(String),
+      })
     }
   })
 
@@ -25,6 +37,12 @@ describe('constants de Ads/Tácticas — estados', () => {
     expect(STATUS['Revisión']).toBeUndefined()
     expect(STATUS['Aprobado']).toBeUndefined()
     expect(STATUS['Cancelado']).toBeUndefined()
+  })
+})
+
+describe('constants de Ads — objetivos', () => {
+  it('OBJECTIVES incluye "Una combinación de ambas"', () => {
+    expect(OBJECTIVES).toContain('Una combinación de ambas')
   })
 })
 

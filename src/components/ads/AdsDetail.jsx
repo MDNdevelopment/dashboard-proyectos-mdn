@@ -1,7 +1,8 @@
-import { useState } from "react";
-import { supabase } from "../../supabase";
-import { STATUS, STATUSES, PRIORITY } from "./constants";
-import StatusPill from "../common/StatusPill";
+import { useState } from 'react'
+import { supabase } from '../../supabase'
+import { STATUS, STATUSES, PRIORITY } from './constants'
+import StatusPill from '../common/StatusPill'
+import CampaignChecklist from './CampaignChecklist'
 
 export default function AdsDetail({
   campaign,
@@ -12,44 +13,54 @@ export default function AdsDetail({
   canManage,
   onEdit,
 }) {
-  const [confirming, setConfirming] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const [confirming, setConfirming] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
-  const priority = PRIORITY[campaign.priority];
+  const priority = PRIORITY[campaign.priority]
 
   async function handleStatusChange(nextStatus) {
     const { data, error } = await supabase
-      .from("campaigns")
+      .from('campaigns')
       .update({ status: nextStatus, updated_at: new Date().toISOString() })
-      .eq("id", campaign.id)
+      .eq('id', campaign.id)
       .select()
-      .single();
-    if (!error && data) onUpdated(data);
+      .single()
+    if (!error && data) onUpdated(data)
+  }
+
+  // Persiste el checklist al tildar/destildar una acción (una escritura por cambio).
+  // La edición de texto/agregar/eliminar se hace en el formulario (AdsForm).
+  async function handleChecklistChange(nextChecklist) {
+    onUpdated({ ...campaign, checklist: nextChecklist }) // optimista
+    const { data, error } = await supabase
+      .from('campaigns')
+      .update({ checklist: nextChecklist, updated_at: new Date().toISOString() })
+      .eq('id', campaign.id)
+      .select()
+      .single()
+    if (!error && data) onUpdated(data)
   }
 
   const fmt = (d) =>
     d
-      ? new Date(d + "T00:00:00").toLocaleDateString("es-VE", {
-          day: "numeric",
-          month: "long",
-          year: "numeric",
+      ? new Date(d + 'T00:00:00').toLocaleDateString('es-VE', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric',
         })
-      : "—";
+      : '—'
 
   async function handleDelete() {
     if (!confirming) {
-      setConfirming(true);
-      return;
+      setConfirming(true)
+      return
     }
-    setDeleting(true);
-    const { error } = await supabase
-      .from("campaigns")
-      .delete()
-      .eq("id", campaign.id);
-    setDeleting(false);
+    setDeleting(true)
+    const { error } = await supabase.from('campaigns').delete().eq('id', campaign.id)
+    setDeleting(false)
     if (!error) {
-      onDeleted(campaign.id);
-      onClose();
+      onDeleted(campaign.id)
+      onClose()
     }
   }
 
@@ -59,9 +70,7 @@ export default function AdsDetail({
         {/* Header */}
         <div className="flex-shrink-0 px-6 pt-6 pb-4 border-b border-[#ece9df] flex items-start justify-between gap-4">
           <div className="flex-1">
-            <h2 className="text-[19px] font-bold text-[#111] leading-snug mb-2">
-              {campaign.name}
-            </h2>
+            <h2 className="text-[19px] font-bold text-[#111] leading-snug mb-2">{campaign.name}</h2>
             <div className="flex items-center gap-2 flex-wrap">
               <StatusPill
                 value={campaign.status}
@@ -71,17 +80,12 @@ export default function AdsDetail({
                 onChange={handleStatusChange}
               />
               <span className="flex items-center gap-1.5 text-[13px] font-mono font-semibold text-[#555]">
-                <span
-                  className={`w-2 h-2 rounded-full flex-shrink-0 ${priority?.dot}`}
-                />
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${priority?.dot}`} />
                 {campaign.priority}
               </span>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="text-[#999] hover:text-[#111] transition-colors p-1"
-          >
+          <button onClick={onClose} className="text-[#999] hover:text-[#111] transition-colors p-1">
             <svg
               width="16"
               height="16"
@@ -109,7 +113,7 @@ export default function AdsDetail({
                 Responsable
               </p>
               <p className="text-[#333] font-medium">
-                {usersMap?.get(campaign.assignee) ?? campaign.assignee ?? "—"}
+                {usersMap?.get(campaign.assignee) ?? campaign.assignee ?? '—'}
               </p>
             </div>
             <div>
@@ -137,6 +141,15 @@ export default function AdsDetail({
             </div>
           )}
 
+          {/* Checklist de acciones: se tildan aquí (avanza el %); el texto se edita en el form. */}
+          <div className="mb-2">
+            <CampaignChecklist
+              value={campaign.checklist ?? []}
+              onChange={handleChecklistChange}
+              canManage={canManage}
+              editable={false}
+            />
+          </div>
         </div>
 
         {canManage && (
@@ -152,15 +165,11 @@ export default function AdsDetail({
               disabled={deleting}
               className={`flex-1 py-2.5 rounded-xl text-[15px] font-bold transition-colors disabled:opacity-50 ${
                 confirming
-                  ? "bg-red-600 text-white hover:bg-red-700"
-                  : "border border-[#e0ddd4] text-[#555] hover:bg-[#f5f3eb]"
+                  ? 'bg-red-600 text-white hover:bg-red-700'
+                  : 'border border-[#e0ddd4] text-[#555] hover:bg-[#f5f3eb]'
               }`}
             >
-              {deleting
-                ? "Eliminando..."
-                : confirming
-                  ? "¿Confirmar?"
-                  : "Eliminar"}
+              {deleting ? 'Eliminando...' : confirming ? '¿Confirmar?' : 'Eliminar'}
             </button>
             {confirming && (
               <button
@@ -174,5 +183,5 @@ export default function AdsDetail({
         )}
       </div>
     </div>
-  );
+  )
 }

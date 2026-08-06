@@ -1,7 +1,8 @@
-import { STATUS, STATUSES, PRIORITY } from "./constants";
-import StatusPill from "../common/StatusPill";
-import ClientCell from "./ClientCell";
-import { fmtDate, dateColor, inPeriod } from "./campaignSpendApi";
+import { STATUS, STATUSES, PRIORITY } from './constants'
+import StatusPill from '../common/StatusPill'
+import ClientCell from './ClientCell'
+import { fmtDate, dateColor, inPeriod } from './campaignSpendApi'
+import { checklistProgress } from '../tareas/taskChecklist'
 
 export default function AdsCard({
   campaign,
@@ -19,11 +20,12 @@ export default function AdsCard({
   onInlineEditChange,
   onInlineEditSave,
 }) {
-  const priority = PRIORITY[campaign.priority];
+  const priority = PRIORITY[campaign.priority]
   // La táctica se ve en este período por su rango, pero no empezó en él (spansPeriod en AdsPage).
-  const esContinua = periodo && !inPeriod(campaign.start_date, periodo);
+  const esContinua = periodo && !inPeriod(campaign.start_date, periodo)
 
-  const isInlineEditing = inlineEditId === campaign.id;
+  const isInlineEditing = inlineEditId === campaign.id
+  const { done: checkDone, total: checkTotal } = checklistProgress(campaign.checklist)
 
   return (
     <tr
@@ -48,8 +50,8 @@ export default function AdsCard({
             onChange={(e) => onInlineEditChange(e.target.value)}
             onBlur={() => onInlineEditSave(campaign.id)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") onInlineEditSave(campaign.id);
-              if (e.key === "Escape") onInlineEditStart(null, "");
+              if (e.key === 'Enter') onInlineEditSave(campaign.id)
+              if (e.key === 'Escape') onInlineEditStart(null, '')
             }}
             onClick={(e) => e.stopPropagation()}
           />
@@ -58,12 +60,12 @@ export default function AdsCard({
             onClick={
               canManage
                 ? (e) => {
-                    e.stopPropagation();
-                    onInlineEditStart(campaign.id, campaign.name);
+                    e.stopPropagation()
+                    onInlineEditStart(campaign.id, campaign.name)
                   }
                 : undefined
             }
-            className={`text-[15px] font-semibold text-[#111] leading-snug ${canManage ? "cursor-text" : ""}`}
+            className={`text-[15px] font-semibold text-[#111] leading-snug ${canManage ? 'cursor-text' : ''}`}
             title={campaign.notes || undefined}
           >
             {campaign.name}
@@ -72,13 +74,31 @@ export default function AdsCard({
                 {campaign.notes}
               </p>
             )}
+            {checkTotal > 0 && (
+              <span
+                className="inline-flex items-center gap-1 mt-1 text-[11px] font-mono font-semibold text-[#888]"
+                title={`${checkDone} de ${checkTotal} acciones completadas`}
+              >
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M3 8.5l3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                {checkDone}/{checkTotal}
+              </span>
+            )}
           </div>
         )}
       </td>
 
       {/* Assignee */}
       <td className="px-3 py-2.5 text-[14px] text-[#555] whitespace-nowrap">
-        {usersMap?.get(campaign.assignee) ?? campaign.assignee ?? "—"}
+        {usersMap?.get(campaign.assignee) ?? campaign.assignee ?? '—'}
       </td>
 
       {/* Start date */}
@@ -92,18 +112,14 @@ export default function AdsCard({
       </td>
 
       {/* End date */}
-      <td
-        className={`px-3 py-2.5 text-[14px] whitespace-nowrap ${dateColor(campaign.end_date)}`}
-      >
+      <td className={`px-3 py-2.5 text-[14px] whitespace-nowrap ${dateColor(campaign.end_date)}`}>
         {fmtDate(campaign.end_date)}
       </td>
 
       {/* Priority */}
       <td className="px-3 py-2.5 whitespace-nowrap">
         <span className="flex items-center gap-1.5 text-[13px] font-mono font-semibold text-[#555]">
-          <span
-            className={`w-2 h-2 rounded-full flex-shrink-0 ${priority?.dot ?? "bg-[#bbb]"}`}
-          />
+          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${priority?.dot ?? 'bg-[#bbb]'}`} />
           {campaign.priority}
         </span>
       </td>
@@ -125,8 +141,8 @@ export default function AdsCard({
         <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
             onClick={(e) => {
-              e.stopPropagation();
-              onSelect(campaign);
+              e.stopPropagation()
+              onSelect(campaign)
             }}
             className="p-1.5 rounded-lg text-[#999] hover:text-[#111] hover:bg-[#f0ede3] transition-all"
             title="Ver detalle"
@@ -147,8 +163,8 @@ export default function AdsCard({
             <>
               <button
                 onClick={(e) => {
-                  e.stopPropagation();
-                  onEdit(campaign);
+                  e.stopPropagation()
+                  onEdit(campaign)
                 }}
                 className="p-1.5 rounded-lg text-[#999] hover:text-[#111] hover:bg-[#f0ede3] transition-all"
                 title="Editar"
@@ -161,17 +177,13 @@ export default function AdsCard({
                   stroke="currentColor"
                   strokeWidth="1.8"
                 >
-                  <path
-                    d="M11 2l3 3-8 8H3v-3l8-8z"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
+                  <path d="M11 2l3 3-8 8H3v-3l8-8z" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </button>
               <button
                 onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(campaign);
+                  e.stopPropagation()
+                  onDelete(campaign)
                 }}
                 className="p-1.5 rounded-lg text-[#999] hover:text-red-600 hover:bg-red-50 transition-all"
                 title="Eliminar"
@@ -196,5 +208,5 @@ export default function AdsCard({
         </div>
       </td>
     </tr>
-  );
+  )
 }

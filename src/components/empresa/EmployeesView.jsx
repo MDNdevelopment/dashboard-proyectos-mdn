@@ -25,7 +25,14 @@ function ViewToggle({ view, onChange }) {
           view === 'columnas' ? 'bg-white text-[#111] shadow-sm' : 'text-[#999] hover:text-[#555]'
         }`}
       >
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6">
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 14 14"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+        >
           <rect x="1" y="1" width="2.6" height="12" rx="0.5" />
           <rect x="5.7" y="1" width="2.6" height="12" rx="0.5" />
           <rect x="10.4" y="1" width="2.6" height="12" rx="0.5" />
@@ -41,7 +48,15 @@ function ViewToggle({ view, onChange }) {
           view === 'lista' ? 'bg-white text-[#111] shadow-sm' : 'text-[#999] hover:text-[#555]'
         }`}
       >
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 14 14"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+        >
           <line x1="1" y1="2.5" x2="13" y2="2.5" />
           <line x1="1" y1="7" x2="13" y2="7" />
           <line x1="1" y1="11.5" x2="13" y2="11.5" />
@@ -54,7 +69,15 @@ function ViewToggle({ view, onChange }) {
 // ── Icono X (eliminar) ─────────────────────────────────────────────────────────
 function DeleteIcon({ size = 13 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 14 14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+    >
       <line x1="2" y1="2" x2="12" y2="12" />
       <line x1="12" y1="2" x2="2" y2="12" />
     </svg>
@@ -64,7 +87,16 @@ function DeleteIcon({ size = 13 }) {
 // ── Icono restaurar ─────────────────────────────────────────────────────────────
 function RestoreIcon({ size = 13 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 14 14"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M2 7a5 5 0 1 1 1.6 3.7" />
       <path d="M2 3v3.5h3.5" />
     </svg>
@@ -72,7 +104,16 @@ function RestoreIcon({ size = 13 }) {
 }
 
 // ── Card de empleado (lista completa / columnas compacta) ─────────────────────
-function EmployeeCard({ emp, compact, onEdit, onVacations, onOpen, onDelete, onRestore, canDelete }) {
+function EmployeeCard({
+  emp,
+  compact,
+  onEdit,
+  onVacations,
+  onOpen,
+  onDelete,
+  onRestore,
+  canDelete,
+}) {
   const fullName = `${emp.first_name} ${emp.last_name}`
   const deleted = !!emp.deleted_at
 
@@ -88,12 +129,15 @@ function EmployeeCard({ emp, compact, onEdit, onVacations, onOpen, onDelete, onR
           <Avatar user={emp} size={28} />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1">
-              <span className="text-[13px] font-semibold text-[#111] truncate">
-                {fullName}
-              </span>
+              <span className="text-[13px] font-semibold text-[#111] truncate">{fullName}</span>
               {emp.admin && (
                 <span className="text-[9px] font-mono font-bold tracking-wide uppercase bg-[#FFB800] text-[#111] px-1 py-0.5 rounded flex-shrink-0">
                   Admin
+                </span>
+              )}
+              {emp.on_probation && (
+                <span className="text-[9px] font-mono font-bold tracking-wide uppercase bg-[#fff3e0] text-[#e65100] px-1 py-0.5 rounded flex-shrink-0">
+                  Prueba
                 </span>
               )}
               {deleted && (
@@ -102,15 +146,16 @@ function EmployeeCard({ emp, compact, onEdit, onVacations, onOpen, onDelete, onR
                 </span>
               )}
             </div>
-            <p className="text-[12px] text-[#888] truncate">
-              {emp.position?.position_name ?? '—'}
-            </p>
+            <p className="text-[12px] text-[#888] truncate">{emp.position?.position_name ?? '—'}</p>
           </div>
         </button>
         {deleted ? (
           <button
             type="button"
-            onClick={e => { e.stopPropagation(); onRestore(emp) }}
+            onClick={(e) => {
+              e.stopPropagation()
+              onRestore(emp)
+            }}
             className="flex-shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-semibold text-[#666] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
           >
             <RestoreIcon size={11} />
@@ -120,12 +165,22 @@ function EmployeeCard({ emp, compact, onEdit, onVacations, onOpen, onDelete, onR
           <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity">
             <button
               type="button"
-              onClick={e => { e.stopPropagation(); onVacations(emp) }}
+              onClick={(e) => {
+                e.stopPropagation()
+                onVacations(emp)
+              }}
               aria-label={`Vacaciones de ${fullName}`}
               title="Vacaciones"
               className="p-1 rounded text-[#999] hover:text-[#555] hover:bg-[#f5f3eb] transition-colors"
             >
-              <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4">
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 14 14"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.4"
+              >
                 <rect x="1.5" y="2.5" width="11" height="10" rx="1.5" />
                 <line x1="1.5" y1="5.5" x2="12.5" y2="5.5" />
                 <line x1="4" y1="1" x2="4" y2="3.5" strokeLinecap="round" />
@@ -134,19 +189,36 @@ function EmployeeCard({ emp, compact, onEdit, onVacations, onOpen, onDelete, onR
             </button>
             <button
               type="button"
-              onClick={e => { e.stopPropagation(); onEdit(emp) }}
+              onClick={(e) => {
+                e.stopPropagation()
+                onEdit(emp)
+              }}
               aria-label={`Editar ${fullName}`}
               title="Editar"
               className="p-1 rounded text-[#999] hover:text-[#555] hover:bg-[#f5f3eb] transition-colors"
             >
-              <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4">
-                <path d="M9.5 1.8l2.7 2.7L4.6 12.1l-3.2.6.6-3.2z" strokeLinecap="round" strokeLinejoin="round" />
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 14 14"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.4"
+              >
+                <path
+                  d="M9.5 1.8l2.7 2.7L4.6 12.1l-3.2.6.6-3.2z"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </svg>
             </button>
             {canDelete && (
               <button
                 type="button"
-                onClick={e => { e.stopPropagation(); onDelete(emp) }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onDelete(emp)
+                }}
                 aria-label={`Eliminar ${fullName}`}
                 title="Eliminar"
                 className="p-1 rounded text-[#999] hover:text-red-600 hover:bg-red-50 transition-colors"
@@ -172,9 +244,7 @@ function EmployeeCard({ emp, compact, onEdit, onVacations, onOpen, onDelete, onR
         <Avatar user={emp} size={38} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[16px] font-semibold text-[#111]">
-              {fullName}
-            </span>
+            <span className="text-[16px] font-semibold text-[#111]">{fullName}</span>
             {emp.admin && (
               <span className="text-[12px] font-mono font-bold tracking-wide uppercase bg-[#FFB800] text-[#111] px-1.5 py-0.5 rounded">
                 Admin
@@ -183,6 +253,11 @@ function EmployeeCard({ emp, compact, onEdit, onVacations, onOpen, onDelete, onR
             {emp.access_level != null && (
               <span className="text-[12px] font-mono font-bold tracking-wide uppercase bg-[#f0ede3] text-[#666] border border-[#e0ddd4] px-1.5 py-0.5 rounded">
                 Nivel {emp.access_level}
+              </span>
+            )}
+            {emp.on_probation && (
+              <span className="text-[12px] font-mono font-bold tracking-wide uppercase bg-[#fff3e0] text-[#e65100] border border-[#f5d3b0] px-1.5 py-0.5 rounded">
+                En prueba
               </span>
             )}
             {deleted && (
@@ -253,6 +328,7 @@ export default function EmployeesView({ companyId }) {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [showArchived, setShowArchived] = useState(false)
+  const [showProbationOnly, setShowProbationOnly] = useState(false)
 
   // Vista: 'columnas' (por defecto, agrupada por nivel) | 'lista'. Se recuerda en localStorage.
   const [view, setView] = useState(() => {
@@ -291,7 +367,9 @@ export default function EmployeesView({ companyId }) {
     const [usersRes, deptsRes, posRes] = await Promise.all([
       supabase
         .from('users')
-        .select('*, department:departments(department_name), position:positions(position_name, position_description, position_functions)')
+        .select(
+          '*, department:departments(department_name), position:positions(position_name, position_description, position_functions)',
+        )
         .eq('company_id', companyId)
         .order('first_name'),
       supabase.from('departments').select('*').eq('company_id', companyId).order('department_name'),
@@ -303,7 +381,9 @@ export default function EmployeesView({ companyId }) {
     setLoading(false)
   }, [companyId])
 
-  useEffect(() => { loadAll() }, [loadAll])
+  useEffect(() => {
+    loadAll()
+  }, [loadAll])
 
   // ── Realtime ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -313,14 +393,16 @@ export default function EmployeesView({ companyId }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, () => loadAll())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'vacations' }, () => loadAll())
       .subscribe()
-    return () => { supabase.removeChannel(channel) }
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [companyId, loadAll])
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   function handleEmployeeSaved(saved) {
-    setEmployees(prev => {
-      const exists = prev.some(e => e.user_id === saved.user_id)
-      if (exists) return prev.map(e => e.user_id === saved.user_id ? saved : e)
+    setEmployees((prev) => {
+      const exists = prev.some((e) => e.user_id === saved.user_id)
+      if (exists) return prev.map((e) => (e.user_id === saved.user_id ? saved : e))
       return [...prev, saved].sort((a, b) => a.first_name.localeCompare(b.first_name))
     })
   }
@@ -328,7 +410,9 @@ export default function EmployeesView({ companyId }) {
   // Archivar/restaurar van a la Netlify function (service role): banea/desbanea el
   // login en auth.users además de marcar/desmarcar deleted_at en el perfil.
   async function callManage(user_id, action) {
-    const { data: { session } } = await supabase.auth.getSession()
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
     const res = await fetch('/api/employees/manage', {
       method: 'POST',
       headers: {
@@ -368,11 +452,16 @@ export default function EmployeesView({ companyId }) {
   }
 
   // ── Split activos / archivados + filtro local ────────────────────────────────
-  const activeEmployees = employees.filter(e => !e.deleted_at)
-  const archivedEmployees = employees.filter(e => !!e.deleted_at)
-  const visibleEmployees = showArchived ? archivedEmployees : activeEmployees
+  const activeEmployees = employees.filter((e) => !e.deleted_at)
+  const archivedEmployees = employees.filter((e) => !!e.deleted_at)
+  const probationCount = activeEmployees.filter((e) => e.on_probation).length
+  // "Solo en prueba" se aplica sobre el pool visible (activos o archivados):
+  // combinado con "Ver eliminados" muestra a los que no pasaron la prueba.
+  const visibleEmployees = (showArchived ? archivedEmployees : activeEmployees).filter(
+    (e) => !showProbationOnly || e.on_probation,
+  )
 
-  const filtered = visibleEmployees.filter(e => {
+  const filtered = visibleEmployees.filter((e) => {
     const q = search.toLowerCase()
     if (!q) return true
     const fullName = `${e.first_name} ${e.last_name}`.toLowerCase()
@@ -389,7 +478,7 @@ export default function EmployeesView({ companyId }) {
   // ── Agrupación por nivel (solo para vista columnas) ─────────────────────────
   const byLevel = { 1: [], 2: [], 3: [], 4: [] }
   const sinNivel = []
-  filtered.forEach(emp => {
+  filtered.forEach((emp) => {
     if (LEVELS.includes(emp.access_level)) byLevel[emp.access_level].push(emp)
     else sinNivel.push(emp)
   })
@@ -409,17 +498,20 @@ export default function EmployeesView({ companyId }) {
       <div className="flex items-center gap-3 mb-4 flex-wrap">
         <p className="text-[15px] text-[#888] flex-shrink-0">
           {visibleEmployees.length} empleado{visibleEmployees.length !== 1 ? 's' : ''}
+          {probationCount > 0 && (
+            <span className="text-[#e65100]"> · {probationCount} en prueba</span>
+          )}
         </p>
         <input
           type="text"
           className="input-base max-w-xs"
           placeholder="Buscar por nombre, email, cargo o departamento…"
           value={search}
-          onChange={e => setSearch(e.target.value)}
+          onChange={(e) => setSearch(e.target.value)}
         />
         <button
           type="button"
-          onClick={() => setShowArchived(v => !v)}
+          onClick={() => setShowArchived((v) => !v)}
           className={`px-3 py-1.5 rounded-lg text-[13.5px] font-semibold border transition-all ${
             showArchived
               ? 'bg-[#f5f0e0] text-[#888] border-[#d4c890]'
@@ -427,6 +519,17 @@ export default function EmployeesView({ companyId }) {
           }`}
         >
           {showArchived ? 'Ocultando activos' : `Ver eliminados (${archivedEmployees.length})`}
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowProbationOnly((v) => !v)}
+          className={`px-3 py-1.5 rounded-lg text-[13.5px] font-semibold border transition-all ${
+            showProbationOnly
+              ? 'bg-[#fff3e0] text-[#e65100] border-[#f5c99a]'
+              : 'bg-white text-[#aaa] border-[#e0ddd4] hover:bg-[#f5f3eb]'
+          }`}
+        >
+          {showProbationOnly ? 'Mostrando solo prueba' : `Solo en prueba (${probationCount})`}
         </button>
         <div className="ml-auto flex items-center gap-3">
           <ViewToggle view={view} onChange={setView} />
@@ -452,7 +555,11 @@ export default function EmployeesView({ companyId }) {
       {filtered.length === 0 ? (
         <div className="bg-white rounded-xl border border-[#e0ddd4] p-10 text-center">
           <p className="text-[17px] font-semibold text-[#888] mb-1">
-            {search ? 'Sin resultados' : showArchived ? 'Sin empleados eliminados' : 'Sin empleados'}
+            {search
+              ? 'Sin resultados'
+              : showArchived
+                ? 'Sin empleados eliminados'
+                : 'Sin empleados'}
           </p>
           <p className="text-[15px] text-[#bbb]">
             {search
@@ -464,7 +571,7 @@ export default function EmployeesView({ companyId }) {
         </div>
       ) : view === 'lista' ? (
         <div className="space-y-2">
-          {filtered.map(emp => (
+          {filtered.map((emp) => (
             <EmployeeCard
               key={emp.user_id}
               emp={emp}
@@ -480,7 +587,7 @@ export default function EmployeesView({ companyId }) {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {LEVELS.map(level => (
+          {LEVELS.map((level) => (
             <div key={level}>
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-[12px] font-mono font-bold tracking-wide uppercase bg-[#f0ede3] text-[#666] border border-[#e0ddd4] px-1.5 py-0.5 rounded">
@@ -492,7 +599,7 @@ export default function EmployeesView({ companyId }) {
                 <p className="text-[13px] text-[#ccc] px-1">Sin empleados</p>
               ) : (
                 <div className="space-y-1.5">
-                  {byLevel[level].map(emp => (
+                  {byLevel[level].map((emp) => (
                     <EmployeeCard
                       key={emp.user_id}
                       emp={emp}
@@ -518,7 +625,7 @@ export default function EmployeesView({ companyId }) {
                 <span className="text-[12px] text-[#bbb]">Total: {sinNivel.length}</span>
               </div>
               <div className="space-y-1.5">
-                {sinNivel.map(emp => (
+                {sinNivel.map((emp) => (
                   <EmployeeCard
                     key={emp.user_id}
                     emp={emp}
@@ -550,18 +657,12 @@ export default function EmployeesView({ companyId }) {
 
       {/* Diálogo de vacaciones */}
       {vacEmployee !== null && (
-        <VacationsDialog
-          employee={vacEmployee}
-          onClose={() => setVacEmployee(null)}
-        />
+        <VacationsDialog employee={vacEmployee} onClose={() => setVacEmployee(null)} />
       )}
 
       {/* Ficha de detalle (solo lectura) */}
       {infoEmployee !== null && (
-        <EmployeeInfoModal
-          employee={infoEmployee}
-          onClose={() => setInfoEmployee(null)}
-        />
+        <EmployeeInfoModal employee={infoEmployee} onClose={() => setInfoEmployee(null)} />
       )}
 
       {/* Dialog crear empleado */}
@@ -581,10 +682,13 @@ export default function EmployeesView({ companyId }) {
           itemLabel="empleado"
           message={
             <>
-              <strong>{confirmArchive.first_name} {confirmArchive.last_name}</strong> dejará de
-              aparecer en selectores y conteos, y no podrá iniciar sesión. Su historial (tareas,
-              reuniones, evaluaciones, reportes) se conserva intacto. Esta acción se puede revertir
-              restaurando al empleado. Para confirmar, escribe su nombre completo a continuación.
+              <strong>
+                {confirmArchive.first_name} {confirmArchive.last_name}
+              </strong>{' '}
+              dejará de aparecer en selectores y conteos, y no podrá iniciar sesión. Su historial
+              (tareas, reuniones, evaluaciones, reportes) se conserva intacto. Esta acción se puede
+              revertir restaurando al empleado. Para confirmar, escribe su nombre completo a
+              continuación.
             </>
           }
           onConfirm={handleArchive}
