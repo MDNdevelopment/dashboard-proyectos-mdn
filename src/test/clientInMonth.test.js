@@ -95,4 +95,43 @@ describe('clientInMonth', () => {
       expect(clientInMonth(c, 2026, 4)).toBe(false)
     })
   })
+
+  describe('fin de contrato (contract_end)', () => {
+    it('el mes que contiene la fecha de fin cuenta completo; el siguiente ya no', () => {
+      const c = make({ created_at: '2026-01-01T00:00:00Z', contract_end: '2026-08-30' })
+      expect(clientInMonth(c, 2026, 8)).toBe(true) // agosto: trabajó
+      expect(clientInMonth(c, 2026, 9)).toBe(false) // septiembre: sin rastro
+    })
+
+    it('contract_end tiene prioridad sobre deleted_at', () => {
+      // Archivado en octubre pero contrato terminó en junio → julio ya no aparece.
+      const c = make({
+        created_at: '2026-01-01T00:00:00Z',
+        contract_end: '2026-06-30',
+        deleted_at: '2026-10-01T00:00:00Z',
+      })
+      expect(clientInMonth(c, 2026, 6)).toBe(true)
+      expect(clientInMonth(c, 2026, 7)).toBe(false)
+    })
+
+    it('contract_end ignora baja_incluye_mes:false (el último mes siempre cuenta completo)', () => {
+      const c = make({
+        created_at: '2026-01-01T00:00:00Z',
+        contract_end: '2026-08-30',
+        baja_incluye_mes: false,
+      })
+      expect(clientInMonth(c, 2026, 8)).toBe(true)
+      expect(clientInMonth(c, 2026, 9)).toBe(false)
+    })
+
+    it('sin contract_end conserva el comportamiento por deleted_at', () => {
+      const c = make({
+        created_at: '2026-01-01T00:00:00Z',
+        contract_end: null,
+        deleted_at: '2026-03-15T10:00:00Z',
+      })
+      expect(clientInMonth(c, 2026, 3)).toBe(true)
+      expect(clientInMonth(c, 2026, 4)).toBe(false)
+    })
+  })
 })

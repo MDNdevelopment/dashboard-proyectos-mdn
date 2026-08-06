@@ -1,109 +1,135 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { useAuth } from "../../context/AuthContext";
-import { loadReport, loadPrevReport, loadClients, upsertReport, loadCompanyEmployees } from "./metricsApi";
-import SectionTotal from "../common/SectionTotal";
-import ClientFichaModal from "./ClientFichaModal";
-import { initMetricReport } from "../../utils/initMetricReport";
-import { syncReportClients } from "../../utils/syncReportClients";
-import { clientInMonth } from "../../utils/clientInMonth";
-import { employeeActiveInMonth } from "../../utils/employeeInMonth";
-import { isReportFrozen } from "../../utils/reportPeriod";
-import { calcTotal, sumScore, crecimientoCliente } from "../../utils/metricsScore";
-import { MONTHS, INDICATORS, REUNIONES_MODULE_START } from "./constants";
-import { useUnsavedChanges } from "../../hooks/useUnsavedChanges";
-import { Avatar } from "../tareas/UserPickerSingle";
-import { loadAds, spentByClientInPeriod } from "../ads/campaignSpendApi";
-import { fmtUSD } from "../../utils/metricsFinance";
-import { countMeetingsHeldForLine, loadHeldClientIdsForLine } from "../reuniones/meetingsApi";
-import ReunionesClientesModal from "./ReunionesClientesModal";
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { useAuth } from '../../context/AuthContext'
+import {
+  loadReport,
+  loadPrevReport,
+  loadClients,
+  upsertReport,
+  loadCompanyEmployees,
+} from './metricsApi'
+import SectionTotal from '../common/SectionTotal'
+import ClientFichaModal from './ClientFichaModal'
+import { initMetricReport } from '../../utils/initMetricReport'
+import { syncReportClients } from '../../utils/syncReportClients'
+import { clientInMonth } from '../../utils/clientInMonth'
+import { employeeActiveInMonth } from '../../utils/employeeInMonth'
+import { isReportFrozen } from '../../utils/reportPeriod'
+import { calcTotal, sumScore, crecimientoCliente } from '../../utils/metricsScore'
+import { MONTHS, INDICATORS, REUNIONES_MODULE_START } from './constants'
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
+import { Avatar } from '../tareas/UserPickerSingle'
+import { loadAds, spentByClientInPeriod } from '../ads/campaignSpendApi'
+import { fmtUSD } from '../../utils/metricsFinance'
+import { countMeetingsHeldForLine, loadHeldClientIdsForLine } from '../reuniones/meetingsApi'
+import ReunionesClientesModal from './ReunionesClientesModal'
 
 /** Adapta un objeto cliente (logo_url) al shape que espera <Avatar> (avatar_url). */
 function clientAvatar(c) {
   return {
-    first_name: c?.name ?? "",
-    last_name: "",
+    first_name: c?.name ?? '',
+    last_name: '',
     avatar_url: c?.logo_url ?? null,
     user_id: c?.id,
-  };
+  }
 }
 
 export default function OperacionesView({ line, companyId, year, month, closed = false }) {
-  const { can = () => true } = useAuth();
-  const [report, setReport] = useState(null);
-  const [prevReport, setPrevReport] = useState(null);
-  const [clients, setClients] = useState([]);
-  const [companyEmployees, setCompanyEmployees] = useState([]);
-  const [ads, setAds] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState(null);
-  const [cliModal, setCliModal] = useState(null); // null=cerrado, objeto=cliente abierto
-  const [heldClientIds, setHeldClientIds] = useState([]); // clientes con reunión realizada en el período
-  const [reunionesModal, setReunionesModal] = useState(false);
+  const { can = () => true } = useAuth()
+  const [report, setReport] = useState(null)
+  const [prevReport, setPrevReport] = useState(null)
+  const [clients, setClients] = useState([])
+  // Mapa company-wide (todas las líneas, incl. archivados) para resolver nombre/logo de
+  // cuentas que se movieron a otra línea: sus reportes pasados guardan el clienteId pero
+  // ya no están en la cartera de esta línea. Sin esto se mostraría "[Cliente eliminado]".
+  const [companyClientsById, setCompanyClientsById] = useState({})
+  const [companyEmployees, setCompanyEmployees] = useState([])
+  const [ads, setAds] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState(null)
+  const [cliModal, setCliModal] = useState(null) // null=cerrado, objeto=cliente abierto
+  const [heldClientIds, setHeldClientIds] = useState([]) // clientes con reunión realizada en el período
+  const [reunionesModal, setReunionesModal] = useState(false)
 
   // Snapshot del reporte tal como vino del servidor (o quedó tras un save).
   // Se usa para detectar cambios sin guardar y mostrar aviso al recargar/cerrar.
-  const baselineRef = useRef(null);
+  const baselineRef = useRef(null)
 
   const load = useCallback(async () => {
-    if (!line?.id || !companyId) return;
-    setLoading(true);
-    setError(null);
+    if (!line?.id || !companyId) return
+    setLoading(true)
+    setError(null)
 
-    const [reportRes, prevRes, clientsRes, employeesRes, adsRes, meetingsRes, heldRes] = await Promise.all([
+    const [
+      reportRes,
+      prevRes,
+      clientsRes,
+      companyClientsRes,
+      employeesRes,
+      adsRes,
+      meetingsRes,
+      heldRes,
+    ] = await Promise.all([
       loadReport(line.id, year, month),
       loadPrevReport(line.id, year, month),
       loadClients(companyId, line.id, { includeArchived: true }),
+      loadClients(companyId, null, { includeArchived: true }),
       loadCompanyEmployees(companyId),
       loadAds(companyId),
       countMeetingsHeldForLine(companyId, line.id, { month, year }),
       loadHeldClientIdsForLine(companyId, line.id, { month, year }),
-    ]);
-    setAds(adsRes.data ?? []);
-    const meetingsCount = meetingsRes?.count ?? 0;
-    const heldIds = heldRes?.clientIds ?? [];
-    setHeldClientIds(heldIds);
+    ])
+    setCompanyClientsById(Object.fromEntries((companyClientsRes.data ?? []).map((c) => [c.id, c])))
+    setAds(adsRes.data ?? [])
+    const meetingsCount = meetingsRes?.count ?? 0
+    const heldIds = heldRes?.clientIds ?? []
+    setHeldClientIds(heldIds)
 
     // Todos (incl. archivados) para resolver nombres en reportes guardados;
     // solo activos EN ESE MES para syncReportClients (no re-agregar archivados
     // al reporte actual, pero sin perder al que se dio de baja durante este mismo mes).
-    const allLineClients = clientsRes.data ?? [];
-    const activeLineClients = allLineClients.filter(c => clientInMonth(c, year, month));
-    setClients(allLineClients);
+    const allLineClients = clientsRes.data ?? []
+    const activeLineClients = allLineClients.filter((c) => clientInMonth(c, year, month))
+    setClients(allLineClients)
 
-    const allEmployees = employeesRes.data ?? [];
-    setCompanyEmployees(allEmployees);
+    const allEmployees = employeesRes.data ?? []
+    setCompanyEmployees(allEmployees)
     // Filtrar solo los empleados miembros de esta línea para sincronizar sueldos,
     // igual que FinanzasView. Sin este filtro, syncReportClients recibe [] y borra
     // las filas de nómina del team al guardar desde esta vista. Se excluyen también
     // los que ya estaban de baja ANTES de este mes (ver employeeActiveInMonth).
-    const memberIds = new Set(line.member_user_ids ?? []);
-    const lineEmployees = allEmployees.filter(e => memberIds.has(e.user_id) && employeeActiveInMonth(e, year, month));
+    const memberIds = new Set(line.member_user_ids ?? [])
+    const lineEmployees = allEmployees.filter(
+      (e) => memberIds.has(e.user_id) && employeeActiveInMonth(e, year, month),
+    )
 
     // Un mes ya pasado (o cerrado) es de solo lectura: se muestra tal cual se guardó,
     // sin reconciliar contra el roster actual (que puede tener altas/bajas posteriores
     // a ese mes). Ver utils/reportPeriod.js.
-    const frozen = isReportFrozen(year, month, closed);
+    const frozen = isReportFrozen(year, month, closed)
 
     // Guardar el reporte del mes anterior para mostrarlo en la sección de crecimiento
-    setPrevReport(prevRes.data?.data ?? null);
+    setPrevReport(prevRes.data?.data ?? null)
 
     // Poda las marcas que ya quedaron cubiertas (tienen reunión realizada) del mapa de
     // justificativos, para no arrastrar justificativos obsoletos en el jsonb del reporte.
     function pruneJustificativos(reuniones) {
-      const justificativos = { ...(reuniones.justificativos ?? {}) };
-      heldIds.forEach(id => { delete justificativos[id]; });
-      return justificativos;
+      const justificativos = { ...(reuniones.justificativos ?? {}) }
+      heldIds.forEach((id) => {
+        delete justificativos[id]
+      })
+      return justificativos
     }
 
     // Antes del lanzamiento del módulo Reuniones no hay filas en `meetings` para derivar
     // el conteo — esos meses conservan el valor que ya tenían guardado en vez de pisarlo
     // con 0. De REUNIONES_MODULE_START en adelante (o si el reporte está cerrado, ver
     // "Cerrar reporte"), se mantiene como siempre reflejando el conteo automático.
-    const isReunionesEra = year > REUNIONES_MODULE_START.year
-      || (year === REUNIONES_MODULE_START.year && month >= REUNIONES_MODULE_START.month);
-    const shouldAutoSync = isReunionesEra && !closed;
+    const isReunionesEra =
+      year > REUNIONES_MODULE_START.year ||
+      (year === REUNIONES_MODULE_START.year && month >= REUNIONES_MODULE_START.month)
+    const shouldAutoSync = isReunionesEra && !closed
 
     if (reportRes.data) {
       // Mes congelado (pasado o cerrado): se muestra tal cual se guardó, sin reconciliar
@@ -111,128 +137,143 @@ export default function OperacionesView({ line, companyId, year, month, closed =
       // Mes editable: sincronizar items con los clientes/empleados activos EN ESE MES.
       const synced = frozen
         ? structuredClone(reportRes.data.data)
-        : syncReportClients(reportRes.data.data, activeLineClients, lineEmployees);
+        : syncReportClients(reportRes.data.data, activeLineClients, lineEmployees)
       // "Realizadas" ya no es editable — siempre refleja el conteo automático (clientes
       // distintos con reunión realizada en el mes), a diferencia del resto de indicadores
       // que quedan congelados al guardar. Excepto en meses previos al módulo Reuniones o
       // en reportes cerrados, donde se conserva el valor histórico guardado.
-      if (shouldAutoSync) synced.reuniones.realizadas = meetingsCount;
-      synced.reuniones.justificativos = pruneJustificativos(synced.reuniones);
-      setReport(synced);
-      baselineRef.current = synced;
+      if (shouldAutoSync) synced.reuniones.realizadas = meetingsCount
+      synced.reuniones.justificativos = pruneJustificativos(synced.reuniones)
+      setReport(synced)
+      baselineRef.current = synced
     } else {
       // Inicializar con carry-forward y metas de la línea
-      const lineMetas = line?.metas ?? {};
-      const fresh = initMetricReport(prevRes.data?.data ?? null, activeLineClients, lineMetas);
-      const synced = frozen ? fresh : syncReportClients(fresh, activeLineClients, lineEmployees);
-      if (shouldAutoSync) synced.reuniones.realizadas = meetingsCount;
-      synced.reuniones.justificativos = pruneJustificativos(synced.reuniones);
-      setReport(synced);
-      baselineRef.current = synced;
+      const lineMetas = line?.metas ?? {}
+      const fresh = initMetricReport(prevRes.data?.data ?? null, activeLineClients, lineMetas)
+      const synced = frozen ? fresh : syncReportClients(fresh, activeLineClients, lineEmployees)
+      if (shouldAutoSync) synced.reuniones.realizadas = meetingsCount
+      synced.reuniones.justificativos = pruneJustificativos(synced.reuniones)
+      setReport(synced)
+      baselineRef.current = synced
     }
-    setLoading(false);
-  }, [line?.id, line?.member_user_ids, companyId, year, month, closed]);
+    setLoading(false)
+  }, [line?.id, line?.member_user_ids, companyId, year, month, closed])
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load()
+  }, [load])
 
   // Aviso nativo del navegador si se intenta recargar/cerrar con cambios sin guardar.
-  useUnsavedChanges({ value: report, baseline: baselineRef.current, onClose: () => {} });
+  useUnsavedChanges({ value: report, baseline: baselineRef.current, onClose: () => {} })
 
   async function handleSave() {
-    if (!report || closed) return;
-    setSaving(true);
-    const { error: err } = await upsertReport(companyId, line.id, year, month, report);
-    setSaving(false);
-    if (err) { setError(err.message); return; }
+    if (!report || closed) return
+    setSaving(true)
+    const { error: err } = await upsertReport(companyId, line.id, year, month, report)
+    setSaving(false)
+    if (err) {
+      setError(err.message)
+      return
+    }
     // Actualizar baseline para que el aviso desaparezca tras guardar
-    baselineRef.current = report;
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    baselineRef.current = report
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  // Resuelve el cliente por id: primero en la cartera de la línea; si no está (p.ej. se
+  // movió a otra línea después de este reporte), cae al mapa company-wide.
+  function resolveClient(clienteId) {
+    return clients.find((c) => c.id === clienteId) ?? companyClientsById[clienteId] ?? null
   }
 
   function clientName(clienteId) {
-    return clients.find(c => c.id === clienteId)?.name ?? "[Cliente eliminado]";
+    return resolveClient(clienteId)?.name ?? '[Cliente eliminado]'
   }
 
   // Renderiza el logo + nombre del cliente como botón que abre la ficha técnica.
   function ClientLink({ clienteId }) {
-    const name = clientName(clienteId);
-    const client = clients.find(c => c.id === clienteId);
+    const client = resolveClient(clienteId)
     if (client) {
+      // La cuenta ya no está en esta línea (se movió): se marca para dar contexto.
+      const movida = !!client.line_id && client.line_id !== line?.id
       return (
         <button
           type="button"
           onClick={() => setCliModal(client)}
           className="inline-flex items-center gap-1.5 text-[14px] text-[#555] hover:text-[#111] hover:underline text-left"
-          title={`Ver ficha de ${name}`}
+          title={`Ver ficha de ${client.name}`}
         >
           <Avatar user={clientAvatar(client)} size={20} />
-          {name}
+          {client.name}
+          {movida && <span className="text-[11.5px] text-[#aaa] font-mono">· otra línea</span>}
         </button>
-      );
+      )
     }
-    return <span className="text-[14px] text-[#555] truncate">{name}</span>;
+    return <span className="text-[14px] text-[#555] truncate">[Cliente eliminado]</span>
   }
 
   // Puntajes en tiempo real
-  const scores = report ? calcTotal(report, null) : null;
-  const total = scores ? sumScore(scores) : 0;
-  const scoreColor = total >= 80 ? "text-green-600" : total >= 60 ? "text-[#b45309]" : "text-red-600";
+  const scores = report ? calcTotal(report, null) : null
+  const total = scores ? sumScore(scores) : 0
+  const scoreColor =
+    total >= 80 ? 'text-green-600' : total >= 60 ? 'text-[#b45309]' : 'text-red-600'
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
         <div className="w-6 h-6 border-2 border-[#FFB800] border-t-transparent rounded-full animate-spin" />
       </div>
-    );
+    )
   }
 
-  if (!report) return null;
+  if (!report) return null
 
   // Tope de la meta de reuniones: no puede superar la cantidad de marcas activas de la
   // línea (cada marca aporta como máximo 1 reunión al conteo — ver countMeetingsHeldForLine).
-  const activeClients = clients.filter(c => !c.deleted_at);
-  const maxMeta = activeClients.length;
+  const activeClients = clients.filter((c) => !c.deleted_at)
+  const maxMeta = activeClients.length
 
   // ── Helpers de actualización ──────────────────────────────────────────────
   function setField(path, value) {
-    setReport(prev => {
-      const next = structuredClone(prev);
-      const parts = path.split(".");
-      let obj = next;
-      for (let i = 0; i < parts.length - 1; i++) obj = obj[parts[i]];
-      obj[parts[parts.length - 1]] = value;
-      return next;
-    });
+    setReport((prev) => {
+      const next = structuredClone(prev)
+      const parts = path.split('.')
+      let obj = next
+      for (let i = 0; i < parts.length - 1; i++) obj = obj[parts[i]]
+      obj[parts[parts.length - 1]] = value
+      return next
+    })
   }
 
   // Guarda (o quita, si value es "") el justificativo de una marca sin reunión en el período.
   function setJustificativo(clienteId, value) {
-    setReport(prev => {
-      const next = structuredClone(prev);
-      const justificativos = { ...(next.reuniones.justificativos ?? {}) };
-      if (value) justificativos[clienteId] = value;
-      else delete justificativos[clienteId];
-      next.reuniones.justificativos = justificativos;
-      return next;
-    });
+    setReport((prev) => {
+      const next = structuredClone(prev)
+      const justificativos = { ...(next.reuniones.justificativos ?? {}) }
+      if (value) justificativos[clienteId] = value
+      else delete justificativos[clienteId]
+      next.reuniones.justificativos = justificativos
+      return next
+    })
   }
 
   function setTareaField(idx, field, value) {
-    setReport(prev => {
-      const next = structuredClone(prev);
-      next.productividad.tareas[idx][field] = field === "nombre" ? value : (value === "" ? null : Number(value));
-      return next;
-    });
+    setReport((prev) => {
+      const next = structuredClone(prev)
+      next.productividad.tareas[idx][field] =
+        field === 'nombre' ? value : value === '' ? null : Number(value)
+      return next
+    })
   }
 
   function setItemField(indicador, idx, field, value) {
-    setReport(prev => {
-      const next = structuredClone(prev);
-      const parsed = value === "" || value === null ? null : Number(value);
-      next[indicador].items[idx][field] = field === "nombre" ? value : parsed;
-      return next;
-    });
+    setReport((prev) => {
+      const next = structuredClone(prev)
+      const parsed = value === '' || value === null ? null : Number(value)
+      next[indicador].items[idx][field] = field === 'nombre' ? value : parsed
+      return next
+    })
   }
 
   return (
@@ -252,11 +293,23 @@ export default function OperacionesView({ line, companyId, year, month, closed =
           {/* Barra de indicadores */}
           <div className="flex gap-1">
             {INDICATORS.map((ind, i) => {
-              const pts = scores?.[ind.key] ?? 0;
-              const pct = (pts / ind.peso) * 100;
-              const colors = ["#FAB51A","#3B82F6","#10B981","#F97316","#8B5CF6","#06B6D4","#EC4899"];
+              const pts = scores?.[ind.key] ?? 0
+              const pct = (pts / ind.peso) * 100
+              const colors = [
+                '#FAB51A',
+                '#3B82F6',
+                '#10B981',
+                '#F97316',
+                '#8B5CF6',
+                '#06B6D4',
+                '#EC4899',
+              ]
               return (
-                <div key={ind.key} className="flex flex-col items-center gap-0.5" title={`${ind.short}: ${pts.toFixed(1)}/${ind.peso}`}>
+                <div
+                  key={ind.key}
+                  className="flex flex-col items-center gap-0.5"
+                  title={`${ind.short}: ${pts.toFixed(1)}/${ind.peso}`}
+                >
                   <div className="w-5 h-14 bg-[#f0ede3] rounded-full overflow-hidden flex items-end">
                     <div
                       className="w-full rounded-full transition-all"
@@ -265,14 +318,16 @@ export default function OperacionesView({ line, companyId, year, month, closed =
                   </div>
                   <span className="text-[9px] font-mono text-[#bbb]">{ind.short.slice(0, 3)}</span>
                 </div>
-              );
+              )
             })}
           </div>
         </div>
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-[14px] rounded-xl px-4 py-3">{error}</div>
+        <div className="bg-red-50 border border-red-200 text-red-700 text-[14px] rounded-xl px-4 py-3">
+          {error}
+        </div>
       )}
 
       {/* 1. REUNIONES */}
@@ -284,7 +339,9 @@ export default function OperacionesView({ line, companyId, year, month, closed =
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Realizadas">
-            <input type="number" className="input-base bg-[#f2f0e8] text-[#888] cursor-not-allowed"
+            <input
+              type="number"
+              className="input-base bg-[#f2f0e8] text-[#888] cursor-not-allowed"
               value={report.reuniones.realizadas ?? 0}
               disabled
               readOnly
@@ -295,12 +352,19 @@ export default function OperacionesView({ line, companyId, year, month, closed =
             </p>
           </Field>
           <Field label="Meta">
-            <input type="number" min="1" max={maxMeta || undefined} className="input-base"
-              value={report.reuniones.meta ?? ""}
-              onChange={e => {
-                if (e.target.value === "") { setField("reuniones.meta", null); return; }
-                const clamped = Math.min(Number(e.target.value), maxMeta);
-                setField("reuniones.meta", clamped);
+            <input
+              type="number"
+              min="1"
+              max={maxMeta || undefined}
+              className="input-base"
+              value={report.reuniones.meta ?? ''}
+              onChange={(e) => {
+                if (e.target.value === '') {
+                  setField('reuniones.meta', null)
+                  return
+                }
+                const clamped = Math.min(Number(e.target.value), maxMeta)
+                setField('reuniones.meta', clamped)
               }}
             />
             <p className="mt-1 text-[12px] font-mono text-[#888]">
@@ -309,29 +373,36 @@ export default function OperacionesView({ line, companyId, year, month, closed =
           </Field>
         </div>
         {(() => {
-          const heldSet = new Set(heldClientIds);
-          const pending = activeClients.filter(c => !heldSet.has(c.id));
+          const heldSet = new Set(heldClientIds)
+          const pending = activeClients.filter((c) => !heldSet.has(c.id))
           return (
             <button
               type="button"
               onClick={() => setReunionesModal(true)}
               className="flex items-center gap-1.5 text-[13px] font-mono text-[#555] hover:text-[#111] transition-colors"
             >
-              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <circle cx="12" cy="12" r="9" strokeLinecap="round" strokeLinejoin="round"/>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4"/>
+              <svg
+                width="14"
+                height="14"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <circle cx="12" cy="12" r="9" strokeLinecap="round" strokeLinejoin="round" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4" />
               </svg>
-              Ver marcas{activeClients.length > 0 ? ` (${pending.length} sin reunión)` : ""}
+              Ver marcas{activeClients.length > 0 ? ` (${pending.length} sin reunión)` : ''}
             </button>
-          );
+          )
         })()}
         <Field label="Comentario (opcional)">
           <textarea
             className="input-base w-full resize-none"
             rows={2}
             placeholder="Notas u observaciones sobre las reuniones del mes"
-            value={report.reuniones.comentario ?? ""}
-            onChange={e => setField("reuniones.comentario", e.target.value)}
+            value={report.reuniones.comentario ?? ''}
+            onChange={(e) => setField('reuniones.comentario', e.target.value)}
           />
         </Field>
       </Section>
@@ -355,42 +426,58 @@ export default function OperacionesView({ line, companyId, year, month, closed =
       >
         <div className="space-y-2">
           {report.productividad.tareas.map((tarea, idx) => (
-            <div key={idx} className="grid grid-cols-[minmax(100px,1fr)_auto_auto] gap-2 items-center">
+            <div
+              key={idx}
+              className="grid grid-cols-[minmax(100px,1fr)_auto_auto] gap-2 items-center"
+            >
               <input
                 type="text"
                 className="input-base text-[14px]"
                 placeholder="Nombre de tarea"
                 value={tarea.nombre}
-                onChange={e => setTareaField(idx, "nombre", e.target.value)}
+                onChange={(e) => setTareaField(idx, 'nombre', e.target.value)}
               />
               <div className="flex items-center gap-1">
                 <span className="text-[12px] text-[#aaa]">Real</span>
-                <input type="number" min="0" className="input-base w-20 text-[14px]"
-                  value={tarea.realizado ?? ""}
-                  onChange={e => setTareaField(idx, "realizado", e.target.value)}
+                <input
+                  type="number"
+                  min="0"
+                  className="input-base w-20 text-[14px]"
+                  value={tarea.realizado ?? ''}
+                  onChange={(e) => setTareaField(idx, 'realizado', e.target.value)}
                 />
               </div>
               <div className="flex items-center gap-1">
                 <span className="text-[12px] text-[#aaa]">Meta</span>
-                <input type="number" min="0" className="input-base w-20 text-[14px]"
-                  value={tarea.meta ?? ""}
-                  onChange={e => setTareaField(idx, "meta", e.target.value)}
+                <input
+                  type="number"
+                  min="0"
+                  className="input-base w-20 text-[14px]"
+                  value={tarea.meta ?? ''}
+                  onChange={(e) => setTareaField(idx, 'meta', e.target.value)}
                 />
               </div>
             </div>
           ))}
           <button
             onClick={() => {
-              setReport(prev => {
-                const next = structuredClone(prev);
-                next.productividad.tareas.push({ nombre: "", realizado: null, meta: null });
-                return next;
-              });
+              setReport((prev) => {
+                const next = structuredClone(prev)
+                next.productividad.tareas.push({ nombre: '', realizado: null, meta: null })
+                return next
+              })
             }}
             className="text-[13px] text-[#888] hover:text-[#111] font-medium flex items-center gap-1 mt-1"
           >
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d="M6 1v10M1 6h10" strokeLinecap="round"/>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 12 12"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+            >
+              <path d="M6 1v10M1 6h10" strokeLinecap="round" />
             </svg>
             Agregar tarea
           </button>
@@ -400,17 +487,17 @@ export default function OperacionesView({ line, companyId, year, month, closed =
 
       {/* 3. CRECIMIENTO */}
       {(() => {
-        const prevMonth = month - 1 < 1 ? 12 : month - 1;
-        const prevMonthName = MONTHS[prevMonth - 1];
-        const currMonthName = MONTHS[month - 1];
+        const prevMonth = month - 1 < 1 ? 12 : month - 1
+        const prevMonthName = MONTHS[prevMonth - 1]
+        const currMonthName = MONTHS[month - 1]
         // seedMode: no hay reporte previo → todas las columnas del periodo pasado son editables
-        const seedMode = !prevReport;
+        const seedMode = !prevReport
         // Anchos fijos (no "auto") para que el encabezado y cada fila —cada uno su propia
         // grilla— alineen columna a columna sin importar si el badge/% o Inversión Ads
         // tienen contenido más largo o más corto en una fila que en otra.
         // 200px: 2×92px inputs + gap-2 (mes anterior). 210px: ídem + border-l/pl-2 (mes actual).
         // 88px: Meta (input !w-20). 104px: badge de cumplimiento + %. 120px: Inversión Ads.
-        const GROW_COLS = "grid-cols-[minmax(110px,1fr)_200px_210px_88px_104px_120px]";
+        const GROW_COLS = 'grid-cols-[minmax(110px,1fr)_200px_210px_88px_104px_120px]'
         return (
           <Section
             title="3. Crecimiento de seguidores"
@@ -420,22 +507,33 @@ export default function OperacionesView({ line, companyId, year, month, closed =
           >
             {seedMode && (
               <p className="text-[12px] text-[#888] bg-[#faf9f3] border border-[#e8e4d8] rounded-lg px-3 py-2 mb-1">
-                Primer mes de uso: ingresá manualmente los seguidores del periodo anterior como línea base. A partir del próximo mes se auto-completará.
+                Primer mes de uso: ingresá manualmente los seguidores del periodo anterior como
+                línea base. A partir del próximo mes se auto-completará.
               </p>
             )}
-            {!seedMode && report.crecimiento.items.some(item => {
-              const prevItem = (prevReport?.crecimiento?.items ?? []).find(i => i.clienteId === item.clienteId);
-              return (prevItem?.seguidoresGanados == null || prevItem?.seguidoresGanados === "")
-                  || (prevItem?.seguidoresActuales == null || prevItem?.seguidoresActuales === "");
-            }) && (
-              <p className="text-[12px] text-[#888] bg-[#faf9f3] border border-[#e8e4d8] rounded-lg px-3 py-2 mb-1">
-                Algunos valores del mes anterior están vacíos. Podés completarlos manualmente como línea base.
-              </p>
-            )}
+            {!seedMode &&
+              report.crecimiento.items.some((item) => {
+                const prevItem = (prevReport?.crecimiento?.items ?? []).find(
+                  (i) => i.clienteId === item.clienteId,
+                )
+                return (
+                  prevItem?.seguidoresGanados == null ||
+                  prevItem?.seguidoresGanados === '' ||
+                  prevItem?.seguidoresActuales == null ||
+                  prevItem?.seguidoresActuales === ''
+                )
+              }) && (
+                <p className="text-[12px] text-[#888] bg-[#faf9f3] border border-[#e8e4d8] rounded-lg px-3 py-2 mb-1">
+                  Algunos valores del mes anterior están vacíos. Podés completarlos manualmente como
+                  línea base.
+                </p>
+              )}
             <div className="overflow-x-auto">
               <div className="min-w-[760px]">
                 {report.crecimiento.items.length === 0 ? (
-                  <p className="text-[14px] text-[#bbb]">Sin clientes. Configurá la cartera en la pestaña Configuración.</p>
+                  <p className="text-[14px] text-[#bbb]">
+                    Sin clientes. Configurá la cartera en la pestaña Configuración.
+                  </p>
                 ) : (
                   <>
                     {/* Fila de encabezados de columna */}
@@ -443,11 +541,17 @@ export default function OperacionesView({ line, companyId, year, month, closed =
                       <div />
                       {/* Título único mes anterior (centrado sobre las 2 columnas del grupo) */}
                       <div className="text-center">
-                        <span className={`text-[11px] font-mono font-bold uppercase tracking-[0.08em] whitespace-nowrap ${seedMode ? "text-[#888]" : "text-[#bbb]"}`}>{prevMonthName}</span>
+                        <span
+                          className={`text-[11px] font-mono font-bold uppercase tracking-[0.08em] whitespace-nowrap ${seedMode ? 'text-[#888]' : 'text-[#bbb]'}`}
+                        >
+                          {prevMonthName}
+                        </span>
                       </div>
                       {/* Título único mes actual (centrado sobre las 2 columnas del grupo) */}
                       <div className="text-center border-l border-[#e0ddd4] pl-2">
-                        <span className="text-[11px] font-mono font-bold uppercase tracking-[0.08em] text-[#555] whitespace-nowrap">{currMonthName}</span>
+                        <span className="text-[11px] font-mono font-bold uppercase tracking-[0.08em] text-[#555] whitespace-nowrap">
+                          {currMonthName}
+                        </span>
                       </div>
                       <div />
                       <div />
@@ -456,47 +560,86 @@ export default function OperacionesView({ line, companyId, year, month, closed =
                     {/* Filas por cliente */}
                     <div className="space-y-2">
                       {report.crecimiento.items.map((item, idx) => {
-                        const { ganados, cumple, pct } = crecimientoCliente(item);
-                        const spent = spentByClientInPeriod(ads, item.clienteId, { month, year });
-                        const budget = clients.find(c => c.id === item.clienteId)?.campaign_budget;
-                        const prevItem = (prevReport?.crecimiento?.items ?? [])
-                          .find(i => i.clienteId === item.clienteId);
+                        const { ganados, cumple, pct } = crecimientoCliente(item)
+                        const spent = spentByClientInPeriod(ads, item.clienteId, { month, year })
+                        const budget = clients.find((c) => c.id === item.clienteId)?.campaign_budget
+                        const prevItem = (prevReport?.crecimiento?.items ?? []).find(
+                          (i) => i.clienteId === item.clienteId,
+                        )
                         // Editable por campo: si el mes anterior tiene un valor, se muestra bloqueado;
                         // si está vacío (o no hay reporte previo), se puede editar manualmente.
-                        const hasPrevGanados = prevItem?.seguidoresGanados != null && prevItem?.seguidoresGanados !== "";
-                        const hasPrevTotales = prevItem?.seguidoresActuales != null && prevItem?.seguidoresActuales !== "";
-                        const ganadosEditable = !hasPrevGanados;
-                        const totalesEditable = !hasPrevTotales;
-                        const prevGanados = hasPrevGanados ? prevItem.seguidoresGanados : (item.seguidoresGanadosPrev ?? "");
-                        const prevTotales = hasPrevTotales ? prevItem.seguidoresActuales : (item.seguidoresBase ?? "");
+                        const hasPrevGanados =
+                          prevItem?.seguidoresGanados != null && prevItem?.seguidoresGanados !== ''
+                        const hasPrevTotales =
+                          prevItem?.seguidoresActuales != null &&
+                          prevItem?.seguidoresActuales !== ''
+                        const ganadosEditable = !hasPrevGanados
+                        const totalesEditable = !hasPrevTotales
+                        const prevGanados = hasPrevGanados
+                          ? prevItem.seguidoresGanados
+                          : (item.seguidoresGanadosPrev ?? '')
+                        const prevTotales = hasPrevTotales
+                          ? prevItem.seguidoresActuales
+                          : (item.seguidoresBase ?? '')
                         return (
-                          <div key={item.clienteId} className={`grid ${GROW_COLS} gap-x-3 items-center`}>
+                          <div
+                            key={item.clienteId}
+                            className={`grid ${GROW_COLS} gap-x-3 items-center`}
+                          >
                             <ClientLink clienteId={item.clienteId} />
 
                             {/* Mes anterior — editable si no hay dato en el reporte del mes anterior */}
                             <div className="flex gap-2 items-center">
                               <div className="flex flex-col items-center gap-0.5">
-                                <span className={`text-[10px] whitespace-nowrap ${ganadosEditable ? "text-[#777]" : "text-[#999]"}`}>Gan. {prevMonthName.slice(0,3)}</span>
+                                <span
+                                  className={`text-[10px] whitespace-nowrap ${ganadosEditable ? 'text-[#777]' : 'text-[#999]'}`}
+                                >
+                                  Gan. {prevMonthName.slice(0, 3)}
+                                </span>
                                 <input
                                   type="number"
                                   disabled={!ganadosEditable}
                                   readOnly={!ganadosEditable}
-                                  className={`input-base !w-[92px] flex-none text-[13px] ${ganadosEditable ? "" : "bg-[#f5f3ec] text-[#bbb] cursor-not-allowed"}`}
+                                  className={`input-base !w-[92px] flex-none text-[13px] ${ganadosEditable ? '' : 'bg-[#f5f3ec] text-[#bbb] cursor-not-allowed'}`}
                                   placeholder="—"
                                   value={prevGanados}
-                                  onChange={ganadosEditable ? e => setItemField("crecimiento", idx, "seguidoresGanadosPrev", e.target.value === "" ? null : e.target.value) : undefined}
+                                  onChange={
+                                    ganadosEditable
+                                      ? (e) =>
+                                          setItemField(
+                                            'crecimiento',
+                                            idx,
+                                            'seguidoresGanadosPrev',
+                                            e.target.value === '' ? null : e.target.value,
+                                          )
+                                      : undefined
+                                  }
                                 />
                               </div>
                               <div className="flex flex-col items-center gap-0.5">
-                                <span className={`text-[10px] whitespace-nowrap ${totalesEditable ? "text-[#777]" : "text-[#999]"}`}>Tot. {prevMonthName.slice(0,3)}</span>
+                                <span
+                                  className={`text-[10px] whitespace-nowrap ${totalesEditable ? 'text-[#777]' : 'text-[#999]'}`}
+                                >
+                                  Tot. {prevMonthName.slice(0, 3)}
+                                </span>
                                 <input
                                   type="number"
                                   disabled={!totalesEditable}
                                   readOnly={!totalesEditable}
-                                  className={`input-base !w-[92px] flex-none text-[13px] ${totalesEditable ? "" : "bg-[#f5f3ec] text-[#bbb] cursor-not-allowed"}`}
+                                  className={`input-base !w-[92px] flex-none text-[13px] ${totalesEditable ? '' : 'bg-[#f5f3ec] text-[#bbb] cursor-not-allowed'}`}
                                   placeholder="—"
                                   value={prevTotales}
-                                  onChange={totalesEditable ? e => setItemField("crecimiento", idx, "seguidoresBase", e.target.value === "" ? null : e.target.value) : undefined}
+                                  onChange={
+                                    totalesEditable
+                                      ? (e) =>
+                                          setItemField(
+                                            'crecimiento',
+                                            idx,
+                                            'seguidoresBase',
+                                            e.target.value === '' ? null : e.target.value,
+                                          )
+                                      : undefined
+                                  }
                                 />
                               </div>
                             </div>
@@ -504,36 +647,58 @@ export default function OperacionesView({ line, companyId, year, month, closed =
                             {/* Mes actual — editables */}
                             <div className="flex gap-2 items-center border-l border-[#e0ddd4] pl-2">
                               <div className="flex flex-col items-center gap-0.5">
-                                <span className="text-[10px] text-[#aaa] whitespace-nowrap">Gan. {currMonthName.slice(0,3)}</span>
+                                <span className="text-[10px] text-[#aaa] whitespace-nowrap">
+                                  Gan. {currMonthName.slice(0, 3)}
+                                </span>
                                 <input
                                   type="number"
                                   className="input-base !w-[92px] flex-none text-[13px]"
                                   placeholder="—"
-                                  value={item.seguidoresGanados ?? ""}
-                                  onChange={e => setItemField("crecimiento", idx, "seguidoresGanados", e.target.value === "" ? null : e.target.value)}
+                                  value={item.seguidoresGanados ?? ''}
+                                  onChange={(e) =>
+                                    setItemField(
+                                      'crecimiento',
+                                      idx,
+                                      'seguidoresGanados',
+                                      e.target.value === '' ? null : e.target.value,
+                                    )
+                                  }
                                 />
                               </div>
                               <div className="flex flex-col items-center gap-0.5">
-                                <span className="text-[10px] text-[#aaa] whitespace-nowrap">Tot. {currMonthName.slice(0,3)}</span>
+                                <span className="text-[10px] text-[#aaa] whitespace-nowrap">
+                                  Tot. {currMonthName.slice(0, 3)}
+                                </span>
                                 <input
                                   type="number"
                                   className="input-base !w-[92px] flex-none text-[13px]"
                                   placeholder="—"
-                                  value={item.seguidoresActuales ?? ""}
-                                  onChange={e => setItemField("crecimiento", idx, "seguidoresActuales", e.target.value === "" ? null : e.target.value)}
+                                  value={item.seguidoresActuales ?? ''}
+                                  onChange={(e) =>
+                                    setItemField(
+                                      'crecimiento',
+                                      idx,
+                                      'seguidoresActuales',
+                                      e.target.value === '' ? null : e.target.value,
+                                    )
+                                  }
                                 />
                               </div>
                             </div>
 
                             {/* Meta */}
                             <div className="flex flex-col items-center gap-0.5">
-                              <span className="text-[10px] text-[#aaa] whitespace-nowrap">Meta</span>
+                              <span className="text-[10px] text-[#aaa] whitespace-nowrap">
+                                Meta
+                              </span>
                               <input
                                 type="number"
                                 min="0"
                                 className="input-base !w-20 flex-none text-[13px]"
-                                value={item.meta ?? ""}
-                                onChange={e => setItemField("crecimiento", idx, "meta", e.target.value)}
+                                value={item.meta ?? ''}
+                                onChange={(e) =>
+                                  setItemField('crecimiento', idx, 'meta', e.target.value)
+                                }
                               />
                             </div>
 
@@ -543,36 +708,50 @@ export default function OperacionesView({ line, companyId, year, month, closed =
                                 <span
                                   className="text-[12px] text-[#bbb] font-mono"
                                   title="Faltan datos de seguidores ganados"
-                                >—</span>
+                                >
+                                  —
+                                </span>
                               ) : cumple ? (
                                 <span
                                   className="text-[12px] font-semibold text-green-700 bg-green-50 rounded-full px-2.5 py-0.5 whitespace-nowrap"
-                                  title={ganados !== null ? `+${ganados} seguidores ganados` : ""}
-                                >✓ Cumple</span>
+                                  title={ganados !== null ? `+${ganados} seguidores ganados` : ''}
+                                >
+                                  ✓ Cumple
+                                </span>
                               ) : (
                                 <span
                                   className="text-[12px] font-semibold text-[#a06a00] bg-[#fff6e0] rounded-full px-2.5 py-0.5 whitespace-nowrap"
-                                  title={ganados !== null ? `${ganados} seguidores ganados` : ""}
-                                >Pendiente</span>
+                                  title={ganados !== null ? `${ganados} seguidores ganados` : ''}
+                                >
+                                  Pendiente
+                                </span>
                               )}
                               {/* Altura reservada aunque no haya %, para que todas las filas midan igual */}
-                              <span className={`text-[11px] font-mono font-semibold leading-none ${pct !== null ? (cumple ? "text-green-600" : "text-red-500") : "invisible"}`}>
-                                {pct !== null ? `${Math.round(pct)}%` : "0%"}
+                              <span
+                                className={`text-[11px] font-mono font-semibold leading-none ${pct !== null ? (cumple ? 'text-green-600' : 'text-red-500') : 'invisible'}`}
+                              >
+                                {pct !== null ? `${Math.round(pct)}%` : '0%'}
                               </span>
                             </div>
 
                             {/* Inversión en pauta (auto desde paid_campaigns, por start_date) vs presupuesto del cliente */}
                             <div className="flex flex-col items-center gap-0.5">
-                              <span className="text-[10px] text-[#aaa] whitespace-nowrap">Inversión Ads</span>
+                              <span className="text-[10px] text-[#aaa] whitespace-nowrap">
+                                Inversión Ads
+                              </span>
                               <span className="flex items-baseline gap-0.5 whitespace-nowrap">
-                                <span className="text-[13px] font-mono text-[#555] tabular-nums">{fmtUSD(spent)}</span>
+                                <span className="text-[13px] font-mono text-[#555] tabular-nums">
+                                  {fmtUSD(spent)}
+                                </span>
                                 {budget != null && (
-                                  <span className="text-[10px] font-mono text-[#aaa] tabular-nums">/ {fmtUSD(budget)}</span>
+                                  <span className="text-[10px] font-mono text-[#aaa] tabular-nums">
+                                    / {fmtUSD(budget)}
+                                  </span>
                                 )}
                               </span>
                             </div>
                           </div>
-                        );
+                        )
                       })}
                     </div>
                   </>
@@ -583,7 +762,7 @@ export default function OperacionesView({ line, companyId, year, month, closed =
               <SectionTotal label="marcas" count={report.crecimiento.items.length} />
             )}
           </Section>
-        );
+        )
       })()}
 
       {/* 4. SOLICITUDES */}
@@ -595,15 +774,31 @@ export default function OperacionesView({ line, companyId, year, month, closed =
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Solicitudes recibidas">
-            <input type="number" min="0" className="input-base"
-              value={report.solicitudes.solicitudes ?? ""}
-              onChange={e => setField("solicitudes.solicitudes", e.target.value === "" ? null : Number(e.target.value))}
+            <input
+              type="number"
+              min="0"
+              className="input-base"
+              value={report.solicitudes.solicitudes ?? ''}
+              onChange={(e) =>
+                setField(
+                  'solicitudes.solicitudes',
+                  e.target.value === '' ? null : Number(e.target.value),
+                )
+              }
             />
           </Field>
           <Field label="Editadas / Entregadas">
-            <input type="number" min="0" className="input-base"
-              value={report.solicitudes.editadas ?? ""}
-              onChange={e => setField("solicitudes.editadas", e.target.value === "" ? null : Number(e.target.value))}
+            <input
+              type="number"
+              min="0"
+              className="input-base"
+              value={report.solicitudes.editadas ?? ''}
+              onChange={(e) =>
+                setField(
+                  'solicitudes.editadas',
+                  e.target.value === '' ? null : Number(e.target.value),
+                )
+              }
             />
           </Field>
         </div>
@@ -617,31 +812,40 @@ export default function OperacionesView({ line, companyId, year, month, closed =
         max={INDICATORS[4].peso}
       >
         <div className="overflow-x-auto">
-        <div className="space-y-2">
-          {report.pautas.items.length === 0 ? (
-            <p className="text-[14px] text-[#bbb]">Sin clientes configurados.</p>
-          ) : (
-            report.pautas.items.map((item, idx) => (
-              <div key={item.clienteId} className="grid grid-cols-[minmax(100px,1fr)_auto_auto] gap-2 items-center">
-                <ClientLink clienteId={item.clienteId} />
-                <div className="flex items-center gap-1">
-                  <span className="text-[11px] text-[#aaa]">Realizadas</span>
-                  <input type="number" min="0" className="input-base w-20 text-[13px]"
-                    value={item.realizadas ?? ""}
-                    onChange={e => setItemField("pautas", idx, "realizadas", e.target.value)}
-                  />
+          <div className="space-y-2">
+            {report.pautas.items.length === 0 ? (
+              <p className="text-[14px] text-[#bbb]">Sin clientes configurados.</p>
+            ) : (
+              report.pautas.items.map((item, idx) => (
+                <div
+                  key={item.clienteId}
+                  className="grid grid-cols-[minmax(100px,1fr)_auto_auto] gap-2 items-center"
+                >
+                  <ClientLink clienteId={item.clienteId} />
+                  <div className="flex items-center gap-1">
+                    <span className="text-[11px] text-[#aaa]">Realizadas</span>
+                    <input
+                      type="number"
+                      min="0"
+                      className="input-base w-20 text-[13px]"
+                      value={item.realizadas ?? ''}
+                      onChange={(e) => setItemField('pautas', idx, 'realizadas', e.target.value)}
+                    />
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[11px] text-[#aaa]">Meta</span>
+                    <input
+                      type="number"
+                      min="0"
+                      className="input-base w-20 text-[13px]"
+                      value={item.meta ?? ''}
+                      onChange={(e) => setItemField('pautas', idx, 'meta', e.target.value)}
+                    />
+                  </div>
                 </div>
-                <div className="flex items-center gap-1">
-                  <span className="text-[11px] text-[#aaa]">Meta</span>
-                  <input type="number" min="0" className="input-base w-20 text-[13px]"
-                    value={item.meta ?? ""}
-                    onChange={e => setItemField("pautas", idx, "meta", e.target.value)}
-                  />
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+              ))
+            )}
+          </div>
         </div>
         {report.pautas.items.length > 0 && (
           <SectionTotal label="marcas" count={report.pautas.items.length} />
@@ -657,15 +861,25 @@ export default function OperacionesView({ line, companyId, year, month, closed =
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Piezas totales">
-            <input type="number" min="0" className="input-base"
-              value={report.piezas.piezas ?? ""}
-              onChange={e => setField("piezas.piezas", e.target.value === "" ? null : Number(e.target.value))}
+            <input
+              type="number"
+              min="0"
+              className="input-base"
+              value={report.piezas.piezas ?? ''}
+              onChange={(e) =>
+                setField('piezas.piezas', e.target.value === '' ? null : Number(e.target.value))
+              }
             />
           </Field>
           <Field label="Piezas editadas">
-            <input type="number" min="0" className="input-base"
-              value={report.piezas.editadas ?? ""}
-              onChange={e => setField("piezas.editadas", e.target.value === "" ? null : Number(e.target.value))}
+            <input
+              type="number"
+              min="0"
+              className="input-base"
+              value={report.piezas.editadas ?? ''}
+              onChange={(e) =>
+                setField('piezas.editadas', e.target.value === '' ? null : Number(e.target.value))
+              }
             />
           </Field>
         </div>
@@ -678,30 +892,36 @@ export default function OperacionesView({ line, companyId, year, month, closed =
           <input
             type="checkbox"
             checked={!!report.incompleto}
-            onChange={e => setField("incompleto", e.target.checked)}
+            onChange={(e) => setField('incompleto', e.target.checked)}
             className="w-4 h-4 rounded border-[#d0ccc0] accent-[#FAB51A] cursor-pointer"
           />
           <span className="text-[13px] text-[#888]">
-            Marcar mes como incompleto <span className="text-[#bbb]">(no contar en el promedio anual)</span>
+            Marcar mes como incompleto{' '}
+            <span className="text-[#bbb]">(no contar en el promedio anual)</span>
           </span>
         </label>
         <button
           onClick={handleSave}
           disabled={saving}
           className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-[15px] transition-all ${
-            saved
-              ? "bg-green-500 text-white"
-              : "bg-[#FAB51A] text-[#111] hover:bg-[#e8a315]"
+            saved ? 'bg-green-500 text-white' : 'bg-[#FAB51A] text-[#111] hover:bg-[#e8a315]'
           } disabled:opacity-60`}
         >
           {saving ? (
             <div className="w-4 h-4 border-2 border-[#111] border-t-transparent rounded-full animate-spin" />
           ) : saved ? (
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 8l3 3 7-7" strokeLinecap="round" strokeLinejoin="round"/>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path d="M3 8l3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           ) : null}
-          {saved ? "Guardado" : saving ? "Guardando..." : "Guardar reporte"}
+          {saved ? 'Guardado' : saving ? 'Guardando...' : 'Guardar reporte'}
         </button>
       </div>
       {cliModal && (
@@ -713,11 +933,11 @@ export default function OperacionesView({ line, companyId, year, month, closed =
         />
       )}
     </fieldset>
-  );
+  )
 }
 
 function Section({ title, subtitle, score, max, children }) {
-  const pct = max > 0 ? Math.min(100, (score / max) * 100) : 0;
+  const pct = max > 0 ? Math.min(100, (score / max) * 100) : 0
   return (
     <div className="bg-white rounded-2xl border border-[#e0ddd4] px-5 py-4 space-y-3">
       <div className="flex items-start justify-between gap-3">
@@ -727,17 +947,20 @@ function Section({ title, subtitle, score, max, children }) {
         </div>
         <div className="flex flex-col items-end flex-shrink-0">
           <span className="text-[20px] font-bold text-[#111] tabular-nums">
-            {score != null ? score.toFixed(1) : "—"}
+            {score != null ? score.toFixed(1) : '—'}
           </span>
           <span className="text-[11px] font-mono text-[#aaa]">/{max} pts</span>
           <div className="w-24 h-1.5 bg-[#f0ede3] rounded-full overflow-hidden mt-1">
-            <div className="h-full bg-[#FAB51A] rounded-full transition-all" style={{ width: `${pct}%` }} />
+            <div
+              className="h-full bg-[#FAB51A] rounded-full transition-all"
+              style={{ width: `${pct}%` }}
+            />
           </div>
         </div>
       </div>
       {children}
     </div>
-  );
+  )
 }
 
 function Field({ label, children }) {
@@ -748,5 +971,5 @@ function Field({ label, children }) {
       </label>
       {children}
     </div>
-  );
+  )
 }

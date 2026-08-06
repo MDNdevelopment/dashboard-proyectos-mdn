@@ -5,6 +5,8 @@
 import { supabase } from '../../supabase'
 import { SEED_LINES, SEED_CLIENTES } from './constants'
 import { lastNMonths } from '../../utils/metricsFinance'
+import { moveClientLine } from '../../utils/moveClientLine'
+import { stripClientFromReport, reportHasClient } from '../../utils/stripClientFromReport'
 
 // ─── Líneas ───────────────────────────────────────────────────────────────────
 
@@ -281,6 +283,154 @@ export async function closeReport(lineId, year, month, userId) {
     .eq('month', month)
     .select()
     .single()
+}
+
+/** Forma mínima válida de un reporte vacío (cuando aún no existe el del mes). */
+function emptyReportShape() {
+  return {
+    reuniones: { realizadas: null, meta: 0, comentario: null, justificativos: {} },
+    productividad: { tareas: [] },
+    crecimiento: { items: [] },
+    solicitudes: { solicitudes: null, editadas: null },
+    pautas: { items: [] },
+    piezas: { piezas: null, editadas: null },
+    feedback: { items: [] },
+    finanzas: { ingresos: [], gastosOperativos: [], sueldos: [], otrosGastos: [] },
+  }
+}
+
+// Parseo/formateo de fechas 'YYYY-MM-DD' sin pasar por Date (evita corrimientos de zona).
+function isoDateParts(isoDate) {
+  const [y, m, d] = String(isoDate).split('-').map(Number)
+  return { year: y, month: m, day: d }
+}
+function formatDMY(isoDate) {
+  const { year, month, day } = isoDateParts(isoDate)
+  return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`
+}
+
+/**
+ * Mueve una cuenta (marca) de una línea a otra, materializando la atribución del mes
+ * de transición en los reportes de AMBAS líneas (ver src/utils/moveClientLine.js):
+ *  - Operativo (crecimiento/pautas/feedback/justificativo) migra a la línea nueva con sus valores.
+ *  - Ingreso del mes se reparte: fila manual prorrateada en la vieja, fila ligada en la nueva.
+ * Luego actualiza client.line_id (limpiando asignaciones de staff, igual que ClientModal)
+ * y registra el movimiento en metric_client_line_moves (auditoría, no bloqueante).
+ *
+ * @param {object} p
+ * @param {string} p.companyId
+ * @param {object} p.client        - fila del cliente (necesita id, name, line_id).
+ * @param {string} p.toLineId      - línea destino.
+ * @param {string} p.effectiveDate - 'YYYY-MM-DD' (día en que empieza en la línea nueva).
+ * @param {number} p.oldAmount     - ingreso prorrateado línea vieja.
+ * @param {number} p.newAmount     - ingreso prorrateado línea nueva.
+ * @param {string} [p.userId]
+ * @returns {{ data, error }}
+ */
+export async function moveClientToLine({
+  companyId,
+  client,
+  toLineId,
+  effectiveDate,
+  oldAmount,
+  newAmount,
+  userId,
+}) {
+  const fromLineId = client.line_id ?? null
+  if (!toLineId || toLineId === fromLineId) {
+    return { error: new Error('Selecciona una línea destino distinta a la actual.') }
+  }
+  const { year, month } = isoDateParts(effectiveDate)
+
+  // 1. Reportes del mes de transición de ambas líneas (pueden no existir todavía).
+  const [oldRes, newRes] = await Promise.all([
+    fromLineId ? loadReport(fromLineId, year, month) : Promise.resolve({ data: null, error: null }),
+    loadReport(toLineId, year, month),
+  ])
+  if (oldRes.error) return { error: oldRes.error }
+  if (newRes.error) return { error: newRes.error }
+
+  const oldData = oldRes.data?.data ?? emptyReportShape()
+  const newData = newRes.data?.data ?? emptyReportShape()
+
+  const { oldReportData, newReportData } = moveClientLine({
+    clientId: client.id,
+    clientName: client.name,
+    effectiveLabel: formatDMY(effectiveDate),
+    oldReportData: oldData,
+    newReportData: newData,
+    oldAmount: Number(oldAmount) || 0,
+    newAmount: Number(newAmount) || 0,
+  })
+
+  // 2. Persistir ambos reportes del mes de transición.
+  if (fromLineId) {
+    const { error } = await upsertReport(companyId, fromLineId, year, month, oldReportData)
+    if (error) return { error }
+  }
+  const { error: e2 } = await upsertReport(companyId, toLineId, year, month, newReportData)
+  if (e2) return { error: e2 }
+
+  // 3. Cambiar la línea del cliente (limpiando staff que ya no aplica).
+  const { data: updated, error: e3 } = await updateClient(client.id, {
+    line_id: toLineId,
+    social_manager_id: null,
+    designer_id: null,
+    audiovisual_ids: [],
+  })
+  if (e3) return { error: e3 }
+
+  // 4. Auditoría (best-effort: no revierte el movimiento si falla).
+  await supabase.from('metric_client_line_moves').insert({
+    company_id: companyId,
+    client_id: client.id,
+    from_line_id: fromLineId,
+    to_line_id: toLineId,
+    effective_date: effectiveDate,
+    split_old: Number(oldAmount) || 0,
+    split_new: Number(newAmount) || 0,
+    created_by: userId ?? null,
+  })
+
+  return { data: updated, error: null }
+}
+
+/**
+ * Quita a una cuenta de los reportes ya guardados de los meses POSTERIORES al mes de su
+ * fin de contrato (por definición, ahí no debe haber rastro). Deja intactos:
+ *  - el mes de fin y anteriores (el último mes cuenta completo),
+ *  - los reportes CERRADOS (`closed_at` no nulo; inmutables por trigger en la base).
+ * Escanea todas las líneas de la empresa (la cuenta pudo haberse movido de línea).
+ *
+ * @param {string} companyId
+ * @param {string} clientId
+ * @param {string} contractEnd - 'YYYY-MM-DD'
+ * @returns {{ data: { cleaned: number }, error: Error|null }}
+ */
+export async function cleanupClientAfterContractEnd(companyId, clientId, contractEnd) {
+  if (!contractEnd) return { data: { cleaned: 0 }, error: null }
+  const [ey, em] = String(contractEnd).split('-').map(Number)
+
+  // Reportes de la empresa en meses estrictamente posteriores a (ey, em), no cerrados.
+  // El filtro fino por mes se hace en JS (comparar (year,month) > (ey,em)).
+  const { data: reports, error } = await supabase
+    .from('metric_reports')
+    .select('line_id, year, month, data, closed_at')
+    .eq('company_id', companyId)
+    .is('closed_at', null)
+  if (error) return { data: null, error }
+
+  const posterior = (r) => r.year > ey || (r.year === ey && r.month > em)
+  const targets = (reports ?? []).filter((r) => posterior(r) && reportHasClient(r.data, clientId))
+
+  let cleaned = 0
+  for (const r of targets) {
+    const stripped = stripClientFromReport(r.data, clientId)
+    const { error: upErr } = await upsertReport(companyId, r.line_id, r.year, r.month, stripped)
+    if (upErr) return { data: null, error: upErr }
+    cleaned++
+  }
+  return { data: { cleaned }, error: null }
 }
 
 /**

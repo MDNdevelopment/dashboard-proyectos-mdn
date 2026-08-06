@@ -529,6 +529,70 @@ describe('OperacionesView — alineación de columnas en "Crecimiento de seguido
   })
 })
 
+describe('OperacionesView — cuenta movida a otra línea resuelve nombre (no "[Cliente eliminado]")', () => {
+  // Roster de ESTA línea: solo c-1. La cuenta c-moved ya no está aquí (se movió),
+  // pero sigue existiendo company-wide en otra línea.
+  const ROSTER = [
+    { id: 'c-1', name: 'Banco Exterior', logo_url: null, deleted_at: null, campaign_budget: 200 },
+  ]
+  const COMPANY_WIDE = [
+    ...ROSTER,
+    {
+      id: 'c-moved',
+      name: 'Marca Movida',
+      logo_url: null,
+      deleted_at: null,
+      line_id: 'other-line',
+    },
+  ]
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockLoadPrevReport.mockResolvedValue({ data: null, error: null })
+    // Distingue la llamada de roster (lineId != null) de la company-wide (lineId == null).
+    mockLoadClients.mockImplementation((companyId, lineId) =>
+      Promise.resolve({ data: lineId == null ? COMPANY_WIDE : ROSTER, error: null }),
+    )
+    mockLoadCompanyEmployees.mockResolvedValue({ data: [], error: null })
+    mockUpsertReport.mockResolvedValue({ data: null, error: null })
+    mockLoadAds.mockResolvedValue({ data: [], error: null })
+    mockCountMeetingsHeldForLine.mockResolvedValue({ count: 0, error: null })
+    mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: [], error: null })
+
+    const data = makeReportData()
+    data.crecimiento.items = [
+      {
+        clienteId: 'c-1',
+        seguidoresGanados: 10,
+        seguidoresGanadosPrev: 5,
+        seguidoresActuales: 100,
+        seguidoresBase: 90,
+        meta: 20,
+      },
+      {
+        clienteId: 'c-moved',
+        seguidoresGanados: 30,
+        seguidoresGanadosPrev: 20,
+        seguidoresActuales: 500,
+        seguidoresBase: 470,
+        meta: 50,
+      },
+    ]
+    mockLoadReport.mockResolvedValue({ data: { data }, error: null })
+  })
+
+  it('muestra el nombre de la cuenta movida y la marca "otra línea" (reporte cerrado, congelado)', async () => {
+    // closed => congelado => no corre syncReportClients => el item de c-moved se conserva.
+    renderView({ month: 7, closed: true })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
+    expect(await screen.findByText('Marca Movida')).toBeInTheDocument()
+    expect(screen.queryByText('[Cliente eliminado]')).not.toBeInTheDocument()
+    expect(screen.getAllByText('· otra línea').length).toBeGreaterThan(0)
+  })
+})
+
 describe('OperacionesView — modal de cobertura de reuniones por marca', () => {
   beforeEach(() => {
     vi.clearAllMocks()
