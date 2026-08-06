@@ -22,16 +22,35 @@ vi.mock('../supabase', () => ({
 import AdsList from '../components/ads/AdsList'
 
 const CAMPAIGN = {
-  id: 'camp-1', name: 'Táctica Julio', client: 'Banco Exterior', client_id: 'c-1',
-  assignee: 'u1', priority: 'Media', status: 'Pendiente', notes: '',
-  start_date: '2026-07-05', end_date: '2026-07-20',
+  id: 'camp-1',
+  name: 'Táctica Julio',
+  client: 'Banco Exterior',
+  client_id: 'c-1',
+  assignee: 'u1',
+  priority: 'Media',
+  status: 'Pendiente',
+  notes: '',
+  start_date: '2026-07-05',
+  end_date: '2026-07-20',
 }
 
 describe('AdsList — click en fila abre detalle', () => {
   it('clic en la fila (fuera de los controles interactivos) llama a onSelect con la campaña', async () => {
     const user = userEvent.setup()
     const onSelect = vi.fn()
-    render(<AdsList campaigns={[CAMPAIGN]} loading={false} canManage={true} usersMap={new Map()} clientsById={new Map()} onSelect={onSelect} onUpdated={() => {}} onDeleted={() => {}} onEdit={() => {}} />)
+    render(
+      <AdsList
+        campaigns={[CAMPAIGN]}
+        loading={false}
+        canManage={true}
+        usersMap={new Map()}
+        clientsById={new Map()}
+        onSelect={onSelect}
+        onUpdated={() => {}}
+        onDeleted={() => {}}
+        onEdit={() => {}}
+      />,
+    )
 
     // El texto del nombre tiene su propio onClick (edición inline); clicamos
     // en la celda del cliente, que no intercepta el click.
@@ -43,7 +62,19 @@ describe('AdsList — click en fila abre detalle', () => {
     const user = userEvent.setup()
     const onSelect = vi.fn()
     const onEdit = vi.fn()
-    render(<AdsList campaigns={[CAMPAIGN]} loading={false} canManage={true} usersMap={new Map()} clientsById={new Map()} onSelect={onSelect} onUpdated={() => {}} onDeleted={() => {}} onEdit={onEdit} />)
+    render(
+      <AdsList
+        campaigns={[CAMPAIGN]}
+        loading={false}
+        canManage={true}
+        usersMap={new Map()}
+        clientsById={new Map()}
+        onSelect={onSelect}
+        onUpdated={() => {}}
+        onDeleted={() => {}}
+        onEdit={onEdit}
+      />,
+    )
 
     await user.click(screen.getByTitle('Editar'))
     expect(onEdit).toHaveBeenCalledWith(CAMPAIGN)
@@ -53,7 +84,19 @@ describe('AdsList — click en fila abre detalle', () => {
   it('clic en el StatusPill (badge de estado) NO llama a onSelect', async () => {
     const user = userEvent.setup()
     const onSelect = vi.fn()
-    render(<AdsList campaigns={[CAMPAIGN]} loading={false} canManage={true} usersMap={new Map()} clientsById={new Map()} onSelect={onSelect} onUpdated={() => {}} onDeleted={() => {}} onEdit={() => {}} />)
+    render(
+      <AdsList
+        campaigns={[CAMPAIGN]}
+        loading={false}
+        canManage={true}
+        usersMap={new Map()}
+        clientsById={new Map()}
+        onSelect={onSelect}
+        onUpdated={() => {}}
+        onDeleted={() => {}}
+        onEdit={() => {}}
+      />,
+    )
 
     await user.click(screen.getByRole('button', { name: 'Pendiente' }))
     expect(onSelect).not.toHaveBeenCalled()
@@ -62,13 +105,34 @@ describe('AdsList — click en fila abre detalle', () => {
 
 describe('AdsList — export', () => {
   it('ya no muestra el botón de export CSV (movido a la tab Ads como Excel)', () => {
-    render(<AdsList campaigns={[CAMPAIGN]} loading={false} canManage={true} usersMap={new Map()} clientsById={new Map()} onSelect={() => {}} onUpdated={() => {}} onDeleted={() => {}} onEdit={() => {}} />)
+    render(
+      <AdsList
+        campaigns={[CAMPAIGN]}
+        loading={false}
+        canManage={true}
+        usersMap={new Map()}
+        clientsById={new Map()}
+        onSelect={() => {}}
+        onUpdated={() => {}}
+        onDeleted={() => {}}
+        onEdit={() => {}}
+      />,
+    )
     expect(screen.queryByRole('button', { name: /CSV/i })).not.toBeInTheDocument()
   })
 })
 
 describe('AdsList — texto "Táctica continua"', () => {
-  const baseProps = { loading: false, canManage: true, usersMap: new Map(), clientsById: new Map(), onSelect: () => {}, onUpdated: () => {}, onDeleted: () => {}, onEdit: () => {} }
+  const baseProps = {
+    loading: false,
+    canManage: true,
+    usersMap: new Map(),
+    clientsById: new Map(),
+    onSelect: () => {},
+    onUpdated: () => {},
+    onDeleted: () => {},
+    onEdit: () => {},
+  }
 
   it('NO se muestra cuando la táctica empezó en el período que se está viendo', () => {
     render(<AdsList campaigns={[CAMPAIGN]} periodo={{ month: 7, year: 2026 }} {...baseProps} />)
