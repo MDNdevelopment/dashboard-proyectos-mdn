@@ -2,63 +2,52 @@
  * Capa de acceso a datos para el módulo Métricas.
  * Todas las funciones hacen queries a Supabase y retornan { data, error }.
  */
-import { supabase } from "../../supabase";
-import { SEED_LINES, SEED_CLIENTES } from "./constants";
-import { lastNMonths } from "../../utils/metricsFinance";
+import { supabase } from '../../supabase'
+import { SEED_LINES, SEED_CLIENTES } from './constants'
+import { lastNMonths } from '../../utils/metricsFinance'
 
 // ─── Líneas ───────────────────────────────────────────────────────────────────
 
 export async function loadLines(companyId, { includeGeneral = false } = {}) {
   let query = supabase
-    .from("metric_lines")
-    .select("*, members:metric_line_members(user_id, is_lead)")
-    .eq("company_id", companyId);
-  if (!includeGeneral) query = query.eq("is_general", false);
-  const { data, error } = await query.order("sort_order");
+    .from('metric_lines')
+    .select('*, members:metric_line_members(user_id, is_lead)')
+    .eq('company_id', companyId)
+  if (!includeGeneral) query = query.eq('is_general', false)
+  const { data, error } = await query.order('sort_order')
   return {
-    data: (data ?? []).map(line => ({
+    data: (data ?? []).map((line) => ({
       ...line,
-      member_user_ids: (line.members ?? []).map(m => m.user_id),
-      lead_user_id: (line.members ?? []).find(m => m.is_lead)?.user_id ?? null,
+      member_user_ids: (line.members ?? []).map((m) => m.user_id),
+      lead_user_id: (line.members ?? []).find((m) => m.is_lead)?.user_id ?? null,
       members: undefined,
     })),
     error,
-  };
+  }
 }
 
 export async function createLine(companyId, { name, color, sort_order }) {
   return supabase
-    .from("metric_lines")
+    .from('metric_lines')
     .insert({ company_id: companyId, name, color, sort_order })
     .select()
-    .single();
+    .single()
 }
 
 export async function updateLine(lineId, updates) {
-  return supabase
-    .from("metric_lines")
-    .update(updates)
-    .eq("id", lineId)
-    .select()
-    .single();
+  return supabase.from('metric_lines').update(updates).eq('id', lineId).select().single()
 }
 
 export async function deleteLine(lineId) {
-  return supabase.from("metric_lines").delete().eq("id", lineId);
+  return supabase.from('metric_lines').delete().eq('id', lineId)
 }
 
 export async function addLineMember(lineId, userId) {
-  return supabase
-    .from("metric_line_members")
-    .insert({ line_id: lineId, user_id: userId });
+  return supabase.from('metric_line_members').insert({ line_id: lineId, user_id: userId })
 }
 
 export async function removeLineMember(lineId, userId) {
-  return supabase
-    .from("metric_line_members")
-    .delete()
-    .eq("line_id", lineId)
-    .eq("user_id", userId);
+  return supabase.from('metric_line_members').delete().eq('line_id', lineId).eq('user_id', userId)
 }
 
 /**
@@ -67,39 +56,36 @@ export async function removeLineMember(lineId, userId) {
  */
 export async function setLineLeader(lineId, userId) {
   const { error: clearErr } = await supabase
-    .from("metric_line_members")
+    .from('metric_line_members')
     .update({ is_lead: false })
-    .eq("line_id", lineId)
-    .neq("user_id", userId);
-  if (clearErr) return { error: clearErr };
+    .eq('line_id', lineId)
+    .neq('user_id', userId)
+  if (clearErr) return { error: clearErr }
   return supabase
-    .from("metric_line_members")
+    .from('metric_line_members')
     .update({ is_lead: true })
-    .eq("line_id", lineId)
-    .eq("user_id", userId)
+    .eq('line_id', lineId)
+    .eq('user_id', userId)
     .select()
-    .single();
+    .single()
 }
 
 /** Quita el liderazgo de una miembro sin asignárselo a nadie más. */
 export async function removeLineLeader(lineId, userId) {
   return supabase
-    .from("metric_line_members")
+    .from('metric_line_members')
     .update({ is_lead: false })
-    .eq("line_id", lineId)
-    .eq("user_id", userId);
+    .eq('line_id', lineId)
+    .eq('user_id', userId)
 }
 
 // ─── Clientes ─────────────────────────────────────────────────────────────────
 
 export async function loadClients(companyId, lineId = null, { includeArchived = false } = {}) {
-  let q = supabase
-    .from("metric_clients")
-    .select("*")
-    .eq("company_id", companyId);
-  if (lineId) q = q.eq("line_id", lineId);
-  if (!includeArchived) q = q.is("deleted_at", null);
-  return q.order("name");
+  let q = supabase.from('metric_clients').select('*').eq('company_id', companyId)
+  if (lineId) q = q.eq('line_id', lineId)
+  if (!includeArchived) q = q.is('deleted_at', null)
+  return q.order('name')
 }
 
 export async function createClient(companyId, fields) {
@@ -121,50 +107,63 @@ export async function createClient(companyId, fields) {
     apoyo_ids = [],
   } = fields
   return supabase
-    .from("metric_clients")
-    .insert({ company_id: companyId, name, line_id, website, payment_day, monthly_fee, campaign_budget, social_links, logo_url, contacts, anniversary_date, mdn_since, social_manager_id, designer_id, audiovisual_ids, apoyo_ids })
+    .from('metric_clients')
+    .insert({
+      company_id: companyId,
+      name,
+      line_id,
+      website,
+      payment_day,
+      monthly_fee,
+      campaign_budget,
+      social_links,
+      logo_url,
+      contacts,
+      anniversary_date,
+      mdn_since,
+      social_manager_id,
+      designer_id,
+      audiovisual_ids,
+      apoyo_ids,
+    })
     .select()
-    .single();
+    .single()
 }
 
 export async function updateClient(clientId, updates) {
-  return supabase
-    .from("metric_clients")
-    .update(updates)
-    .eq("id", clientId)
-    .select()
-    .single();
+  return supabase.from('metric_clients').update(updates).eq('id', clientId).select().single()
 }
 
 export async function loadCompanyUsers(companyId) {
   return supabase
-    .from("users")
-    .select("user_id, first_name, last_name, avatar_url, deleted_at")
-    .eq("company_id", companyId)
-    .order("first_name");
+    .from('users')
+    .select('user_id, first_name, last_name, avatar_url, deleted_at')
+    .eq('company_id', companyId)
+    .order('first_name')
 }
 
 /** Carga empleados con toda la información básica (cargo y departamento incluidos). */
 export async function loadCompanyEmployees(companyId) {
   return supabase
-    .from("users")
-    .select("*, department:departments(department_name), position:positions(position_name, position_description, position_functions)")
-    .eq("company_id", companyId)
-    .order("first_name");
+    .from('users')
+    .select(
+      '*, department:departments(department_name), position:positions(position_name, position_description, position_functions)',
+    )
+    .eq('company_id', companyId)
+    .order('first_name')
 }
 
-export async function deleteClient(clientId) {
+// incluyeMes = true  → el cliente cuenta en el reporte del mes de baja (facturó/trabajó parte del mes).
+// incluyeMes = false → se excluye también del mes en curso (ver utils/clientInMonth.js).
+export async function deleteClient(clientId, { incluyeMes = true } = {}) {
   return supabase
-    .from("metric_clients")
-    .update({ deleted_at: new Date().toISOString() })
-    .eq("id", clientId);
+    .from('metric_clients')
+    .update({ deleted_at: new Date().toISOString(), baja_incluye_mes: incluyeMes })
+    .eq('id', clientId)
 }
 
 export async function restoreClient(clientId) {
-  return supabase
-    .from("metric_clients")
-    .update({ deleted_at: null })
-    .eq("id", clientId);
+  return supabase.from('metric_clients').update({ deleted_at: null }).eq('id', clientId)
 }
 
 // Datos privados de contacto (teléfono, correo de Instagram). Viven en
@@ -172,47 +171,48 @@ export async function restoreClient(clientId) {
 // de nivel menor simplemente recibe 0 filas (no error).
 export async function loadClientPrivate(clientId) {
   return supabase
-    .from("metric_client_private")
-    .select("phone, instagram_email")
-    .eq("client_id", clientId)
-    .maybeSingle();
+    .from('metric_client_private')
+    .select('phone, instagram_email')
+    .eq('client_id', clientId)
+    .maybeSingle()
 }
 
 export async function upsertClientPrivate(clientId, { phone, instagram_email }) {
-  return supabase
-    .from("metric_client_private")
-    .upsert({
-      client_id: clientId,
-      phone: phone || null,
-      instagram_email: instagram_email || null,
-      updated_at: new Date().toISOString(),
-    });
+  return supabase.from('metric_client_private').upsert({
+    client_id: clientId,
+    phone: phone || null,
+    instagram_email: instagram_email || null,
+    updated_at: new Date().toISOString(),
+  })
 }
 
 // ─── Reportes ─────────────────────────────────────────────────────────────────
 
 export async function loadReport(lineId, year, month) {
   return supabase
-    .from("metric_reports")
-    .select("*")
-    .eq("line_id", lineId)
-    .eq("year", year)
-    .eq("month", month)
-    .maybeSingle();
+    .from('metric_reports')
+    .select('*')
+    .eq('line_id', lineId)
+    .eq('year', year)
+    .eq('month', month)
+    .maybeSingle()
 }
 
 export async function loadPrevReport(lineId, year, month) {
   // Busca el reporte del mes anterior (solo 1 mes atrás)
-  let m = month - 1;
-  let y = year;
-  if (m < 1) { m = 12; y--; }
+  let m = month - 1
+  let y = year
+  if (m < 1) {
+    m = 12
+    y--
+  }
   return supabase
-    .from("metric_reports")
-    .select("*")
-    .eq("line_id", lineId)
-    .eq("year", y)
-    .eq("month", m)
-    .maybeSingle();
+    .from('metric_reports')
+    .select('*')
+    .eq('line_id', lineId)
+    .eq('year', y)
+    .eq('month', m)
+    .maybeSingle()
 }
 
 /**
@@ -222,13 +222,13 @@ export async function loadPrevReport(lineId, year, month) {
  * caller (ver buildFinanceTrend en utils/metricsFinance.js).
  */
 export async function loadRecentReports(lineId, endYear, endMonth, n = 5) {
-  const months = lastNMonths(endYear, endMonth, n);
-  const years = [...new Set(months.map(m => m.year))];
+  const months = lastNMonths(endYear, endMonth, n)
+  const years = [...new Set(months.map((m) => m.year))]
   return supabase
-    .from("metric_reports")
-    .select("year, month, data")
-    .eq("line_id", lineId)
-    .in("year", years);
+    .from('metric_reports')
+    .select('year, month, data')
+    .eq('line_id', lineId)
+    .in('year', years)
 }
 
 /**
@@ -237,10 +237,10 @@ export async function loadRecentReports(lineId, endYear, endMonth, n = 5) {
  */
 export async function loadYearReports(companyId, year) {
   return supabase
-    .from("metric_reports")
-    .select("*, line:metric_lines!inner(id, name, color, sort_order)")
-    .eq("company_id", companyId)
-    .eq("year", year);
+    .from('metric_reports')
+    .select('*, line:metric_lines!inner(id, name, color, sort_order)')
+    .eq('company_id', companyId)
+    .eq('year', year)
 }
 
 /**
@@ -249,13 +249,20 @@ export async function loadYearReports(companyId, year) {
  */
 export async function upsertReport(companyId, lineId, year, month, data) {
   return supabase
-    .from("metric_reports")
+    .from('metric_reports')
     .upsert(
-      { company_id: companyId, line_id: lineId, year, month, data, updated_at: new Date().toISOString() },
-      { onConflict: "line_id,year,month" }
+      {
+        company_id: companyId,
+        line_id: lineId,
+        year,
+        month,
+        data,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'line_id,year,month' },
     )
     .select()
-    .single();
+    .single()
 }
 
 /**
@@ -267,13 +274,13 @@ export async function upsertReport(companyId, lineId, year, month, data) {
  */
 export async function closeReport(lineId, year, month, userId) {
   return supabase
-    .from("metric_reports")
+    .from('metric_reports')
     .update({ closed_at: new Date().toISOString(), closed_by: userId })
-    .eq("line_id", lineId)
-    .eq("year", year)
-    .eq("month", month)
+    .eq('line_id', lineId)
+    .eq('year', year)
+    .eq('month', month)
     .select()
-    .single();
+    .single()
 }
 
 /**
@@ -284,12 +291,12 @@ export async function closeReport(lineId, year, month, userId) {
 export async function updateEmployeeSalaries(rows) {
   for (const { user_id, monto } of rows) {
     const { error } = await supabase
-      .from("users")
+      .from('users')
       .update({ monthly_salary: monto })
-      .eq("user_id", user_id);
-    if (error) return { error };
+      .eq('user_id', user_id)
+    if (error) return { error }
   }
-  return { error: null };
+  return { error: null }
 }
 
 // ─── Seed ─────────────────────────────────────────────────────────────────────
@@ -300,42 +307,47 @@ export async function updateEmployeeSalaries(rows) {
  * @returns {Array|null} - Array de líneas creadas, o null si ya existían.
  */
 export async function seedMetricsIfEmpty(companyId) {
-  const { data: existing, error: checkErr } = await loadLines(companyId);
-  if (checkErr) return null;
-  if (existing && existing.length > 0) return null; // ya sembrado
+  const { data: existing, error: checkErr } = await loadLines(companyId)
+  if (checkErr) return null
+  if (existing && existing.length > 0) return null // ya sembrado
 
   // Insertar líneas
   const { data: lines, error: lineErr } = await supabase
-    .from("metric_lines")
+    .from('metric_lines')
     .insert(
-      SEED_LINES.map(l => ({ company_id: companyId, name: l.name, color: l.color, sort_order: l.sort_order }))
+      SEED_LINES.map((l) => ({
+        company_id: companyId,
+        name: l.name,
+        color: l.color,
+        sort_order: l.sort_order,
+      })),
     )
-    .select();
-  if (lineErr || !lines) return null;
+    .select()
+  if (lineErr || !lines) return null
 
   // Insertar clientes para cada línea
-  const allClients = [];
-  lines.forEach(line => {
-    const names = SEED_CLIENTES[line.name] ?? [];
-    names.forEach(name => {
-      allClients.push({ company_id: companyId, line_id: line.id, name });
-    });
-  });
+  const allClients = []
+  lines.forEach((line) => {
+    const names = SEED_CLIENTES[line.name] ?? []
+    names.forEach((name) => {
+      allClients.push({ company_id: companyId, line_id: line.id, name })
+    })
+  })
   if (allClients.length > 0) {
-    await supabase.from("metric_clients").insert(allClients);
+    await supabase.from('metric_clients').insert(allClients)
   }
 
   // Fila oculta "Independientes": agrupa tareas de empleados sin línea asignada.
   // Se excluye de Métricas/Ads/Home/Clientes vía el default includeGeneral=false.
-  await supabase.from("metric_lines").insert({
+  await supabase.from('metric_lines').insert({
     company_id: companyId,
-    name: "Independientes",
-    color: "#9CA3AF",
+    name: 'Independientes',
+    color: '#9CA3AF',
     sort_order: 9999,
     is_general: true,
-  });
+  })
 
-  return lines;
+  return lines
 }
 
 // ─── Import / Export ──────────────────────────────────────────────────────────
@@ -345,18 +357,18 @@ export async function seedMetricsIfEmpty(companyId) {
  */
 export async function exportMetrics(companyId) {
   const [linesRes, clientsRes, reportsRes] = await Promise.all([
-    supabase.from("metric_lines").select("*").eq("company_id", companyId).order("sort_order"),
-    supabase.from("metric_clients").select("*").eq("company_id", companyId),
-    supabase.from("metric_reports").select("*").eq("company_id", companyId),
-  ]);
-  if (linesRes.error || clientsRes.error || reportsRes.error) return null;
+    supabase.from('metric_lines').select('*').eq('company_id', companyId).order('sort_order'),
+    supabase.from('metric_clients').select('*').eq('company_id', companyId),
+    supabase.from('metric_reports').select('*').eq('company_id', companyId),
+  ])
+  if (linesRes.error || clientsRes.error || reportsRes.error) return null
   return {
     exportedAt: new Date().toISOString(),
     companyId,
     lines: linesRes.data,
     clients: clientsRes.data,
     reports: reportsRes.data,
-  };
+  }
 }
 
 /**
@@ -367,27 +379,30 @@ export async function exportMetrics(companyId) {
 export async function importMetrics(companyId, payload) {
   // Verificar formato mínimo
   if (!payload?.lines || !payload?.clients || !payload?.reports) {
-    return { error: "Formato de archivo inválido." };
+    return { error: 'Formato de archivo inválido.' }
   }
 
   // Upsert clientes
   if (payload.clients.length > 0) {
-    const { error: ce } = await supabase
-      .from("metric_clients")
-      .upsert(payload.clients.map(c => ({ ...c, company_id: companyId })), { onConflict: "id" });
-    if (ce) return { error: `Error importando clientes: ${ce.message}` };
+    const { error: ce } = await supabase.from('metric_clients').upsert(
+      payload.clients.map((c) => ({ ...c, company_id: companyId })),
+      { onConflict: 'id' },
+    )
+    if (ce) return { error: `Error importando clientes: ${ce.message}` }
   }
 
   // Upsert reportes
   if (payload.reports.length > 0) {
-    const { error: re } = await supabase
-      .from("metric_reports")
-      .upsert(
-        payload.reports.map(r => ({ ...r, company_id: companyId, updated_at: new Date().toISOString() })),
-        { onConflict: "line_id,year,month" }
-      );
-    if (re) return { error: `Error importando reportes: ${re.message}` };
+    const { error: re } = await supabase.from('metric_reports').upsert(
+      payload.reports.map((r) => ({
+        ...r,
+        company_id: companyId,
+        updated_at: new Date().toISOString(),
+      })),
+      { onConflict: 'line_id,year,month' },
+    )
+    if (re) return { error: `Error importando reportes: ${re.message}` }
   }
 
-  return { success: true };
+  return { success: true }
 }

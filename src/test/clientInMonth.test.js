@@ -51,4 +51,48 @@ describe('clientInMonth', () => {
     expect(clientInMonth(c, 2026, 4)).toBe(false)
     expect(clientInMonth(c, 2026, 5)).toBe(true)
   })
+
+  describe('baja_incluye_mes', () => {
+    it('default (bandera ausente) conserva el mes de baja — igual que legacy', () => {
+      const c = make({ created_at: '2026-01-01T00:00:00Z', deleted_at: '2026-03-15T10:00:00Z' })
+      expect(clientInMonth(c, 2026, 3)).toBe(true)
+    })
+
+    it('true explícito conserva el mes de baja', () => {
+      const c = make({
+        created_at: '2026-01-01T00:00:00Z',
+        deleted_at: '2026-03-15T10:00:00Z',
+        baja_incluye_mes: true,
+      })
+      expect(clientInMonth(c, 2026, 3)).toBe(true)
+    })
+
+    it('false: baja a mitad de mes NO aparece en el mes de baja', () => {
+      const c = make({
+        created_at: '2026-01-01T00:00:00Z',
+        deleted_at: '2026-03-15T10:00:00Z',
+        baja_incluye_mes: false,
+      })
+      expect(clientInMonth(c, 2026, 3)).toBe(false)
+    })
+
+    it('false: sigue apareciendo en meses ANTERIORES a la baja (histórico intacto)', () => {
+      const c = make({
+        created_at: '2026-01-01T00:00:00Z',
+        deleted_at: '2026-03-15T10:00:00Z',
+        baja_incluye_mes: false,
+      })
+      expect(clientInMonth(c, 2026, 2)).toBe(true)
+      expect(clientInMonth(c, 2026, 1)).toBe(true)
+    })
+
+    it('false: no aparece en meses posteriores a la baja', () => {
+      const c = make({
+        created_at: '2026-01-01T00:00:00Z',
+        deleted_at: '2026-03-15T10:00:00Z',
+        baja_incluye_mes: false,
+      })
+      expect(clientInMonth(c, 2026, 4)).toBe(false)
+    })
+  })
 })
