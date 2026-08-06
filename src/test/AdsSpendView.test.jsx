@@ -9,15 +9,53 @@ import { vi } from 'vitest'
 
 const { MOCK_CLIENTS } = vi.hoisted(() => ({
   MOCK_CLIENTS: [
-    { id: 'c-1', name: 'Banco Exterior', campaign_budget: 100, logo_url: 'https://cdn.example.com/banco.png' },
+    {
+      id: 'c-1',
+      name: 'Banco Exterior',
+      campaign_budget: 100,
+      logo_url: 'https://cdn.example.com/banco.png',
+    },
     { id: 'c-2', name: 'Pepsi', campaign_budget: null, logo_url: null },
   ],
 }))
 
 const MOCK_ADS = [
-  { id: 'ad-1', client_id: 'c-1', client: 'Banco Exterior', name: 'Ad Julio', objective: 'Alcance', piece_url: null, amount: 80, start_date: '2026-07-05', end_date: '2026-07-15', status: 'En Curso' },
-  { id: 'ad-2', client_id: 'c-1', client: 'Banco Exterior', name: 'Ad Junio', objective: 'Tráfico', piece_url: null, amount: 50, start_date: '2026-06-01', end_date: '2026-06-10', status: 'Finalizado' },
-  { id: 'ad-3', client_id: 'c-2', client: 'Pepsi', name: 'Ad Pepsi', objective: 'Conversiones', piece_url: null, amount: 30, start_date: '2026-07-02', end_date: '2026-07-04', status: 'Pendiente' },
+  {
+    id: 'ad-1',
+    client_id: 'c-1',
+    client: 'Banco Exterior',
+    name: 'Ad Julio',
+    objective: 'Alcance',
+    piece_url: null,
+    amount: 80,
+    start_date: '2026-07-05',
+    end_date: '2026-07-15',
+    status: 'En Curso',
+  },
+  {
+    id: 'ad-2',
+    client_id: 'c-1',
+    client: 'Banco Exterior',
+    name: 'Ad Junio',
+    objective: 'Tráfico',
+    piece_url: null,
+    amount: 50,
+    start_date: '2026-06-01',
+    end_date: '2026-06-10',
+    status: 'Finalizado',
+  },
+  {
+    id: 'ad-3',
+    client_id: 'c-2',
+    client: 'Pepsi',
+    name: 'Ad Pepsi',
+    objective: 'Conversiones',
+    piece_url: null,
+    amount: 30,
+    start_date: '2026-07-02',
+    end_date: '2026-07-04',
+    status: 'Pendiente',
+  },
 ]
 
 const mockLoadAds = vi.fn()
@@ -78,21 +116,27 @@ describe('AdsSpendView', () => {
 
   it('muestra solo los ads cuyo inicio de plazo cae en el periodo seleccionado', async () => {
     renderView({ month: 7, year: 2026 })
-    await waitFor(() => { expect(screen.getByText('Ad Julio')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Ad Julio')).toBeInTheDocument()
+    })
     expect(screen.getByText('Ad Pepsi')).toBeInTheDocument()
     expect(screen.queryByText('Ad Junio')).not.toBeInTheDocument()
   })
 
   it('cambiar de periodo actualiza los ads visibles', async () => {
     renderView({ month: 6, year: 2026 })
-    await waitFor(() => { expect(screen.getByText('Ad Junio')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Ad Junio')).toBeInTheDocument()
+    })
     expect(screen.queryByText('Ad Julio')).not.toBeInTheDocument()
   })
 
   it('filtrar por cliente reduce la tabla a sus ads', async () => {
     const user = userEvent.setup()
     renderView({ month: 7, year: 2026 })
-    await waitFor(() => { expect(screen.getByText('Ad Julio')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Ad Julio')).toBeInTheDocument()
+    })
 
     await user.selectOptions(screen.getByDisplayValue('Todos los clientes'), 'c-1')
     expect(screen.getByText('Ad Julio')).toBeInTheDocument()
@@ -102,7 +146,9 @@ describe('AdsSpendView', () => {
   it('muestra el tracking de invertido vs. presupuesto al seleccionar un cliente', async () => {
     const user = userEvent.setup()
     renderView({ month: 7, year: 2026 })
-    await waitFor(() => { expect(screen.getByText('Ad Julio')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Ad Julio')).toBeInTheDocument()
+    })
 
     await user.selectOptions(screen.getByDisplayValue('Todos los clientes'), 'c-1')
 
@@ -119,12 +165,25 @@ describe('AdsSpendView', () => {
     mockLoadAds.mockResolvedValue({
       data: [
         ...MOCK_ADS,
-        { id: 'ad-4', client_id: 'c-1', client: 'Banco Exterior', name: 'Ad Extra', objective: '', piece_url: null, amount: 40, start_date: '2026-07-20', end_date: '2026-07-25', status: 'Pendiente' },
+        {
+          id: 'ad-4',
+          client_id: 'c-1',
+          client: 'Banco Exterior',
+          name: 'Ad Extra',
+          objective: '',
+          piece_url: null,
+          amount: 40,
+          start_date: '2026-07-20',
+          end_date: '2026-07-25',
+          status: 'Pendiente',
+        },
       ],
       error: null,
     })
     renderView({ month: 7, year: 2026 })
-    await waitFor(() => { expect(screen.getByText('Ad Julio')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Ad Julio')).toBeInTheDocument()
+    })
 
     await user.selectOptions(screen.getByDisplayValue('Todos los clientes'), 'c-1')
 
@@ -135,7 +194,9 @@ describe('AdsSpendView', () => {
 
   it('muestra las cards de resumen (Total Ads, Invertido, En Curso, Completados, Avance Global) del periodo', async () => {
     renderView({ month: 7, year: 2026 })
-    await waitFor(() => { expect(screen.getByText('Ad Julio')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Ad Julio')).toBeInTheDocument()
+    })
 
     // Periodo julio 2026: Ad Julio (80, En Curso) + Ad Pepsi (30, Pendiente) = 2 ads, $110 invertidos
     // (el "2" de esta card convive con el índice de fila "2" en la tabla, por eso
@@ -153,31 +214,41 @@ describe('AdsSpendView', () => {
     it('clic en "Total Ads" resetea los filtros de búsqueda/estado/cliente', async () => {
       const user = userEvent.setup()
       renderView({ month: 7, year: 2026 })
-      await waitFor(() => { expect(screen.getByText('Ad Julio')).toBeInTheDocument() })
+      await waitFor(() => {
+        expect(screen.getByText('Ad Julio')).toBeInTheDocument()
+      })
 
       await user.type(screen.getByPlaceholderText('Buscar ad, cliente, objetivo...'), 'Pepsi')
       expect(screen.queryByText('Ad Julio')).not.toBeInTheDocument()
 
       await user.click(screen.getByText('Total Ads'))
-      await waitFor(() => { expect(screen.getByText('Ad Julio')).toBeInTheDocument() })
+      await waitFor(() => {
+        expect(screen.getByText('Ad Julio')).toBeInTheDocument()
+      })
     })
 
     it('clic en "Invertido" abre el modal de presupuestos por cliente', async () => {
       const user = userEvent.setup()
       renderView({ month: 7, year: 2026 })
-      await waitFor(() => { expect(screen.getByText('Ad Julio')).toBeInTheDocument() })
+      await waitFor(() => {
+        expect(screen.getByText('Ad Julio')).toBeInTheDocument()
+      })
 
       await user.click(screen.getByText('Invertido'))
 
       await waitFor(() => {
-        expect(screen.getByRole('heading', { name: 'Presupuestos por cliente' })).toBeInTheDocument()
+        expect(
+          screen.getByRole('heading', { name: 'Presupuestos por cliente' }),
+        ).toBeInTheDocument()
       })
     })
 
     it('clic en "En Curso" filtra la tabla a ads En Curso', async () => {
       const user = userEvent.setup()
       renderView({ month: 7, year: 2026 })
-      await waitFor(() => { expect(screen.getByText('Ad Julio')).toBeInTheDocument() })
+      await waitFor(() => {
+        expect(screen.getByText('Ad Julio')).toBeInTheDocument()
+      })
 
       await user.click(screen.getByText('En Curso', { selector: 'p' }))
       expect(screen.getByText('Ad Julio')).toBeInTheDocument()
@@ -187,7 +258,9 @@ describe('AdsSpendView', () => {
     it('clic en "Completados" filtra la tabla a ads Finalizado', async () => {
       const user = userEvent.setup()
       renderView({ month: 6, year: 2026 })
-      await waitFor(() => { expect(screen.getByText('Ad Junio')).toBeInTheDocument() })
+      await waitFor(() => {
+        expect(screen.getByText('Ad Junio')).toBeInTheDocument()
+      })
 
       await user.click(screen.getByText('Completados', { selector: 'p' }))
       expect(screen.getByText('Ad Junio')).toBeInTheDocument()
@@ -197,7 +270,9 @@ describe('AdsSpendView', () => {
   it('el buscador filtra por nombre, cliente u objetivo', async () => {
     const user = userEvent.setup()
     renderView({ month: 7, year: 2026 })
-    await waitFor(() => { expect(screen.getByText('Ad Julio')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Ad Julio')).toBeInTheDocument()
+    })
 
     await user.type(screen.getByPlaceholderText('Buscar ad, cliente, objetivo...'), 'Pepsi')
     expect(screen.getByText('Ad Pepsi')).toBeInTheDocument()
@@ -207,7 +282,9 @@ describe('AdsSpendView', () => {
   it('el filtro de estado reduce la tabla a ads con ese estado', async () => {
     const user = userEvent.setup()
     renderView({ month: 7, year: 2026 })
-    await waitFor(() => { expect(screen.getByText('Ad Julio')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Ad Julio')).toBeInTheDocument()
+    })
 
     await user.selectOptions(screen.getByDisplayValue('Todos los estados'), 'Pendiente')
     expect(screen.getByText('Ad Pepsi')).toBeInTheDocument()
@@ -217,20 +294,26 @@ describe('AdsSpendView', () => {
   it('"Limpiar" resetea búsqueda, estado y cliente', async () => {
     const user = userEvent.setup()
     renderView({ month: 7, year: 2026 })
-    await waitFor(() => { expect(screen.getByText('Ad Julio')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Ad Julio')).toBeInTheDocument()
+    })
 
     await user.type(screen.getByPlaceholderText('Buscar ad, cliente, objetivo...'), 'Pepsi')
     expect(screen.queryByText('Ad Julio')).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Limpiar' }))
-    await waitFor(() => { expect(screen.getByText('Ad Julio')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Ad Julio')).toBeInTheDocument()
+    })
   })
 
   describe('click en fila abre el detalle', () => {
     it('clic en una fila abre AdsSpendDetail con los datos del ad', async () => {
       const user = userEvent.setup()
       renderView({ month: 7, year: 2026 })
-      await waitFor(() => { expect(screen.getByText('Ad Julio')).toBeInTheDocument() })
+      await waitFor(() => {
+        expect(screen.getByText('Ad Julio')).toBeInTheDocument()
+      })
 
       await user.click(screen.getByText('Ad Julio'))
 
@@ -243,7 +326,9 @@ describe('AdsSpendView', () => {
     it('clic en "Editar" (acciones de fila) NO abre el detalle, abre el form de edición', async () => {
       const user = userEvent.setup()
       renderView({ month: 7, year: 2026 })
-      await waitFor(() => { expect(screen.getByText('Ad Julio')).toBeInTheDocument() })
+      await waitFor(() => {
+        expect(screen.getByText('Ad Julio')).toBeInTheDocument()
+      })
 
       const editButtons = screen.getAllByRole('button', { name: 'Editar' })
       await user.click(editButtons[0])
@@ -255,7 +340,9 @@ describe('AdsSpendView', () => {
     it('clic en "Eliminar" (acciones de fila) abre la confirmación de borrado, no el detalle', async () => {
       const user = userEvent.setup()
       renderView({ month: 7, year: 2026 })
-      await waitFor(() => { expect(screen.getByText('Ad Julio')).toBeInTheDocument() })
+      await waitFor(() => {
+        expect(screen.getByText('Ad Julio')).toBeInTheDocument()
+      })
 
       const deleteButtons = screen.getAllByRole('button', { name: 'Eliminar' })
       await user.click(deleteButtons[0])
@@ -267,21 +354,25 @@ describe('AdsSpendView', () => {
   it('el botón "Excel" exporta solo los ads visibles (filtrados) del periodo', async () => {
     const user = userEvent.setup()
     renderView({ month: 7, year: 2026 })
-    await waitFor(() => { expect(screen.getByText('Ad Julio')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Ad Julio')).toBeInTheDocument()
+    })
 
     await user.selectOptions(screen.getByDisplayValue('Todos los clientes'), 'c-1')
     await user.click(screen.getByRole('button', { name: /Excel/i }))
 
     expect(mockExportAdsToExcel).toHaveBeenCalledTimes(1)
     const arg = mockExportAdsToExcel.mock.calls[0][0]
-    expect(arg.ads.map(a => a.id)).toEqual(['ad-1'])
+    expect(arg.ads.map((a) => a.id)).toEqual(['ad-1'])
     expect(arg.periodo).toEqual({ month: 7, year: 2026 })
   })
 
   it('el botón "Presupuestos por cliente" abre el modal de resumen por cliente', async () => {
     const user = userEvent.setup()
     renderView({ month: 7, year: 2026 })
-    await waitFor(() => { expect(screen.getByText('Ad Julio')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Ad Julio')).toBeInTheDocument()
+    })
 
     await user.click(screen.getByRole('button', { name: 'Presupuestos por cliente' }))
 
@@ -293,21 +384,37 @@ describe('AdsSpendView', () => {
   describe('paridad visual con la tabla de Tácticas', () => {
     it('el orden de columnas coincide con el especificado (Cliente, Nombre, Responsable, Inicio, Fecha fin, Duración, Objetivo, Pieza, Monto, Estado)', async () => {
       renderView({ month: 7, year: 2026 })
-      await waitFor(() => { expect(screen.getByText('Ad Julio')).toBeInTheDocument() })
+      await waitFor(() => {
+        expect(screen.getByText('Ad Julio')).toBeInTheDocument()
+      })
 
-      const headers = screen.getAllByRole('columnheader').map(th => th.textContent)
+      const headers = screen.getAllByRole('columnheader').map((th) => th.textContent)
       expect(headers).toEqual([
-        'Cliente', 'Nombre de campaña', 'Responsable', 'Inicio',
-        'Fecha fin', 'Duración', 'Objetivo', 'Pieza', 'Monto', 'Estado', '',
+        'Cliente',
+        'Nombre de campaña',
+        'Responsable',
+        'Inicio',
+        'Fecha fin',
+        'Duración',
+        'Objetivo',
+        'Pieza',
+        'Monto',
+        'Estado',
+        '',
       ])
     })
 
     it('muestra el logo del cliente cuando existe, e inicial cuando no', async () => {
       renderView({ month: 7, year: 2026 })
-      await waitFor(() => { expect(screen.getByText('Ad Julio')).toBeInTheDocument() })
+      await waitFor(() => {
+        expect(screen.getByText('Ad Julio')).toBeInTheDocument()
+      })
 
       // Ad Julio → cliente Banco Exterior, con logo_url
-      expect(screen.getByRole('img', { name: 'Banco Exterior' })).toHaveAttribute('src', 'https://cdn.example.com/banco.png')
+      expect(screen.getByRole('img', { name: 'Banco Exterior' })).toHaveAttribute(
+        'src',
+        'https://cdn.example.com/banco.png',
+      )
       // Ad Pepsi → cliente Pepsi, sin logo_url → inicial "P"
       expect(screen.getByText('P')).toBeInTheDocument()
     })
@@ -323,13 +430,17 @@ describe('AdsSpendView', () => {
       })
       renderView({ month: 7, year: 2026 })
 
-      await waitFor(() => { expect(screen.getByText('Katherine Mora')).toBeInTheDocument() })
+      await waitFor(() => {
+        expect(screen.getByText('Katherine Mora')).toBeInTheDocument()
+      })
     })
 
     it('el estado es editable desde la tabla: elegir un estado que no sea Finalizado llama a updateAd directo', async () => {
       const user = userEvent.setup()
       renderView({ month: 7, year: 2026 })
-      await waitFor(() => { expect(screen.getByText('Ad Julio')).toBeInTheDocument() })
+      await waitFor(() => {
+        expect(screen.getByText('Ad Julio')).toBeInTheDocument()
+      })
 
       await user.click(screen.getByRole('button', { name: 'En Curso' }))
       await user.click(screen.getByRole('button', { name: 'Descartado' }))
@@ -342,7 +453,9 @@ describe('AdsSpendView', () => {
     it('elegir "Finalizado" desde el pill de la fila abre el modal de resultados y NO llama a updateAd', async () => {
       const user = userEvent.setup()
       renderView({ month: 7, year: 2026 })
-      await waitFor(() => { expect(screen.getByText('Ad Julio')).toBeInTheDocument() })
+      await waitFor(() => {
+        expect(screen.getByText('Ad Julio')).toBeInTheDocument()
+      })
 
       await user.click(screen.getByRole('button', { name: 'En Curso' }))
       await user.click(screen.getByRole('button', { name: 'Finalizado' }))
@@ -358,11 +471,15 @@ describe('AdsSpendView', () => {
         error: null,
       })
       renderView({ month: 7, year: 2026 })
-      await waitFor(() => { expect(screen.getByText('Ad Julio')).toBeInTheDocument() })
+      await waitFor(() => {
+        expect(screen.getByText('Ad Julio')).toBeInTheDocument()
+      })
 
       await user.click(screen.getByRole('button', { name: 'En Curso' }))
       await user.click(screen.getByRole('button', { name: 'Finalizado' }))
-      await waitFor(() => { expect(screen.getByRole('heading', { name: 'Resultados del ad' })).toBeInTheDocument() })
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { name: 'Resultados del ad' })).toBeInTheDocument()
+      })
 
       // Solo se eligen 2 de los 6 indicadores disponibles — el resto se guarda en null.
       await user.click(screen.getByRole('checkbox', { name: 'Incluir Alcance' }))
@@ -374,6 +491,7 @@ describe('AdsSpendView', () => {
       await waitFor(() => {
         expect(mockUpdateAd).toHaveBeenCalledWith('ad-1', {
           status: 'Finalizado',
+          results_pending: false,
           reach: 1000,
           interactions: 200,
           followers: null,
@@ -388,10 +506,14 @@ describe('AdsSpendView', () => {
     it('elegir "Finalizado" desde el pill del detalle también abre el modal de resultados', async () => {
       const user = userEvent.setup()
       renderView({ month: 7, year: 2026 })
-      await waitFor(() => { expect(screen.getByText('Ad Julio')).toBeInTheDocument() })
+      await waitFor(() => {
+        expect(screen.getByText('Ad Julio')).toBeInTheDocument()
+      })
 
       await user.click(screen.getByText('Ad Julio'))
-      await waitFor(() => { expect(screen.getByRole('heading', { name: 'Ad Julio' })).toBeInTheDocument() })
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { name: 'Ad Julio' })).toBeInTheDocument()
+      })
 
       // Dos pills "En Curso" en pantalla (fila de tabla + header del detalle): el del
       // detalle es el último en el orden del DOM (se renderiza después de la tabla).

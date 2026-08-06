@@ -9,6 +9,14 @@
 // - `version` debe ser semver comparable. `date` es informativo (string libre, opcional).
 export const CHANGELOG = [
   {
+    version: '1.2.0',
+    title: 'Cierre automático de campañas',
+    changes: [
+      'Las campañas y los ads pasan solos a "Finalizado" cuando termina su fecha de cierre. Se avisa al responsable y a los Marketing Managers, y en los ads queda un aviso para cargar los resultados.',
+      'La campanita de notificaciones ahora tiene un botón "Cargar más" para ver el historial completo, no solo las más recientes.',
+    ],
+  },
+  {
     version: '1.1.0',
     date: '2026-08-05',
     title: 'Reportes por línea',

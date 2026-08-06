@@ -2,8 +2,15 @@ import { useState, useEffect, useCallback, useMemo, forwardRef, useImperativeHan
 import { supabase } from '../../supabase'
 import { loadClients } from '../metricas/metricsApi'
 import {
-  loadAds, deleteAd, updateAd, inPeriod, durationDays, spentByClientInPeriod,
-  loadAdsResponsables, fmtDate, dateColor,
+  loadAds,
+  deleteAd,
+  updateAd,
+  inPeriod,
+  durationDays,
+  spentByClientInPeriod,
+  loadAdsResponsables,
+  fmtDate,
+  dateColor,
 } from './campaignSpendApi'
 import { fmtUSD } from '../../utils/metricsFinance'
 import { STATUS, STATUSES } from './constants'
@@ -55,7 +62,9 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
     setLoading(false)
   }, [companyId])
 
-  useEffect(() => { fetchAll() }, [fetchAll])
+  useEffect(() => {
+    fetchAll()
+  }, [fetchAll])
 
   useEffect(() => {
     if (!companyId) return
@@ -63,16 +72,18 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
       .channel('paid-campaigns-view')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'paid_campaigns' }, fetchAll)
       .subscribe()
-    return () => { supabase.removeChannel(channel) }
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [companyId, fetchAll])
 
   function handleSaved(row) {
-    setAds(prev => {
-      const exists = prev.some(a => a.id === row.id)
-      const next = exists ? prev.map(a => (a.id === row.id ? row : a)) : [row, ...prev]
+    setAds((prev) => {
+      const exists = prev.some((a) => a.id === row.id)
+      const next = exists ? prev.map((a) => (a.id === row.id ? row : a)) : [row, ...prev]
       return next.sort((a, b) => (a.start_date < b.start_date ? 1 : -1))
     })
-    setDetail(prev => (prev?.id === row.id ? row : prev))
+    setDetail((prev) => (prev?.id === row.id ? row : prev))
   }
 
   async function handleAdStatusChange(id, next) {
@@ -106,22 +117,22 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
     const { error } = await deleteAd(confirmDelete.id)
     setDeleting(false)
     if (!error) {
-      setAds(prev => prev.filter(a => a.id !== confirmDelete.id))
+      setAds((prev) => prev.filter((a) => a.id !== confirmDelete.id))
       setConfirmDelete(null)
     }
   }
 
   // Mapas de resolución — mismo patrón que clientsById/usersMap en AdsPage.jsx.
-  const clientsById = useMemo(() => new Map(clients.map(c => [c.id, c])), [clients])
+  const clientsById = useMemo(() => new Map(clients.map((c) => [c.id, c])), [clients])
   const responsablesById = useMemo(
-    () => new Map(responsables.map(r => [r.user_id, `${r.first_name} ${r.last_name}`])),
-    [responsables]
+    () => new Map(responsables.map((r) => [r.user_id, `${r.first_name} ${r.last_name}`])),
+    [responsables],
   )
 
   // Ads del periodo — pool base para las cards de resumen (igual que Tácticas).
-  const periodAds = ads.filter(a => inPeriod(a.start_date, periodo))
+  const periodAds = ads.filter((a) => inPeriod(a.start_date, periodo))
 
-  const filtered = periodAds.filter(a => {
+  const filtered = periodAds.filter((a) => {
     if (clientFilter !== 'all' && a.client_id !== clientFilter) return false
     if (statusFilter !== 'all' && a.status !== statusFilter) return false
     if (search) {
@@ -132,13 +143,16 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
         !a.client?.toLowerCase().includes(q) &&
         !a.objective?.toLowerCase().includes(q) &&
         !responsableName.toLowerCase().includes(q)
-      ) return false
+      )
+        return false
     }
     return true
   })
 
   function clearFilters() {
-    setSearch(''); setStatusFilter('all'); setClientFilter('all')
+    setSearch('')
+    setStatusFilter('all')
+    setClientFilter('all')
   }
 
   async function handleExportExcel() {
@@ -155,11 +169,10 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
   }))
 
   // Tracking: invertido vs. presupuesto para el cliente seleccionado en el periodo actual.
-  const trackingClient = clientFilter !== 'all' ? clients.find(c => c.id === clientFilter) : null
-  const spent = trackingClient
-    ? spentByClientInPeriod(ads, trackingClient.id, periodo)
-    : null
-  const budget = trackingClient?.campaign_budget != null ? Number(trackingClient.campaign_budget) : null
+  const trackingClient = clientFilter !== 'all' ? clients.find((c) => c.id === clientFilter) : null
+  const spent = trackingClient ? spentByClientInPeriod(ads, trackingClient.id, periodo) : null
+  const budget =
+    trackingClient?.campaign_budget != null ? Number(trackingClient.campaign_budget) : null
   const overBudget = budget != null && spent != null && spent > budget
 
   if (loading) {
@@ -184,27 +197,33 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
         <input
           type="text"
           value={search}
-          onChange={e => setSearch(e.target.value)}
+          onChange={(e) => setSearch(e.target.value)}
           placeholder="Buscar ad, cliente, objetivo..."
           className="input-base text-[14px] py-1.5 flex-1 min-w-[160px] sm:min-w-[200px]"
         />
         <div className="flex gap-2">
           <select
             value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
+            onChange={(e) => setStatusFilter(e.target.value)}
             className="input-base text-[14px] py-1.5"
           >
             <option value="all">Todos los estados</option>
-            {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
           </select>
           <select
             value={clientFilter}
-            onChange={e => setClientFilter(e.target.value)}
+            onChange={(e) => setClientFilter(e.target.value)}
             className="input-base text-[14px] py-1.5"
           >
             <option value="all">Todos los clientes</option>
-            {clients.map(c => (
-              <option key={c.id} value={c.id}>{c.name}</option>
+            {clients.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
             ))}
           </select>
         </div>
@@ -224,9 +243,16 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
           {generatingExcel ? (
             <span className="w-3 h-3 border-2 border-[#999] border-t-transparent rounded-full animate-spin" />
           ) : (
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d="M8 1v9M5 7l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M2 12v2h12v-2" strokeLinecap="round"/>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+            >
+              <path d="M8 1v9M5 7l3 3 3-3" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M2 12v2h12v-2" strokeLinecap="round" />
             </svg>
           )}
           {generatingExcel ? 'Generando…' : 'Excel'}
@@ -257,7 +283,9 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
             Invertido en {trackingClient.name} este periodo
           </p>
           <div className="flex items-baseline gap-2">
-            <span className={`text-[24px] font-bold ${overBudget ? 'text-red-600' : 'text-[#111]'}`}>
+            <span
+              className={`text-[24px] font-bold ${overBudget ? 'text-red-600' : 'text-[#111]'}`}
+            >
               {fmtUSD(spent)}
             </span>
             {budget != null && (
@@ -284,7 +312,9 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
       {filtered.length === 0 ? (
         <div className="text-center py-16">
           <p className="text-[16px] font-medium text-[#888]">
-            {periodAds.length === 0 ? 'No hay ads en este periodo' : 'Sin resultados para los filtros aplicados'}
+            {periodAds.length === 0
+              ? 'No hay ads en este periodo'
+              : 'Sin resultados para los filtros aplicados'}
           </p>
         </div>
       ) : (
@@ -292,8 +322,23 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-[#ece9df] bg-[#fafaf7]">
-                {['Cliente', 'Nombre de campaña', 'Responsable', 'Inicio', 'Fecha fin', 'Duración', 'Objetivo', 'Pieza', 'Monto', 'Estado', ''].map(h => (
-                  <th key={h} className="px-3 py-2.5 text-[12px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] whitespace-nowrap">
+                {[
+                  'Cliente',
+                  'Nombre de campaña',
+                  'Responsable',
+                  'Inicio',
+                  'Fecha fin',
+                  'Duración',
+                  'Objetivo',
+                  'Pieza',
+                  'Monto',
+                  'Estado',
+                  '',
+                ].map((h) => (
+                  <th
+                    key={h}
+                    className="px-3 py-2.5 text-[12px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] whitespace-nowrap"
+                  >
                     {h}
                   </th>
                 ))}
@@ -309,14 +354,23 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
                     className="border-b border-[#f0ede3] last:border-0 hover:bg-[#fafaf7] transition-colors group cursor-pointer"
                   >
                     <td className="px-3 py-2.5 text-[14px] text-[#444] whitespace-nowrap">
-                      <ClientCell name={a.client} logoUrl={a.client_id ? clientsById.get(a.client_id)?.logo_url : null} />
+                      <ClientCell
+                        name={a.client}
+                        logoUrl={a.client_id ? clientsById.get(a.client_id)?.logo_url : null}
+                      />
                     </td>
-                    <td className="px-3 py-2.5 max-w-[180px] text-[15px] font-semibold text-[#111] leading-snug">{a.name}</td>
+                    <td className="px-3 py-2.5 max-w-[180px] text-[15px] font-semibold text-[#111] leading-snug">
+                      {a.name}
+                    </td>
                     <td className="px-3 py-2.5 text-[14px] text-[#555] whitespace-nowrap">
                       {responsablesById.get(a.responsable_id) ?? '—'}
                     </td>
-                    <td className="px-3 py-2.5 text-[14px] text-[#555] whitespace-nowrap">{fmtDate(a.start_date)}</td>
-                    <td className={`px-3 py-2.5 text-[14px] whitespace-nowrap ${dateColor(a.end_date)}`}>
+                    <td className="px-3 py-2.5 text-[14px] text-[#555] whitespace-nowrap">
+                      {fmtDate(a.start_date)}
+                    </td>
+                    <td
+                      className={`px-3 py-2.5 text-[14px] whitespace-nowrap ${dateColor(a.end_date)}`}
+                    >
                       {fmtDate(a.end_date)}
                     </td>
                     <td className="px-3 py-2.5 text-[14px] text-[#666] whitespace-nowrap">
@@ -334,27 +388,58 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
                         >
                           Ver pieza
                         </a>
-                      ) : '—'}
+                      ) : (
+                        '—'
+                      )}
                     </td>
-                    <td className="px-3 py-2.5 text-[14px] font-semibold text-[#111] whitespace-nowrap">{fmtUSD(a.amount)}</td>
+                    <td className="px-3 py-2.5 text-[14px] font-semibold text-[#111] whitespace-nowrap">
+                      {fmtUSD(a.amount)}
+                    </td>
                     <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                      <StatusPill
-                        value={a.status}
-                        meta={STATUS}
-                        options={STATUSES}
-                        editable={canManage}
-                        onChange={(next) => requestStatusChange(a, next)}
-                        size="sm"
-                      />
+                      <div className="flex flex-col items-start gap-1">
+                        <StatusPill
+                          value={a.status}
+                          meta={STATUS}
+                          options={STATUSES}
+                          editable={canManage}
+                          onChange={(next) => requestStatusChange(a, next)}
+                          size="sm"
+                        />
+                        {a.results_pending && (
+                          <button
+                            type="button"
+                            disabled={!canManage}
+                            onClick={() => canManage && setResultsFor(a)}
+                            title={
+                              canManage
+                                ? 'Cargar los resultados de este ad'
+                                : 'Faltan resultados por cargar'
+                            }
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[#fff3e0] text-[#8a4a0a] text-[11px] font-semibold whitespace-nowrap enabled:hover:bg-[#ffe6c7] transition-colors disabled:cursor-default"
+                          >
+                            ⚠ Faltan resultados
+                          </button>
+                        )}
+                      </div>
                     </td>
                     <td className="px-3 py-2.5">
                       <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
-                          onClick={(e) => { e.stopPropagation(); setDetail(a) }}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setDetail(a)
+                          }}
                           className="p-1.5 rounded-lg text-[#999] hover:text-[#111] hover:bg-[#f0ede3] transition-all"
                           title="Ver detalle"
                         >
-                          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
+                          <svg
+                            width="13"
+                            height="13"
+                            viewBox="0 0 16 16"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                          >
                             <circle cx="8" cy="8" r="6.5" />
                             <circle cx="8" cy="8" r="2.5" fill="currentColor" stroke="none" />
                           </svg>
@@ -362,21 +447,49 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
                         {canManage && (
                           <>
                             <button
-                              onClick={(e) => { e.stopPropagation(); setModal(a) }}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setModal(a)
+                              }}
                               className="p-1.5 rounded-lg text-[#999] hover:text-[#111] hover:bg-[#f0ede3] transition-all"
                               title="Editar"
                             >
-                              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
-                                <path d="M11 2l3 3-8 8H3v-3l8-8z" strokeLinecap="round" strokeLinejoin="round" />
+                              <svg
+                                width="13"
+                                height="13"
+                                viewBox="0 0 16 16"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                              >
+                                <path
+                                  d="M11 2l3 3-8 8H3v-3l8-8z"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
                               </svg>
                             </button>
                             <button
-                              onClick={(e) => { e.stopPropagation(); setConfirmDelete(a) }}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setConfirmDelete(a)
+                              }}
                               className="p-1.5 rounded-lg text-[#999] hover:text-red-600 hover:bg-red-50 transition-all"
                               title="Eliminar"
                             >
-                              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
-                                <path d="M3 4h10M6 4V2.5h4V4M5 4v8.5h6V4" strokeLinecap="round" strokeLinejoin="round" />
+                              <svg
+                                width="13"
+                                height="13"
+                                viewBox="0 0 16 16"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                              >
+                                <path
+                                  d="M3 4h10M6 4V2.5h4V4M5 4v8.5h6V4"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
                               </svg>
                             </button>
                           </>
@@ -406,7 +519,7 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
         <AdsSpendDetail
           ad={detail}
           ads={ads}
-          client={clients.find(c => c.id === detail.client_id)}
+          client={clients.find((c) => c.id === detail.client_id)}
           responsables={responsables}
           canManage={canManage}
           onClose={() => setDetail(null)}
@@ -420,7 +533,10 @@ const AdsSpendView = forwardRef(function AdsSpendView({ companyId, canManage, pe
         <AdsResultsModal
           ad={resultsFor}
           onClose={() => setResultsFor(null)}
-          onSaved={(row) => { handleSaved(row); setResultsFor(null) }}
+          onSaved={(row) => {
+            handleSaved(row)
+            setResultsFor(null)
+          }}
         />
       )}
 

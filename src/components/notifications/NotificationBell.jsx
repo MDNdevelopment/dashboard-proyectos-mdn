@@ -5,7 +5,7 @@ import { supabase } from '../../supabase'
 import { useAuth } from '../../context/AuthContext'
 import { notifIcon, notifLabel, notifRoute, notifTimeAgo } from '../../utils/notificationFormat'
 
-const LIMIT = 40
+const PAGE_SIZE = 40
 
 // Each mounted instance gets a unique sequence number so two simultaneous bells
 // (desktop Sidebar + mobile AppLayout top bar) never share a Supabase channel topic.
@@ -26,16 +26,24 @@ export default function NotificationBell() {
   const [notifs, setNotifs] = useState([])
   const [open, setOpen] = useState(false)
   const [markingAll, setMarkingAll] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const buttonRef = useRef(null)
   const panelRef = useRef(null)
 
   const userId = userProfile?.user_id ?? null
 
+  // Nº de páginas ya traídas del servidor. El offset de "Cargar más" se calcula
+  // desde aquí (pagesLoaded * PAGE_SIZE) y NO desde notifs.length: así una inserción
+  // en tiempo real que se antepone a la lista no desplaza el cursor de paginado
+  // (a lo sumo re-trae una fila ya vista, que se deduplica por id — nunca la salta).
+  const pagesLoadedRef = useRef(1)
+
   // Stable per-instance id; assigned once on first render, never changes.
   const instanceIdRef = useRef(null)
   if (instanceIdRef.current === null) instanceIdRef.current = ++bellInstanceSeq
 
-  // ── Load notifications ──────────────────────────────────────────────────────
+  // ── Load notifications (primera página) ─────────────────────────────────────
   const loadNotifs = useCallback(async () => {
     if (!userId) return
     const { data } = await supabase
@@ -43,11 +51,36 @@ export default function NotificationBell() {
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
-      .limit(LIMIT)
+      .range(0, PAGE_SIZE - 1)
     setNotifs(data ?? [])
+    pagesLoadedRef.current = 1
+    setHasMore((data?.length ?? 0) === PAGE_SIZE)
   }, [userId])
 
-  useEffect(() => { loadNotifs() }, [loadNotifs])
+  useEffect(() => {
+    loadNotifs()
+  }, [loadNotifs])
+
+  // ── Cargar más (páginas anteriores) ─────────────────────────────────────────
+  const loadMore = useCallback(async () => {
+    if (!userId || loadingMore) return
+    setLoadingMore(true)
+    const from = pagesLoadedRef.current * PAGE_SIZE
+    const { data } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .range(from, from + PAGE_SIZE - 1)
+    const page = data ?? []
+    setNotifs((prev) => {
+      const seen = new Set(prev.map((n) => n.id))
+      return [...prev, ...page.filter((n) => !seen.has(n.id))]
+    })
+    pagesLoadedRef.current += 1
+    setHasMore(page.length === PAGE_SIZE)
+    setLoadingMore(false)
+  }, [userId, loadingMore])
 
   // ── Realtime subscription ───────────────────────────────────────────────────
   useEffect(() => {
@@ -63,12 +96,12 @@ export default function NotificationBell() {
           filter: `user_id=eq.${userId}`,
         },
         (payload) => {
-          setNotifs(prev =>
-            prev.some(n => n.id === payload.new.id)
-              ? prev
-              : [payload.new, ...prev].slice(0, LIMIT)
+          // No se recorta la lista: si el usuario ya cargó páginas anteriores con
+          // "Cargar más", truncar a PAGE_SIZE le borraría el historial que abrió.
+          setNotifs((prev) =>
+            prev.some((n) => n.id === payload.new.id) ? prev : [payload.new, ...prev],
           )
-        }
+        },
       )
       .on(
         'postgres_changes',
@@ -79,11 +112,13 @@ export default function NotificationBell() {
           filter: `user_id=eq.${userId}`,
         },
         (payload) => {
-          setNotifs(prev => prev.map(n => n.id === payload.new.id ? payload.new : n))
-        }
+          setNotifs((prev) => prev.map((n) => (n.id === payload.new.id ? payload.new : n)))
+        },
       )
       .subscribe()
-    return () => { supabase.removeChannel(channel) }
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [userId])
 
   // ── Close panel on outside click ────────────────────────────────────────────
@@ -91,8 +126,10 @@ export default function NotificationBell() {
     if (!open) return
     function handleClick(e) {
       if (
-        panelRef.current && !panelRef.current.contains(e.target) &&
-        buttonRef.current && !buttonRef.current.contains(e.target)
+        panelRef.current &&
+        !panelRef.current.contains(e.target) &&
+        buttonRef.current &&
+        !buttonRef.current.contains(e.target)
       ) {
         setOpen(false)
       }
@@ -104,15 +141,15 @@ export default function NotificationBell() {
   // ── Actions ─────────────────────────────────────────────────────────────────
   async function markRead(notif) {
     if (notif.read) return
-    setNotifs(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n))
+    setNotifs((prev) => prev.map((n) => (n.id === notif.id ? { ...n, read: true } : n)))
     await supabase.from('notifications').update({ read: true }).eq('id', notif.id)
   }
 
   async function markAllRead() {
-    const unread = notifs.filter(n => !n.read)
+    const unread = notifs.filter((n) => !n.read)
     if (unread.length === 0) return
     setMarkingAll(true)
-    setNotifs(prev => prev.map(n => ({ ...n, read: true })))
+    setNotifs((prev) => prev.map((n) => ({ ...n, read: true })))
     await supabase
       .from('notifications')
       .update({ read: true })
@@ -128,7 +165,7 @@ export default function NotificationBell() {
   }
 
   // ── Derived state ────────────────────────────────────────────────────────────
-  const unreadCount = notifs.filter(n => !n.read).length
+  const unreadCount = notifs.filter((n) => !n.read).length
 
   if (!userId) return null
 
@@ -158,14 +195,25 @@ export default function NotificationBell() {
       <button
         ref={buttonRef}
         type="button"
-        onClick={() => setOpen(o => !o)}
+        onClick={() => setOpen((o) => !o)}
         aria-label={unreadCount > 0 ? `${unreadCount} notificaciones sin leer` : 'Notificaciones'}
         className="relative flex items-center justify-center w-7 h-7 rounded-lg text-[#999] hover:text-[#111] hover:bg-[#f0ede3] transition-colors flex-shrink-0"
       >
         {/* Bell SVG */}
-        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
-          <path d="M8 1.5a4.5 4.5 0 0 1 4.5 4.5c0 2.5.8 3.5 1.5 4.5H2c.7-1 1.5-2 1.5-4.5A4.5 4.5 0 0 1 8 1.5Z" strokeLinecap="round" strokeLinejoin="round"/>
-          <path d="M6.5 13a1.5 1.5 0 0 0 3 0" strokeLinecap="round"/>
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+        >
+          <path
+            d="M8 1.5a4.5 4.5 0 0 1 4.5 4.5c0 2.5.8 3.5 1.5 4.5H2c.7-1 1.5-2 1.5-4.5A4.5 4.5 0 0 1 8 1.5Z"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path d="M6.5 13a1.5 1.5 0 0 0 3 0" strokeLinecap="round" />
         </svg>
 
         {/* Unread badge */}
@@ -177,82 +225,99 @@ export default function NotificationBell() {
       </button>
 
       {/* Panel — rendered via portal so it escapes any overflow:hidden containers */}
-      {open && createPortal(
-        <div
-          ref={panelRef}
-          style={{ ...getPanelStyle(), position: 'fixed', zIndex: 9999, width: 340 }}
-          className="bg-white border border-[#e0ddd4] rounded-2xl shadow-2xl overflow-hidden"
-        >
-          {/* Panel header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-[#ece9df]">
-            <span className="text-[15px] font-bold text-[#111]">
-              Notificaciones
-              {unreadCount > 0 && (
-                <span className="ml-2 text-[12px] font-mono font-bold bg-[#FFB800] text-[#111] px-1.5 py-0.5 rounded-md">
-                  {unreadCount}
-                </span>
-              )}
-            </span>
-            {unreadCount > 0 && (
-              <button
-                type="button"
-                onClick={markAllRead}
-                disabled={markingAll}
-                className="text-[13px] text-[#888] hover:text-[#111] font-medium transition-colors disabled:opacity-40"
-              >
-                Marcar todas
-              </button>
-            )}
-          </div>
-
-          {/* Notification list */}
-          <div className="overflow-y-auto max-h-[400px]">
-            {notifs.length === 0 ? (
-              <div className="py-10 text-center">
-                <p className="text-[15px] font-semibold text-[#bbb]">Sin notificaciones</p>
-                <p className="text-[13px] text-[#ccc] mt-1">Aquí aparecerán tus alertas.</p>
-              </div>
-            ) : (
-              notifs.map(notif => (
-                <button
-                  key={notif.id}
-                  type="button"
-                  onClick={() => handleClick(notif)}
-                  className={`w-full flex items-start gap-3 px-4 py-3 text-left border-b border-[#f5f3eb] last:border-b-0 transition-colors ${
-                    notif.read
-                      ? 'hover:bg-[#fafaf7]'
-                      : 'bg-[#fffbee] hover:bg-[#fff6d6]'
-                  }`}
-                >
-                  {/* Icon */}
-                  <span className="text-[20px] flex-shrink-0 mt-0.5 leading-none" role="img" aria-label="">
-                    {notifIcon(notif.type)}
+      {open &&
+        createPortal(
+          <div
+            ref={panelRef}
+            style={{ ...getPanelStyle(), position: 'fixed', zIndex: 9999, width: 340 }}
+            className="bg-white border border-[#e0ddd4] rounded-2xl shadow-2xl overflow-hidden"
+          >
+            {/* Panel header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[#ece9df]">
+              <span className="text-[15px] font-bold text-[#111]">
+                Notificaciones
+                {unreadCount > 0 && (
+                  <span className="ml-2 text-[12px] font-mono font-bold bg-[#FFB800] text-[#111] px-1.5 py-0.5 rounded-md">
+                    {unreadCount}
                   </span>
-
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className={`text-[14px] leading-snug ${notif.read ? 'text-[#555]' : 'text-[#111] font-semibold'}`}>
-                        {notif.title}
-                      </p>
-                      {!notif.read && (
-                        <span className="w-2 h-2 rounded-full bg-[#FFB800] flex-shrink-0 mt-1" />
-                      )}
-                    </div>
-                    <p className="text-[13px] text-[#888] mt-0.5 leading-snug line-clamp-2">
-                      {notif.body}
-                    </p>
-                    <p className="text-[11px] font-mono text-[#bbb] mt-1">
-                      {notifLabel(notif.type)} · {notifTimeAgo(notif.created_at)}
-                    </p>
-                  </div>
+                )}
+              </span>
+              {unreadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={markAllRead}
+                  disabled={markingAll}
+                  className="text-[13px] text-[#888] hover:text-[#111] font-medium transition-colors disabled:opacity-40"
+                >
+                  Marcar todas
                 </button>
-              ))
-            )}
-          </div>
-        </div>,
-        document.body
-      )}
+              )}
+            </div>
+
+            {/* Notification list */}
+            <div className="overflow-y-auto max-h-[400px]">
+              {notifs.length === 0 ? (
+                <div className="py-10 text-center">
+                  <p className="text-[15px] font-semibold text-[#bbb]">Sin notificaciones</p>
+                  <p className="text-[13px] text-[#ccc] mt-1">Aquí aparecerán tus alertas.</p>
+                </div>
+              ) : (
+                <>
+                  {notifs.map((notif) => (
+                    <button
+                      key={notif.id}
+                      type="button"
+                      onClick={() => handleClick(notif)}
+                      className={`w-full flex items-start gap-3 px-4 py-3 text-left border-b border-[#f5f3eb] last:border-b-0 transition-colors ${
+                        notif.read ? 'hover:bg-[#fafaf7]' : 'bg-[#fffbee] hover:bg-[#fff6d6]'
+                      }`}
+                    >
+                      {/* Icon */}
+                      <span
+                        className="text-[20px] flex-shrink-0 mt-0.5 leading-none"
+                        role="img"
+                        aria-label=""
+                      >
+                        {notifIcon(notif.type)}
+                      </span>
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <p
+                            className={`text-[14px] leading-snug ${notif.read ? 'text-[#555]' : 'text-[#111] font-semibold'}`}
+                          >
+                            {notif.title}
+                          </p>
+                          {!notif.read && (
+                            <span className="w-2 h-2 rounded-full bg-[#FFB800] flex-shrink-0 mt-1" />
+                          )}
+                        </div>
+                        <p className="text-[13px] text-[#888] mt-0.5 leading-snug line-clamp-2">
+                          {notif.body}
+                        </p>
+                        <p className="text-[11px] font-mono text-[#bbb] mt-1">
+                          {notifLabel(notif.type)} · {notifTimeAgo(notif.created_at)}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                  {hasMore && (
+                    <button
+                      type="button"
+                      onClick={loadMore}
+                      disabled={loadingMore}
+                      className="w-full py-3 text-[13px] font-semibold text-[#888] hover:text-[#111] hover:bg-[#fafaf7] transition-colors disabled:opacity-40"
+                    >
+                      {loadingMore ? 'Cargando…' : 'Cargar más'}
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          </div>,
+          document.body,
+        )}
     </>
   )
 }
