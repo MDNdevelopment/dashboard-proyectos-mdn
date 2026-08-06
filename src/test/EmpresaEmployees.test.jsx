@@ -49,6 +49,7 @@ const MOCK_USERS = [
     company_id: 'co-1',
     access_level: 1,
     admin: false,
+    on_probation: true,
     avatar_url: null,
     phone_number: null,
     birth_date: null,
@@ -632,5 +633,34 @@ describe('EmployeesView', () => {
       // Los otros 3 empleados sí tienen su icono de eliminar
       expect(screen.getAllByRole('button', { name: /^Eliminar / })).toHaveLength(3)
     })
+  })
+})
+
+describe('EmployeesView — período de prueba', () => {
+  it('muestra el chip "Prueba", el contador y el botón de filtro', async () => {
+    renderAsAdmin()
+    await waitFor(() => {
+      expect(screen.getByText('Luisa Ramírez')).toBeInTheDocument()
+    })
+    // Chip en la tarjeta del empleado en prueba (u9 Luisa)
+    expect(screen.getByText('Prueba')).toBeInTheDocument()
+    // Contador junto al total
+    expect(screen.getByText(/1 en prueba/)).toBeInTheDocument()
+    // Botón de filtro
+    expect(screen.getByRole('button', { name: /Solo en prueba \(1\)/ })).toBeInTheDocument()
+  })
+
+  it('el filtro "Solo en prueba" deja solo a los empleados en prueba', async () => {
+    const user = userEvent.setup()
+    renderAsAdmin()
+    await waitFor(() => {
+      expect(screen.getByText('Luisa Ramírez')).toBeInTheDocument()
+    })
+    expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /Solo en prueba/ }))
+
+    expect(screen.getByText('Luisa Ramírez')).toBeInTheDocument()
+    expect(screen.queryByText('Ana Pérez')).not.toBeInTheDocument()
   })
 })

@@ -27,7 +27,12 @@ const MOCK_DEPARTMENTS = [
   { department_id: 'd2', department_name: 'Tecnología', company_id: 'co-1' },
 ]
 const MOCK_POSITIONS = [
-  { position_id: 'p1', position_name: 'Diseñador Gráfico', department_id: 'd1', company_id: 'co-1' },
+  {
+    position_id: 'p1',
+    position_name: 'Diseñador Gráfico',
+    department_id: 'd1',
+    company_id: 'co-1',
+  },
   { position_id: 'p2', position_name: 'Desarrollador', department_id: 'd2', company_id: 'co-1' },
 ]
 
@@ -62,10 +67,13 @@ function renderDialog(overrides = {}) {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 describe('NewEmployeeDialog', () => {
   beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => NEW_EMPLOYEE_ROW,
-    }))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => NEW_EMPLOYEE_ROW,
+      }),
+    )
   })
 
   afterEach(() => {
@@ -176,7 +184,7 @@ describe('NewEmployeeDialog', () => {
             Authorization: 'Bearer test-token-123',
             'Content-Type': 'application/json',
           }),
-        })
+        }),
       )
     })
 
@@ -196,7 +204,9 @@ describe('NewEmployeeDialog', () => {
 
     await user.click(screen.getByRole('button', { name: 'Crear empleado' }))
 
-    await waitFor(() => { expect(fetch).toHaveBeenCalled() })
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalled()
+    })
 
     const callArgs = fetch.mock.calls[0][1]
     const body = JSON.parse(callArgs.body)
@@ -206,14 +216,19 @@ describe('NewEmployeeDialog', () => {
     expect(body.department_id).toBe('d1')
     expect(body.access_level).toBe(1)
     expect(body.admin).toBe(false)
+    // Los nuevos empleados entran "en prueba" por defecto
+    expect(body.on_probation).toBe(true)
   })
 
   // ── Error del servidor ───────────────────────────────────────────────────────
   it('muestra el mensaje de error del servidor y NO llama onClose', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: false,
-      json: async () => ({ error: 'El email ya está en uso' }),
-    }))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        json: async () => ({ error: 'El email ya está en uso' }),
+      }),
+    )
 
     const user = userEvent.setup()
     const { props } = renderDialog()
