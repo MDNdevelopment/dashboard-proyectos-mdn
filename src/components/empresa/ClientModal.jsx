@@ -5,6 +5,7 @@ import {
   loadClientPrivate,
   upsertClientPrivate,
   cleanupClientAfterContractEnd,
+  cancelPendingLineMove,
 } from '../metricas/metricsApi'
 import { SOCIAL_NETWORKS, MONTHS } from '../metricas/constants'
 import AvatarUpload from './AvatarUpload'
@@ -76,6 +77,21 @@ export default function ClientModal({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [showMover, setShowMover] = useState(false)
+  // Cambio de línea diferido pendiente (se aplica el 1° del próximo mes vía cron).
+  const [pendingMove, setPendingMove] = useState(() =>
+    client?.pending_line_id ? { lineId: client.pending_line_id, at: client.line_change_at } : null,
+  )
+
+  async function handleCancelPending() {
+    if (!client?.id) return
+    const { error: err } = await cancelPendingLineMove(client.id)
+    if (err) {
+      setError(err.message)
+      return
+    }
+    setPendingMove(null)
+    onSaved({ ...client, pending_line_id: null, line_change_at: null })
+  }
 
   // Cliente existente que YA pertenece a una línea: cambiar de línea es un "movimiento"
   // con implicaciones de dinero (prorrateo) y de reportes, no una simple edición de campo.
@@ -353,7 +369,7 @@ export default function ClientModal({
                 <div className="input-base flex-1 flex items-center text-[#333]">
                   {lines.find((l) => l.id === form.line_id)?.name ?? 'Sin línea'}
                 </div>
-                {!readOnly && privileged && (
+                {!readOnly && privileged && !pendingMove && (
                   <button
                     type="button"
                     onClick={() => setShowMover(true)}
@@ -363,7 +379,28 @@ export default function ClientModal({
                   </button>
                 )}
               </div>
-            ) : (
+            ) : null}
+            {hasLine && pendingMove && (
+              <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-[#FFB80055] bg-[#FFB80014] px-3 py-2">
+                <span className="text-[13px] text-[#7a5b00]">
+                  Programado: pasa a{' '}
+                  <span className="font-semibold">
+                    {lines.find((l) => l.id === pendingMove.lineId)?.name ?? 'otra línea'}
+                  </span>{' '}
+                  el {pendingMove.at}
+                </span>
+                {!readOnly && privileged && (
+                  <button
+                    type="button"
+                    onClick={handleCancelPending}
+                    className="flex-shrink-0 text-[12.5px] font-semibold text-[#b45309] hover:underline"
+                  >
+                    Cancelar
+                  </button>
+                )}
+              </div>
+            )}
+            {!hasLine && (
               <select
                 className="input-base"
                 value={form.line_id}
@@ -862,6 +899,7 @@ export default function ClientModal({
         <MoverClienteModal
           client={client}
           lines={lines}
+          employees={employees}
           companyId={companyId}
           onClose={() => setShowMover(false)}
           onMoved={(updated) => {

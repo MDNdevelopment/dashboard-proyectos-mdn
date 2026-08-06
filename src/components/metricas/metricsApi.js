@@ -7,6 +7,7 @@ import { SEED_LINES, SEED_CLIENTES } from './constants'
 import { lastNMonths } from '../../utils/metricsFinance'
 import { moveClientLine } from '../../utils/moveClientLine'
 import { stripClientFromReport, reportHasClient } from '../../utils/stripClientFromReport'
+import { firstOfNextMonthISO } from '../../utils/prorateMonthlyFee'
 
 // ─── Líneas ───────────────────────────────────────────────────────────────────
 
@@ -335,6 +336,7 @@ export async function moveClientToLine({
   oldAmount,
   newAmount,
   userId,
+  taskAssigneeId = null,
 }) {
   const fromLineId = client.line_id ?? null
   if (!toLineId || toLineId === fromLineId) {
@@ -371,14 +373,28 @@ export async function moveClientToLine({
   const { error: e2 } = await upsertReport(companyId, toLineId, year, month, newReportData)
   if (e2) return { error: e2 }
 
-  // 3. Cambiar la línea del cliente (limpiando staff que ya no aplica).
+  // 3. Cambiar la línea del cliente (limpiando staff que ya no aplica y cualquier
+  //    cambio diferido pendiente, ya que este movimiento es inmediato).
   const { data: updated, error: e3 } = await updateClient(client.id, {
     line_id: toLineId,
     social_manager_id: null,
     designer_id: null,
     audiovisual_ids: [],
+    pending_line_id: null,
+    line_change_at: null,
+    pending_task_assignee: null,
   })
   if (e3) return { error: e3 }
+
+  // 3b. Mover las tareas ABIERTAS de la marca a la línea nueva. El responsable pasa a ser el
+  //     jefe de la línea destino, o el responsable elegido a mano (taskAssigneeId) si la línea
+  //     no tiene jefe (p.ej. "Independientes"). SECURITY DEFINER (migración 20260806050000).
+  const { error: eTasks } = await supabase.rpc('reassign_client_open_tasks', {
+    p_client_id: client.id,
+    p_to_line_id: toLineId,
+    p_assignee: taskAssigneeId || null,
+  })
+  if (eTasks) return { error: eTasks }
 
   // 4. Auditoría (best-effort: no revierte el movimiento si falla).
   await supabase.from('metric_client_line_moves').insert({
@@ -393,6 +409,66 @@ export async function moveClientToLine({
   })
 
   return { data: updated, error: null }
+}
+
+/**
+ * Programa un cambio de línea DIFERIDO: la cuenta se queda completa en su línea actual
+ * hasta fin de mes y pasa a `toLineId` el 1° del próximo mes (aplicado por el cron
+ * `apply_due_client_line_moves`, migración 20260806030000). No cambia `line_id` ni toca
+ * reportes ahora. Usado cuando al mover se elige "este mes cuenta para la línea vieja".
+ *
+ * @param {object} p
+ * @param {string} p.companyId
+ * @param {object} p.client   - fila del cliente (id, name, line_id).
+ * @param {string} p.toLineId - línea destino.
+ * @param {string} [p.userId]
+ * @returns {{ data, error }}
+ */
+export async function scheduleClientLineMove({
+  companyId,
+  client,
+  toLineId,
+  userId,
+  taskAssigneeId = null,
+}) {
+  const fromLineId = client.line_id ?? null
+  if (!toLineId || toLineId === fromLineId) {
+    return { error: new Error('Selecciona una línea destino distinta a la actual.') }
+  }
+  const effective = firstOfNextMonthISO()
+
+  const { data: updated, error } = await updateClient(client.id, {
+    pending_line_id: toLineId,
+    line_change_at: effective,
+    pending_task_assignee: taskAssigneeId || null,
+  })
+  if (error) return { error }
+
+  // Auditoría (best-effort): el efectivo es el 1° del próximo mes; sin prorrateo.
+  await supabase.from('metric_client_line_moves').insert({
+    company_id: companyId,
+    client_id: client.id,
+    from_line_id: fromLineId,
+    to_line_id: toLineId,
+    effective_date: effective,
+    split_old: null,
+    split_new: null,
+    created_by: userId ?? null,
+  })
+
+  return { data: updated, error: null }
+}
+
+/**
+ * Cancela un cambio de línea diferido pendiente (limpia pending_line_id / line_change_at).
+ * @returns {{ data, error }}
+ */
+export async function cancelPendingLineMove(clientId) {
+  return updateClient(clientId, {
+    pending_line_id: null,
+    line_change_at: null,
+    pending_task_assignee: null,
+  })
 }
 
 /**

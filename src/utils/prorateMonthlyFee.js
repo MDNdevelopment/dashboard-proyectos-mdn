@@ -18,6 +18,22 @@ export function daysInMonth(year, month) {
   return new Date(Date.UTC(year, month, 0)).getUTCDate()
 }
 
+/**
+ * Primer día del mes SIGUIENTE al de `today`, como ISO 'YYYY-MM-01'.
+ * Se usa para programar un cambio de línea diferido (efectivo el próximo mes).
+ * @param {Date} [today] - default: hoy (inyectable para tests).
+ */
+export function firstOfNextMonthISO(today = new Date()) {
+  let y = today.getFullYear()
+  let m = today.getMonth() + 1 // 1-12
+  m += 1
+  if (m > 12) {
+    m = 1
+    y += 1
+  }
+  return `${y}-${String(m).padStart(2, '0')}-01`
+}
+
 function round2(n) {
   return Math.round((Number(n) + Number.EPSILON) * 100) / 100
 }

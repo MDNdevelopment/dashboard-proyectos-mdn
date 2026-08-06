@@ -1,5 +1,15 @@
 import { describe, it, expect } from 'vitest'
-import { prorateMonthlyFee, daysInMonth } from '../utils/prorateMonthlyFee'
+import { prorateMonthlyFee, daysInMonth, firstOfNextMonthISO } from '../utils/prorateMonthlyFee'
+
+describe('firstOfNextMonthISO', () => {
+  it('mes normal → 1° del mes siguiente', () => {
+    expect(firstOfNextMonthISO(new Date(2026, 7, 20))).toBe('2026-09-01') // agosto → septiembre
+    expect(firstOfNextMonthISO(new Date(2026, 0, 1))).toBe('2026-02-01')
+  })
+  it('diciembre → enero del año siguiente', () => {
+    expect(firstOfNextMonthISO(new Date(2026, 11, 15))).toBe('2027-01-01')
+  })
+})
 
 describe('daysInMonth', () => {
   it('meses de 31, 30 y 28/29 días', () => {
