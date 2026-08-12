@@ -51,6 +51,9 @@ export default function OperacionesView({ line, companyId, year, month, closed =
   const [cliModal, setCliModal] = useState(null) // null=cerrado, objeto=cliente abierto
   const [heldClientIds, setHeldClientIds] = useState([]) // clientes con reunión realizada en el período
   const [reunionesModal, setReunionesModal] = useState(false)
+  // Roster de marcas para la sección de Reuniones (picker + meta). En meses congelados
+  // se deriva del propio reporte guardado, igual que crecimiento/pautas — ver `load()`.
+  const [reunionesClients, setReunionesClients] = useState([])
 
   // Snapshot del reporte tal como vino del servidor (o quedó tras un save).
   // Se usa para detectar cambios sin guardar y mostrar aviso al recargar/cerrar.
@@ -131,30 +134,45 @@ export default function OperacionesView({ line, companyId, year, month, closed =
       (year === REUNIONES_MODULE_START.year && month >= REUNIONES_MODULE_START.month)
     const shouldAutoSync = isReunionesEra && !closed
 
+    let synced
     if (reportRes.data) {
       // Mes congelado (pasado o cerrado): se muestra tal cual se guardó, sin reconciliar
       // contra el roster actual (evita borrar/agregar clientes o empleados retroactivamente).
       // Mes editable: sincronizar items con los clientes/empleados activos EN ESE MES.
-      const synced = frozen
+      synced = frozen
         ? structuredClone(reportRes.data.data)
         : syncReportClients(reportRes.data.data, activeLineClients, lineEmployees)
-      // "Realizadas" ya no es editable — siempre refleja el conteo automático (clientes
-      // distintos con reunión realizada en el mes), a diferencia del resto de indicadores
-      // que quedan congelados al guardar. Excepto en meses previos al módulo Reuniones o
-      // en reportes cerrados, donde se conserva el valor histórico guardado.
-      if (shouldAutoSync) synced.reuniones.realizadas = meetingsCount
-      synced.reuniones.justificativos = pruneJustificativos(synced.reuniones)
-      setReport(synced)
-      baselineRef.current = synced
     } else {
       // Inicializar con carry-forward y metas de la línea
       const lineMetas = line?.metas ?? {}
       const fresh = initMetricReport(prevRes.data?.data ?? null, activeLineClients, lineMetas)
-      const synced = frozen ? fresh : syncReportClients(fresh, activeLineClients, lineEmployees)
-      if (shouldAutoSync) synced.reuniones.realizadas = meetingsCount
-      synced.reuniones.justificativos = pruneJustificativos(synced.reuniones)
-      setReport(synced)
-      baselineRef.current = synced
+      synced = frozen ? fresh : syncReportClients(fresh, activeLineClients, lineEmployees)
+    }
+    // "Realizadas" ya no es editable — siempre refleja el conteo automático (clientes
+    // distintos con reunión realizada en el mes), a diferencia del resto de indicadores
+    // que quedan congelados al guardar. Excepto en meses previos al módulo Reuniones o
+    // en reportes cerrados, donde se conserva el valor histórico guardado.
+    if (shouldAutoSync) synced.reuniones.realizadas = meetingsCount
+    synced.reuniones.justificativos = pruneJustificativos(synced.reuniones)
+    setReport(synced)
+    baselineRef.current = synced
+
+    // Roster de marcas para Reuniones (picker + meta máxima). Debe respetar el mismo
+    // congelamiento que crecimiento/pautas/finanzas: en meses pasados no se recalcula contra
+    // la asignación de línea ACTUAL (una cuenta movida después de ese mes no debe aparecer
+    // como "marca de la línea" en un reporte anterior a la mudanza). En un mes congelado se
+    // deriva de los clienteId que efectivamente quedaron en el reporte guardado (crecimiento),
+    // resolviendo cada uno a su objeto cliente vía el roster de la línea o el mapa company-wide
+    // (por si ya no pertenece a esta línea). En un mes editable se usa el roster activo normal.
+    if (frozen) {
+      const companyMap = new Map((companyClientsRes.data ?? []).map((c) => [c.id, c]))
+      const lineMap = new Map(allLineClients.map((c) => [c.id, c]))
+      const rosterIds = [...new Set((synced.crecimiento?.items ?? []).map((i) => i.clienteId))]
+      setReunionesClients(
+        rosterIds.map((id) => lineMap.get(id) ?? companyMap.get(id)).filter(Boolean),
+      )
+    } else {
+      setReunionesClients(activeLineClients)
     }
     setLoading(false)
   }, [line?.id, line?.member_user_ids, companyId, year, month, closed])
@@ -230,8 +248,9 @@ export default function OperacionesView({ line, companyId, year, month, closed =
   if (!report) return null
 
   // Tope de la meta de reuniones: no puede superar la cantidad de marcas activas de la
-  // línea (cada marca aporta como máximo 1 reunión al conteo — ver countMeetingsHeldForLine).
-  const activeClients = clients.filter((c) => !c.deleted_at)
+  // línea EN ESE MES (cada marca aporta como máximo 1 reunión al conteo — ver
+  // countMeetingsHeldForLine). Ver `reunionesClients` en `load()` para el congelamiento.
+  const activeClients = reunionesClients
   const maxMeta = activeClients.length
 
   // ── Helpers de actualización ──────────────────────────────────────────────

@@ -23,6 +23,7 @@ export const CHANGELOG = [
       'Nueva opción "Mover de línea" para las marcas: al cambiar una cuenta de equipo, los reportes de meses anteriores conservan el nombre y el logo de la marca (ya no aparece como "cliente eliminado"). Al mover eliges si este mes ya cuenta para el equipo nuevo (el ingreso del mes se reparte entre ambos según los días y las métricas pasan al nuevo) o si este mes se queda completo con el equipo actual y el cambio se aplica solo el 1° del próximo mes. Además, las tareas abiertas de la marca pasan al equipo nuevo y quedan a cargo del jefe de ese equipo. También puedes mover una marca a "Independientes"; como no tiene jefe, ahí eliges tú a quién quedan asignadas las tareas.',
       'Ahora las marcas tienen "Fin de contrato" en su ficha: indicas hasta qué fecha trabajó la cuenta y, desde el mes siguiente, deja de aparecer en los reportes. Los reportes ya guardados de meses posteriores se limpian solos (los meses cerrados no se modifican).',
       'Corregido: los ads y campañas no se estaban finalizando solos al llegar a su fecha de cierre desde el 7 de agosto. Ya se pusieron al día los que quedaron pendientes.',
+      'Corregido: en la sección Reuniones de un reporte de mes pasado, una marca movida a otra línea después de ese mes podía seguir apareciendo (en la meta y en el listado de marcas), aunque ya no figurara en el resto de las métricas de ese mes.',
     ],
   },
   {

@@ -462,6 +462,25 @@ describe('OperacionesView — meses pasados congelados no reconcilian contra el 
     expect(await screen.findByText('Marca Archivada')).toBeInTheDocument()
     expect(screen.queryByText('Marca Nueva')).not.toBeInTheDocument()
   })
+
+  it('junio (mes pasado): el roster de Reuniones (meta máx. y modal) también respeta el congelamiento, no la asignación de línea actual', async () => {
+    // c-3 ("Marca Nueva") está asignada HOY a esta línea (mockLoadClients la incluye),
+    // pero el reporte de junio guardado (crecimiento.items) solo tiene c-1 y c-2 — igual
+    // que le pasaría a una cuenta movida a otra línea después de junio: no debe contar
+    // como "marca de la línea" para la meta ni aparecer en el picker de justificativos.
+    renderView({ month: 6 })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
+    expect(await screen.findByText('Máx. 2 (1 por marca activa de la línea)')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /Ver marcas/ }))
+    const heading = await screen.findByText('Cobertura de reuniones por marca')
+    const modal = heading.closest('div.bg-white')
+    expect(within(modal).getByText('Banco Exterior')).toBeInTheDocument()
+    expect(within(modal).getByText('Marca Archivada')).toBeInTheDocument()
+    expect(within(modal).queryByText('Marca Nueva')).not.toBeInTheDocument()
+  })
 })
 
 describe('OperacionesView — alineación de columnas en "Crecimiento de seguidores"', () => {
