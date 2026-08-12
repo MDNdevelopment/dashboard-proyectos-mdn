@@ -24,6 +24,7 @@ export const CHANGELOG = [
       'Ahora las marcas tienen "Fin de contrato" en su ficha: indicas hasta qué fecha trabajó la cuenta y, desde el mes siguiente, deja de aparecer en los reportes. Los reportes ya guardados de meses posteriores se limpian solos (los meses cerrados no se modifican).',
       'Corregido: los ads y campañas no se estaban finalizando solos al llegar a su fecha de cierre desde el 7 de agosto. Ya se pusieron al día los que quedaron pendientes.',
       'Corregido: en la sección Reuniones de un reporte de mes pasado, una marca movida a otra línea después de ese mes podía seguir apareciendo (en la meta y en el listado de marcas), aunque ya no figurara en el resto de las métricas de ese mes.',
+      'Corregido: las tareas pendientes y en proceso de Energon y Maxxis se habían quedado en el equipo anterior al mover esas marcas a Team Sabrina. Ya se movieron al equipo nuevo y quedaron a cargo de la jefa de línea.',
     ],
   },
   {
