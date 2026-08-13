@@ -1,77 +1,49 @@
-# Cómo conectar Claude con el dashboard de MDN
+# Cómo conectar Claude con la base de datos de MDN
 
-Esta guía te permite hacer preguntas a Claude sobre los proyectos activos sin tener que exportar nada manualmente.
+Esta guía te permite hacer preguntas a Claude sobre cualquier dato del dashboard (proyectos,
+tareas, métricas, evaluaciones, etc.) sin exportar nada manualmente. Funciona igual en
+**computadora e iPhone/iPad** — no hay nada que instalar.
 
 ---
 
 ## Lo que necesitas
 
-- [Node.js](https://nodejs.org) instalado (descarga la versión "LTS")
-- [Claude Desktop](https://claude.ai/download) instalado
-- La carpeta `mcp-server` (pídesela al administrador)
-- El token de acceso (pídeselo al administrador)
+- Una cuenta de Claude con plan **de pago** (Pro, Max, Team o Enterprise). Con el plan gratis no se
+  pueden agregar conectores personalizados.
+- La URL de conexión que te da el administrador (incluye un token secreto).
 
 ---
 
-## Paso 1 — Instalar dependencias
+## Paso 1 — Agregar el conector en Claude
 
-Abre la carpeta `mcp-server`, haz clic derecho dentro de ella y abre una terminal en esa ubicación. Luego escribe:
+**En computadora (Claude Desktop o claude.ai):**
 
-```
-npm install
-```
+1. Ve a **Settings → Connectors**.
+2. Haz clic en **Add custom connector**.
+3. Pega la URL que te dio el administrador, algo como:
+   ```
+   https://mdngestion.netlify.app/mcp/TOKEN_QUE_TE_DIO_EL_ADMIN
+   ```
+4. Guarda.
 
-Espera a que termine y cierra la terminal.
+**En iPhone (app de Claude):**
 
----
+1. Abre la app → **Settings → Connectors**.
+2. **Add custom connector** → pega la misma URL.
+3. Guarda.
 
-## Paso 2 — Editar la configuración de Claude Desktop
-
-1. Abre el archivo de configuración de Claude Desktop. Está en:
-
-   **Mac:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-
-   Para llegar rápido: abre Finder → menú "Ir" → "Ir a la carpeta…" → pega la ruta de arriba.
-
-2. Abre ese archivo con cualquier editor de texto (TextEdit, VS Code, etc.).
-
-3. Busca la línea que dice `"mcpServers": {}` y reemplázala con esto:
-
-```json
-"mcpServers": {
-  "mdn-projects": {
-    "command": "node",
-    "args": ["/ruta/a/mcp-server/index.js"],
-    "env": {
-      "MDN_API_BASE_URL": "https://mdngestion.netlify.app",
-      "MDN_API_TOKEN": "TOKEN_QUE_TE_DIO_EL_ADMIN"
-    }
-  }
-},
-```
-
-4. Cambia `/ruta/a/mcp-server/index.js` por la ruta real donde guardaste la carpeta. Por ejemplo:
-   `/Users/tunombre/Desktop/mcp-server/index.js`
-
-5. Cambia `TOKEN_QUE_TE_DIO_EL_ADMIN` por el token que te pasaron.
-
-6. Guarda el archivo.
+No hace falta reiniciar nada ni instalar Node — el conector queda disponible de inmediato en un
+chat nuevo.
 
 ---
 
-## Paso 3 — Reiniciar Claude Desktop
-
-Cierra Claude Desktop completamente y vuelve a abrirlo.
-
----
-
-## Paso 4 — Verificar que funciona
+## Paso 2 — Verificar que funciona
 
 En un chat nuevo, escribe por ejemplo:
 
-> "¿Cuáles proyectos están en proceso?"
+> "¿Cuántas tareas hay por línea de negocio?"
 
-Claude debería responderte con los proyectos actuales del dashboard.
+Claude debería consultar la base de datos y responderte con datos reales y actuales.
 
 ---
 
@@ -79,8 +51,17 @@ Claude debería responderte con los proyectos actuales del dashboard.
 
 - ¿Qué proyectos están pendientes?
 - ¿Cuáles proyectos tiene asignados Redes?
-- Dame el detalle del proyecto "Campaña Verano"
+- Lista las tablas disponibles en la base de datos
 - ¿Cuántos proyectos están completados este mes?
+- Dame un resumen de las evaluaciones del último período
+
+---
+
+## Importante sobre la URL
+
+La URL de conexión incluye un token secreto: es como una contraseña. No la compartas por canales
+públicos ni la publiques en ningún lado. Solo permite **leer** datos — nunca modificar ni borrar
+nada — pero cualquiera que la tenga puede consultar toda la base de datos.
 
 ---
 
