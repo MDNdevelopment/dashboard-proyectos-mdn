@@ -1,50 +1,43 @@
-# MDN Projects MCP
+# MDN Database MCP
 
-Servidor MCP que permite a Claude acceder directamente a los proyectos del dashboard de MDN Publicidad.
+Servidor MCP **remoto** (alojado en Netlify, `netlify/functions/mcp.js`) que permite a Claude
+consultar la base de datos de MDN Publicidad en modo **solo lectura** directamente desde el chat
+— cualquier tabla, no solo proyectos — para hacer análisis ad-hoc.
 
-## Instalación
+Al ser remoto (HTTP, no un proceso local), funciona igual en **PC, Mac e iPhone/iPad**: no hay que
+instalar Node ni nada en el dispositivo, solo agregar una URL como "custom connector" en Claude.
+Agregar custom connectors requiere un plan Claude de pago (Pro/Max/Team/Enterprise).
 
-1. Asegúrate de tener Node.js 18+ instalado.
-2. Abre una terminal en esta carpeta (`mcp-server/`) y ejecuta:
+## Configuración (una vez por persona/cuenta)
+
+1. Abre Claude → **Settings → Connectors → Add custom connector**.
+2. Pega la URL que te dio el administrador:
    ```
-   npm install
+   https://mdngestion.netlify.app/mcp/<TOKEN_SECRETO>
    ```
+3. Guarda. Ya está disponible en todos tus dispositivos con esa cuenta (Desktop, web, iPhone).
 
-## Configuración en Claude Desktop
-
-Agrega esto a tu archivo `claude_desktop_config.json`:
-
-**Mac:** `~/Library/Application Support/Claude/claude_desktop_config.json`  
-**Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "mdn-projects": {
-      "command": "node",
-      "args": ["/ruta/absoluta/a/mcp-server/index.js"],
-      "env": {
-        "MDN_API_BASE_URL": "https://mdngestion.netlify.app",
-        "MDN_API_TOKEN": "el-token-que-te-dio-el-admin"
-      }
-    }
-  }
-}
-```
-
-Reemplaza `/ruta/absoluta/a/mcp-server/index.js` con la ruta real donde guardaste esta carpeta.
-
-Reinicia Claude Desktop después de guardar el archivo.
+La URL completa (incluido el token) es un secreto — no la compartas en canales públicos. Cualquiera
+que la tenga puede leer la base de datos (nunca escribir: el rol de base de datos que usa el
+servidor es de solo lectura).
 
 ## Herramientas disponibles
 
-- **list_projects** — Lista todos los proyectos. Acepta filtros opcionales:
-  - `status`: `"Pendiente"`, `"En proceso"`, o `"Completado"`
-  - `department`: `"Redes"`, `"Diseño"`, `"Audiovisual"`, o `"Tecnología"`
-- **get_project** — Obtiene el detalle completo de un proyecto por su ID (fases, tareas, equipo, etc.)
+- **list_tables** — lista las tablas y columnas del schema `public`, para saber qué se puede
+  consultar.
+- **query_database** — ejecuta un `SELECT` (o `WITH ... SELECT`) de solo lectura y devuelve las
+  filas. Máximo 1000 filas por consulta (500 por defecto).
 
 ## Ejemplos de preguntas a Claude
 
-- "¿Cuáles proyectos están en proceso?"
-- "Dame el detalle del proyecto con ID abc-123"
-- "¿Qué proyectos tiene asignado el departamento de Redes?"
+- "¿Cuántas tareas hay por línea de negocio?"
+- "Lista las tablas disponibles"
+- "¿Cuáles proyectos están en proceso y qué departamentos tienen?"
+- "Dame un resumen de las evaluaciones del último mes"
+
+## Nota sobre `index.js` (servidor local, obsoleto)
+
+Este directorio conserva `index.js`, la versión anterior del MCP como proceso local (stdio),
+limitada a proyectos y solo utilizable en PC/Mac con Claude Desktop. Ya no es necesaria — todo el
+mundo debería migrar al connector remoto de arriba. Se deja el archivo por ahora sin eliminar;
+puede borrarse cuando se confirme que nadie lo sigue usando.
