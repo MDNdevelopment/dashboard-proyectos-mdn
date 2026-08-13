@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-vi.mock('./db.js', () => ({
+vi.mock('./_lib/db.js', () => ({
   runReadOnlyQuery: vi.fn(),
   listTables: vi.fn(),
 }))
 
-const { runReadOnlyQuery, listTables } = await import('./db.js')
-const { handler, checkSecret } = await import('../mcp.js')
+const { runReadOnlyQuery, listTables } = await import('./_lib/db.js')
+const { handler, checkSecret } = await import('./mcp.js')
 
 const SECRET = 'test-secret-token'
 
