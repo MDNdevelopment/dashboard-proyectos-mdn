@@ -1,28 +1,30 @@
-import { timingSafeEqual, createHash } from 'crypto'
 import { runReadOnlyQuery, listTables } from './_lib/db.js'
+import { verifyToken } from './_lib/oauthCrypto.js'
 
-const json = (statusCode, body) => ({
+const json = (statusCode, body, extraHeaders = {}) => ({
   statusCode,
-  headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+  headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...extraHeaders },
   body: JSON.stringify(body),
 })
 
+function getOrigin(event) {
+  const host = event.headers?.['x-forwarded-host'] ?? event.headers?.host ?? event.headers?.Host
+  const proto = event.headers?.['x-forwarded-proto'] ?? 'https'
+  return `${proto}://${host}`
+}
+
 /**
- * El secreto de acceso viaja como último segmento de la URL
- * (/mcp/<MCP_URL_SECRET>), igual que un connector remoto configurado con una
- * URL "bearer". Ver netlify/functions/_lib/auth.js para el mismo patrón de
- * comparación en tiempo constante usado por el resto de las functions.
+ * El cliente MCP se autentica con un access_token Bearer emitido por
+ * netlify/functions/oauth.js (flujo OAuth 2.1 + PKCE con Dynamic Client
+ * Registration, el único modelo de auth que hoy soporta el conector remoto
+ * de Claude). El token es auto-verificable (HMAC + expiración), sin sesión
+ * ni tabla de tokens que mantener.
  */
-export function checkSecret(event) {
-  const segments = event.path.replace(/\/$/, '').split('/')
-  const provided = segments[segments.length - 1] ?? ''
-  const expected = process.env.MCP_URL_SECRET ?? ''
-
-  if (!provided || !expected) return false
-
-  const a = createHash('sha256').update(provided).digest()
-  const b = createHash('sha256').update(expected).digest()
-  return timingSafeEqual(a, b)
+export function checkBearerToken(event) {
+  const header = event.headers?.authorization ?? event.headers?.Authorization ?? ''
+  const token = header.startsWith('Bearer ') ? header.slice(7) : ''
+  const payload = verifyToken(token)
+  return payload?.type === 'access'
 }
 
 const TOOLS = [
@@ -76,7 +78,16 @@ const rpcError = (id, code, message) => ({ jsonrpc: '2.0', id, error: { code, me
  */
 export const handler = async (event) => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Method Not Allowed' })
-  if (!checkSecret(event)) return json(401, { error: 'Unauthorized' })
+  if (!checkBearerToken(event)) {
+    const origin = getOrigin(event)
+    return json(
+      401,
+      { error: 'Unauthorized' },
+      {
+        'WWW-Authenticate': `Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource"`,
+      },
+    )
+  }
 
   let body
   try {

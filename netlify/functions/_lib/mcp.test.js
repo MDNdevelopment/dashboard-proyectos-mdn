@@ -5,15 +5,21 @@ vi.mock('./db.js', () => ({
   listTables: vi.fn(),
 }))
 
+process.env.MCP_OAUTH_SIGNING_SECRET = 'test-signing-secret'
+
 const { runReadOnlyQuery, listTables } = await import('./db.js')
-const { handler, checkSecret } = await import('../mcp.js')
+const { handler, checkBearerToken } = await import('../mcp.js')
+const { issueToken } = await import('./oauthCrypto.js')
 
-const SECRET = 'test-secret-token'
+function accessToken(overrides = {}) {
+  return issueToken({ type: 'access', exp: Date.now() + 60_000, ...overrides })
+}
 
-function makeEvent({ method = 'POST', path = `/mcp/${SECRET}`, body } = {}) {
+function makeEvent({ method = 'POST', path = '/mcp', token = accessToken(), body } = {}) {
   return {
     httpMethod: method,
     path,
+    headers: token ? { authorization: `Bearer ${token}` } : {},
     body: body === undefined ? undefined : JSON.stringify(body),
   }
 }
@@ -21,7 +27,7 @@ function makeEvent({ method = 'POST', path = `/mcp/${SECRET}`, body } = {}) {
 describe('mcp.js handler', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    process.env.MCP_URL_SECRET = SECRET
+    process.env.MCP_OAUTH_SIGNING_SECRET = 'test-signing-secret'
   })
 
   it('rechaza métodos que no sean POST', async () => {
@@ -29,22 +35,40 @@ describe('mcp.js handler', () => {
     expect(res.statusCode).toBe(405)
   })
 
-  it('rechaza si el secreto en la URL no coincide', async () => {
+  it('rechaza sin Authorization header, con WWW-Authenticate apuntando al resource metadata', async () => {
     const res = await handler(
-      makeEvent({ path: '/mcp/wrong-secret', body: { jsonrpc: '2.0', id: 1, method: 'ping' } }),
+      makeEvent({ token: null, body: { jsonrpc: '2.0', id: 1, method: 'ping' } }),
+    )
+    expect(res.statusCode).toBe(401)
+    expect(res.headers['WWW-Authenticate']).toContain('oauth-protected-resource')
+  })
+
+  it('rechaza un access_token con firma inválida', async () => {
+    const res = await handler(
+      makeEvent({ token: 'garbage.token', body: { jsonrpc: '2.0', id: 1, method: 'ping' } }),
     )
     expect(res.statusCode).toBe(401)
   })
 
-  it('rechaza si no hay MCP_URL_SECRET configurado en el servidor', async () => {
-    delete process.env.MCP_URL_SECRET
-    const res = await handler(makeEvent({ body: { jsonrpc: '2.0', id: 1, method: 'ping' } }))
+  it('rechaza un access_token expirado', async () => {
+    const expired = issueToken({ type: 'access', exp: Date.now() - 1 })
+    const res = await handler(
+      makeEvent({ token: expired, body: { jsonrpc: '2.0', id: 1, method: 'ping' } }),
+    )
     expect(res.statusCode).toBe(401)
   })
 
-  it('checkSecret es insensible a la longitud (no lanza con secretos de distinto tamaño)', () => {
-    process.env.MCP_URL_SECRET = 'a-very-long-secret-value'
-    expect(checkSecret({ path: '/mcp/x' })).toBe(false)
+  it('rechaza un token de otro type (p.ej. un authorization code, no un access token)', async () => {
+    const code = issueToken({ type: 'code', exp: Date.now() + 60_000 })
+    const res = await handler(
+      makeEvent({ token: code, body: { jsonrpc: '2.0', id: 1, method: 'ping' } }),
+    )
+    expect(res.statusCode).toBe(401)
+  })
+
+  it('checkBearerToken acepta un access_token válido', () => {
+    const token = accessToken()
+    expect(checkBearerToken({ headers: { authorization: `Bearer ${token}` } })).toBe(true)
   })
 
   it('responde initialize con las capabilities', async () => {
@@ -150,7 +174,9 @@ describe('mcp.js handler', () => {
   })
 
   it('responde error de parseo si el body no es JSON válido', async () => {
-    const res = await handler({ httpMethod: 'POST', path: `/mcp/${SECRET}`, body: '{not json' })
+    const event = makeEvent({ method: 'POST' })
+    event.body = '{not json'
+    const res = await handler(event)
     const parsed = JSON.parse(res.body)
     expect(res.statusCode).toBe(400)
     expect(parsed.error.code).toBe(-32700)

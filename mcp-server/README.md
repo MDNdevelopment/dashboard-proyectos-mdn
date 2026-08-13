@@ -8,18 +8,23 @@ Al ser remoto (HTTP, no un proceso local), funciona igual en **PC, Mac e iPhone/
 instalar Node ni nada en el dispositivo, solo agregar una URL como "custom connector" en Claude.
 Agregar custom connectors requiere un plan Claude de pago (Pro/Max/Team/Enterprise).
 
+Se autentica con **OAuth 2.1 + PKCE** (`netlify/functions/oauth.js`) — el único modelo que hoy
+soporta el conector remoto de Claude. Al agregar el connector, Claude te lleva a una página donde
+pides la contraseña compartida (una sola vez por cuenta); no hay ningún token en la URL.
+
 ## Configuración (una vez por persona/cuenta)
 
 1. Abre Claude → **Settings → Connectors → Add custom connector**.
-2. Pega la URL que te dio el administrador:
+2. Pega la URL del servidor (sin token, es pública):
    ```
-   https://mdngestion.netlify.app/mcp/<TOKEN_SECRETO>
+   https://mdngestion.netlify.app/mcp
    ```
-3. Guarda. Ya está disponible en todos tus dispositivos con esa cuenta (Desktop, web, iPhone).
+3. Claude abrirá una pantalla pidiendo una contraseña — ingresa la que te dio el administrador y
+   autoriza el acceso.
+4. Listo. Disponible en todos tus dispositivos con esa cuenta (Desktop, web, iPhone).
 
-La URL completa (incluido el token) es un secreto — no la compartas en canales públicos. Cualquiera
-que la tenga puede leer la base de datos (nunca escribir: el rol de base de datos que usa el
-servidor es de solo lectura).
+Solo permite **leer** datos (nunca escribir: el rol de base de datos que usa el servidor es de solo
+lectura), pero la contraseña sigue siendo sensible — no la compartas en canales públicos.
 
 ## Herramientas disponibles
 
