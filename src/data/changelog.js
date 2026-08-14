@@ -26,6 +26,7 @@ export const CHANGELOG = [
       'Corregido: en la sección Reuniones de un reporte de mes pasado, una marca movida a otra línea después de ese mes podía seguir apareciendo (en la meta y en el listado de marcas), aunque ya no figurara en el resto de las métricas de ese mes.',
       'Corregido: las tareas pendientes y en proceso de Energon y Maxxis se habían quedado en el equipo anterior al mover esas marcas a Team Sabrina. Ya se movieron al equipo nuevo y quedaron a cargo de la jefa de línea.',
       'Nuevo: se puede conectar Claude (computadora o iPhone) a la base de datos del dashboard para hacer preguntas y análisis en el chat, en modo solo lectura. Se conecta agregando un enlace en Settings → Connectors de Claude e iniciando sesión con una contraseña, sin instalar nada.',
+      'Corregido: ahora se puede eliminar un empleado (u otro elemento) aunque su nombre tenga espacios de más al escribirlo para confirmar.',
     ],
   },
   {

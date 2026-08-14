@@ -24,7 +24,11 @@ export default function ConfirmDeleteDialog({
   children,
 }) {
   const [typed, setTyped] = useState('')
-  const canDelete = typed.trim() === itemName
+  const normalize = (s) =>
+    String(s ?? '')
+      .replace(/\s+/g, ' ')
+      .trim()
+  const canDelete = normalize(typed) === normalize(itemName)
 
   useEffect(() => {
     const fn = (e) => {
