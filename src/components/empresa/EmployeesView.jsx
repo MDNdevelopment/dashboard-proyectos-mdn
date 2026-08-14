@@ -113,6 +113,7 @@ function EmployeeCard({
   onDelete,
   onRestore,
   canDelete,
+  showLevel,
 }) {
   const fullName = `${emp.first_name} ${emp.last_name}`
   const deleted = !!emp.deleted_at
@@ -250,7 +251,7 @@ function EmployeeCard({
                 Admin
               </span>
             )}
-            {emp.access_level != null && (
+            {showLevel && emp.access_level != null && (
               <span className="text-[12px] font-mono font-bold tracking-wide uppercase bg-[#f0ede3] text-[#666] border border-[#e0ddd4] px-1.5 py-0.5 rounded">
                 Nivel {emp.access_level}
               </span>
@@ -322,6 +323,9 @@ function EmployeeCard({
 
 export default function EmployeesView({ companyId }) {
   const { userProfile } = useAuth()
+  // Nivel 1 y 2 no deben ver el nivel de acceso de los demás empleados (ni la vista por
+  // columnas, que lo deja intuir por agrupación). Mismo criterio que isFinancePrivileged.
+  const canSeeLevels = userProfile?.admin === true || (userProfile?.access_level ?? 1) >= 3
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
   const [positions, setPositions] = useState([])
@@ -475,6 +479,9 @@ export default function EmployeesView({ companyId }) {
     )
   })
 
+  // Vista efectiva: nivel 1/2 siempre ven la lista plana, sin tocar la preferencia guardada.
+  const effectiveView = canSeeLevels ? view : 'lista'
+
   // ── Agrupación por nivel (solo para vista columnas) ─────────────────────────
   const byLevel = { 1: [], 2: [], 3: [], 4: [] }
   const sinNivel = []
@@ -532,7 +539,7 @@ export default function EmployeesView({ companyId }) {
           {showProbationOnly ? 'Mostrando solo prueba' : `Solo en prueba (${probationCount})`}
         </button>
         <div className="ml-auto flex items-center gap-3">
-          <ViewToggle view={view} onChange={setView} />
+          {canSeeLevels && <ViewToggle view={view} onChange={setView} />}
           {!showArchived && (
             <button
               type="button"
@@ -569,7 +576,7 @@ export default function EmployeesView({ companyId }) {
                 : 'Aún no hay empleados registrados en esta empresa.'}
           </p>
         </div>
-      ) : view === 'lista' ? (
+      ) : effectiveView === 'lista' ? (
         <div className="space-y-2">
           {filtered.map((emp) => (
             <EmployeeCard
@@ -582,6 +589,7 @@ export default function EmployeesView({ companyId }) {
               onDelete={setConfirmArchive}
               onRestore={handleRestore}
               canDelete={emp.user_id !== userProfile?.user_id}
+              showLevel={canSeeLevels}
             />
           ))}
         </div>
@@ -610,6 +618,7 @@ export default function EmployeesView({ companyId }) {
                       onDelete={setConfirmArchive}
                       onRestore={handleRestore}
                       canDelete={emp.user_id !== userProfile?.user_id}
+                      showLevel={canSeeLevels}
                     />
                   ))}
                 </div>
@@ -636,6 +645,7 @@ export default function EmployeesView({ companyId }) {
                     onDelete={setConfirmArchive}
                     onRestore={handleRestore}
                     canDelete={emp.user_id !== userProfile?.user_id}
+                    showLevel={canSeeLevels}
                   />
                 ))}
               </div>

@@ -157,6 +157,25 @@ const LEVEL1_RESTRICTED = [
   'empresa.lineas.manage',
 ]
 
+function renderAsLevel(access_level) {
+  useAuth.mockReturnValue({
+    userProfile: {
+      user_id: 'u-regular',
+      company_id: 'co-1',
+      access_level,
+      admin: false,
+      first_name: 'Regular',
+      last_name: 'User',
+    },
+    can: () => true,
+  })
+  return render(
+    <MemoryRouter initialEntries={['/empresa/empleados']}>
+      <EmpresaPage />
+    </MemoryRouter>,
+  )
+}
+
 function renderAsNonAdmin() {
   useAuth.mockReturnValue({
     userProfile: {
@@ -633,6 +652,72 @@ describe('EmployeesView', () => {
       // Los otros 3 empleados sí tienen su icono de eliminar
       expect(screen.getAllByRole('button', { name: /^Eliminar / })).toHaveLength(3)
     })
+  })
+})
+
+describe('EmployeesView — visibilidad de nivel por permisos', () => {
+  it.each([1, 2])(
+    'nivel %i no ve el badge de nivel ni el toggle de vista por columnas',
+    async (level) => {
+      renderAsLevel(level)
+      await waitFor(() => {
+        expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
+      })
+
+      // Sin toggle de vista → siempre vista lista (aparece el email de cada empleado)
+      expect(screen.queryByRole('button', { name: 'Vista por nivel' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Vista lista' })).not.toBeInTheDocument()
+      expect(screen.getByText('ana@test.com')).toBeInTheDocument()
+
+      // Sin badge "Nivel N" ni encabezados de columnas por nivel
+      expect(screen.queryByText('Nivel 1')).not.toBeInTheDocument()
+      expect(screen.queryByText('Nivel 2')).not.toBeInTheDocument()
+      expect(screen.queryByText('Nivel 3')).not.toBeInTheDocument()
+      expect(screen.queryByText('Nivel 4')).not.toBeInTheDocument()
+    },
+  )
+
+  it.each([3, 4])(
+    'nivel %i sí ve el badge de nivel y el toggle de vista por columnas',
+    async (level) => {
+      renderAsLevel(level)
+      await waitFor(() => {
+        expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
+      })
+
+      expect(screen.getByRole('button', { name: 'Vista por nivel' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Vista lista' })).toBeInTheDocument()
+      // Vista por defecto es columnas, agrupadas con encabezado "Nivel N"
+      expect(screen.getByText('Nivel 1')).toBeInTheDocument()
+      expect(screen.getByText('Nivel 2')).toBeInTheDocument()
+      expect(screen.getByText('Nivel 3')).toBeInTheDocument()
+      expect(screen.getByText('Nivel 4')).toBeInTheDocument()
+    },
+  )
+
+  it('admin ve el badge de nivel y el toggle aunque su access_level sea bajo', async () => {
+    useAuth.mockReturnValue({
+      userProfile: {
+        user_id: 'u-admin-low',
+        company_id: 'co-1',
+        access_level: 1,
+        admin: true,
+        first_name: 'Admin',
+        last_name: 'Bajo',
+      },
+      can: () => true,
+    })
+    render(
+      <MemoryRouter initialEntries={['/empresa/empleados']}>
+        <EmpresaPage />
+      </MemoryRouter>,
+    )
+    await waitFor(() => {
+      expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
+    })
+
+    expect(screen.getByRole('button', { name: 'Vista por nivel' })).toBeInTheDocument()
+    expect(screen.getByText('Nivel 1')).toBeInTheDocument()
   })
 })
 
