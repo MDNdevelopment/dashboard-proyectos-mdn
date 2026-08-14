@@ -28,6 +28,7 @@ export const CHANGELOG = [
       'Nuevo: se puede conectar Claude (computadora o iPhone) a la base de datos del dashboard para hacer preguntas y análisis en el chat, en modo solo lectura. Se conecta agregando un enlace en Settings → Connectors de Claude e iniciando sesión con una contraseña, sin instalar nada.',
       'Corregido: ahora se puede eliminar un empleado (u otro elemento) aunque su nombre tenga espacios de más al escribirlo para confirmar.',
       'En Empresa → Empleados, los usuarios de nivel 1 y 2 ya no ven el nivel de cada empleado ni la vista por columnas que lo dejaba entrever.',
+      'Corregido: al crear un empleado con un correo que ya existe aparecía un mensaje de error técnico. Ahora avisa claramente si el correo ya pertenece a un empleado activo, o si pertenece a uno archivado (indicando que debe restaurarse desde "Ver eliminados").',
     ],
   },
   {

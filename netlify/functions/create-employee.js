@@ -1,5 +1,6 @@
 import { supabase } from './_lib/supabase.js'
 import { requireAdmin } from './_lib/requireAdmin.js'
+import { classifyEmployeeCreation } from '../../src/lib/employees.js'
 
 const json = (statusCode, body) => ({
   statusCode,
@@ -38,10 +39,31 @@ export const handler = async (event) => {
   if (!first_name?.trim()) return json(400, { error: 'El nombre es obligatorio' })
   if (!last_name?.trim()) return json(400, { error: 'El apellido es obligatorio' })
 
+  const cleanEmail = email.trim().toLowerCase()
+
+  // 0. Si ya existe un perfil con este email (activo o archivado), no reintentar la
+  //    invitación/insert: inviteUserByEmail reutiliza la cuenta auth existente y el
+  //    insert siguiente violaría users_pkey. Bloquear con un mensaje claro en su lugar.
+  const { data: existing } = await supabase
+    .from('users')
+    .select('user_id, deleted_at')
+    .eq('company_id', caller.company_id)
+    .ilike('email', cleanEmail)
+    .maybeSingle()
+
+  const classification = classifyEmployeeCreation(existing)
+  if (classification === 'active-duplicate') {
+    return json(409, { error: 'Ya existe un empleado activo con ese email.' })
+  }
+  if (classification === 'archived') {
+    return json(409, {
+      error: 'Ese email pertenece a un empleado archivado. Restáuralo desde "Ver eliminados".',
+    })
+  }
+
   // 1. Crear cuenta auth via invitación — el empleado recibirá un email para fijar su contraseña
-  const { data: inviteData, error: inviteErr } = await supabase.auth.admin.inviteUserByEmail(
-    email.trim(),
-  )
+  const { data: inviteData, error: inviteErr } =
+    await supabase.auth.admin.inviteUserByEmail(cleanEmail)
 
   if (inviteErr) return json(400, { error: inviteErr.message })
 
@@ -51,7 +73,7 @@ export const handler = async (event) => {
     .from('users')
     .insert({
       user_id: inviteData.user.id,
-      email: email.trim(),
+      email: cleanEmail,
       first_name: first_name.trim(),
       last_name: last_name.trim(),
       department_id: department_id || null,
@@ -64,7 +86,14 @@ export const handler = async (event) => {
     .select('*, department:departments(department_name), position:positions(position_name)')
     .single()
 
-  if (insertErr) return json(500, { error: insertErr.message })
+  if (insertErr) {
+    // Red de seguridad ante carreras o cuentas auth huérfanas: no filtrar el mensaje
+    // crudo de Postgres al usuario final.
+    if (insertErr.code === '23505') {
+      return json(409, { error: 'Ya existe un empleado con ese email.' })
+    }
+    return json(500, { error: insertErr.message })
+  }
 
   return json(201, employee)
 }
