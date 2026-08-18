@@ -18,6 +18,12 @@ import { teamMemberUsers } from '../../utils/lineFilters'
 import { EmployeeChip, EmployeeChipList } from '../common/EmployeeChip'
 import DateInput from '../common/DateInput'
 import MoverClienteModal from '../metricas/MoverClienteModal'
+import { TASK_KEYS, TASK_LABELS } from '../../utils/fixedTasks'
+
+/** Default: todas las tareas fijas activas para una cuenta nueva o sin configurar. */
+function defaultFixedTasks() {
+  return Object.fromEntries(TASK_KEYS.map((k) => [k, true]))
+}
 
 /**
  * Modal crear/editar/ver cliente (marca).
@@ -65,6 +71,7 @@ export default function ClientModal({
     designer_id: client?.designer_id ?? null,
     audiovisual_ids: client?.audiovisual_ids ?? [],
     apoyo_ids: client?.apoyo_ids ?? [],
+    fixed_tasks: { ...defaultFixedTasks(), ...(client?.fixed_tasks ?? {}) },
     phone: '',
     instagram_email: '',
   }))
@@ -218,6 +225,7 @@ export default function ClientModal({
       designer_id: form.designer_id || null,
       audiovisual_ids: form.audiovisual_ids,
       apoyo_ids: form.apoyo_ids,
+      fixed_tasks: form.fixed_tasks,
     }
 
     let data, err
@@ -602,6 +610,34 @@ export default function ClientModal({
               Último mes bajo contrato. Desde el mes siguiente la cuenta deja de aparecer en los
               reportes (los meses ya cerrados no se modifican).
             </p>
+          </div>
+
+          {/* Tareas fijas aplicables — qué tareas recurrentes se tildan para esta cuenta
+              en Gestión de Tareas → Tareas Fijas. Default: todas activas. */}
+          <div>
+            <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+              Tareas fijas aplicables
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {TASK_KEYS.map((key) => {
+                const active = form.fixed_tasks[key] !== false
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    disabled={readOnly}
+                    onClick={() => set('fixed_tasks', { ...form.fixed_tasks, [key]: !active })}
+                    className={`px-3 py-1.5 rounded-full text-[13px] font-semibold border transition-all ${
+                      active
+                        ? 'bg-[#e9f7ec] border-[#bfe6c8] text-[#1f8a43]'
+                        : 'bg-[#f3f1ea] border-[#e6e2d8] text-[#a29b8c]'
+                    } ${readOnly ? 'cursor-default' : ''}`}
+                  >
+                    {TASK_LABELS[key]}
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
           {/* Personas de la empresa */}

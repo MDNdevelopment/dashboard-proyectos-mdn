@@ -1,8 +1,28 @@
 import {
-  isClosed, isLate, isDragged, isBlocked,
-  parseD, daysBetween, monthIndex, currentMonthIndex,
-  taskInMonth, taskStartMonth, taskEndMonth, fmtMonth,
+  isClosed,
+  isLate,
+  isDragged,
+  isBlocked,
+  parseD,
+  daysBetween,
+  monthIndex,
+  currentMonthIndex,
+  taskInMonth,
+  taskStartMonth,
+  taskEndMonth,
+  fmtMonth,
 } from '../components/tareas/constants'
+
+/**
+ * Determina si una tarea pertenece a un usuario según el rol.
+ * Compat: assignee migró de escalar (assignee_id) a array (assignee_ids).
+ * Support sigue siendo escalar (support_id).
+ */
+function taskMatchesUser(t, userId, role) {
+  if (role === 'support') return t.support_id === userId
+  const ids = t.assignee_ids ?? (t.assignee_id ? [t.assignee_id] : [])
+  return ids.includes(userId)
+}
 
 /**
  * Agrega métricas de tareas para un empleado, opcionalmente filtradas a un mes.
@@ -22,14 +42,12 @@ import {
  * }}
  */
 export function aggregateTaskMetrics(tasks, userId, { monthIdx = null, role = 'assignee' } = {}) {
-  const field = role === 'support' ? 'support_id' : 'assignee_id'
-
   // 1. Filtrar por empleado
-  let scoped = tasks.filter(t => t[field] === userId)
+  let scoped = tasks.filter((t) => taskMatchesUser(t, userId, role))
 
   // 2. Filtrar por mes si corresponde
   if (monthIdx !== null) {
-    scoped = scoped.filter(t => taskInMonth(t, monthIdx))
+    scoped = scoped.filter((t) => taskInMonth(t, monthIdx))
   }
 
   const total = scoped.length
@@ -48,9 +66,7 @@ export function aggregateTaskMetrics(tasks, userId, { monthIdx = null, role = 'a
   const bloqueadas = scoped.filter(isBlocked).length
 
   // A tiempo vs tarde: solo tareas terminadas que tengan due_date y closed_date
-  const closedWithDates = scoped.filter(
-    t => isClosed(t) && t.due_date && t.closed_date,
-  )
+  const closedWithDates = scoped.filter((t) => isClosed(t) && t.due_date && t.closed_date)
   let aTiempo = 0
   let tarde = 0
   let totalDelayDays = 0
@@ -71,9 +87,7 @@ export function aggregateTaskMetrics(tasks, userId, { monthIdx = null, role = 'a
   const avgDelayDays = tarde > 0 ? Math.round(totalDelayDays / tarde) : null
 
   // Tiempo promedio de resolución (request_date → closed_date), sobre terminadas con ambas fechas
-  const closedWithResolution = scoped.filter(
-    t => isClosed(t) && t.request_date && t.closed_date,
-  )
+  const closedWithResolution = scoped.filter((t) => isClosed(t) && t.request_date && t.closed_date)
   let totalResolution = 0
   for (const t of closedWithResolution) {
     totalResolution += daysBetween(parseD(t.request_date), parseD(t.closed_date))
@@ -110,8 +124,7 @@ export function aggregateTaskMetrics(tasks, userId, { monthIdx = null, role = 'a
  * @returns {Array<{ monthIdx: number, label: string, total: number, terminadas: number, completionPct: number }>}
  */
 export function buildMonthlySeries(tasks, userId, { role = 'assignee' } = {}) {
-  const field = role === 'support' ? 'support_id' : 'assignee_id'
-  const userTasks = tasks.filter(t => t[field] === userId)
+  const userTasks = tasks.filter((t) => taskMatchesUser(t, userId, role))
 
   // Recopilar todos los monthIndex en los que hay actividad del empleado
   const monthSet = new Set()
@@ -128,8 +141,8 @@ export function buildMonthlySeries(tasks, userId, { role = 'assignee' } = {}) {
 
   return Array.from(monthSet)
     .sort((a, b) => a - b)
-    .map(mIdx => {
-      const monthTasks = userTasks.filter(t => taskInMonth(t, mIdx))
+    .map((mIdx) => {
+      const monthTasks = userTasks.filter((t) => taskInMonth(t, mIdx))
       const total = monthTasks.length
       const terminadas = monthTasks.filter(isClosed).length
       const completionPct = total ? Math.round((terminadas / total) * 100) : 0
@@ -138,17 +151,32 @@ export function buildMonthlySeries(tasks, userId, { role = 'assignee' } = {}) {
 }
 
 /**
- * Agrega la participación de un empleado en proyectos.
- * Los proyectos no tienen fechas por miembro, solo estado general.
+ * Determina si un proyecto pertenece a un mes según su fecha de creación (created_at).
+ * Histórico (monthIdx === null) o sin created_at → siempre pertenece (no se oculta).
  *
- * @param {Array}   projects  - Proyectos con { id, name, status, members: string[] }
+ * @param {{ created_at?: string }} project
+ * @param {number|null} monthIdx
+ * @returns {boolean}
+ */
+export function projectInMonth(project, monthIdx) {
+  if (monthIdx === null || !project.created_at) return true
+  return monthIndex(parseD(project.created_at.slice(0, 10))) === monthIdx
+}
+
+/**
+ * Agrega la participación de un empleado en proyectos.
+ * Los proyectos no tienen fechas por miembro, solo estado general y created_at.
+ *
+ * @param {Array}   projects  - Proyectos con { id, name, status, members: string[], created_at }
  * @param {string}  userId
+ * @param {object}  [opts]
+ * @param {number|null} [opts.monthIdx=null]  monthIndex del mes deseado, null = histórico
  *
  * @returns {{ total: number, byStatus: Record<string,number>, completedPct: number }}
  */
-export function aggregateProjectParticipation(projects, userId) {
+export function aggregateProjectParticipation(projects, userId, { monthIdx = null } = {}) {
   const mine = projects.filter(
-    p => Array.isArray(p.members) && p.members.includes(userId),
+    (p) => Array.isArray(p.members) && p.members.includes(userId) && projectInMonth(p, monthIdx),
   )
   const total = mine.length
   const byStatus = { Pendiente: 0, 'En proceso': 0, Completado: 0 }

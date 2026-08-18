@@ -6,21 +6,188 @@ import MDNLogo from './MDNLogo'
 import AvatarUpload from './empresa/AvatarUpload'
 import NotificationBell from './notifications/NotificationBell'
 
-const HOME_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M2 7.5 8 2l6 5.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M3.5 6.5V13a1 1 0 0 0 1 1H6a.5.5 0 0 0 .5-.5V10a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v3.5a.5.5 0 0 0 .5.5h1.5a1 1 0 0 0 1-1V6.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-const PROJECTS_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="1" y="1" width="6" height="6" rx="1.5"/><rect x="9" y="1" width="6" height="6" rx="1.5"/><rect x="1" y="9" width="6" height="6" rx="1.5"/><rect x="9" y="9" width="6" height="6" rx="1.5"/></svg>
-const TICKET_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="1" y="3" width="14" height="10" rx="1.5"/><path d="M1 6h14" strokeLinecap="round"/><path d="M5 10h6" strokeLinecap="round"/></svg>
-const BELL_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M8 1.5a4.5 4.5 0 0 1 4.5 4.5c0 2.5.8 3.5 1.5 4.5H2c.7-1 1.5-2 1.5-4.5A4.5 4.5 0 0 1 8 1.5Z" strokeLinecap="round" strokeLinejoin="round"/><path d="M6.5 13a1.5 1.5 0 0 0 3 0" strokeLinecap="round"/></svg>
-const CHART_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="1" y="8" width="3" height="6" rx="1"/><rect x="6" y="5" width="3" height="9" rx="1"/><rect x="11" y="2" width="3" height="12" rx="1"/></svg>
-const ADS_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M2 11V5l6-3 6 3v6l-6 3-6-3Z" strokeLinejoin="round"/><path d="M8 2v12M2 5l6 3 6-3" strokeLinecap="round"/></svg>
-const TASKS_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="1.5" y="2" width="13" height="12" rx="1.5"/><path d="M5 6h6M5 9h4" strokeLinecap="round"/><path d="M5 12h2" strokeLinecap="round"/></svg>
-const COMPANY_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="1" y="4" width="14" height="10" rx="1.5"/><path d="M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1" strokeLinecap="round"/><path d="M1 8h14" strokeLinecap="round"/></svg>
-const EVAL_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="8" cy="5.5" r="2.5"/><path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6" strokeLinecap="round"/><path d="M10.5 8.5l1 1 2-2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-const METRICS_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><polyline points="1 12 5 7 8 10 11 5 15 8" strokeLinecap="round" strokeLinejoin="round"/><path d="M1 14h14" strokeLinecap="round"/></svg>
-const MEETINGS_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="1.5" y="2.5" width="13" height="12" rx="1.5"/><path d="M1.5 6h13" strokeLinecap="round"/><path d="M5 1v3M11 1v3" strokeLinecap="round"/><path d="M4.5 9h2M4.5 11.5h5" strokeLinecap="round"/></svg>
-const LEADS_ICON = <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M1.5 4.5h13v9h-13v-9Z" strokeLinejoin="round"/><path d="M1.5 4.5 8 9.5l6.5-5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+const HOME_ICON = (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.7"
+  >
+    <path d="M2 7.5 8 2l6 5.5" strokeLinecap="round" strokeLinejoin="round" />
+    <path
+      d="M3.5 6.5V13a1 1 0 0 0 1 1H6a.5.5 0 0 0 .5-.5V10a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v3.5a.5.5 0 0 0 .5.5h1.5a1 1 0 0 0 1-1V6.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+)
+const PROJECTS_ICON = (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.7"
+  >
+    <rect x="1" y="1" width="6" height="6" rx="1.5" />
+    <rect x="9" y="1" width="6" height="6" rx="1.5" />
+    <rect x="1" y="9" width="6" height="6" rx="1.5" />
+    <rect x="9" y="9" width="6" height="6" rx="1.5" />
+  </svg>
+)
+const TICKET_ICON = (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.7"
+  >
+    <rect x="1" y="3" width="14" height="10" rx="1.5" />
+    <path d="M1 6h14" strokeLinecap="round" />
+    <path d="M5 10h6" strokeLinecap="round" />
+  </svg>
+)
+const BELL_ICON = (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.7"
+  >
+    <path
+      d="M8 1.5a4.5 4.5 0 0 1 4.5 4.5c0 2.5.8 3.5 1.5 4.5H2c.7-1 1.5-2 1.5-4.5A4.5 4.5 0 0 1 8 1.5Z"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path d="M6.5 13a1.5 1.5 0 0 0 3 0" strokeLinecap="round" />
+  </svg>
+)
+const CHART_ICON = (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.7"
+  >
+    <rect x="1" y="8" width="3" height="6" rx="1" />
+    <rect x="6" y="5" width="3" height="9" rx="1" />
+    <rect x="11" y="2" width="3" height="12" rx="1" />
+  </svg>
+)
+const ADS_ICON = (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.7"
+  >
+    <path d="M2 11V5l6-3 6 3v6l-6 3-6-3Z" strokeLinejoin="round" />
+    <path d="M8 2v12M2 5l6 3 6-3" strokeLinecap="round" />
+  </svg>
+)
+const TASKS_ICON = (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.7"
+  >
+    <rect x="1.5" y="2" width="13" height="12" rx="1.5" />
+    <path d="M5 6h6M5 9h4" strokeLinecap="round" />
+    <path d="M5 12h2" strokeLinecap="round" />
+  </svg>
+)
+const COMPANY_ICON = (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.7"
+  >
+    <rect x="1" y="4" width="14" height="10" rx="1.5" />
+    <path d="M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1" strokeLinecap="round" />
+    <path d="M1 8h14" strokeLinecap="round" />
+  </svg>
+)
+const EVAL_ICON = (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.7"
+  >
+    <circle cx="8" cy="5.5" r="2.5" />
+    <path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6" strokeLinecap="round" />
+    <path d="M10.5 8.5l1 1 2-2" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+)
+const METRICS_ICON = (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.7"
+  >
+    <polyline points="1 12 5 7 8 10 11 5 15 8" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M1 14h14" strokeLinecap="round" />
+  </svg>
+)
+const MEETINGS_ICON = (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.7"
+  >
+    <rect x="1.5" y="2.5" width="13" height="12" rx="1.5" />
+    <path d="M1.5 6h13" strokeLinecap="round" />
+    <path d="M5 1v3M11 1v3" strokeLinecap="round" />
+    <path d="M4.5 9h2M4.5 11.5h5" strokeLinecap="round" />
+  </svg>
+)
+const LEADS_ICON = (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.7"
+  >
+    <path d="M1.5 4.5h13v9h-13v-9Z" strokeLinejoin="round" />
+    <path d="M1.5 4.5 8 9.5l6.5-5" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+)
 
 function Sidebar() {
-  const { signOut, userProfile, refreshProfile, can = () => false, permissionsLoaded = false } = useAuth()
+  const {
+    signOut,
+    userProfile,
+    refreshProfile,
+    can = () => false,
+    permissionsLoaded = false,
+  } = useAuth()
   // Hasta que los permisos carguen desde BD, ningún módulo gateado aparece (evita flash).
   const canR = permissionsLoaded ? can : () => false
   const [menuOpen, setMenuOpen] = useState(false)
@@ -50,6 +217,8 @@ function Sidebar() {
 
   const isAdsRoute = location.pathname.startsWith('/ads')
   const isTareasRoute = location.pathname.startsWith('/tareas')
+  const isTareasFijasRoute = location.pathname.startsWith('/tareas/fijas')
+  const isTareasMainRoute = isTareasRoute && !isTareasFijasRoute
   const isEmpresaRoute = location.pathname.startsWith('/empresa')
 
   const canEval = userProfile?.access_level >= 2 || userProfile?.admin === true
@@ -64,7 +233,6 @@ function Sidebar() {
 
   return (
     <aside className="w-[260px] flex-shrink-0 bg-white border-r border-[#e0ddd4] flex flex-col h-full">
-
       {/* Brand */}
       <div className="px-5 pt-6 pb-5 border-b border-[#ece9df]">
         <MDNLogo size={72} />
@@ -72,12 +240,10 @@ function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 overflow-y-auto">
-
         <p className="text-[12px] font-mono font-bold tracking-[0.16em] uppercase text-[#888] px-2 mb-2">
           Herramientas
         </p>
         <div className="space-y-0.5">
-
           {/* Inicio — botón directo */}
           <Link
             to="/"
@@ -115,15 +281,46 @@ function Sidebar() {
             <Link
               to="/tareas"
               className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all ${
-                isTareasRoute
+                isTareasMainRoute
                   ? 'bg-[#FFB800] text-[#111]'
                   : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
               }`}
             >
-              <span className={`flex-shrink-0 ${isTareasRoute ? 'text-[#111]' : 'text-[#666]'}`}>
+              <span
+                className={`flex-shrink-0 ${isTareasMainRoute ? 'text-[#111]' : 'text-[#666]'}`}
+              >
                 {TASKS_ICON}
               </span>
               <span className="flex-1">Gestión de Tareas</span>
+            </Link>
+          )}
+
+          {/* Tareas Fijas — sub-link indentado bajo Gestión de Tareas */}
+          {canR('tareas') && canR('tareas.fijas') && (
+            <Link
+              to="/tareas/fijas"
+              className={`flex items-center gap-2.5 w-full ml-3 pl-3 px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all ${
+                isTareasFijasRoute
+                  ? 'bg-[#FFB800] text-[#111]'
+                  : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+              }`}
+            >
+              <span
+                className={`flex-shrink-0 ${isTareasFijasRoute ? 'text-[#111]' : 'text-[#666]'}`}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                >
+                  <rect x="2" y="2" width="12" height="12" rx="1.5" />
+                  <path d="M5 8l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
+              <span className="flex-1">Tareas Fijas</span>
             </Link>
           )}
 
@@ -194,83 +391,103 @@ function Sidebar() {
           </Link>
 
           {/* Evaluaciones — menú desplegable */}
-          {canR('evaluaciones') && <>
-            <button
-              onClick={() => setEvalOpen(o => !o)}
-              className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all text-left ${
-                isEvalRoute && !evalOpen
-                  ? 'bg-[#FFB800] text-[#111]'
-                  : isEvalRoute
-                    ? 'text-[#111] bg-[#f5f3eb]'
-                    : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
-              }`}
-            >
-              <span className={`flex-shrink-0 ${isEvalRoute ? 'text-[#111]' : 'text-[#666]'}`}>
-                {EVAL_ICON}
-              </span>
-              <span className="flex-1">Evaluaciones</span>
-              <svg
-                width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8"
-                className={`flex-shrink-0 transition-transform duration-200 ${evalOpen ? 'rotate-180' : ''}`}
-              >
-                <path d="M2 3.5l3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </button>
-
-            {evalOpen && (
-              <div className="ml-3 pl-3 border-l-2 border-[#ece9df] space-y-0.5 mt-0.5">
-                {/* Mi Perfil — visible a todos */}
-                <Link
-                  to="/evaluaciones/perfil"
-                  className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
-                    evalPerfilActive
-                      ? 'bg-[#FFB800] text-[#111]'
+          {canR('evaluaciones') && (
+            <>
+              <button
+                onClick={() => setEvalOpen((o) => !o)}
+                className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all text-left ${
+                  isEvalRoute && !evalOpen
+                    ? 'bg-[#FFB800] text-[#111]'
+                    : isEvalRoute
+                      ? 'text-[#111] bg-[#f5f3eb]'
                       : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
-                  }`}
+                }`}
+              >
+                <span className={`flex-shrink-0 ${isEvalRoute ? 'text-[#111]' : 'text-[#666]'}`}>
+                  {EVAL_ICON}
+                </span>
+                <span className="flex-1">Evaluaciones</span>
+                <svg
+                  width="10"
+                  height="10"
+                  viewBox="0 0 10 10"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  className={`flex-shrink-0 transition-transform duration-200 ${evalOpen ? 'rotate-180' : ''}`}
                 >
-                  <span className={`flex-shrink-0 ${evalPerfilActive ? 'text-[#111]' : 'text-[#666]'}`}>
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
-                      <circle cx="8" cy="5.5" r="2.5"/>
-                      <path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6" strokeLinecap="round"/>
-                    </svg>
-                  </span>
-                  <span className="flex-1">Mi Perfil</span>
-                </Link>
+                  <path d="M2 3.5l3 3 3-3" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
 
-                {/* Empleados y Resumen — solo para managers/admins */}
-                {canEval && (
-                  <>
-                    <Link
-                      to="/evaluaciones"
-                      className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
-                        evalActive
-                          ? 'bg-[#FFB800] text-[#111]'
-                          : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
-                      }`}
+              {evalOpen && (
+                <div className="ml-3 pl-3 border-l-2 border-[#ece9df] space-y-0.5 mt-0.5">
+                  {/* Mi Perfil — visible a todos */}
+                  <Link
+                    to="/evaluaciones/perfil"
+                    className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
+                      evalPerfilActive
+                        ? 'bg-[#FFB800] text-[#111]'
+                        : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+                    }`}
+                  >
+                    <span
+                      className={`flex-shrink-0 ${evalPerfilActive ? 'text-[#111]' : 'text-[#666]'}`}
                     >
-                      <span className={`flex-shrink-0 ${evalActive ? 'text-[#111]' : 'text-[#666]'}`}>
-                        {EVAL_ICON}
-                      </span>
-                      <span className="flex-1">Empleados</span>
-                    </Link>
-                    <Link
-                      to="/evaluaciones/resumen"
-                      className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
-                        evalResumenActive
-                          ? 'bg-[#FFB800] text-[#111]'
-                          : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
-                      }`}
-                    >
-                      <span className={`flex-shrink-0 ${evalResumenActive ? 'text-[#111]' : 'text-[#666]'}`}>
-                        {CHART_ICON}
-                      </span>
-                      <span className="flex-1">Resumen</span>
-                    </Link>
-                  </>
-                )}
-              </div>
-            )}
-          </>}
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.7"
+                      >
+                        <circle cx="8" cy="5.5" r="2.5" />
+                        <path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6" strokeLinecap="round" />
+                      </svg>
+                    </span>
+                    <span className="flex-1">Mi Perfil</span>
+                  </Link>
+
+                  {/* Empleados y Resumen — solo para managers/admins */}
+                  {canEval && (
+                    <>
+                      <Link
+                        to="/evaluaciones"
+                        className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
+                          evalActive
+                            ? 'bg-[#FFB800] text-[#111]'
+                            : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+                        }`}
+                      >
+                        <span
+                          className={`flex-shrink-0 ${evalActive ? 'text-[#111]' : 'text-[#666]'}`}
+                        >
+                          {EVAL_ICON}
+                        </span>
+                        <span className="flex-1">Empleados</span>
+                      </Link>
+                      <Link
+                        to="/evaluaciones/resumen"
+                        className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
+                          evalResumenActive
+                            ? 'bg-[#FFB800] text-[#111]'
+                            : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+                        }`}
+                      >
+                        <span
+                          className={`flex-shrink-0 ${evalResumenActive ? 'text-[#111]' : 'text-[#666]'}`}
+                        >
+                          {CHART_ICON}
+                        </span>
+                        <span className="flex-1">Resumen</span>
+                      </Link>
+                    </>
+                  )}
+                </div>
+              )}
+            </>
+          )}
 
           {/* Reportes — botón directo */}
           {canR('reportes') && (
@@ -288,7 +505,6 @@ function Sidebar() {
               <span className="flex-1">Reportes</span>
             </Link>
           )}
-
         </div>
       </nav>
 
@@ -324,7 +540,9 @@ function Sidebar() {
           ) : (
             <div className="w-9 h-9 rounded-full flex-shrink-0 bg-[#FFB800] flex items-center justify-center">
               <span className="text-[15px] font-bold text-[#111]">
-                {((userProfile?.first_name?.[0] ?? '') + (userProfile?.last_name?.[0] ?? '')).toUpperCase() || '?'}
+                {(
+                  (userProfile?.first_name?.[0] ?? '') + (userProfile?.last_name?.[0] ?? '')
+                ).toUpperCase() || '?'}
               </span>
             </div>
           )}
@@ -339,7 +557,9 @@ function Sidebar() {
             </p>
             {(userProfile?.department?.department_name || userProfile?.position?.position_name) && (
               <p className="text-[12.5px] font-mono text-[#666] truncate leading-snug mt-0.5">
-                {[userProfile.department?.department_name, userProfile.position?.position_name].filter(Boolean).join(' · ')}
+                {[userProfile.department?.department_name, userProfile.position?.position_name]
+                  .filter(Boolean)
+                  .join(' · ')}
               </p>
             )}
           </div>
@@ -349,14 +569,14 @@ function Sidebar() {
 
           {/* 3-dot trigger */}
           <button
-            onClick={() => setMenuOpen(o => !o)}
+            onClick={() => setMenuOpen((o) => !o)}
             aria-label="Opciones de usuario"
             className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-[#999] hover:text-[#111] hover:bg-[#f0ede3] transition-colors"
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-              <circle cx="8" cy="3" r="1.4"/>
-              <circle cx="8" cy="8" r="1.4"/>
-              <circle cx="8" cy="13" r="1.4"/>
+              <circle cx="8" cy="3" r="1.4" />
+              <circle cx="8" cy="8" r="1.4" />
+              <circle cx="8" cy="13" r="1.4" />
             </svg>
           </button>
         </div>
@@ -365,21 +585,45 @@ function Sidebar() {
         {menuOpen && (
           <div className="absolute bottom-full left-4 right-4 mb-2 bg-white border border-[#e0ddd4] rounded-xl shadow-lg overflow-hidden">
             <button
-              onClick={() => { setMenuOpen(false); avatarInputRef.current?.click() }}
+              onClick={() => {
+                setMenuOpen(false)
+                avatarInputRef.current?.click()
+              }}
               className="w-full flex items-center gap-2.5 px-4 py-3 text-[15px] font-medium text-[#444] hover:bg-[#f5f3eb] hover:text-[#111] transition-colors text-left"
             >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
-                <circle cx="8" cy="6" r="3.5"/>
-                <path d="M1.5 14c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5" strokeLinecap="round"/>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+              >
+                <circle cx="8" cy="6" r="3.5" />
+                <path d="M1.5 14c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5" strokeLinecap="round" />
               </svg>
               Cambiar foto
             </button>
             <button
-              onClick={() => { setMenuOpen(false); signOut() }}
+              onClick={() => {
+                setMenuOpen(false)
+                signOut()
+              }}
               className="w-full flex items-center gap-2.5 px-4 py-3 text-[15px] font-medium text-[#444] hover:bg-[#f5f3eb] hover:text-[#111] transition-colors text-left"
             >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
-                <path d="M6 2H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3M11 11l3-3-3-3M14 8H6" strokeLinecap="round" strokeLinejoin="round"/>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+              >
+                <path
+                  d="M6 2H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3M11 11l3-3-3-3M14 8H6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </svg>
               Cerrar sesión
             </button>

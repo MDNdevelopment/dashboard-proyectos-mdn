@@ -6,6 +6,7 @@ import {
   loadClients,
   upsertReport,
   loadCompanyEmployees,
+  loadFixedTaskMarks,
 } from './metricsApi'
 import SectionTotal from '../common/SectionTotal'
 import ClientFichaModal from './ClientFichaModal'
@@ -15,7 +16,8 @@ import { clientInMonth } from '../../utils/clientInMonth'
 import { employeeActiveInMonth } from '../../utils/employeeInMonth'
 import { isReportFrozen } from '../../utils/reportPeriod'
 import { calcTotal, sumScore, crecimientoCliente } from '../../utils/metricsScore'
-import { MONTHS, INDICATORS, REUNIONES_MODULE_START } from './constants'
+import { buildFixedWeeks, computeProductividad } from '../../utils/fixedTasks'
+import { MONTHS, INDICATORS, REUNIONES_MODULE_START, TAREAS_FIJAS_MODULE_START } from './constants'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import { Avatar } from '../tareas/UserPickerSingle'
 import { loadAds, spentByClientInPeriod } from '../ads/campaignSpendApi'
@@ -73,6 +75,7 @@ export default function OperacionesView({ line, companyId, year, month, closed =
       adsRes,
       meetingsRes,
       heldRes,
+      fixedTaskMarksRes,
     ] = await Promise.all([
       loadReport(line.id, year, month),
       loadPrevReport(line.id, year, month),
@@ -82,6 +85,7 @@ export default function OperacionesView({ line, companyId, year, month, closed =
       loadAds(companyId),
       countMeetingsHeldForLine(companyId, line.id, { month, year }),
       loadHeldClientIdsForLine(companyId, line.id, { month, year }),
+      loadFixedTaskMarks(line.id, year, month),
     ])
     setCompanyClientsById(Object.fromEntries((companyClientsRes.data ?? []).map((c) => [c.id, c])))
     setAds(adsRes.data ?? [])
@@ -154,6 +158,22 @@ export default function OperacionesView({ line, companyId, year, month, closed =
     // en reportes cerrados, donde se conserva el valor histórico guardado.
     if (shouldAutoSync) synced.reuniones.realizadas = meetingsCount
     synced.reuniones.justificativos = pruneJustificativos(synced.reuniones)
+
+    // "Productividad – Tareas Fijas" ya no se captura a mano — se deriva de lo tildado
+    // en Gestión de Tareas → Tareas Fijas (fixed_task_marks), mismo patrón que
+    // "Realizadas" arriba. Antes del lanzamiento del módulo no hay marcas que derivar,
+    // así que esos meses conservan las filas que ya tenían guardadas.
+    const isFijasEra =
+      year > TAREAS_FIJAS_MODULE_START.year ||
+      (year === TAREAS_FIJAS_MODULE_START.year && month >= TAREAS_FIJAS_MODULE_START.month)
+    if (isFijasEra && !closed) {
+      const weeks = buildFixedWeeks(year, month)
+      synced.productividad.tareas = computeProductividad(
+        fixedTaskMarksRes.data ?? [],
+        activeLineClients,
+        weeks,
+      )
+    }
     setReport(synced)
     baselineRef.current = synced
 
@@ -294,6 +314,12 @@ export default function OperacionesView({ line, companyId, year, month, closed =
       return next
     })
   }
+
+  // Antes del lanzamiento del módulo Tareas Fijas, "Productividad" se sigue capturando
+  // a mano (mismo criterio que en load(), ver TAREAS_FIJAS_MODULE_START en constants.js).
+  const isFijasEra =
+    year > TAREAS_FIJAS_MODULE_START.year ||
+    (year === TAREAS_FIJAS_MODULE_START.year && month >= TAREAS_FIJAS_MODULE_START.month)
 
   return (
     <fieldset disabled={closed} className="space-y-5 border-0 p-0 m-0 min-w-0">
@@ -451,55 +477,85 @@ export default function OperacionesView({ line, companyId, year, month, closed =
             >
               <input
                 type="text"
-                className="input-base text-[14px]"
-                placeholder="Nombre de tarea"
+                placeholder={isFijasEra ? undefined : 'Nombre de tarea'}
+                className={
+                  isFijasEra
+                    ? 'input-base text-[14px] bg-[#f2f0e8] text-[#888] cursor-not-allowed'
+                    : 'input-base text-[14px]'
+                }
                 value={tarea.nombre}
-                onChange={(e) => setTareaField(idx, 'nombre', e.target.value)}
+                onChange={
+                  isFijasEra ? undefined : (e) => setTareaField(idx, 'nombre', e.target.value)
+                }
+                disabled={isFijasEra}
+                readOnly={isFijasEra}
               />
               <div className="flex items-center gap-1">
                 <span className="text-[12px] text-[#aaa]">Real</span>
                 <input
                   type="number"
-                  min="0"
-                  className="input-base w-20 text-[14px]"
-                  value={tarea.realizado ?? ''}
-                  onChange={(e) => setTareaField(idx, 'realizado', e.target.value)}
+                  min={isFijasEra ? undefined : '0'}
+                  className={
+                    isFijasEra
+                      ? 'input-base w-20 text-[14px] bg-[#f2f0e8] text-[#888] cursor-not-allowed'
+                      : 'input-base w-20 text-[14px]'
+                  }
+                  value={isFijasEra ? (tarea.realizado ?? 0) : (tarea.realizado ?? '')}
+                  onChange={
+                    isFijasEra ? undefined : (e) => setTareaField(idx, 'realizado', e.target.value)
+                  }
+                  disabled={isFijasEra}
+                  readOnly={isFijasEra}
                 />
               </div>
               <div className="flex items-center gap-1">
                 <span className="text-[12px] text-[#aaa]">Meta</span>
                 <input
                   type="number"
-                  min="0"
-                  className="input-base w-20 text-[14px]"
-                  value={tarea.meta ?? ''}
-                  onChange={(e) => setTareaField(idx, 'meta', e.target.value)}
+                  min={isFijasEra ? undefined : '0'}
+                  className={
+                    isFijasEra
+                      ? 'input-base w-20 text-[14px] bg-[#f2f0e8] text-[#888] cursor-not-allowed'
+                      : 'input-base w-20 text-[14px]'
+                  }
+                  value={isFijasEra ? (tarea.meta ?? 0) : (tarea.meta ?? '')}
+                  onChange={
+                    isFijasEra ? undefined : (e) => setTareaField(idx, 'meta', e.target.value)
+                  }
+                  disabled={isFijasEra}
+                  readOnly={isFijasEra}
                 />
               </div>
             </div>
           ))}
-          <button
-            onClick={() => {
-              setReport((prev) => {
-                const next = structuredClone(prev)
-                next.productividad.tareas.push({ nombre: '', realizado: null, meta: null })
-                return next
-              })
-            }}
-            className="text-[13px] text-[#888] hover:text-[#111] font-medium flex items-center gap-1 mt-1"
-          >
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 12 12"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
+          {isFijasEra ? (
+            <p className="mt-1 text-[12px] font-mono text-[#888]">
+              Derivado de la grilla de tareas recurrentes (Gestión de Tareas)
+            </p>
+          ) : (
+            <button
+              onClick={() => {
+                setReport((prev) => {
+                  const next = structuredClone(prev)
+                  next.productividad.tareas.push({ nombre: '', realizado: null, meta: null })
+                  return next
+                })
+              }}
+              className="text-[13px] text-[#888] hover:text-[#111] font-medium flex items-center gap-1 mt-1"
             >
-              <path d="M6 1v10M1 6h10" strokeLinecap="round" />
-            </svg>
-            Agregar tarea
-          </button>
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 12 12"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+              >
+                <path d="M6 1v10M1 6h10" strokeLinecap="round" />
+              </svg>
+              Agregar tarea
+            </button>
+          )}
         </div>
         <SectionTotal label="tareas" count={report.productividad.tareas.length} />
       </Section>

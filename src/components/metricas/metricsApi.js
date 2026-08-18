@@ -108,6 +108,7 @@ export async function createClient(companyId, fields) {
     designer_id = null,
     audiovisual_ids = [],
     apoyo_ids = [],
+    fixed_tasks = null,
   } = fields
   return supabase
     .from('metric_clients')
@@ -128,6 +129,7 @@ export async function createClient(companyId, fields) {
       designer_id,
       audiovisual_ids,
       apoyo_ids,
+      fixed_tasks,
     })
     .select()
     .single()
@@ -187,6 +189,22 @@ export async function upsertClientPrivate(clientId, { phone, instagram_email }) 
     instagram_email: instagram_email || null,
     updated_at: new Date().toISOString(),
   })
+}
+
+// ─── Tareas Fijas ───────────────────────────────────────────────────────────────
+
+/**
+ * Carga las marcas de Tareas Fijas de una línea en un mes concreto (todas las
+ * semanas). Alimenta el auto-llenado del indicador «2. Productividad» en
+ * OperacionesView (ver utils/fixedTasks.js:computeProductividad).
+ */
+export async function loadFixedTaskMarks(lineId, year, month) {
+  return supabase
+    .from('fixed_task_marks')
+    .select('*')
+    .eq('line_id', lineId)
+    .eq('period_year', year)
+    .eq('period_month', month)
 }
 
 // ─── Reportes ─────────────────────────────────────────────────────────────────

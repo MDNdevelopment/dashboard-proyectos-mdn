@@ -108,7 +108,7 @@ export default function AppLayout() {
     }
   }
 
-  // Abrir el modal de un proyecto específico desde ?projectId=uuid (deeplink desde Mi Perfil v2)
+  // Abrir el modal de un proyecto específico desde ?projectId=uuid (deeplink desde notificaciones)
   useEffect(() => {
     const projectId = searchParams.get('projectId')
     if (!projectId || projects.length === 0) return

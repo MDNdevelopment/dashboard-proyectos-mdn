@@ -102,6 +102,7 @@ vi.mock('../components/metricas/metricsApi', () => ({
   loadCompanyUsers: vi.fn().mockResolvedValue({ data: [], error: null }),
   seedMetricsIfEmpty: vi.fn().mockResolvedValue(null),
   loadLines: vi.fn().mockResolvedValue({ data: [], error: null }),
+  loadFixedTaskMarks: vi.fn().mockResolvedValue({ data: [], error: null }),
 }))
 
 vi.mock('../utils/metricsFinance', () => ({

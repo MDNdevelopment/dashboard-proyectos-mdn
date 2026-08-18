@@ -153,8 +153,16 @@ const MOCK_LINE_CLIENTS = [
   { id: 'lc3', company_id: 'co-1', line_id: 'l2' },
 ]
 
+// Mock del recuadro de análisis IA: solo nos interesa que se muestre/oculte según el
+// gate de acceso — su comportamiento interno (fetch, caché, etc.) se prueba en
+// CeoAnalysisCard.test.jsx.
+vi.mock('../components/home/CeoAnalysisCard', () => ({
+  default: () => <div>Análisis IA mock</div>,
+}))
+
 import { useAuth } from '../context/AuthContext'
 import HomePage from '../pages/HomePage'
+import { CEO_ANALYSIS_USER_IDS } from '../lib/ceoAnalysisAccess'
 
 function renderPage(profileOverride = {}) {
   useAuth.mockReturnValue({
@@ -200,6 +208,18 @@ describe('HomePage — encabezado personal', () => {
     const img = container.querySelector('img')
     expect(img).toHaveAttribute('src', 'https://example.com/foto.jpg')
     expect(screen.queryByText('G')).not.toBeInTheDocument()
+  })
+})
+
+describe('HomePage — Análisis IA (recuadro solo para dirección autorizada)', () => {
+  it('NO se muestra para un usuario fuera de la lista de acceso, aunque sea admin', () => {
+    renderPage({ user_id: 'u1', admin: true, access_level: 4 })
+    expect(screen.queryByText(/análisis ia mock/i)).not.toBeInTheDocument()
+  })
+
+  it('SÍ se muestra para un usuario en la lista de acceso, aunque no sea admin', () => {
+    renderPage({ user_id: CEO_ANALYSIS_USER_IDS[0], admin: false, access_level: 2 })
+    expect(screen.getByText(/análisis ia mock/i)).toBeInTheDocument()
   })
 })
 

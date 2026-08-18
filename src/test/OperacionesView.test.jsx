@@ -54,6 +54,7 @@ const mockUpsertReport = vi.fn()
 const mockLoadAds = vi.fn()
 const mockCountMeetingsHeldForLine = vi.fn()
 const mockLoadHeldClientIdsForLine = vi.fn()
+const mockLoadFixedTaskMarks = vi.fn()
 
 vi.mock('../components/metricas/metricsApi', () => ({
   loadReport: (...a) => mockLoadReport(...a),
@@ -61,6 +62,7 @@ vi.mock('../components/metricas/metricsApi', () => ({
   loadClients: (...a) => mockLoadClients(...a),
   loadCompanyEmployees: (...a) => mockLoadCompanyEmployees(...a),
   upsertReport: (...a) => mockUpsertReport(...a),
+  loadFixedTaskMarks: (...a) => mockLoadFixedTaskMarks(...a),
 }))
 
 vi.mock('../components/ads/campaignSpendApi', async () => {
@@ -98,6 +100,7 @@ describe('OperacionesView — columna Inversión Ads (Crecimiento de seguidores)
     mockUpsertReport.mockResolvedValue({ data: null, error: null })
     mockCountMeetingsHeldForLine.mockResolvedValue({ count: 0, error: null })
     mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: [], error: null })
+    mockLoadFixedTaskMarks.mockResolvedValue({ data: [], error: null })
     mockLoadAds.mockResolvedValue({ data: [], error: null })
   })
 
@@ -286,6 +289,52 @@ describe('OperacionesView — meses previos al módulo Reuniones conservan el va
   })
 })
 
+describe('OperacionesView — "Productividad – Tareas Fijas" antes del lanzamiento del módulo (< sept. 2026) sigue siendo manual', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockLoadPrevReport.mockResolvedValue({ data: null, error: null })
+    mockLoadClients.mockResolvedValue({ data: MOCK_CLIENTS, error: null })
+    mockLoadCompanyEmployees.mockResolvedValue({ data: [], error: null })
+    mockUpsertReport.mockResolvedValue({ data: null, error: null })
+    mockLoadAds.mockResolvedValue({ data: [], error: null })
+    mockCountMeetingsHeldForLine.mockResolvedValue({ count: 0, error: null })
+    mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: [], error: null })
+    mockLoadFixedTaskMarks.mockResolvedValue({ data: [], error: null })
+  })
+
+  it('agosto 2026 (previo a septiembre): las tareas guardadas a mano se pueden editar y agregar', async () => {
+    const data = makeReportData()
+    data.productividad.tareas = [{ nombre: 'Grillas Redes→Diseño', realizado: 3, meta: 4 }]
+    mockLoadReport.mockResolvedValue({ data: { data }, error: null })
+    renderView({ month: 8 })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
+    const nombreInput = screen.getByDisplayValue('Grillas Redes→Diseño')
+    expect(nombreInput).not.toBeDisabled()
+    fireEvent.change(nombreInput, { target: { value: 'Grillas editado' } })
+    expect(screen.getByDisplayValue('Grillas editado')).toBeInTheDocument()
+    expect(screen.getByText('Agregar tarea')).toBeInTheDocument()
+  })
+
+  it('septiembre 2026 (lanzamiento del módulo, inclusive): las tareas quedan de solo lectura', async () => {
+    const data = makeReportData()
+    data.productividad.tareas = [{ nombre: 'Grillas Redes→Diseño', realizado: 3, meta: 4 }]
+    mockLoadReport.mockResolvedValue({ data: { data }, error: null })
+    renderView({ month: 9 })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
+    // Al ser la era del módulo, computeProductividad deriva la lista completa de
+    // tareas (5, según TASK_KEYS) en vez de conservar la fila guardada a mano.
+    const section = screen.getByText('2. Productividad – Tareas Fijas').closest('div.space-y-3')
+    const nombreInputs = within(section).getAllByRole('textbox')
+    expect(nombreInputs.length).toBeGreaterThan(0)
+    nombreInputs.forEach((input) => expect(input).toBeDisabled())
+    expect(within(section).queryByText('Agregar tarea')).not.toBeInTheDocument()
+  })
+})
+
 describe('OperacionesView — reporte cerrado (prop "closed")', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -341,6 +390,7 @@ describe('OperacionesView — meta de reuniones topada a la cantidad de marcas a
     mockLoadAds.mockResolvedValue({ data: [], error: null })
     mockCountMeetingsHeldForLine.mockResolvedValue({ count: 0, error: null })
     mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: [], error: null })
+    mockLoadFixedTaskMarks.mockResolvedValue({ data: [], error: null })
   })
 
   it('clampa un valor tipeado por encima de la cantidad de marcas activas', async () => {
@@ -433,6 +483,7 @@ describe('OperacionesView — meses pasados congelados no reconcilian contra el 
     mockLoadAds.mockResolvedValue({ data: [], error: null })
     mockCountMeetingsHeldForLine.mockResolvedValue({ count: 0, error: null })
     mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: [], error: null })
+    mockLoadFixedTaskMarks.mockResolvedValue({ data: [], error: null })
     mockLoadReport.mockResolvedValue({ data: { data: reportSavedInJune() }, error: null })
   })
 
@@ -496,6 +547,7 @@ describe('OperacionesView — alineación de columnas en "Crecimiento de seguido
     mockUpsertReport.mockResolvedValue({ data: null, error: null })
     mockCountMeetingsHeldForLine.mockResolvedValue({ count: 0, error: null })
     mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: [], error: null })
+    mockLoadFixedTaskMarks.mockResolvedValue({ data: [], error: null })
     mockLoadAds.mockResolvedValue({ data: [], error: null })
 
     const data = makeReportData()
@@ -577,6 +629,7 @@ describe('OperacionesView — cuenta movida a otra línea resuelve nombre (no "[
     mockLoadAds.mockResolvedValue({ data: [], error: null })
     mockCountMeetingsHeldForLine.mockResolvedValue({ count: 0, error: null })
     mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: [], error: null })
+    mockLoadFixedTaskMarks.mockResolvedValue({ data: [], error: null })
 
     const data = makeReportData()
     data.crecimiento.items = [

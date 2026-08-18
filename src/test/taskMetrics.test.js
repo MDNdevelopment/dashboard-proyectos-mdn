@@ -3,6 +3,7 @@ import {
   aggregateTaskMetrics,
   buildMonthlySeries,
   aggregateProjectParticipation,
+  projectInMonth,
 } from '../utils/aggregateTaskMetrics'
 import { monthIndex, currentMonthIndex } from '../components/tareas/constants'
 
@@ -53,6 +54,35 @@ describe('aggregateTaskMetrics', () => {
     expect(m.total).toBe(2)
   })
 
+  it('cuenta tareas asignadas via assignee_ids (array) a varios responsables', () => {
+    const tasks = [
+      task({ assignee_id: null, assignee_ids: [USER_A, USER_B] }),
+      task({ assignee_id: null, assignee_ids: [USER_B] }),
+    ]
+    const mA = aggregateTaskMetrics(tasks, USER_A, { role: 'assignee' })
+    const mB = aggregateTaskMetrics(tasks, USER_B, { role: 'assignee' })
+    expect(mA.total).toBe(1)
+    expect(mB.total).toBe(2)
+  })
+
+  it('cuenta una tarea sin assignee_id escalar pero con el usuario en assignee_ids', () => {
+    const tasks = [task({ assignee_id: null, assignee_ids: [USER_A] })]
+    const m = aggregateTaskMetrics(tasks, USER_A, { role: 'assignee' })
+    expect(m.total).toBe(1)
+  })
+
+  it('sigue contando tareas legadas con solo assignee_id escalar (sin assignee_ids)', () => {
+    const tasks = [task({ assignee_id: USER_A, assignee_ids: undefined })]
+    const m = aggregateTaskMetrics(tasks, USER_A, { role: 'assignee' })
+    expect(m.total).toBe(1)
+  })
+
+  it('el rol support solo mira support_id y no assignee_ids', () => {
+    const tasks = [task({ assignee_id: null, assignee_ids: [USER_A], support_id: null })]
+    const m = aggregateTaskMetrics(tasks, USER_A, { role: 'support' })
+    expect(m.total).toBe(0)
+  })
+
   it('filtra solo las tareas del empleado como apoyo', () => {
     const tasks = [
       task({ support_id: USER_A }),
@@ -88,7 +118,12 @@ describe('aggregateTaskMetrics', () => {
 
   it('detecta tarea a tiempo (closed_date <= due_date)', () => {
     const tasks = [
-      task({ status: 'Terminado', due_date: '2026-02-10', closed_date: '2026-02-08', request_date: '2026-01-01' }),
+      task({
+        status: 'Terminado',
+        due_date: '2026-02-10',
+        closed_date: '2026-02-08',
+        request_date: '2026-01-01',
+      }),
     ]
     const m = aggregateTaskMetrics(tasks, USER_A)
     expect(m.aTiempo).toBe(1)
@@ -99,7 +134,12 @@ describe('aggregateTaskMetrics', () => {
 
   it('detecta tarea tarde (closed_date > due_date)', () => {
     const tasks = [
-      task({ status: 'Terminado', due_date: '2026-02-05', closed_date: '2026-02-10', request_date: '2026-01-01' }),
+      task({
+        status: 'Terminado',
+        due_date: '2026-02-05',
+        closed_date: '2026-02-10',
+        request_date: '2026-01-01',
+      }),
     ]
     const m = aggregateTaskMetrics(tasks, USER_A)
     expect(m.aTiempo).toBe(0)
@@ -110,8 +150,18 @@ describe('aggregateTaskMetrics', () => {
 
   it('calcula promedio de demora sobre múltiples tareas tarde', () => {
     const tasks = [
-      task({ status: 'Terminado', due_date: '2026-02-01', closed_date: '2026-02-11', request_date: '2026-01-01' }), // 10 días tarde
-      task({ status: 'Terminado', due_date: '2026-03-01', closed_date: '2026-03-06', request_date: '2026-02-01' }), // 5 días tarde
+      task({
+        status: 'Terminado',
+        due_date: '2026-02-01',
+        closed_date: '2026-02-11',
+        request_date: '2026-01-01',
+      }), // 10 días tarde
+      task({
+        status: 'Terminado',
+        due_date: '2026-03-01',
+        closed_date: '2026-03-06',
+        request_date: '2026-02-01',
+      }), // 5 días tarde
     ]
     const m = aggregateTaskMetrics(tasks, USER_A)
     expect(m.avgDelayDays).toBe(8) // redondeo de (10+5)/2 = 7.5 → 8
@@ -119,9 +169,24 @@ describe('aggregateTaskMetrics', () => {
 
   it('onTimePct combina a tiempo y tarde correctamente', () => {
     const tasks = [
-      task({ status: 'Terminado', due_date: '2026-02-10', closed_date: '2026-02-08', request_date: '2026-01-01' }), // a tiempo
-      task({ status: 'Terminado', due_date: '2026-03-01', closed_date: '2026-03-06', request_date: '2026-02-01' }), // tarde
-      task({ status: 'Terminado', due_date: '2026-04-01', closed_date: '2026-03-30', request_date: '2026-03-01' }), // a tiempo
+      task({
+        status: 'Terminado',
+        due_date: '2026-02-10',
+        closed_date: '2026-02-08',
+        request_date: '2026-01-01',
+      }), // a tiempo
+      task({
+        status: 'Terminado',
+        due_date: '2026-03-01',
+        closed_date: '2026-03-06',
+        request_date: '2026-02-01',
+      }), // tarde
+      task({
+        status: 'Terminado',
+        due_date: '2026-04-01',
+        closed_date: '2026-03-30',
+        request_date: '2026-03-01',
+      }), // a tiempo
     ]
     const m = aggregateTaskMetrics(tasks, USER_A)
     // 2 a tiempo, 1 tarde → 67%
@@ -130,8 +195,18 @@ describe('aggregateTaskMetrics', () => {
 
   it('ignora tareas sin due_date o closed_date para el cálculo de onTimePct', () => {
     const tasks = [
-      task({ status: 'Terminado', due_date: null, closed_date: '2026-02-10', request_date: '2026-01-01' }),
-      task({ status: 'Terminado', due_date: '2026-03-01', closed_date: null, request_date: '2026-02-01' }),
+      task({
+        status: 'Terminado',
+        due_date: null,
+        closed_date: '2026-02-10',
+        request_date: '2026-01-01',
+      }),
+      task({
+        status: 'Terminado',
+        due_date: '2026-03-01',
+        closed_date: null,
+        request_date: '2026-02-01',
+      }),
     ]
     const m = aggregateTaskMetrics(tasks, USER_A)
     expect(m.terminadas).toBe(2)
@@ -162,7 +237,12 @@ describe('aggregateTaskMetrics', () => {
       // Vencida en el pasado y aún abierta → retrasada
       task({ status: 'En proceso', due_date: '2020-01-01', request_date: '2019-12-01' }),
       // Vencida pero terminada → no retrasada
-      task({ status: 'Terminado', due_date: '2020-01-01', closed_date: '2020-02-01', request_date: '2019-12-01' }),
+      task({
+        status: 'Terminado',
+        due_date: '2020-01-01',
+        closed_date: '2020-02-01',
+        request_date: '2019-12-01',
+      }),
       // Sin due_date → no retrasada
       task({ status: 'En proceso' }),
     ]
@@ -241,7 +321,7 @@ describe('buildMonthlySeries', () => {
       task({ status: 'Terminado', request_date: '2026-04-01', closed_date: '2026-04-15' }),
     ]
     const series = buildMonthlySeries(tasks, USER_A)
-    const indices = series.map(s => s.monthIdx)
+    const indices = series.map((s) => s.monthIdx)
     // Deben estar en orden ascendente
     for (let i = 1; i < indices.length; i++) {
       expect(indices[i]).toBeGreaterThan(indices[i - 1])
@@ -256,6 +336,21 @@ describe('buildMonthlySeries', () => {
     }
   })
 
+  it('incluye tareas asignadas via assignee_ids (array)', () => {
+    const tasks = [
+      task({
+        assignee_id: null,
+        assignee_ids: [USER_A],
+        status: 'Terminado',
+        request_date: '2026-03-01',
+        closed_date: '2026-03-20',
+      }),
+    ]
+    const series = buildMonthlySeries(tasks, USER_A)
+    expect(series.length).toBeGreaterThan(0)
+    expect(series[0].total).toBe(1)
+  })
+
   it('completionPct por mes es correcto', () => {
     const mar2026 = monthIndex(new Date(2026, 2, 1))
     const tasks = [
@@ -264,7 +359,7 @@ describe('buildMonthlySeries', () => {
       task({ status: 'En proceso', request_date: '2026-03-10' }), // sigue activa hasta hoy
     ]
     const series = buildMonthlySeries(tasks, USER_A)
-    const marPt = series.find(s => s.monthIdx === mar2026)
+    const marPt = series.find((s) => s.monthIdx === mar2026)
     expect(marPt).toBeDefined()
     // En marzo hay 3 tareas activas (las abiertas siguen hasta hoy)
     // 2 terminadas → 67%
@@ -273,18 +368,14 @@ describe('buildMonthlySeries', () => {
   })
 
   it('no incluye tareas del otro rol (apoyo)', () => {
-    const tasks = [
-      task({ assignee_id: USER_B, support_id: USER_A, request_date: '2026-03-01' }),
-    ]
+    const tasks = [task({ assignee_id: USER_B, support_id: USER_A, request_date: '2026-03-01' })]
     // role assignee → USER_A no aparece
     const series = buildMonthlySeries(tasks, USER_A, { role: 'assignee' })
     expect(series).toEqual([])
   })
 
   it('usa role support cuando se indica', () => {
-    const tasks = [
-      task({ assignee_id: USER_B, support_id: USER_A, request_date: '2026-03-01' }),
-    ]
+    const tasks = [task({ assignee_id: USER_B, support_id: USER_A, request_date: '2026-03-01' })]
     const series = buildMonthlySeries(tasks, USER_A, { role: 'support' })
     expect(series.length).toBeGreaterThan(0)
   })
@@ -341,5 +432,42 @@ describe('aggregateProjectParticipation', () => {
     ]
     const r = aggregateProjectParticipation(projects, USER_A)
     expect(r.total).toBe(1)
+  })
+
+  it('filtra por monthIdx usando created_at cuando se indica', () => {
+    const may2026 = monthIndex(new Date(2026, 4, 1))
+    const projects = [
+      { id: '1', status: 'En proceso', members: [USER_A], created_at: '2026-05-10' },
+      { id: '2', status: 'En proceso', members: [USER_A], created_at: '2026-04-10' },
+    ]
+    const r = aggregateProjectParticipation(projects, USER_A, { monthIdx: may2026 })
+    expect(r.total).toBe(1)
+    expect(r.byStatus['En proceso']).toBe(1)
+  })
+})
+
+// ─── projectInMonth ────────────────────────────────────────────────────────
+
+describe('projectInMonth', () => {
+  const may2026 = monthIndex(new Date(2026, 4, 1))
+
+  it('devuelve true cuando created_at cae en el mes indicado', () => {
+    expect(projectInMonth({ created_at: '2026-05-15' }, may2026)).toBe(true)
+  })
+
+  it('devuelve false cuando created_at cae en otro mes', () => {
+    expect(projectInMonth({ created_at: '2026-04-15' }, may2026)).toBe(false)
+  })
+
+  it('devuelve true en modo histórico (monthIdx null), sin importar la fecha', () => {
+    expect(projectInMonth({ created_at: '2026-04-15' }, null)).toBe(true)
+  })
+
+  it('devuelve true cuando no hay created_at (no se oculta el proyecto)', () => {
+    expect(projectInMonth({}, may2026)).toBe(true)
+  })
+
+  it('acepta timestamps completos, no solo fechas puras', () => {
+    expect(projectInMonth({ created_at: '2026-05-15T10:30:00Z' }, may2026)).toBe(true)
   })
 })

@@ -1,7 +1,16 @@
-import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { useNavigate, useOutletContext } from 'react-router-dom'
+import { createPortal } from 'react-dom'
+import { addMonths, addYears, format } from 'date-fns'
+import { es } from 'date-fns/locale'
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
 } from 'recharts'
 import { supabase } from '../../supabase'
 import { Avatar } from '../tareas/UserPickerSingle'
@@ -10,8 +19,194 @@ import {
   aggregateTaskMetrics,
   buildMonthlySeries,
   aggregateProjectParticipation,
+  projectInMonth,
 } from '../../utils/aggregateTaskMetrics'
+import { aggregateEmployeeFixedTasks, TASK_LABELS } from '../../utils/fixedTasks'
 import { COL_META, parseD, monthIndex } from '../tareas/constants'
+import { fmtDate } from '../../utils/formatDate'
+
+/** Mes actual en formato "YYYY-MM" (local), para inicializar el selector de período. */
+function thisMonthStr() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+function monthStrToDate(str) {
+  const [y, m] = str.split('-').map(Number)
+  return new Date(y, m - 1, 1)
+}
+
+function dateToMonthStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+const CHEVRON_LEFT = 'M6 1L2 4l4 3'
+const CHEVRON_RIGHT = 'M2 1l4 3-4 3'
+
+/**
+ * Selector de mes con flechas anterior/siguiente y un popover para elegir
+ * mes/año rápido (grid de 12 meses + navegación de año), en español.
+ * `value` es un string "YYYY-MM" siempre válido (el toggle "Histórico" vive
+ * en el componente padre, fuera de este selector).
+ */
+function MonthPeriodPicker({ value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState({ top: 0, left: 0 })
+  const [pickerDate, setPickerDate] = useState(() => monthStrToDate(value))
+  const triggerRef = useRef(null)
+  const popoverRef = useRef(null)
+
+  const current = monthStrToDate(value)
+
+  function openPicker() {
+    if (!triggerRef.current) return
+    const r = triggerRef.current.getBoundingClientRect()
+    setPos({ top: r.bottom + 4, left: r.left })
+    setPickerDate(current)
+    setOpen(true)
+  }
+
+  useEffect(() => {
+    if (!open) return
+    const fn = (e) => {
+      if (!popoverRef.current?.contains(e.target) && !triggerRef.current?.contains(e.target)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', fn)
+    return () => document.removeEventListener('mousedown', fn)
+  }, [open])
+
+  function step(delta) {
+    onChange(dateToMonthStr(addMonths(current, delta)))
+  }
+
+  function pickMonth(monthIdx0) {
+    onChange(dateToMonthStr(new Date(pickerDate.getFullYear(), monthIdx0, 1)))
+    setOpen(false)
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        onClick={() => step(-1)}
+        aria-label="Mes anterior"
+        className="w-7 h-7 flex items-center justify-center rounded-lg text-[#888] hover:bg-[#f5f3eb] hover:text-[#111] transition-colors"
+      >
+        <svg
+          width="9"
+          height="9"
+          viewBox="0 0 8 8"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+        >
+          <path d={CHEVRON_LEFT} strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+
+      <div className="relative">
+        <button
+          ref={triggerRef}
+          type="button"
+          onClick={openPicker}
+          className="px-3 py-1.5 rounded-lg text-[14px] font-semibold text-[#111] border border-[#e0ddd4] hover:border-[#bbb] bg-white transition-all capitalize min-w-[150px] text-center"
+        >
+          {format(current, 'MMMM yyyy', { locale: es })}
+        </button>
+
+        {open &&
+          createPortal(
+            <div
+              ref={popoverRef}
+              style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999 }}
+              className="bg-white border border-[#e8e5db] rounded-xl shadow-lg p-3 w-56"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <button
+                  type="button"
+                  onClick={() => setPickerDate((d) => addYears(d, -1))}
+                  aria-label="Año anterior"
+                  className="w-6 h-6 flex items-center justify-center rounded-md text-[#888] hover:bg-[#f5f3eb] transition-colors"
+                >
+                  <svg
+                    width="8"
+                    height="8"
+                    viewBox="0 0 8 8"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                  >
+                    <path d={CHEVRON_LEFT} strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <p className="text-[13px] font-semibold text-[#111]">{pickerDate.getFullYear()}</p>
+                <button
+                  type="button"
+                  onClick={() => setPickerDate((d) => addYears(d, 1))}
+                  aria-label="Año siguiente"
+                  className="w-6 h-6 flex items-center justify-center rounded-md text-[#888] hover:bg-[#f5f3eb] transition-colors"
+                >
+                  <svg
+                    width="8"
+                    height="8"
+                    viewBox="0 0 8 8"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                  >
+                    <path d={CHEVRON_RIGHT} strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-3 gap-1">
+                {Array.from({ length: 12 }, (_, i) => {
+                  const label = format(new Date(2000, i, 1), 'MMM', { locale: es })
+                  const isSelected =
+                    pickerDate.getFullYear() === current.getFullYear() && i === current.getMonth()
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => pickMonth(i)}
+                      className={`text-[12.5px] rounded-md py-1.5 capitalize transition-colors ${
+                        isSelected
+                          ? '!bg-[#111] !text-white font-semibold'
+                          : 'text-[#333] hover:bg-[#f5f3eb]'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>,
+            document.body,
+          )}
+      </div>
+
+      <button
+        type="button"
+        onClick={() => step(1)}
+        aria-label="Mes siguiente"
+        className="w-7 h-7 flex items-center justify-center rounded-lg text-[#888] hover:bg-[#f5f3eb] hover:text-[#111] transition-colors"
+      >
+        <svg
+          width="9"
+          height="9"
+          viewBox="0 0 8 8"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+        >
+          <path d={CHEVRON_RIGHT} strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+    </div>
+  )
+}
 
 // ─── Sub-componentes locales ──────────────────────────────────────────────────
 
@@ -45,9 +240,7 @@ function KpiCard({ label, value, sub, accent = false }) {
       >
         {label}
       </p>
-      <p className="text-[28px] font-bold leading-none text-[#111]">
-        {value ?? '—'}
-      </p>
+      <p className="text-[28px] font-bold leading-none text-[#111]">{value ?? '—'}</p>
       {sub && (
         <p className={`text-[13px] font-medium ${accent ? 'text-[#5a3d00]' : 'text-[#888]'}`}>
           {sub}
@@ -63,10 +256,7 @@ function StatusBar({ label, count, total, color }) {
   return (
     <div className="flex items-center gap-3">
       <div className="flex items-center gap-1.5 w-32 flex-shrink-0">
-        <span
-          className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
-          style={{ background: color }}
-        />
+        <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: color }} />
         <span className="text-[13px] font-mono text-[#888] truncate">{label}</span>
       </div>
       <div className="flex-1 bg-[#f0ede3] rounded-full h-2 relative overflow-hidden">
@@ -75,26 +265,35 @@ function StatusBar({ label, count, total, color }) {
           style={{ width: `${pct}%`, background: color }}
         />
       </div>
-      <span className="text-[13px] font-bold font-mono w-7 text-right text-[#555]">
-        {count}
-      </span>
+      <span className="text-[13px] font-bold font-mono w-7 text-right text-[#555]">{count}</span>
     </div>
   )
 }
 
 /** Tarjeta compacta de métrica operativa (retrasadas/bloqueadas/arrastradas) */
 function StatChip({ label, value, color = '#888', onClick }) {
-  const base = 'flex flex-col items-center gap-0.5 bg-[#fafaf7] rounded-xl border border-[#e0ddd4] px-4 py-3 min-w-[90px]'
-  const clickable = onClick ? 'cursor-pointer hover:border-[#bbb] hover:bg-[#f5f3eb] transition-colors' : ''
+  const base =
+    'flex flex-col items-center gap-0.5 bg-[#fafaf7] rounded-xl border border-[#e0ddd4] px-4 py-3 min-w-[90px]'
+  const clickable = onClick
+    ? 'cursor-pointer hover:border-[#bbb] hover:bg-[#f5f3eb] transition-colors'
+    : ''
   return onClick ? (
     <button type="button" onClick={onClick} className={`${base} ${clickable}`}>
-      <span className="text-[22px] font-bold leading-none" style={{ color }}>{value}</span>
-      <span className="text-[11px] font-mono text-[#888] uppercase tracking-[0.1em] text-center leading-tight">{label}</span>
+      <span className="text-[22px] font-bold leading-none" style={{ color }}>
+        {value}
+      </span>
+      <span className="text-[11px] font-mono text-[#888] uppercase tracking-[0.1em] text-center leading-tight">
+        {label}
+      </span>
     </button>
   ) : (
     <div className={base}>
-      <span className="text-[22px] font-bold leading-none" style={{ color }}>{value}</span>
-      <span className="text-[11px] font-mono text-[#888] uppercase tracking-[0.1em] text-center leading-tight">{label}</span>
+      <span className="text-[22px] font-bold leading-none" style={{ color }}>
+        {value}
+      </span>
+      <span className="text-[11px] font-mono text-[#888] uppercase tracking-[0.1em] text-center leading-tight">
+        {label}
+      </span>
     </div>
   )
 }
@@ -103,22 +302,26 @@ function StatChip({ label, value, color = '#888', onClick }) {
 
 const STATUS_ORDER = ['En proceso', 'Por revisar', 'Pendiente', 'Paralizado', 'Terminado']
 const PROJECT_STATUS_META = {
-  Pendiente:    { color: '#F0871F', bg: '#FEF3E2' },
+  Pendiente: { color: '#F0871F', bg: '#FEF3E2' },
   'En proceso': { color: '#b45309', bg: '#FEF9C3' },
-  Completado:   { color: '#16A34A', bg: '#DCFCE7' },
+  Completado: { color: '#16A34A', bg: '#DCFCE7' },
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 export default function MiPerfilV2View({ userId, companyId, userProfile, canEval }) {
   const navigate = useNavigate()
+  const { onViewProject } = useOutletContext() ?? {}
   const [allTasks, setAllTasks] = useState([])
   const [projects, setProjects] = useState([])
   const [users, setUsers] = useState([])
+  const [fixedClients, setFixedClients] = useState([])
+  const [fixedMarks, setFixedMarks] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [targetId, setTargetId] = useState(userId)
-  const [selectedMonth, setSelectedMonth] = useState('') // '' = histórico
+  const [selectedMonth, setSelectedMonth] = useState(thisMonthStr()) // mes actual por defecto
+  const [isHistorico, setIsHistorico] = useState(false) // toggle independiente del mes elegido
 
   // Si cambia el userId (distinto empleado autenticado), resetear target
   useEffect(() => {
@@ -132,7 +335,13 @@ export default function MiPerfilV2View({ userId, companyId, userProfile, canEval
 
     const queries = [
       supabase.from('tasks').select('*').eq('company_id', companyId),
-      supabase.from('projects').select('id, name, status, members'),
+      supabase.from('projects').select('id, name, status, members, created_at'),
+      supabase
+        .from('metric_clients')
+        .select('id, name, social_manager_id, designer_id')
+        .eq('company_id', companyId)
+        .is('deleted_at', null),
+      supabase.from('fixed_task_marks').select('*').eq('company_id', companyId),
     ]
     if (canEval) {
       queries.push(
@@ -140,14 +349,15 @@ export default function MiPerfilV2View({ userId, companyId, userProfile, canEval
           .from('users')
           .select(
             'user_id, first_name, last_name, avatar_url, access_level, company_id,' +
-            ' position:positions(position_name)',
+              ' position:positions(position_name)',
           )
           .eq('company_id', companyId)
           .order('first_name'),
       )
     }
 
-    const [tasksRes, projectsRes, usersRes] = await Promise.all(queries)
+    const [tasksRes, projectsRes, fixedClientsRes, fixedMarksRes, usersRes] =
+      await Promise.all(queries)
 
     if (tasksRes.error) {
       setError(tasksRes.error.message)
@@ -157,6 +367,8 @@ export default function MiPerfilV2View({ userId, companyId, userProfile, canEval
 
     setAllTasks(tasksRes.data ?? [])
     setProjects(projectsRes.data ?? [])
+    setFixedClients(fixedClientsRes.data ?? [])
+    setFixedMarks(fixedMarksRes.data ?? [])
     if (usersRes) setUsers(usersRes.data ?? [])
     setLoading(false)
   }, [companyId, canEval])
@@ -167,21 +379,30 @@ export default function MiPerfilV2View({ userId, companyId, userProfile, canEval
 
   // ─── Derivados ──────────────────────────────────────────────────────────────
 
-  const monthIdx = selectedMonth ? monthIndex(parseD(selectedMonth + '-01')) : null
-  const isHistorico = monthIdx === null
+  const monthIdx = isHistorico ? null : monthIndex(parseD(selectedMonth + '-01'))
 
   const metrics = aggregateTaskMetrics(allTasks, targetId, { monthIdx, role: 'assignee' })
-  // Estado operativo SIEMPRE sobre el histórico (retrasadas/bloqueadas/arrastradas del estado actual)
-  const liveMetrics =
-    isHistorico ? metrics : aggregateTaskMetrics(allTasks, targetId, { monthIdx: null, role: 'assignee' })
   const supportMetrics = aggregateTaskMetrics(allTasks, targetId, { monthIdx, role: 'support' })
   const monthlySeries = buildMonthlySeries(allTasks, targetId, { role: 'assignee' })
-  const projectMetrics = aggregateProjectParticipation(projects, targetId)
+  const projectMetrics = aggregateProjectParticipation(projects, targetId, { monthIdx })
+
+  // Cumplimiento de Tareas Fijas: cuentas donde el empleado es social o diseñador
+  // (independiente del medidor de tareas de arriba, que mide la tabla `tasks`).
+  const targetClientIds = fixedClients
+    .filter((c) => c.social_manager_id === targetId || c.designer_id === targetId)
+    .map((c) => c.id)
+  const fixedTasksPeriodMarks =
+    monthIdx == null
+      ? fixedMarks
+      : fixedMarks.filter(
+          (m) =>
+            m.period_year === Math.floor(monthIdx / 12) && m.period_month === (monthIdx % 12) + 1,
+        )
+  const fixedTasksMetrics = aggregateEmployeeFixedTasks(fixedTasksPeriodMarks, targetClientIds)
 
   // Resolver datos del empleado objetivo
   const targetUser =
-    users.find(u => u.user_id === targetId) ??
-    (targetId === userId ? userProfile : null)
+    users.find((u) => u.user_id === targetId) ?? (targetId === userId ? userProfile : null)
 
   // ─── Render: loading / error ─────────────────────────────────────────────────
 
@@ -201,11 +422,14 @@ export default function MiPerfilV2View({ userId, companyId, userProfile, canEval
     )
   }
 
-  const isEmpty = metrics.total === 0 && supportMetrics.total === 0 && projectMetrics.total === 0
+  const isEmpty =
+    metrics.total === 0 &&
+    supportMetrics.total === 0 &&
+    projectMetrics.total === 0 &&
+    fixedTasksMetrics.total === 0
 
   return (
     <div className="space-y-6">
-
       {/* ── Selector de empleado (solo managers/admins) ───────────────────── */}
       {canEval && users.length > 0 && (
         <div className="flex items-center gap-3">
@@ -216,7 +440,7 @@ export default function MiPerfilV2View({ userId, companyId, userProfile, canEval
             <UserPickerSingle
               users={users}
               selectedId={targetId}
-              onChange={id => id && setTargetId(id)}
+              onChange={(id) => id && setTargetId(id)}
               clearable={false}
               placeholder="Seleccionar empleado"
             />
@@ -261,7 +485,8 @@ export default function MiPerfilV2View({ userId, companyId, userProfile, canEval
       {/* ── Selector de período ───────────────────────────────────────────── */}
       <div className="flex items-center gap-3">
         <button
-          onClick={() => setSelectedMonth('')}
+          onClick={() => setIsHistorico((h) => !h)}
+          aria-pressed={isHistorico}
           className={`px-4 py-1.5 rounded-lg text-[14px] font-semibold border transition-all ${
             isHistorico
               ? 'bg-[#111] text-white border-[#111]'
@@ -270,17 +495,13 @@ export default function MiPerfilV2View({ userId, companyId, userProfile, canEval
         >
           Histórico
         </button>
-        <label className="flex items-center gap-2">
-          <span className="text-[13px] font-mono font-bold uppercase tracking-[0.1em] text-[#888]">
-            Mes
-          </span>
-          <input
-            type="month"
-            className="input-base py-1 text-[15px]"
-            value={selectedMonth}
-            onChange={e => setSelectedMonth(e.target.value)}
-          />
-        </label>
+        <MonthPeriodPicker
+          value={selectedMonth}
+          onChange={(m) => {
+            setSelectedMonth(m)
+            setIsHistorico(false)
+          }}
+        />
       </div>
 
       {/* ── Estado vacío ─────────────────────────────────────────────────── */}
@@ -298,7 +519,9 @@ export default function MiPerfilV2View({ userId, companyId, userProfile, canEval
           {/* ── KPIs Responsable ───────────────────────────────────────────── */}
           {metrics.total > 0 && (
             <div>
-              <SectionLabel>Como responsable{!isHistorico ? ` — ${selectedMonth}` : ''}</SectionLabel>
+              <SectionLabel>
+                Como responsable{!isHistorico ? ` — ${selectedMonth}` : ''}
+              </SectionLabel>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <KpiCard
                   label="% Completación"
@@ -306,14 +529,8 @@ export default function MiPerfilV2View({ userId, companyId, userProfile, canEval
                   sub={`${metrics.terminadas} de ${metrics.total} tareas`}
                   accent
                 />
-                <KpiCard
-                  label="Total asignadas"
-                  value={metrics.total}
-                />
-                <KpiCard
-                  label="Terminadas"
-                  value={metrics.terminadas}
-                />
+                <KpiCard label="Total asignadas" value={metrics.total} />
+                <KpiCard label="Terminadas" value={metrics.terminadas} />
                 {metrics.onTimePct !== null ? (
                   <KpiCard
                     label="% A tiempo"
@@ -321,11 +538,7 @@ export default function MiPerfilV2View({ userId, companyId, userProfile, canEval
                     sub={`${metrics.aTiempo} a tiempo · ${metrics.tarde} tarde`}
                   />
                 ) : (
-                  <KpiCard
-                    label="% A tiempo"
-                    value="—"
-                    sub="Sin fechas de entrega"
-                  />
+                  <KpiCard label="% A tiempo" value="—" sub="Sin fechas de entrega" />
                 )}
               </div>
 
@@ -358,27 +571,43 @@ export default function MiPerfilV2View({ userId, companyId, userProfile, canEval
               <div className="flex flex-wrap gap-3">
                 <StatChip
                   label="Retrasadas"
-                  value={liveMetrics.retrasadas}
-                  color={liveMetrics.retrasadas > 0 ? '#E14848' : '#bbb'}
-                  onClick={liveMetrics.retrasadas > 0
-                    ? () => navigate(`/tareas?view=base&assignee=${targetId}&fAlert=late`)
-                    : undefined}
+                  value={metrics.retrasadas}
+                  color={metrics.retrasadas > 0 ? '#E14848' : '#bbb'}
+                  onClick={
+                    metrics.retrasadas > 0
+                      ? () => navigate(`/tareas?view=base&assignee=${targetId}&fAlert=late`)
+                      : undefined
+                  }
                 />
                 <StatChip
                   label="Paralizadas"
-                  value={liveMetrics.bloqueadas}
-                  color={liveMetrics.bloqueadas > 0 ? '#E14848' : '#bbb'}
-                  onClick={liveMetrics.bloqueadas > 0
-                    ? () => navigate(`/tareas?view=base&assignee=${targetId}&status=Paralizado`)
-                    : undefined}
+                  value={metrics.bloqueadas}
+                  color={metrics.bloqueadas > 0 ? '#E14848' : '#bbb'}
+                  onClick={
+                    metrics.bloqueadas > 0
+                      ? () => navigate(`/tareas?view=base&assignee=${targetId}&status=Paralizado`)
+                      : undefined
+                  }
                 />
                 <StatChip
                   label="Atrasadas"
-                  value={liveMetrics.arrastradas}
-                  color={liveMetrics.arrastradas > 0 ? '#F0871F' : '#bbb'}
-                  onClick={liveMetrics.arrastradas > 0
-                    ? () => navigate(`/tareas?view=base&assignee=${targetId}&fAlert=drag`)
-                    : undefined}
+                  value={metrics.arrastradas}
+                  color={metrics.arrastradas > 0 ? '#F0871F' : '#bbb'}
+                  onClick={
+                    metrics.arrastradas > 0
+                      ? () => navigate(`/tareas?view=base&assignee=${targetId}&fAlert=drag`)
+                      : undefined
+                  }
+                />
+                <StatChip
+                  label="Pendientes"
+                  value={metrics.byStatus['Pendiente'] ?? 0}
+                  color={(metrics.byStatus['Pendiente'] ?? 0) > 0 ? '#F0871F' : '#bbb'}
+                  onClick={
+                    (metrics.byStatus['Pendiente'] ?? 0) > 0
+                      ? () => navigate(`/tareas?view=base&assignee=${targetId}&status=Pendiente`)
+                      : undefined
+                  }
                 />
               </div>
             </Card>
@@ -389,7 +618,7 @@ export default function MiPerfilV2View({ userId, companyId, userProfile, canEval
             <Card>
               <SectionLabel>Distribución por estado</SectionLabel>
               <div className="space-y-2.5">
-                {STATUS_ORDER.filter(s => metrics.byStatus[s] > 0).map(s => (
+                {STATUS_ORDER.filter((s) => metrics.byStatus[s] > 0).map((s) => (
                   <StatusBar
                     key={s}
                     label={s}
@@ -412,7 +641,7 @@ export default function MiPerfilV2View({ userId, companyId, userProfile, canEval
                   <XAxis
                     dataKey="label"
                     tick={{ fontSize: 10, fontFamily: 'DM Mono, monospace', fill: '#888' }}
-                    tickFormatter={v => {
+                    tickFormatter={(v) => {
                       // Abreviar "Junio 2026" → "Jun 26"
                       const parts = v.split(' ')
                       if (parts.length === 2) {
@@ -425,7 +654,7 @@ export default function MiPerfilV2View({ userId, companyId, userProfile, canEval
                     domain={[0, 100]}
                     ticks={[0, 25, 50, 75, 100]}
                     tick={{ fontSize: 10, fontFamily: 'DM Mono, monospace', fill: '#888' }}
-                    tickFormatter={v => `${v}%`}
+                    tickFormatter={(v) => `${v}%`}
                   />
                   <Tooltip
                     contentStyle={{
@@ -458,28 +687,16 @@ export default function MiPerfilV2View({ userId, companyId, userProfile, canEval
             <Card>
               <SectionLabel>Como apoyo de dirección</SectionLabel>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <KpiCard
-                  label="Tareas de apoyo"
-                  value={supportMetrics.total}
-                />
-                <KpiCard
-                  label="Terminadas"
-                  value={supportMetrics.terminadas}
-                />
-                <KpiCard
-                  label="% Completación"
-                  value={`${supportMetrics.completionPct}%`}
-                />
+                <KpiCard label="Tareas de apoyo" value={supportMetrics.total} />
+                <KpiCard label="Terminadas" value={supportMetrics.terminadas} />
+                <KpiCard label="% Completación" value={`${supportMetrics.completionPct}%`} />
                 {supportMetrics.onTimePct !== null && (
-                  <KpiCard
-                    label="% A tiempo"
-                    value={`${supportMetrics.onTimePct}%`}
-                  />
+                  <KpiCard label="% A tiempo" value={`${supportMetrics.onTimePct}%`} />
                 )}
               </div>
               {Object.keys(supportMetrics.byStatus).length > 0 && (
                 <div className="mt-4 space-y-2.5">
-                  {STATUS_ORDER.filter(s => supportMetrics.byStatus[s] > 0).map(s => (
+                  {STATUS_ORDER.filter((s) => supportMetrics.byStatus[s] > 0).map((s) => (
                     <StatusBar
                       key={s}
                       label={s}
@@ -490,6 +707,39 @@ export default function MiPerfilV2View({ userId, companyId, userProfile, canEval
                   ))}
                 </div>
               )}
+            </Card>
+          )}
+
+          {/* ── Tareas Fijas ──────────────────────────────────────────────────
+              Cumplimiento de la grilla semanal (Gestión de Tareas → Tareas Fijas) en
+              las cuentas donde el empleado es social o diseñador. Independiente del
+              medidor de arriba (que mide la tabla `tasks`). */}
+          {fixedTasksMetrics.total > 0 && (
+            <Card>
+              <SectionLabel>Tareas fijas{!isHistorico ? ` — ${selectedMonth}` : ''}</SectionLabel>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <KpiCard
+                  label="% Cumplimiento"
+                  value={`${fixedTasksMetrics.cumplimientoPct}%`}
+                  sub={`${fixedTasksMetrics.entregadas} de ${fixedTasksMetrics.total} tildadas`}
+                  accent
+                />
+                <KpiCard label="Total tildadas" value={fixedTasksMetrics.total} />
+                <KpiCard label="Entregadas" value={fixedTasksMetrics.entregadas} />
+              </div>
+              <div className="mt-4 space-y-2.5">
+                {Object.entries(fixedTasksMetrics.byTaskKey)
+                  .filter(([, v]) => v.total > 0)
+                  .map(([key, v]) => (
+                    <StatusBar
+                      key={key}
+                      label={TASK_LABELS[key] ?? key}
+                      count={v.entregadas}
+                      total={v.total}
+                      color="#FFB800"
+                    />
+                  ))}
+              </div>
             </Card>
           )}
 
@@ -514,28 +764,43 @@ export default function MiPerfilV2View({ userId, companyId, userProfile, canEval
                 </div>
               </div>
 
-              {/* Lista de proyectos con nombre y status, clickeables */}
+              {/* Lista de proyectos con nombre, fecha de inicio y status, clickeables */}
               <div className="space-y-1.5">
                 {projects
-                  .filter(p => Array.isArray(p.members) && p.members.includes(targetId))
-                  .map(p => {
+                  .filter(
+                    (p) =>
+                      Array.isArray(p.members) &&
+                      p.members.includes(targetId) &&
+                      projectInMonth(p, monthIdx),
+                  )
+                  .map((p) => {
                     const meta = PROJECT_STATUS_META[p.status] ?? { color: '#888', bg: '#f0ede3' }
                     return (
                       <button
                         key={p.id}
                         type="button"
-                        onClick={() => navigate(`/?projectId=${p.id}`)}
+                        onClick={() => onViewProject?.(p)}
                         className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-[#fafaf7] transition-colors text-left group"
                       >
                         <svg
-                          width="12" height="12" viewBox="0 0 12 12" fill="none"
-                          stroke={meta.color} strokeWidth="2" className="flex-shrink-0"
+                          width="12"
+                          height="12"
+                          viewBox="0 0 12 12"
+                          fill="none"
+                          stroke={meta.color}
+                          strokeWidth="2"
+                          className="flex-shrink-0"
                         >
-                          <rect x="1" y="1" width="10" height="10" rx="2"/>
+                          <rect x="1" y="1" width="10" height="10" rx="2" />
                         </svg>
                         <span className="flex-1 text-[15px] font-medium text-[#111] truncate group-hover:text-[#111]">
                           {p.name}
                         </span>
+                        {p.created_at && (
+                          <span className="text-[12px] text-[#aaa] font-mono flex-shrink-0">
+                            {fmtDate(p.created_at)}
+                          </span>
+                        )}
                         <span
                           className="text-[12px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
                           style={{ background: meta.bg, color: meta.color }}
@@ -543,10 +808,15 @@ export default function MiPerfilV2View({ userId, companyId, userProfile, canEval
                           {p.status}
                         </span>
                         <svg
-                          width="12" height="12" viewBox="0 0 16 16" fill="none"
-                          stroke="#bbb" strokeWidth="2" className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                          width="12"
+                          height="12"
+                          viewBox="0 0 16 16"
+                          fill="none"
+                          stroke="#bbb"
+                          strokeWidth="2"
+                          className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
                         >
-                          <path d="M6 3l5 5-5 5" strokeLinecap="round" strokeLinejoin="round"/>
+                          <path d="M6 3l5 5-5 5" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
                       </button>
                     )
