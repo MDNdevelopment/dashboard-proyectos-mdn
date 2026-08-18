@@ -211,15 +211,15 @@ describe('HomePage — encabezado personal', () => {
   })
 })
 
-describe('HomePage — Análisis IA (recuadro solo para dirección autorizada)', () => {
+describe('HomePage — Análisis IA (oculto temporalmente hasta nuevo aviso)', () => {
   it('NO se muestra para un usuario fuera de la lista de acceso, aunque sea admin', () => {
     renderPage({ user_id: 'u1', admin: true, access_level: 4 })
     expect(screen.queryByText(/análisis ia mock/i)).not.toBeInTheDocument()
   })
 
-  it('SÍ se muestra para un usuario en la lista de acceso, aunque no sea admin', () => {
+  it('NO se muestra para un usuario en la lista de acceso mientras SHOW_CEO_ANALYSIS esté en false', () => {
     renderPage({ user_id: CEO_ANALYSIS_USER_IDS[0], admin: false, access_level: 2 })
-    expect(screen.getByText(/análisis ia mock/i)).toBeInTheDocument()
+    expect(screen.queryByText(/análisis ia mock/i)).not.toBeInTheDocument()
   })
 })
 

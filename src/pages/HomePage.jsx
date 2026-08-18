@@ -26,6 +26,9 @@ import { canSeeCeoAnalysis } from '../lib/ceoAnalysisAccess'
 import CeoAnalysisCard from '../components/home/CeoAnalysisCard'
 
 // Íconos simples reutilizados por los accesos rápidos (mismo estilo que Sidebar).
+// Oculto temporalmente hasta nuevo aviso (solicitado por el usuario)
+const SHOW_CEO_ANALYSIS = false
+
 const MODULE_ICON = {
   proyectos: (
     <svg
@@ -522,8 +525,8 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Análisis IA — solo visible para la dirección (lista explícita, ver ceoAnalysisAccess.js) */}
-        {canSeeCeoAnalysis(userProfile) && (
+        {/* Análisis IA — oculto temporalmente hasta nuevo aviso (solicitado por el usuario) */}
+        {SHOW_CEO_ANALYSIS && canSeeCeoAnalysis(userProfile) && (
           <section className="mb-8 rise-in" style={{ animationDelay: '60ms' }}>
             <CeoAnalysisCard />
           </section>

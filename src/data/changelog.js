@@ -38,6 +38,7 @@ export const CHANGELOG = [
       'Mejorado el diseño móvil de Tareas Fijas: la columna de la cuenta ocupa menos espacio, dejando más pantalla disponible para las tareas y reduciendo cuánto hay que deslizar la tabla hacia los lados.',
       'En Tareas Fijas (vista "Todas"), se quitó el renglón que repetía el nombre de la línea entre grupos de cuentas.',
       'El apartado "2. Productividad – Tareas Fijas" del reporte operativo empieza a llenarse solo desde el reporte de septiembre; los reportes de agosto hacia atrás se pueden seguir editando a mano como antes.',
+      'El recuadro de "Análisis IA" en Inicio se ocultó temporalmente hasta nuevo aviso.',
     ],
   },
   {
