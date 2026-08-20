@@ -140,6 +140,8 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
     setDetailPauta((prev) => (prev && prev.id === pauta.id ? pauta : prev))
   }
 
+  // Solo para el borrado DEFINITIVO desde la Papelera (AvPhaseTable → ConfirmDeleteDialog) —
+  // el soft delete normal ("Borrar" en cualquier fase) es un UPDATE y pasa por handleChanged.
   function handleDeleted(id) {
     setPautas((prev) => prev.filter((p) => p.id !== id))
   }
@@ -165,6 +167,9 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
   }
 
   const scopedPautas = pautasInScope(pautas, scopeLine)
+  // Sin las borradas: el calendario y el generador de agenda de WhatsApp no deben pintar ni
+  // listar una pauta que está en la papelera.
+  const visibleScopedPautas = scopedPautas.filter((p) => !p.deleted_at)
   const scopedClients = clients.filter((c) => !scopeLine || c.line_id === scopeLine)
   const audiovisualUsers = employees.filter((u) => u.department_id === 2 && !u.deleted_at)
   const usersById = new Map(employees.map((u) => [u.user_id, u]))
@@ -178,13 +183,19 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
   // pautasInMonth). El calendario mismo (AvCalendar) recibe `scopedPautas` sin este
   // filtro: ya arma su propia grilla acotada al mes/año, incluyendo los días de relleno
   // de semanas adyacentes.
+  //
+  // `monthPautas` SÍ conserva las borradas (deleted_at seteado): es lo que le llega a
+  // AvPhaseTable, que necesita verlas para poder listarlas en la pestaña Papelera. Todo lo
+  // demás (calendario, recuadros de resumen, analítica) debe excluirlas explícitamente —
+  // una pauta en la papelera no es "programada"/"realizada" a efectos de esas vistas.
   const monthPautas = pautasInMonth(scopedPautas, year, month)
+  const visiblePautas = monthPautas.filter((p) => !p.deleted_at)
 
   const { deadline } = nextAgendaDeadline()
   // "Agendadas" = pautas con status 'programada' (con o sin fecha) — mismo número que la
   // pestaña "Agenda" de AvPhaseTable.
-  const agendadasCount = monthPautas.filter((p) => p.status === 'programada').length
-  const realizadasCount = monthPautas.filter((p) => p.status === 'realizada').length
+  const agendadasCount = visiblePautas.filter((p) => p.status === 'programada').length
+  const realizadasCount = visiblePautas.filter((p) => p.status === 'realizada').length
   const calendarStatusFilter =
     calendarFilter === 'agendadas'
       ? 'programada'
@@ -283,7 +294,7 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
       <AvCalendar
         year={year}
         month={month}
-        pautas={scopedPautas}
+        pautas={visibleScopedPautas}
         statusFilter={calendarStatusFilter}
         onMonthChange={(y, m) => setPeriod({ year: y, month: m })}
         onDayClick={async (date) => {
@@ -326,7 +337,7 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
       </div>
 
       <AvAnalytics
-        pautas={monthPautas}
+        pautas={visiblePautas}
         lines={lines}
         usersById={usersById}
         piezasByPauta={piezasByPautaMap}
@@ -349,7 +360,7 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
 
       {waOpen && (
         <WhatsAppAgendaModal
-          pautas={scopedPautas}
+          pautas={visibleScopedPautas}
           lines={lines}
           usersById={usersById}
           onClose={() => setWaOpen(false)}

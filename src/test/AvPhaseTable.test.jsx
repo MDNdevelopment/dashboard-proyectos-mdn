@@ -11,11 +11,15 @@ import { vi } from 'vitest'
 const mockCreatePauta = vi.fn()
 const mockUpdatePauta = vi.fn()
 const mockDeletePauta = vi.fn()
+const mockRestorePauta = vi.fn()
+const mockPermanentlyDeletePauta = vi.fn()
 
 vi.mock('../components/pautas/avPautasApi', () => ({
   createPauta: (...a) => mockCreatePauta(...a),
   updatePauta: (...a) => mockUpdatePauta(...a),
   deletePauta: (...a) => mockDeletePauta(...a),
+  restorePauta: (...a) => mockRestorePauta(...a),
+  permanentlyDeletePauta: (...a) => mockPermanentlyDeletePauta(...a),
 }))
 
 import AvPhaseTable from '../components/pautas/AvPhaseTable'
@@ -301,5 +305,134 @@ describe('AvPhaseTable — Realizadas: columna única "Piezas" + fila clickeable
     })
     fireEvent.click(screen.getByText('Cliente A'))
     expect(onPautaClick).toHaveBeenCalledWith(PAUTA_REALIZADA)
+  })
+})
+
+describe('AvPhaseTable — Papelera (soft delete + restaurar)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  const PAUTA_ACTIVA = {
+    id: 'p1',
+    client_name: 'Cliente A',
+    status: 'realizada',
+    formats: [],
+    recurso_ids: [],
+    attendee_ids: [],
+    piezas_totales: 0,
+    piezas_editadas: 0,
+    deleted_at: null,
+  }
+
+  const PAUTA_BORRADA = {
+    id: 'p2',
+    client_name: 'Cliente B',
+    status: 'programada',
+    formats: [],
+    recurso_ids: [],
+    attendee_ids: [],
+    deleted_at: '2026-08-20T12:00:00.000Z',
+  }
+
+  it('una pauta con deleted_at no aparece en su fase original (Agenda) sino en Papelera', () => {
+    renderTable({
+      initialPhase: 'agenda',
+      editMode: 'coordina',
+      pautas: [PAUTA_BORRADA],
+    })
+    expect(screen.getByText('Nada agendado en este alcance.')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByText(/Papelera/))
+    expect(screen.getByText('Cliente B')).toBeInTheDocument()
+  })
+
+  it('la pestaña Papelera muestra el conteo de pautas borradas', () => {
+    renderTable({
+      initialPhase: 'realizadas',
+      editMode: 'coordina',
+      pautas: [PAUTA_ACTIVA, PAUTA_BORRADA],
+    })
+    const tab = screen.getByText('Papelera').closest('button')
+    expect(tab).toHaveTextContent('1')
+  })
+
+  it('"Borrar" (doble clic) llama a deletePauta y propaga el resultado por onChanged, no onDeleted', async () => {
+    const softDeleted = { ...PAUTA_ACTIVA, deleted_at: '2026-08-20T12:00:00.000Z' }
+    mockDeletePauta.mockResolvedValue({ data: softDeleted, error: null })
+    const onChanged = vi.fn()
+    renderTable({
+      initialPhase: 'realizadas',
+      editMode: 'coordina',
+      pautas: [PAUTA_ACTIVA],
+      onChanged,
+    })
+    fireEvent.click(screen.getByTitle('Borrar pauta'))
+    fireEvent.click(screen.getByText('Borrar'))
+    await waitFor(() => expect(mockDeletePauta).toHaveBeenCalledWith('p1'))
+    await waitFor(() => expect(onChanged).toHaveBeenCalledWith(softDeleted))
+  })
+
+  it('"Restaurar" en Papelera llama a restorePauta y propaga el resultado por onChanged', async () => {
+    const restored = { ...PAUTA_BORRADA, deleted_at: null }
+    mockRestorePauta.mockResolvedValue({ data: restored, error: null })
+    const onChanged = vi.fn()
+    renderTable({
+      initialPhase: 'papelera',
+      editMode: 'coordina',
+      pautas: [PAUTA_BORRADA],
+      onChanged,
+    })
+    fireEvent.click(screen.getByText('Restaurar'))
+    await waitFor(() => expect(mockRestorePauta).toHaveBeenCalledWith('p2'))
+    await waitFor(() => expect(onChanged).toHaveBeenCalledWith(restored))
+  })
+
+  it('papelera vacía muestra el mensaje correspondiente', () => {
+    renderTable({ initialPhase: 'papelera', editMode: 'coordina', pautas: [PAUTA_ACTIVA] })
+    expect(screen.getByText('La papelera está vacía.')).toBeInTheDocument()
+  })
+
+  it('"Eliminar definitivamente" abre el diálogo de confirmación sin llamar a la API todavía', () => {
+    renderTable({ initialPhase: 'papelera', editMode: 'coordina', pautas: [PAUTA_BORRADA] })
+    fireEvent.click(screen.getByText('Eliminar definitivamente'))
+    expect(screen.getByText('Eliminar pauta')).toBeInTheDocument()
+    expect(mockPermanentlyDeletePauta).not.toHaveBeenCalled()
+  })
+
+  it('el botón "Eliminar" del diálogo queda deshabilitado hasta teclear el nombre exacto del cliente', () => {
+    renderTable({ initialPhase: 'papelera', editMode: 'coordina', pautas: [PAUTA_BORRADA] })
+    fireEvent.click(screen.getByText('Eliminar definitivamente'))
+    const confirmBtn = screen.getByRole('button', { name: 'Eliminar' })
+    expect(confirmBtn).toBeDisabled()
+    fireEvent.change(screen.getByPlaceholderText('Cliente B'), { target: { value: 'Cliente B' } })
+    expect(confirmBtn).not.toBeDisabled()
+  })
+
+  it('confirmar el diálogo llama a permanentlyDeletePauta y propaga por onDeleted (no onChanged)', async () => {
+    mockPermanentlyDeletePauta.mockResolvedValue({ error: null })
+    const onDeleted = vi.fn()
+    const onChanged = vi.fn()
+    renderTable({
+      initialPhase: 'papelera',
+      editMode: 'coordina',
+      pautas: [PAUTA_BORRADA],
+      onDeleted,
+      onChanged,
+    })
+    fireEvent.click(screen.getByText('Eliminar definitivamente'))
+    fireEvent.change(screen.getByPlaceholderText('Cliente B'), { target: { value: 'Cliente B' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Eliminar' }))
+    await waitFor(() => expect(mockPermanentlyDeletePauta).toHaveBeenCalledWith('p2'))
+    await waitFor(() => expect(onDeleted).toHaveBeenCalledWith('p2'))
+    expect(onChanged).not.toHaveBeenCalled()
+  })
+
+  it('"Cancelar" cierra el diálogo sin llamar a la API', () => {
+    renderTable({ initialPhase: 'papelera', editMode: 'coordina', pautas: [PAUTA_BORRADA] })
+    fireEvent.click(screen.getByText('Eliminar definitivamente'))
+    fireEvent.click(screen.getByText('Cancelar'))
+    expect(screen.queryByText('Eliminar pauta')).not.toBeInTheDocument()
+    expect(mockPermanentlyDeletePauta).not.toHaveBeenCalled()
   })
 })

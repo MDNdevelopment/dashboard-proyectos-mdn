@@ -90,7 +90,33 @@ export async function updatePauta(pautaId, fields) {
   return supabase.from('av_pautas').update(updates).eq('id', pautaId).select().single()
 }
 
+/**
+ * Soft delete (papelera): marca `deleted_at` en vez de borrar físicamente, para poder
+ * restaurar la pauta después desde cualquiera de las 3 fases (solicitada/programada/
+ * realizada) — mismo patrón que `deleteClient`/`restoreClient` en `metricsApi.js`. Devuelve
+ * la fila actualizada (como `updatePauta`), no un simple `{error}`: el llamador la trata
+ * como un cambio normal (`onChanged`), no como una desaparición (`onDeleted`).
+ */
 export async function deletePauta(pautaId) {
+  return supabase
+    .from('av_pautas')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', pautaId)
+    .select()
+    .single()
+}
+
+export async function restorePauta(pautaId) {
+  return supabase.from('av_pautas').update({ deleted_at: null }).eq('id', pautaId).select().single()
+}
+
+/**
+ * Elimina físicamente una pauta ya en la papelera (irreversible) — solo desde ahí, nunca
+ * como acción directa sobre una pauta activa. `av_pauta_piezas.pauta_id` tiene
+ * `on delete cascade`, así que su checklist se borra junto con la pauta. Sigue cubierta por
+ * la policy RLS `av_pautas_delete` (nunca se removió al introducir el soft delete).
+ */
+export async function permanentlyDeletePauta(pautaId) {
   return supabase.from('av_pautas').delete().eq('id', pautaId)
 }
 

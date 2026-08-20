@@ -1,10 +1,19 @@
 import { useState, useRef } from 'react'
 import AttendeePicker from '../reuniones/AttendeePicker'
-import { createPauta, updatePauta, deletePauta } from './avPautasApi'
+import ConfirmDeleteDialog from '../common/ConfirmDeleteDialog'
+import {
+  createPauta,
+  updatePauta,
+  deletePauta,
+  restorePauta,
+  permanentlyDeletePauta,
+} from './avPautasApi'
+import { fmtDate } from '../../utils/formatDate'
 import {
   FORMAT_KEYS,
   FORMAT_LABELS,
   GRILLA_STATUS_LABELS,
+  LIFECYCLE_LABELS,
   formatCodes,
   formatDayShort,
   resourceNames,
@@ -19,6 +28,7 @@ const PHASES = [
   { key: 'solicitudes', label: 'Solicitudes' },
   { key: 'agenda', label: 'Agenda' },
   { key: 'realizadas', label: 'Realizadas' },
+  { key: 'papelera', label: 'Papelera' },
 ]
 
 /**
@@ -46,6 +56,10 @@ export default function AvPhaseTable({
 }) {
   const [error, setError] = useState(null)
   const [confirmingId, setConfirmingId] = useState(null)
+  // Pauta pendiente de borrado DEFINITIVO (irreversible) — distinto de `confirmingId`, que es
+  // el doble-clic del soft delete normal. Solo se llega acá desde la Papelera.
+  const [permanentDeleteTarget, setPermanentDeleteTarget] = useState(null)
+  const [permanentDeleting, setPermanentDeleting] = useState(false)
   const [expandedAttendeesId, setExpandedAttendeesId] = useState(null)
   const [expandedRecursosId, setExpandedRecursosId] = useState(null)
   const tableScrollRef = useRef(null)
@@ -81,19 +95,28 @@ export default function AvPhaseTable({
   // depto — ver requesterName más abajo.
   const employeesById = usersById(allEmployees)
 
-  const solicitudes = visibleSolicitudes(pautas, { canCoordinate })
-  const declinadas = pautas.filter((p) => p.status === 'declinada')
-  const agenda = [...pautas.filter((p) => p.status === 'programada')].sort((a, b) =>
+  // La papelera guarda las pautas borradas de cualquiera de las 3 fases (deleted_at seteado
+  // por un soft delete, ver avPautasApi.deletePauta) — el resto de las tablas trabaja siempre
+  // sobre `activePautas` para que una pauta borrada desaparezca de su fase original.
+  const activePautas = pautas.filter((p) => !p.deleted_at)
+  const papelera = [...pautas.filter((p) => p.deleted_at)].sort((a, b) =>
+    a.deleted_at < b.deleted_at ? 1 : -1,
+  )
+
+  const solicitudes = visibleSolicitudes(activePautas, { canCoordinate })
+  const declinadas = activePautas.filter((p) => p.status === 'declinada')
+  const agenda = [...activePautas.filter((p) => p.status === 'programada')].sort((a, b) =>
     (a.pauta_date || '9999') + (a.salida || '') < (b.pauta_date || '9999') + (b.salida || '')
       ? -1
       : 1,
   )
-  const realizadas = pautas.filter((p) => p.status === 'realizada')
+  const realizadas = activePautas.filter((p) => p.status === 'realizada')
 
   const counts = {
     solicitudes: solicitudes.length + drafts.length,
     agenda: agenda.length,
     realizadas: realizadas.length,
+    papelera: papelera.length,
   }
 
   async function handleFields(pauta, fields) {
@@ -165,19 +188,49 @@ export default function AvPhaseTable({
     onPhaseChange('solicitudes')
   }
 
+  // "Borrar" es un soft delete (deletePauta marca deleted_at) — la pauta pasa a la Papelera
+  // en vez de desaparecer, así que se propaga como cualquier otro cambio de campo (onChanged),
+  // no como una desaparición.
   async function handleDelete(id) {
     if (confirmingId !== id) {
       setConfirmingId(id)
       return
     }
     setError(null)
-    const { error: err } = await deletePauta(id)
+    const { data, error: err } = await deletePauta(id)
     if (err) {
       setError(err.message)
       return
     }
-    onDeleted(id)
+    onChanged(data)
     setConfirmingId(null)
+  }
+
+  async function handleRestore(id) {
+    setError(null)
+    const { data, error: err } = await restorePauta(id)
+    if (err) {
+      setError(err.message)
+      return
+    }
+    onChanged(data)
+  }
+
+  // Borrado definitivo: solo alcanzable desde la Papelera (permanentDeleteTarget siempre es
+  // una pauta ya con deleted_at seteado). A diferencia del soft delete, acá sí desaparece de
+  // verdad — se propaga como `onDeleted`, no `onChanged`.
+  async function handlePermanentDelete() {
+    if (!permanentDeleteTarget) return
+    setPermanentDeleting(true)
+    const { error: err } = await permanentlyDeletePauta(permanentDeleteTarget.id)
+    setPermanentDeleting(false)
+    if (err) {
+      setError(err.message)
+      setPermanentDeleteTarget(null)
+      return
+    }
+    onDeleted(permanentDeleteTarget.id)
+    setPermanentDeleteTarget(null)
   }
 
   if (!canEdit && pautas.length === 0) {
@@ -278,7 +331,32 @@ export default function AvPhaseTable({
             onPautaClick={onPautaClick}
           />
         )}
+        {phase === 'papelera' && (
+          <PapeleraTable
+            papelera={papelera}
+            employeesById={employeesById}
+            onRestore={handleRestore}
+            onPermanentDelete={setPermanentDeleteTarget}
+          />
+        )}
       </div>
+
+      {permanentDeleteTarget && (
+        <ConfirmDeleteDialog
+          itemName={permanentDeleteTarget.client_name || 'sin cliente'}
+          itemLabel="pauta"
+          message={
+            <>
+              Esta acción <strong>no se puede deshacer</strong>. Se eliminará la pauta y todo su
+              checklist de piezas. Para confirmar, escribe el nombre exacto del cliente a
+              continuación.
+            </>
+          }
+          confirming={permanentDeleting}
+          onConfirm={handlePermanentDelete}
+          onCancel={() => setPermanentDeleteTarget(null)}
+        />
+      )}
     </div>
   )
 }
@@ -1045,6 +1123,87 @@ function RealizadasTable({
         })}
       </tbody>
     </table>
+  )
+}
+
+// ─── Papelera ───────────────────────────────────────────────────────────────
+
+function PapeleraTable({ papelera, employeesById, onRestore, onPermanentDelete }) {
+  return (
+    <table className="w-full border-collapse min-w-[860px]">
+      <Thead cols={['Cliente', 'Solicitado por', 'Estado original', 'Eliminada el', '', '']} />
+      <tbody>
+        {papelera.length === 0 && (
+          <tr>
+            <td colSpan={6} className="px-4 py-8 text-center text-[13px] text-[#a29b8c]">
+              La papelera está vacía.
+            </td>
+          </tr>
+        )}
+        {papelera.map((p) => (
+          <tr key={p.id} className="border-b border-[#f2efe6] align-top opacity-80">
+            <td className="px-2 py-1.5 min-w-[170px]">
+              <div className="text-[14px] font-medium text-[#222] line-through">
+                {p.client_name || 'sin cliente'}
+              </div>
+              <div className="text-[11.5px] text-[#a29b8c] mt-0.5">
+                {p.tema} · {formatCodes(p)}
+              </div>
+            </td>
+            <td className="px-2 py-1.5 min-w-[110px]">
+              <span className="text-[12px] text-[#888]">
+                {requesterName(p, employeesById) || '—'}
+              </span>
+            </td>
+            <td className="px-2 py-1.5">
+              <span className="text-[12px] font-mono text-[#888]">
+                {LIFECYCLE_LABELS[p.status] ?? p.status}
+              </span>
+            </td>
+            <td className="px-2 py-1.5 text-[13px] text-[#888]">{fmtDate(p.deleted_at)}</td>
+            <td className="px-2 py-1.5">
+              <RestoreButton onRestore={() => onRestore(p.id)} />
+            </td>
+            <td className="px-2 py-1.5">
+              <button
+                type="button"
+                onClick={() => onPermanentDelete(p)}
+                title="Eliminar definitivamente"
+                className="text-[12px] font-semibold rounded-lg px-2 py-1 text-[#c0392b] hover:bg-[#fdecec] transition-colors whitespace-nowrap"
+              >
+                Eliminar definitivamente
+              </button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+function RestoreButton({ onRestore }) {
+  return (
+    <button
+      type="button"
+      onClick={onRestore}
+      title="Restaurar pauta"
+      className="flex items-center gap-1.5 text-[12px] font-semibold rounded-lg px-2 py-1 text-[#1f8a43] hover:bg-[#e9f7ec] transition-colors"
+    >
+      <svg
+        width="12"
+        height="12"
+        viewBox="0 0 14 14"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M2 7a5 5 0 1 1 1.6 3.7" />
+        <path d="M2 3v3.5h3.5" />
+      </svg>
+      Restaurar
+    </button>
   )
 }
 
