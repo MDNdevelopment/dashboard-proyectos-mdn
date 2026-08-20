@@ -11,7 +11,7 @@
  * @returns {object|null}
  */
 export function lineOfMember(lines, userId) {
-  return lines.find(l => (l.member_user_ids ?? []).includes(userId)) ?? null
+  return lines.find((l) => (l.member_user_ids ?? []).includes(userId)) ?? null
 }
 
 /**
@@ -26,7 +26,7 @@ export function lineOfMember(lines, userId) {
  */
 export function assignMemberToLine(lines, lineId, userId) {
   const changedIds = []
-  const updated = lines.map(line => {
+  const updated = lines.map((line) => {
     const members = line.member_user_ids ?? []
     const hasMember = members.includes(userId)
     const isTarget = line.id === lineId
@@ -42,7 +42,7 @@ export function assignMemberToLine(lines, lineId, userId) {
       changedIds.push(line.id)
       return {
         ...line,
-        member_user_ids: members.filter(id => id !== userId),
+        member_user_ids: members.filter((id) => id !== userId),
         lead_user_id: line.lead_user_id === userId ? null : line.lead_user_id,
       }
     }
@@ -52,9 +52,24 @@ export function assignMemberToLine(lines, lineId, userId) {
 }
 
 /**
- * Filtra las líneas visibles para un usuario según su nivel de acceso.
+ * Determina si un usuario debe ver todas las líneas (sin scoping).
  * - Nivel 4+ o admin: ve todas las líneas.
  * - tasks_view_all=true: ve todas las líneas (bypass por usuario, sin cambiar nivel).
+ *
+ * @param {object|null} userProfile - Perfil del usuario (de useAuth)
+ * @returns {boolean}
+ */
+export function userViewsAllLines(userProfile) {
+  return (
+    userProfile?.access_level >= 4 ||
+    userProfile?.admin === true ||
+    userProfile?.tasks_view_all === true
+  )
+}
+
+/**
+ * Filtra las líneas visibles para un usuario según su nivel de acceso.
+ * - userViewsAllLines(): ve todas las líneas.
  * - Nivel 1-3 sin flag: ve solo las líneas donde está en member_user_ids.
  *
  * @param {Array} lines - Todas las líneas cargadas de metric_lines
@@ -63,13 +78,10 @@ export function assignMemberToLine(lines, lineId, userId) {
  */
 export function visibleLinesForUser(lines, userProfile) {
   if (!lines) return []
-  const viewAll = userProfile?.access_level >= 4
-    || userProfile?.admin === true
-    || userProfile?.tasks_view_all === true
-  if (viewAll) return lines
+  if (userViewsAllLines(userProfile)) return lines
   const uid = userProfile?.user_id
   if (!uid) return []
-  return lines.filter(l => (l.member_user_ids ?? []).includes(uid))
+  return lines.filter((l) => (l.member_user_ids ?? []).includes(uid))
 }
 
 /**
@@ -84,12 +96,12 @@ export function visibleLinesForUser(lines, userProfile) {
  */
 export function withDerivedGeneralMembers(lines, users) {
   const assignedIds = new Set(
-    lines.filter(l => !l.is_general).flatMap(l => l.member_user_ids ?? []),
+    lines.filter((l) => !l.is_general).flatMap((l) => l.member_user_ids ?? []),
   )
   const unassignedIds = (users ?? [])
-    .filter(u => !u.deleted_at && !assignedIds.has(u.user_id))
-    .map(u => u.user_id)
-  return lines.map(l => l.is_general ? { ...l, member_user_ids: unassignedIds } : l)
+    .filter((u) => !u.deleted_at && !assignedIds.has(u.user_id))
+    .map((u) => u.user_id)
+  return lines.map((l) => (l.is_general ? { ...l, member_user_ids: unassignedIds } : l))
 }
 
 /**
@@ -101,14 +113,14 @@ export function withDerivedGeneralMembers(lines, users) {
  */
 export function removeMemberFromLine(lines, lineId, userId) {
   const changedIds = []
-  const updated = lines.map(line => {
+  const updated = lines.map((line) => {
     if (line.id !== lineId) return line
     const members = line.member_user_ids ?? []
     if (!members.includes(userId)) return line
     changedIds.push(line.id)
     return {
       ...line,
-      member_user_ids: members.filter(id => id !== userId),
+      member_user_ids: members.filter((id) => id !== userId),
       lead_user_id: line.lead_user_id === userId ? null : line.lead_user_id,
     }
   })

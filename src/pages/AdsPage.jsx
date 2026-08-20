@@ -9,7 +9,7 @@ import AdsDetail from '../components/ads/AdsDetail'
 import AdsSpendView from '../components/ads/AdsSpendView'
 import { loadClients, loadLines } from '../components/metricas/metricsApi'
 import { spansPeriod } from '../components/ads/campaignSpendApi'
-import { visibleLinesForUser } from '../utils/lineMembers'
+import { visibleLinesForUser, userViewsAllLines } from '../utils/lineMembers'
 import { MONTHS } from '../components/metricas/constants'
 
 // Sentinela de "ver todas las líneas" (solo nivel 4/admin), igual que ALL_TEAMS en TareasPage.
@@ -47,8 +47,8 @@ export default function AdsPage() {
   // Control de acceso config-driven — sin reglas configuradas: abierto a todos.
   const canManage = can('ads.manage')
 
-  // Solo nivel 4/admin ve el botón "Todos" y arranca en él (mismo criterio que TareasPage).
-  const canViewAll = userProfile?.access_level >= 4 || userProfile?.admin === true
+  // Nivel 4/admin/tasks_view_all ven el botón "Todos" y arrancan en él (mismo criterio que visibleLinesForUser).
+  const canViewAll = userViewsAllLines(userProfile)
 
   // Ámbito de línea para filtrar: null = sin filtro (Todos); '__none__' = nada
   // (una jefa sin línea no debe ver campañas de otras líneas ni las sin línea).

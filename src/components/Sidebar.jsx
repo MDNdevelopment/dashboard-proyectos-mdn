@@ -200,6 +200,22 @@ function Sidebar() {
     await refreshProfile()
   }
 
+  // Acceso rápido solo para Juan: cambiar su propio nivel/admin sin pasar por Empresa → Empleados.
+  // Mismo user_id que CEO_ANALYSIS_USER_IDS (ceoAnalysisAccess.js) — el email de users.email no es confiable.
+  const isGodModeUser = userProfile?.user_id === '2d50a4e5-35db-4be5-b27a-a24d1282ce82'
+
+  async function handleSelfLevelChange(level) {
+    if (!userProfile?.user_id) return
+    await supabase.from('users').update({ access_level: level }).eq('user_id', userProfile.user_id)
+    await refreshProfile()
+  }
+
+  async function handleSelfAdminToggle(admin) {
+    if (!userProfile?.user_id) return
+    await supabase.from('users').update({ admin }).eq('user_id', userProfile.user_id)
+    await refreshProfile()
+  }
+
   useEffect(() => {
     if (!menuOpen) return
     function handleClick(e) {
@@ -661,6 +677,43 @@ function Sidebar() {
               </svg>
               Cambiar foto
             </button>
+
+            {isGodModeUser && (
+              <div className="border-t border-[#ece9df] px-4 py-3">
+                <p className="text-[11px] font-mono font-bold tracking-[0.1em] uppercase text-[#999] mb-2">
+                  Modo dios
+                </p>
+                <select
+                  className="input-base mb-2.5"
+                  value={userProfile.access_level ?? 1}
+                  onChange={(e) => handleSelfLevelChange(Number(e.target.value))}
+                >
+                  <option value={1}>Nivel 1</option>
+                  <option value={2}>Nivel 2</option>
+                  <option value={3}>Nivel 3</option>
+                  <option value={4}>Nivel 4</option>
+                </select>
+                <div className="flex items-center gap-2.5">
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={userProfile.admin === true}
+                    onClick={() => handleSelfAdminToggle(!userProfile.admin)}
+                    className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${
+                      userProfile.admin ? 'bg-[#FFB800]' : 'bg-[#d8d4c8]'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                        userProfile.admin ? 'translate-x-4' : ''
+                      }`}
+                    />
+                  </button>
+                  <span className="text-[15px] text-[#555]">Administrador</span>
+                </div>
+              </div>
+            )}
+
             <button
               onClick={() => {
                 setMenuOpen(false)
