@@ -7,39 +7,18 @@
  * Cada semana define hasta 5 tareas recurrentes (`TASK_KEYS`), con fecha tope propia.
  */
 
-/** Las 5 tareas fijas recurrentes, en el orden en que aparecen en la grilla y el reporte. */
-export const TASK_KEYS = ['metricas', 'grilla', 'artes', 'plataformas', 'calendario']
+/**
+ * Las 4 tareas fijas recurrentes, en el orden en que aparecen en la grilla y el reporte.
+ * "Actualización de Plataformas" (antes la 5.ª tarea) se mudó al módulo Chequeo — ver
+ * src/utils/chequeo.js → computePlataformasProductividad.
+ */
+export const TASK_KEYS = ['metricas', 'grilla', 'artes', 'calendario']
 
 export const TASK_LABELS = {
   metricas: 'Métricas',
   grilla: 'Grillas Redes → Diseño',
   artes: 'Grillas Diseño → Redes',
-  plataformas: 'Actualización de Plataformas',
   calendario: 'Calendario',
-}
-
-/** Abreviatura por red social para los botones compactos de 'plataformas'. */
-export const NETWORK_SHORT = {
-  Instagram: 'IG',
-  Facebook: 'FB',
-  TikTok: 'TT',
-  X: 'X',
-  YouTube: 'YT',
-  LinkedIn: 'LI',
-  Otro: 'Otro',
-}
-
-/**
- * Nombres de red social de un cliente (metric_clients.social_links: [{red, link}]),
- * tolerante a datos faltantes o mal formados.
- * @param {object} client
- * @returns {Array<string>}
- */
-export function clientNetworks(client) {
-  if (!Array.isArray(client?.social_links)) return []
-  return client.social_links
-    .map((s) => s?.red)
-    .filter((red) => typeof red === 'string' && red.length > 0)
 }
 
 // ─── Semanas del mes ────────────────────────────────────────────────────────
@@ -66,7 +45,7 @@ export function buildFixedWeeks(year, month) {
   }
   return weds.map((wed, i) => {
     const fri = new Date(wed)
-    fri.setDate(wed.getDate() + 2) // viernes de la semana → plataformas
+    fri.setDate(wed.getDate() + 2) // viernes de la semana
     const mon = new Date(wed)
     mon.setDate(wed.getDate() + 5) // lunes siguiente → artes
     const monIni = new Date(wed)
@@ -79,13 +58,13 @@ export function buildFixedWeeks(year, month) {
 
 /**
  * Qué tareas (`task_key`) aplican en una semana dada.
- * Base todas las semanas: grilla, artes, plataformas.
+ * Base todas las semanas: grilla, artes.
  * Semana 1: + métricas. Última semana del mes: + calendario.
  * @param {number} weekN
  * @param {Array} weeks  resultado de buildFixedWeeks
  */
 export function tasksForWeek(weekN, weeks) {
-  const base = ['grilla', 'artes', 'plataformas']
+  const base = ['grilla', 'artes']
   if (weekN === 1) return ['metricas', ...base]
   const week = weeks.find((w) => w.n === weekN)
   if (week?.isLast) return [...base, 'calendario']
@@ -129,7 +108,6 @@ export function taskDeadline(taskKey, week, year, month) {
     return { date: nthBusinessDay(year, month, 5), rule: '5.º día hábil del mes' }
   if (taskKey === 'grilla') return { date: week.wed, rule: 'cada miércoles' }
   if (taskKey === 'artes') return { date: week.mon, rule: 'cada lunes' }
-  if (taskKey === 'plataformas') return { date: week.fri, rule: 'cada viernes' }
   if (taskKey === 'calendario')
     return { date: lastBusinessDay(year, month), rule: 'último día hábil del mes' }
   return { date: null, rule: '' }
@@ -153,17 +131,17 @@ export function taskAppliesToClient(fixedTasksConfig, taskKey) {
  * mensual de la línea, a partir de las marcas tildadas en la grilla.
  *
  * Meta de cada tarea = nº de celdas aplicables en el mes (excluye 'na' y cuentas
- * donde la tarea no aplica). Real = nº de celdas marcadas 'si'. Para 'plataformas'
- * la celda se desagrega por red social (metric_clients.social_links): cada red suma
- * a la meta cada semana, en vez de una sola marca por cuenta — ver `clientNetworks`.
- * Además, 'plataformas' fija su base a **4 semanas siempre** (no las 4-5 reales del
- * mes según cuántos miércoles tenga): un mes con 5 semanas no cuenta la 5.ª contra
- * este indicador. 'na' sigue descontando de la meta igual que las demás tareas.
- * Devuelve el shape EXACTO de `report.productividad.tareas`, para que
- * `calcProductividad` (metricsScore.js) siga funcionando sin cambios.
+ * donde la tarea no aplica). Real = nº de celdas marcadas 'si'. Devuelve el shape
+ * EXACTO de `report.productividad.tareas`, para que `calcProductividad`
+ * (metricsScore.js) siga funcionando sin cambios.
+ *
+ * Nota: no incluye "Actualización de Plataformas" — esa fila se deriva aparte, de los
+ * eventos del módulo Chequeo (ver utils/chequeo.js → computePlataformasProductividad),
+ * y se concatena al resultado de esta función en el caller (OperacionesView,
+ * FixedTasksReportPreview).
  *
  * @param {Array} marks     filas de fixed_task_marks del mes (line_id ya filtrado)
- * @param {Array} clients   cuentas de la línea (con fixed_tasks, social_links)
+ * @param {Array} clients   cuentas de la línea (con fixed_tasks)
  * @param {Array} weeks     buildFixedWeeks(year, month)
  * @returns {Array<{nombre:string, realizado:number, meta:number}>}
  */
@@ -175,26 +153,6 @@ export function computeProductividad(marks, clients, weeks) {
       if (!taskAppliesToClient(client.fixed_tasks, taskKey)) return
       weeks.forEach((week) => {
         if (!tasksForWeek(week.n, weeks).includes(taskKey)) return
-
-        if (taskKey === 'plataformas') {
-          // Base fija de 4 semanas: la 5.ª semana de un mes largo no cuenta para
-          // este indicador (evita que el mes varíe entre ×4 y ×5 según el calendario).
-          if (week.n > 4) return
-          // Una unidad de meta por cada red social del cliente, en cada una de esas 4 semanas.
-          clientNetworks(client).forEach((network) => {
-            const mark = marks.find(
-              (m) =>
-                m.client_id === client.id &&
-                m.task_key === 'plataformas' &&
-                m.period_week === week.n &&
-                m.network === network,
-            )
-            if (mark?.status === 'na') return
-            meta++
-            if (mark?.status === 'si') realizado++
-          })
-          return
-        }
 
         const mark = marks.find(
           (m) => m.client_id === client.id && m.task_key === taskKey && m.period_week === week.n,

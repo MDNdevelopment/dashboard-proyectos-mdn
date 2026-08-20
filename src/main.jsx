@@ -15,6 +15,8 @@ import TicketsPage from './pages/TicketsPage.jsx'
 import AdsPage from './pages/AdsPage.jsx'
 import TareasPage from './pages/TareasPage.jsx'
 import TareasFijasPage from './pages/TareasFijasPage.jsx'
+import PautasPage from './pages/PautasPage.jsx'
+import ChequeoPage from './pages/ChequeoPage.jsx'
 import EmpresaPage from './pages/EmpresaPage.jsx'
 import EvaluacionesPage from './pages/EvaluacionesPage.jsx'
 import MetricasPage from './pages/MetricasPage.jsx'
@@ -89,6 +91,22 @@ createRoot(document.getElementById('root')).render(
               element={
                 <RequireModule moduleKey="tareas">
                   <TareasFijasPage />
+                </RequireModule>
+              }
+            />
+            <Route
+              path="/tareas/pautas"
+              element={
+                <RequireModule moduleKey="tareas">
+                  <PautasPage />
+                </RequireModule>
+              }
+            />
+            <Route
+              path="/tareas/chequeo"
+              element={
+                <RequireModule moduleKey="tareas">
+                  <ChequeoPage />
                 </RequireModule>
               }
             />

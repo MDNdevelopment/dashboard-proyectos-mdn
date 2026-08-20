@@ -17,12 +17,22 @@ import { employeeActiveInMonth } from '../../utils/employeeInMonth'
 import { isReportFrozen } from '../../utils/reportPeriod'
 import { calcTotal, sumScore, crecimientoCliente } from '../../utils/metricsScore'
 import { buildFixedWeeks, computeProductividad } from '../../utils/fixedTasks'
-import { MONTHS, INDICATORS, REUNIONES_MODULE_START, TAREAS_FIJAS_MODULE_START } from './constants'
+import { computePlataformasProductividad } from '../../utils/chequeo'
+import { loadCheckEvents } from '../chequeo/chequeoApi'
+import {
+  MONTHS,
+  INDICATORS,
+  REUNIONES_MODULE_START,
+  TAREAS_FIJAS_MODULE_START,
+  AUDIOVISUAL_MODULE_START,
+  CHEQUEO_PRODUCTIVIDAD_START,
+} from './constants'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import { Avatar } from '../tareas/UserPickerSingle'
 import { loadAds, spentByClientInPeriod } from '../ads/campaignSpendApi'
 import { fmtUSD } from '../../utils/metricsFinance'
 import { countMeetingsHeldForLine, loadHeldClientIdsForLine } from '../reuniones/meetingsApi'
+import { countPiezasForLine } from '../pautas/avPautasApi'
 import ReunionesClientesModal from './ReunionesClientesModal'
 
 /** Adapta un objeto cliente (logo_url) al shape que espera <Avatar> (avatar_url). */
@@ -76,6 +86,8 @@ export default function OperacionesView({ line, companyId, year, month, closed =
       meetingsRes,
       heldRes,
       fixedTaskMarksRes,
+      piezasRes,
+      checkEventsRes,
     ] = await Promise.all([
       loadReport(line.id, year, month),
       loadPrevReport(line.id, year, month),
@@ -86,6 +98,8 @@ export default function OperacionesView({ line, companyId, year, month, closed =
       countMeetingsHeldForLine(companyId, line.id, { month, year }),
       loadHeldClientIdsForLine(companyId, line.id, { month, year }),
       loadFixedTaskMarks(line.id, year, month),
+      countPiezasForLine(companyId, line.id, { month, year }),
+      loadCheckEvents(line.id, year, month),
     ])
     setCompanyClientsById(Object.fromEntries((companyClientsRes.data ?? []).map((c) => [c.id, c])))
     setAds(adsRes.data ?? [])
@@ -173,6 +187,32 @@ export default function OperacionesView({ line, companyId, year, month, closed =
         activeLineClients,
         weeks,
       )
+    }
+
+    // Fila «Actualización de Plataformas» del mismo indicador — se mudó al módulo
+    // Chequeo (ver utils/chequeo.js → computePlataformasProductividad). Antes del
+    // lanzamiento no hay eventos que derivar, así que esos meses no la agregan (evita un
+    // meta>0/real=0 falso; conserva la fila si ya estaba guardada de antes).
+    const isChequeoEra =
+      year > CHEQUEO_PRODUCTIVIDAD_START.year ||
+      (year === CHEQUEO_PRODUCTIVIDAD_START.year && month >= CHEQUEO_PRODUCTIVIDAD_START.month)
+    if (isChequeoEra && !closed) {
+      synced.productividad.tareas = [
+        ...synced.productividad.tareas.filter((t) => t.nombre !== 'Actualización de Plataformas'),
+        computePlataformasProductividad(checkEventsRes.data ?? [], activeLineClients),
+      ]
+    }
+
+    // "Nº Piezas vs Piezas editadas" ya no se captura a mano — se deriva de las pautas
+    // 'realizada' de Tareas Fijas → Audiovisual (av_pautas), mismo patrón que Reuniones y
+    // Productividad arriba. Antes del lanzamiento no hay pautas que derivar, así que esos
+    // meses conservan el valor que ya tenían guardado.
+    const isAvEra =
+      year > AUDIOVISUAL_MODULE_START.year ||
+      (year === AUDIOVISUAL_MODULE_START.year && month >= AUDIOVISUAL_MODULE_START.month)
+    if (isAvEra && !closed) {
+      synced.piezas.piezas = piezasRes.piezas
+      synced.piezas.editadas = piezasRes.editadas
     }
     setReport(synced)
     baselineRef.current = synced
@@ -320,6 +360,12 @@ export default function OperacionesView({ line, companyId, year, month, closed =
   const isFijasEra =
     year > TAREAS_FIJAS_MODULE_START.year ||
     (year === TAREAS_FIJAS_MODULE_START.year && month >= TAREAS_FIJAS_MODULE_START.month)
+
+  // Antes del lanzamiento del módulo Audiovisual, "Piezas" se sigue capturando a mano
+  // (mismo criterio que en load(), ver AUDIOVISUAL_MODULE_START en constants.js).
+  const isAvEra =
+    year > AUDIOVISUAL_MODULE_START.year ||
+    (year === AUDIOVISUAL_MODULE_START.year && month >= AUDIOVISUAL_MODULE_START.month)
 
   return (
     <fieldset disabled={closed} className="space-y-5 border-0 p-0 m-0 min-w-0">
@@ -939,23 +985,59 @@ export default function OperacionesView({ line, companyId, year, month, closed =
             <input
               type="number"
               min="0"
-              className="input-base"
-              value={report.piezas.piezas ?? ''}
-              onChange={(e) =>
-                setField('piezas.piezas', e.target.value === '' ? null : Number(e.target.value))
+              className={
+                isAvEra ? 'input-base bg-[#f2f0e8] text-[#888] cursor-not-allowed' : 'input-base'
+              }
+              value={isAvEra ? (report.piezas.piezas ?? 0) : (report.piezas.piezas ?? '')}
+              disabled={isAvEra}
+              readOnly={isAvEra}
+              onChange={
+                isAvEra
+                  ? undefined
+                  : (e) =>
+                      setField(
+                        'piezas.piezas',
+                        e.target.value === '' ? null : Number(e.target.value),
+                      )
+              }
+              title={
+                isAvEra
+                  ? 'Derivado automáticamente de Audiovisual: piezas de las pautas realizadas en el mes'
+                  : undefined
               }
             />
+            {isAvEra && (
+              <p className="mt-1 text-[12px] font-mono text-[#888]">Derivado de Audiovisual</p>
+            )}
           </Field>
           <Field label="Piezas editadas">
             <input
               type="number"
               min="0"
-              className="input-base"
-              value={report.piezas.editadas ?? ''}
-              onChange={(e) =>
-                setField('piezas.editadas', e.target.value === '' ? null : Number(e.target.value))
+              className={
+                isAvEra ? 'input-base bg-[#f2f0e8] text-[#888] cursor-not-allowed' : 'input-base'
+              }
+              value={isAvEra ? (report.piezas.editadas ?? 0) : (report.piezas.editadas ?? '')}
+              disabled={isAvEra}
+              readOnly={isAvEra}
+              onChange={
+                isAvEra
+                  ? undefined
+                  : (e) =>
+                      setField(
+                        'piezas.editadas',
+                        e.target.value === '' ? null : Number(e.target.value),
+                      )
+              }
+              title={
+                isAvEra
+                  ? 'Derivado automáticamente de Audiovisual: piezas editadas de las pautas realizadas en el mes'
+                  : undefined
               }
             />
+            {isAvEra && (
+              <p className="mt-1 text-[12px] font-mono text-[#888]">Derivado de Audiovisual</p>
+            )}
           </Field>
         </div>
       </Section>

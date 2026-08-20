@@ -55,6 +55,7 @@ const mockLoadAds = vi.fn()
 const mockCountMeetingsHeldForLine = vi.fn()
 const mockLoadHeldClientIdsForLine = vi.fn()
 const mockLoadFixedTaskMarks = vi.fn()
+const mockLoadCheckEvents = vi.fn()
 
 vi.mock('../components/metricas/metricsApi', () => ({
   loadReport: (...a) => mockLoadReport(...a),
@@ -63,6 +64,10 @@ vi.mock('../components/metricas/metricsApi', () => ({
   loadCompanyEmployees: (...a) => mockLoadCompanyEmployees(...a),
   upsertReport: (...a) => mockUpsertReport(...a),
   loadFixedTaskMarks: (...a) => mockLoadFixedTaskMarks(...a),
+}))
+
+vi.mock('../components/chequeo/chequeoApi', () => ({
+  loadCheckEvents: (...a) => mockLoadCheckEvents(...a),
 }))
 
 vi.mock('../components/ads/campaignSpendApi', async () => {
@@ -89,6 +94,11 @@ const LINE = { id: 'line-1', name: 'Georgina', member_user_ids: [], metas: {} }
 function renderView(props = {}) {
   return render(<OperacionesView line={LINE} companyId="co-1" year={2026} month={7} {...props} />)
 }
+
+// Default sin eventos de Chequeo — vi.clearAllMocks() (usado en los beforeEach de cada
+// describe) limpia calls/results pero no la implementación, así que este default
+// sobrevive salvo que un test lo pise explícitamente con mockLoadCheckEvents.mockResolvedValue(...).
+mockLoadCheckEvents.mockResolvedValue({ data: [], error: null })
 
 describe('OperacionesView — columna Inversión Ads (Crecimiento de seguidores)', () => {
   beforeEach(() => {
@@ -325,13 +335,49 @@ describe('OperacionesView — "Productividad – Tareas Fijas" antes del lanzami
     await waitFor(() => {
       expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
     })
-    // Al ser la era del módulo, computeProductividad deriva la lista completa de
-    // tareas (5, según TASK_KEYS) en vez de conservar la fila guardada a mano.
+    // Al ser la era del módulo, computeProductividad deriva las 4 tareas de TASK_KEYS +
+    // la fila "Actualización de Plataformas" (derivada de Chequeo, ver
+    // CHEQUEO_PRODUCTIVIDAD_START) en vez de conservar la fila guardada a mano.
     const section = screen.getByText('2. Productividad – Tareas Fijas').closest('div.space-y-3')
     const nombreInputs = within(section).getAllByRole('textbox')
     expect(nombreInputs.length).toBeGreaterThan(0)
     nombreInputs.forEach((input) => expect(input).toBeDisabled())
     expect(within(section).queryByText('Agregar tarea')).not.toBeInTheDocument()
+  })
+
+  it('agrega la fila "Actualización de Plataformas" derivada de los eventos de Chequeo del mes', async () => {
+    const data = makeReportData()
+    mockLoadReport.mockResolvedValue({ data: { data }, error: null })
+    // c-1 tiene Instagram (social_links) → 3 celdas aplicables (publicaciones/reels/highlights)
+    // × 4 = meta 12. Un evento de publicaciones del mes → real 1.
+    mockLoadClients.mockResolvedValue({
+      data: [
+        { ...MOCK_CLIENTS[0], social_links: [{ red: 'Instagram', link: '' }] },
+        MOCK_CLIENTS[1],
+      ],
+      error: null,
+    })
+    mockLoadCheckEvents.mockResolvedValueOnce({
+      data: [
+        {
+          client_id: 'c-1',
+          network: 'Instagram',
+          content_type: 'publicaciones',
+          published_at: '2026-09-05',
+        },
+      ],
+      error: null,
+    })
+    renderView({ month: 9 })
+    await waitFor(() => {
+      expect(screen.getByText('2. Productividad – Tareas Fijas')).toBeInTheDocument()
+    })
+    const section = screen.getByText('2. Productividad – Tareas Fijas').closest('div.space-y-3')
+    expect(within(section).getByDisplayValue('Actualización de Plataformas')).toBeInTheDocument()
+    // "Real" y "Meta" de esa fila son los últimos inputs de la sección.
+    const numberInputs = within(section).getAllByRole('spinbutton')
+    expect(numberInputs.at(-2).value).toBe('1') // real
+    expect(numberInputs.at(-1).value).toBe('12') // meta
   })
 })
 

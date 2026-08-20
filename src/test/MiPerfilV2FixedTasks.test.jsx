@@ -84,7 +84,7 @@ describe('MiPerfilV2View — sección Tareas Fijas', () => {
     currentMarks = [
       mark({ task_key: 'grilla', period_week: 1, status: 'si' }),
       mark({ task_key: 'artes', period_week: 1, status: 'no' }),
-      mark({ task_key: 'plataformas', period_week: 1, status: 'na' }),
+      mark({ task_key: 'calendario', period_week: 1, status: 'na' }),
     ]
     renderProfile()
     await waitFor(() => {

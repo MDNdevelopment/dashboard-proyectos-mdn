@@ -6,7 +6,6 @@ import {
   taskAppliesToClient,
   computeProductividad,
   aggregateEmployeeFixedTasks,
-  clientNetworks,
   TASK_KEYS,
 } from '../utils/fixedTasks'
 
@@ -30,11 +29,6 @@ function client(overrides = {}) {
   return { id: 'c1', name: 'Cliente 1', fixed_tasks: null, ...overrides }
 }
 
-/** Cliente con redes sociales (metric_clients.social_links). */
-function clientNets(reds, overrides = {}) {
-  return client({ social_links: reds.map((red) => ({ red, link: '' })), ...overrides })
-}
-
 describe('buildFixedWeeks', () => {
   it('ancla las semanas al miércoles del mes', () => {
     const weeks = buildFixedWeeks(YEAR, MONTH)
@@ -55,20 +49,16 @@ describe('tasksForWeek', () => {
   const weeks = buildFixedWeeks(YEAR, MONTH)
 
   it('la semana 1 incluye métricas + base', () => {
-    expect(tasksForWeek(1, weeks).sort()).toEqual(
-      ['artes', 'grilla', 'metricas', 'plataformas'].sort(),
-    )
+    expect(tasksForWeek(1, weeks).sort()).toEqual(['artes', 'grilla', 'metricas'].sort())
   })
 
   it('una semana intermedia solo trae la base', () => {
-    expect(tasksForWeek(3, weeks).sort()).toEqual(['artes', 'grilla', 'plataformas'].sort())
+    expect(tasksForWeek(3, weeks).sort()).toEqual(['artes', 'grilla'].sort())
   })
 
   it('la última semana incluye calendario + base', () => {
     const lastN = weeks.at(-1).n
-    expect(tasksForWeek(lastN, weeks).sort()).toEqual(
-      ['artes', 'calendario', 'grilla', 'plataformas'].sort(),
-    )
+    expect(tasksForWeek(lastN, weeks).sort()).toEqual(['artes', 'calendario', 'grilla'].sort())
   })
 })
 
@@ -141,93 +131,6 @@ describe('computeProductividad', () => {
       expect(r).toHaveProperty('meta')
     })
   })
-
-  describe('plataformas — desagregado por red social', () => {
-    it('meta = redes × 4 semanas fijas (no las semanas reales del mes); real cuenta solo "si"', () => {
-      const weeks = buildFixedWeeks(YEAR, MONTH) // 5 semanas reales, pero plataformas se fija a 4
-      const clients = [clientNets(['Instagram', 'Facebook'])] // 2 redes
-      const marks = [
-        mark({ task_key: 'plataformas', period_week: 1, network: 'Instagram', status: 'si' }),
-        mark({ task_key: 'plataformas', period_week: 1, network: 'Facebook', status: 'no' }),
-        // resto de semanas/redes sin marca (pendiente) → cuentan en meta, no en real
-      ]
-      const row = computeProductividad(marks, clients, weeks).find(
-        (r) => r.nombre === 'Actualización de Plataformas',
-      )
-      expect(row.meta).toBe(8) // 2 redes × 4 semanas
-      expect(row.realizado).toBe(1) // solo el 'si'
-    })
-
-    it('"na" descuenta de la meta por red dentro de las 4 semanas', () => {
-      const weeks = buildFixedWeeks(YEAR, MONTH)
-      const clients = [clientNets(['Instagram'])]
-      const marks = [
-        mark({ task_key: 'plataformas', period_week: 1, network: 'Instagram', status: 'na' }),
-      ]
-      const row = computeProductividad(marks, clients, weeks).find(
-        (r) => r.nombre === 'Actualización de Plataformas',
-      )
-      expect(row.meta).toBe(3) // 4 semanas - 1 na
-      expect(row.realizado).toBe(0)
-    })
-
-    it('un mes con 5 semanas reales no cuenta la 5.ª contra la meta ni el real', () => {
-      const weeks = buildFixedWeeks(YEAR, MONTH) // Julio 2026 tiene 5 miércoles
-      expect(weeks).toHaveLength(5)
-      const clients = [clientNets(['Instagram'])]
-      const marks = [
-        mark({ task_key: 'plataformas', period_week: 5, network: 'Instagram', status: 'si' }),
-      ]
-      const row = computeProductividad(marks, clients, weeks).find(
-        (r) => r.nombre === 'Actualización de Plataformas',
-      )
-      expect(row.meta).toBe(4) // 1 red × 4 semanas fijas
-      expect(row.realizado).toBe(0) // el 'si' cae en la semana 5, que no cuenta
-    })
-
-    it('cliente sin redes aporta 0 a la meta', () => {
-      const weeks = buildFixedWeeks(YEAR, MONTH)
-      const clients = [clientNets([])]
-      const row = computeProductividad([], clients, weeks).find(
-        (r) => r.nombre === 'Actualización de Plataformas',
-      )
-      expect(row.meta).toBe(0)
-      expect(row.realizado).toBe(0)
-    })
-
-    it('social_links ausente se trata como sin redes', () => {
-      const weeks = buildFixedWeeks(YEAR, MONTH)
-      const row = computeProductividad([], [client()], weeks).find(
-        (r) => r.nombre === 'Actualización de Plataformas',
-      )
-      expect(row.meta).toBe(0)
-    })
-
-    it('fixed_tasks.plataformas=false excluye la cuenta y todas sus redes', () => {
-      const weeks = buildFixedWeeks(YEAR, MONTH)
-      const clients = [clientNets(['Instagram', 'TikTok'], { fixed_tasks: { plataformas: false } })]
-      const marks = [
-        mark({ task_key: 'plataformas', period_week: 1, network: 'Instagram', status: 'si' }),
-      ]
-      const row = computeProductividad(marks, clients, weeks).find(
-        (r) => r.nombre === 'Actualización de Plataformas',
-      )
-      expect(row.meta).toBe(0)
-      expect(row.realizado).toBe(0)
-    })
-  })
-})
-
-describe('clientNetworks', () => {
-  it('extrae los nombres de red de social_links', () => {
-    expect(clientNetworks(clientNets(['Instagram', 'TikTok']))).toEqual(['Instagram', 'TikTok'])
-  })
-
-  it('tolera social_links ausente o mal formado', () => {
-    expect(clientNetworks(client())).toEqual([])
-    expect(clientNetworks({ social_links: null })).toEqual([])
-    expect(clientNetworks({ social_links: [{ link: 'sin-red' }] })).toEqual([])
-  })
 })
 
 describe('aggregateEmployeeFixedTasks', () => {
@@ -242,7 +145,7 @@ describe('aggregateEmployeeFixedTasks', () => {
     const marks = [
       mark({ client_id: 'c1', status: 'si' }),
       mark({ client_id: 'c1', task_key: 'artes', status: 'no' }),
-      mark({ client_id: 'c1', task_key: 'plataformas', status: 'na' }),
+      mark({ client_id: 'c1', task_key: 'calendario', status: 'na' }),
     ]
     const res = aggregateEmployeeFixedTasks(marks, ['c1'])
     expect(res.total).toBe(2)
@@ -265,14 +168,5 @@ describe('aggregateEmployeeFixedTasks', () => {
     const res = aggregateEmployeeFixedTasks(marks, ['c1'])
     expect(res.byTaskKey.grilla).toEqual({ total: 1, entregadas: 1 })
     expect(res.byTaskKey.artes).toEqual({ total: 1, entregadas: 0 })
-  })
-
-  it('cuenta cada red social de plataformas como una marca independiente', () => {
-    const marks = [
-      mark({ client_id: 'c1', task_key: 'plataformas', network: 'Instagram', status: 'si' }),
-      mark({ client_id: 'c1', task_key: 'plataformas', network: 'Facebook', status: 'no' }),
-    ]
-    const res = aggregateEmployeeFixedTasks(marks, ['c1'])
-    expect(res.byTaskKey.plataformas).toEqual({ total: 2, entregadas: 1 })
   })
 })

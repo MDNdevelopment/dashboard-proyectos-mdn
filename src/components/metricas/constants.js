@@ -4,7 +4,9 @@ export const SOCIAL_NETWORKS = [
   'TikTok',
   'X',
   'YouTube',
+  'YouTube Shorts',
   'LinkedIn',
+  'Mailchimp',
   'Otro',
 ]
 
@@ -35,6 +37,18 @@ export const REUNIONES_MODULE_START = { year: 2026, month: 7 }
 // automático siempre daría 0/0 — los reportes de meses anteriores conservan las
 // filas que ya tenían guardadas (capturadas a mano) en vez de que se les pise.
 export const TAREAS_FIJAS_MODULE_START = { year: 2026, month: 9 }
+
+// Mes en que arranca el auto-llenado de «6. Nº Piezas vs Piezas editadas» desde las
+// pautas realizadas de Tareas Fijas → Audiovisual (tabla `av_pautas`). Antes de este mes
+// no hay pautas que derivar, así que esos reportes conservan el valor capturado a mano.
+export const AUDIOVISUAL_MODULE_START = { year: 2026, month: 9 }
+
+// Mes en que arranca el auto-llenado de la fila «Actualización de Plataformas» (dentro
+// de Productividad) desde los eventos del módulo Chequeo (tabla `publication_check_events`,
+// migración 20260823000000_create_publication_check_events.sql). Antes de este mes no hay
+// eventos que derivar — esa fila se omite en vez de mostrar meta>0/real=0 falso. Reemplaza
+// a la columna "Actualización de Plataformas" que antes vivía en Tareas Fijas.
+export const CHEQUEO_PRODUCTIVIDAD_START = { year: 2026, month: 9 }
 
 export const INDICATORS = [
   { key: 'reuniones', nombre: 'Reuniones realizadas', peso: 20, short: 'Reuniones' },

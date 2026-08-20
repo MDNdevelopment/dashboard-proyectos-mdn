@@ -1,11 +1,19 @@
 import { computeProductividad, TASK_LABELS } from '../../utils/fixedTasks'
+import { computePlataformasProductividad } from '../../utils/chequeo'
 import { calcProductividad } from '../../utils/metricsScore'
+
+const PLATAFORMAS_LABEL = 'Actualización de Plataformas'
+// Encabezados de la vista previa: las 4 tareas de Tareas Fijas + la fila derivada de
+// Chequeo, en el mismo orden en que las mostraba la columna vieja.
+const PREVIEW_LABELS = [...Object.values(TASK_LABELS), PLATAFORMAS_LABEL]
 
 /**
  * Vista previa de solo-lectura del indicador «2. Productividad – Tareas Fijas»
  * del reporte mensual, calculado en vivo desde la grilla de arriba (todas las
- * semanas del mes). Es exactamente lo que OperacionesView derivará y guardará
- * en `report.productividad.tareas` — ver utils/fixedTasks.js:computeProductividad.
+ * semanas del mes) más la fila «Actualización de Plataformas» derivada de los eventos
+ * de Chequeo del mes. Es exactamente lo que OperacionesView derivará y guardará en
+ * `report.productividad.tareas` — ver utils/fixedTasks.js:computeProductividad y
+ * utils/chequeo.js:computePlataformasProductividad.
  *
  * showMatrix=true (alcance "Todas las líneas"): una fila por línea con su score.
  */
@@ -14,13 +22,18 @@ export default function FixedTasksReportPreview({
   clients,
   marks,
   weeks,
+  checkEvents,
   showMatrix,
   lineLabel,
 }) {
   function rowsForLine(line) {
     const lineClients = clients.filter((c) => c.line_id === line.id)
     const lineMarks = marks.filter((m) => m.line_id === line.id)
-    return computeProductividad(lineMarks, lineClients, weeks)
+    const lineEvents = (checkEvents ?? []).filter((e) => e.line_id === line.id)
+    return [
+      ...computeProductividad(lineMarks, lineClients, weeks),
+      computePlataformasProductividad(lineEvents, lineClients),
+    ]
   }
 
   function scoreOf(rows) {
@@ -44,7 +57,7 @@ export default function FixedTasksReportPreview({
             <thead>
               <tr className="text-[11px] font-mono uppercase tracking-wide text-[#a29b8c] border-b border-[#eee9dd]">
                 <th className="text-left py-2 pr-3">Línea</th>
-                {Object.values(TASK_LABELS).map((label) => (
+                {PREVIEW_LABELS.map((label) => (
                   <th key={label} className="px-2 py-2 text-center">
                     {label}
                   </th>

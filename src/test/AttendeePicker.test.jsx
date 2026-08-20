@@ -187,7 +187,7 @@ describe('AttendeePicker — sugerencia de alguien ya agregado (check verde)', (
 describe('AttendeePicker — orden alfabético', () => {
   it('las pills de participantes agregados se muestran en orden alfabético sin importar el orden de selectedIds', () => {
     renderPicker(['emp-1', 'director-1', 'coord-1']) // Dario, Ana, Carla → debe verse Ana, Carla, Dario
-    const names = screen.getAllByText(/^(Ana|Beto|Carla|Dario) /).map(el => el.textContent)
+    const names = screen.getAllByText(/^(Ana|Beto|Carla|Dario) /).map((el) => el.textContent)
     expect(names).toEqual(['Ana Director', 'Carla Coord', 'Dario Empleado'])
   })
 
@@ -196,7 +196,7 @@ describe('AttendeePicker — orden alfabético', () => {
     renderPicker()
     await user.type(screen.getByPlaceholderText('Buscar empleado por nombre…'), 'a')
     const dropdown = within(screen.getByTestId('attendee-suggestions'))
-    const names = dropdown.getAllByText(/^(Ana|Beto|Carla|Dario) /).map(el => el.textContent)
+    const names = dropdown.getAllByText(/^(Ana|Beto|Carla|Dario) /).map((el) => el.textContent)
     expect(names).toEqual(['Ana Director', 'Carla Coord', 'Dario Empleado'])
   })
 })
@@ -207,5 +207,39 @@ describe('AttendeePicker — quitar participantes agregados', () => {
     const onChange = renderPicker(['director-1', 'coord-1'])
     await user.click(screen.getByRole('button', { name: 'Quitar a Ana Director' }))
     expect(onChange).toHaveBeenCalledWith(['coord-1'])
+  })
+})
+
+describe('AttendeePicker — hideQuickGroups (Audiovisual: solo búsqueda manual)', () => {
+  it('con hideQuickGroups no se renderizan los botones de selección rápida por cargo', () => {
+    render(
+      <AttendeePicker employees={EMPLOYEES} selectedIds={[]} onChange={vi.fn()} hideQuickGroups />,
+    )
+    expect(screen.queryByText('Preseleccionar por cargo')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Solo directores' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Toda la empresa' })).not.toBeInTheDocument()
+    // El buscador manual sigue disponible
+    expect(screen.getByPlaceholderText('Buscar empleado por nombre…')).toBeInTheDocument()
+  })
+
+  it('sin hideQuickGroups (uso en Reuniones) los botones de selección rápida siguen ahí — regresión', () => {
+    renderPicker()
+    expect(screen.getByText('Preseleccionar por cargo')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Solo directores' })).toBeInTheDocument()
+  })
+
+  it('con hideQuickGroups, "Quitar a todos" sigue disponible si hay participantes agregados', async () => {
+    const user = userEvent.setup()
+    const onChange = vi.fn()
+    render(
+      <AttendeePicker
+        employees={EMPLOYEES}
+        selectedIds={['director-1']}
+        onChange={onChange}
+        hideQuickGroups
+      />,
+    )
+    await user.click(screen.getByRole('button', { name: 'Quitar a todos' }))
+    expect(onChange).toHaveBeenCalledWith([])
   })
 })

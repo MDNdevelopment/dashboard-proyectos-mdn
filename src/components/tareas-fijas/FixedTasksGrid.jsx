@@ -6,8 +6,6 @@ import {
   taskDeadline,
   taskAppliesToClient,
   TASK_LABELS,
-  NETWORK_SHORT,
-  clientNetworks,
 } from '../../utils/fixedTasks'
 
 const ORDER = ['si', 'no', 'na', null]
@@ -22,10 +20,7 @@ const STATUS_META = {
   null: { label: 'Pendiente', dot: '#d8d4c8', cls: 'bg-white border-[#e6e2d8] text-[#9a9488]' },
 }
 
-/** Label del estado; 'plataformas' usa "Completado"/"No completado" en vez de "Entregado". */
-function statusLabel(status, isPlatform) {
-  if (status === 'si') return isPlatform ? 'Completado' : 'Entregado'
-  if (status === 'no') return isPlatform ? 'No completado' : 'No entregado'
+function statusLabel(status) {
   return STATUS_META[String(status)].label
 }
 
@@ -35,6 +30,11 @@ const CONFLICT_TARGET = 'client_id,task_key,period_year,period_month,period_week
  * Grilla `cuenta × tarea` de la semana activa. Un clic tilda/cicla el estado
  * (pendiente → si → no → na → pendiente); si el estado queda en "si" se
  * despliega un input opcional para el enlace de la pieza/publicación.
+ *
+ * Nota: la tarea "Actualización de Plataformas" ya no vive acá — se mudó al módulo
+ * Gestión de Tareas → Chequeo (ver src/components/chequeo/ChequeoGrid.jsx), que registra
+ * la última publicación por cuenta × red × tipo de contenido y alimenta aparte el
+ * indicador de Productividad (ver src/utils/chequeo.js → computePlataformasProductividad).
  *
  * Props:
  *   lines, clients, companyUsers — roster ya acotado al alcance activo
@@ -67,20 +67,16 @@ export default function FixedTasksGrid({
   const cols = week ? tasksForWeek(weekN, weeks) : []
   const usersById = new Map(companyUsers.map((u) => [u.user_id, u]))
 
-  function findMark(clientId, taskKey, network = '') {
+  function findMark(clientId, taskKey) {
     return marks.find(
-      (m) =>
-        m.client_id === clientId &&
-        m.task_key === taskKey &&
-        m.period_week === weekN &&
-        (m.network ?? '') === network,
+      (m) => m.client_id === clientId && m.task_key === taskKey && m.period_week === weekN,
     )
   }
 
-  async function cycleStatus(client, taskKey, network = '') {
+  async function cycleStatus(client, taskKey) {
     if (!canManage || !week) return
-    const key = `${client.id}:${taskKey}:${network}`
-    const current = findMark(client.id, taskKey, network)
+    const key = `${client.id}:${taskKey}`
+    const current = findMark(client.id, taskKey)
     const idx = ORDER.indexOf(current?.status ?? null)
     const next = ORDER[(idx + 1) % ORDER.length]
     setSavingKey(key)
@@ -104,7 +100,7 @@ export default function FixedTasksGrid({
       period_year: year,
       period_month: month,
       period_week: weekN,
-      network,
+      network: '',
       status: next,
       link: next === 'si' ? (current?.link ?? null) : null,
       marked_by: userId,
@@ -120,8 +116,8 @@ export default function FixedTasksGrid({
     setSavingKey(null)
   }
 
-  async function setLink(client, taskKey, value, network = '') {
-    const current = findMark(client.id, taskKey, network)
+  async function setLink(client, taskKey, value) {
+    const current = findMark(client.id, taskKey)
     if (!current) return
     setError(null)
     const { data, error: err } = await supabase
@@ -222,50 +218,6 @@ export default function FixedTasksGrid({
                             </td>
                           )
                         }
-                        if (taskKey === 'plataformas') {
-                          const nets = clientNetworks(client)
-                          return (
-                            <td key={taskKey} className="px-1.5 sm:px-2 py-2 text-center align-top">
-                              {nets.length === 0 ? (
-                                <div
-                                  className="h-[38px] flex items-center justify-center text-[12px] text-[#c3bcac]"
-                                  title="Esta cuenta no tiene redes sociales cargadas en su ficha"
-                                >
-                                  sin redes
-                                </div>
-                              ) : (
-                                <div className="flex flex-wrap gap-1 justify-center">
-                                  {nets.map((network) => {
-                                    const mark = findMark(client.id, 'plataformas', network)
-                                    const status = mark?.status ?? null
-                                    const sm = STATUS_META[String(status)]
-                                    const key = `${client.id}:plataformas:${network}`
-                                    return (
-                                      <button
-                                        key={network}
-                                        type="button"
-                                        disabled={!canManage || savingKey === key}
-                                        onClick={() => cycleStatus(client, 'plataformas', network)}
-                                        title={`${network} · ${statusLabel(status, true)}`}
-                                        className={`min-w-[38px] h-[30px] px-1.5 rounded-md border flex items-center justify-center gap-1 text-[11px] font-semibold transition-all ${sm.cls} ${
-                                          canManage
-                                            ? 'cursor-pointer hover:opacity-80'
-                                            : 'cursor-default'
-                                        }`}
-                                      >
-                                        <span
-                                          className="w-[6px] h-[6px] rounded-full"
-                                          style={{ background: sm.dot }}
-                                        />
-                                        {NETWORK_SHORT[network] ?? network}
-                                      </button>
-                                    )
-                                  })}
-                                </div>
-                              )}
-                            </td>
-                          )
-                        }
                         const mark = findMark(client.id, taskKey)
                         const status = mark?.status ?? null
                         const meta = STATUS_META[String(status)]
@@ -285,7 +237,7 @@ export default function FixedTasksGrid({
                                   className="w-[7px] h-[7px] rounded-full"
                                   style={{ background: meta.dot }}
                                 />
-                                {statusLabel(status, false)}
+                                {statusLabel(status)}
                               </button>
                               {status === 'si' && canManage && (
                                 <input
