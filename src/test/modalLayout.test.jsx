@@ -38,6 +38,7 @@ const MODALS_WITH_FOOTER = [
   'src/components/empresa/LineMetasModal.jsx',
   'src/components/ads/AdsDetail.jsx',
   'src/components/ads/AdsSpendDetail.jsx',
+  'src/components/pautas/PautaDetailModal.jsx',
 ]
 
 // ── Casos: modales con header fijo pero sin footer de acciones separado ────────
@@ -58,27 +59,36 @@ const FICHA_CONTENT_FRAGMENTS = [
 ]
 
 describe('Modales — panel flex-col con header/footer fijos y contenido scrolleable', () => {
-  it.each(MODALS_WITH_FOOTER)('%s: panel flex-col, contenido scrolleable, header y footer fijos', path => {
-    const code = src(path)
-    expect(code).toMatch(/flex flex-col/)
-    expect(code).toMatch(/flex-1[^"]*overflow-y-auto|overflow-y-auto[^"]*flex-1/)
-    expect(code).toMatch(/flex-shrink-0/)
-    // El footer (fila de botones) debe llevar border-t y flex-shrink-0.
-    expect(code).toMatch(/flex-shrink-0[^"]*border-t|border-t[^"]*flex-shrink-0/)
-  })
+  it.each(MODALS_WITH_FOOTER)(
+    '%s: panel flex-col, contenido scrolleable, header y footer fijos',
+    (path) => {
+      const code = src(path)
+      expect(code).toMatch(/flex flex-col/)
+      expect(code).toMatch(/flex-1[^"]*overflow-y-auto|overflow-y-auto[^"]*flex-1/)
+      expect(code).toMatch(/flex-shrink-0/)
+      // El footer (fila de botones) debe llevar border-t y flex-shrink-0.
+      expect(code).toMatch(/flex-shrink-0[^"]*border-t|border-t[^"]*flex-shrink-0/)
+    },
+  )
 
-  it.each(MODALS_HEADER_ONLY)('%s: panel/header flex-col con flex-shrink-0 y contenido flex-1 overflow-y-auto', path => {
-    const code = src(path)
-    expect(code).toMatch(/flex flex-col/)
-    expect(code).toMatch(/flex-1[^"]*overflow-y-auto|overflow-y-auto[^"]*flex-1/)
-    expect(code).toMatch(/flex-shrink-0/)
-  })
+  it.each(MODALS_HEADER_ONLY)(
+    '%s: panel/header flex-col con flex-shrink-0 y contenido flex-1 overflow-y-auto',
+    (path) => {
+      const code = src(path)
+      expect(code).toMatch(/flex flex-col/)
+      expect(code).toMatch(/flex-1[^"]*overflow-y-auto|overflow-y-auto[^"]*flex-1/)
+      expect(code).toMatch(/flex-shrink-0/)
+    },
+  )
 
-  it.each(FICHA_CONTENT_FRAGMENTS)('%s: header flex-shrink-0 y cuerpo flex-1 overflow-y-auto (el panel flex-col vive en el wrapper)', path => {
-    const code = src(path)
-    expect(code).toMatch(/flex-shrink-0/)
-    expect(code).toMatch(/flex-1[^"]*overflow-y-auto|overflow-y-auto[^"]*flex-1/)
-  })
+  it.each(FICHA_CONTENT_FRAGMENTS)(
+    '%s: header flex-shrink-0 y cuerpo flex-1 overflow-y-auto (el panel flex-col vive en el wrapper)',
+    (path) => {
+      const code = src(path)
+      expect(code).toMatch(/flex-shrink-0/)
+      expect(code).toMatch(/flex-1[^"]*overflow-y-auto|overflow-y-auto[^"]*flex-1/)
+    },
+  )
 
   it('LineFichaModal: panel flex-col, barra "Volver" y header de línea con flex-shrink-0, contenido flex-1 overflow-y-auto', () => {
     const code = src('src/components/empresa/LineFichaModal.jsx')
@@ -98,13 +108,18 @@ describe('Modales — panel flex-col con header/footer fijos y contenido scrolle
 
   it('ClientModal y PositionModal ya no usan el hack "sticky top-0 bg-white z-10" en el header', () => {
     expect(src('src/components/empresa/ClientModal.jsx')).not.toMatch(/sticky top-0 bg-white z-10/)
-    expect(src('src/components/empresa/PositionModal.jsx')).not.toMatch(/sticky top-0 bg-white z-10/)
+    expect(src('src/components/empresa/PositionModal.jsx')).not.toMatch(
+      /sticky top-0 bg-white z-10/,
+    )
   })
 
-  it.each([...MODALS_WITH_FOOTER, ...MODALS_HEADER_ONLY, ...FICHA_CONTENT_FRAGMENTS])('%s: ningún contenedor combina max-h-[ con overflow-y-auto en el mismo elemento', path => {
-    const code = src(path)
-    // Patrón legado: `max-h-[90vh] overflow-y-auto` (o similar) en la misma className.
-    expect(code).not.toMatch(/max-h-\[[^\]]+\]\s+overflow-y-auto/)
-    expect(code).not.toMatch(/overflow-y-auto\s+max-h-\[[^\]]+\]/)
-  })
+  it.each([...MODALS_WITH_FOOTER, ...MODALS_HEADER_ONLY, ...FICHA_CONTENT_FRAGMENTS])(
+    '%s: ningún contenedor combina max-h-[ con overflow-y-auto en el mismo elemento',
+    (path) => {
+      const code = src(path)
+      // Patrón legado: `max-h-[90vh] overflow-y-auto` (o similar) en la misma className.
+      expect(code).not.toMatch(/max-h-\[[^\]]+\]\s+overflow-y-auto/)
+      expect(code).not.toMatch(/overflow-y-auto\s+max-h-\[[^\]]+\]/)
+    },
+  )
 })

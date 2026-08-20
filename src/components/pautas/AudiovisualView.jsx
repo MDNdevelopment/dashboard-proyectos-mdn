@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../supabase'
 import { loadCompanyEmployees } from '../metricas/metricsApi'
-import { loadPautas, createPauta } from './avPautasApi'
+import { loadPautas, createPauta, loadPiezas, updatePauta } from './avPautasApi'
 import {
   avEditMode,
   nextAgendaDeadline,
@@ -11,7 +11,7 @@ import {
 import AvCalendar from './AvCalendar'
 import AvPhaseTable from './AvPhaseTable'
 import AvAnalytics from './AvAnalytics'
-import PautaDetailCard from './PautaDetailCard'
+import PautaDetailModal from './PautaDetailModal'
 import WhatsAppAgendaModal from './WhatsAppAgendaModal'
 
 const ALL_LINES = '__all__'
@@ -43,6 +43,7 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
 
   const [{ year, month }, setPeriod] = useState(currentYearMonth)
   const [pautas, setPautas] = useState([])
+  const [piezas, setPiezas] = useState([])
   const [employees, setEmployees] = useState([])
   const [loading, setLoading] = useState(true)
   // Solo relevante cuando canViewAll (badges "Todos"/línea): sin ese permiso, el alcance queda
@@ -67,12 +68,14 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
   const loadAll = useCallback(async () => {
     if (!companyId) return
     setLoading(true)
-    const [pautasRes, employeesRes] = await Promise.all([
+    const [pautasRes, employeesRes, piezasRes] = await Promise.all([
       loadPautas(companyId),
       loadCompanyEmployees(companyId),
+      loadPiezas(companyId),
     ])
     setPautas(pautasRes.data ?? [])
     setEmployees(employeesRes.data ?? [])
+    setPiezas(piezasRes.data ?? [])
     setLoading(false)
   }, [companyId])
 
@@ -102,6 +105,33 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
     return () => supabase.removeChannel(channel)
   }, [companyId])
 
+  // Realtime del checklist de piezas — mismo patrón que el canal de arriba. El trigger de
+  // BD que deriva av_pautas.piezas_editadas dispara además un UPDATE de av_pautas, que ya
+  // llega por el canal anterior.
+  useEffect(() => {
+    if (!companyId) return
+    const channel = supabase
+      .channel('av-pauta-piezas-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'av_pauta_piezas' },
+        (payload) => {
+          setPiezas((prev) => {
+            if (payload.eventType === 'INSERT') {
+              if (payload.new.company_id !== companyId) return prev
+              return prev.some((p) => p.id === payload.new.id) ? prev : [...prev, payload.new]
+            }
+            if (payload.eventType === 'UPDATE')
+              return prev.map((p) => (p.id === payload.new.id ? payload.new : p))
+            if (payload.eventType === 'DELETE') return prev.filter((p) => p.id !== payload.old.id)
+            return prev
+          })
+        },
+      )
+      .subscribe()
+    return () => supabase.removeChannel(channel)
+  }, [companyId])
+
   function handleChanged(pauta) {
     setPautas((prev) => {
       const exists = prev.some((p) => p.id === pauta.id)
@@ -114,10 +144,35 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
     setPautas((prev) => prev.filter((p) => p.id !== id))
   }
 
+  function handlePiezaChanged(pieza) {
+    setPiezas((prev) => {
+      const exists = prev.some((p) => p.id === pieza.id)
+      return exists ? prev.map((p) => (p.id === pieza.id ? pieza : p)) : [...prev, pieza]
+    })
+  }
+
+  function handlePiezaDeleted(id) {
+    setPiezas((prev) => prev.filter((p) => p.id !== id))
+  }
+
+  // Handler compartido con AvPhaseTable.handleFields (mismo patrón), pero vive acá porque
+  // el modal de detalle es hermano de la tabla, no hijo — ambos actualizan la misma pauta
+  // vía updatePauta y reconcilian con handleChanged.
+  async function handlePautaFields(pauta, fields) {
+    const { data, error: err } = await updatePauta(pauta.id, fields)
+    if (err) return
+    handleChanged(data)
+  }
+
   const scopedPautas = pautasInScope(pautas, scopeLine)
   const scopedClients = clients.filter((c) => !scopeLine || c.line_id === scopeLine)
   const audiovisualUsers = employees.filter((u) => u.department_id === 2 && !u.deleted_at)
   const usersById = new Map(employees.map((u) => [u.user_id, u]))
+  const piezasByPautaMap = new Map()
+  piezas.forEach((pz) => {
+    if (!piezasByPautaMap.has(pz.pauta_id)) piezasByPautaMap.set(pz.pauta_id, [])
+    piezasByPautaMap.get(pz.pauta_id).push(pz)
+  })
   // Tabla de seguimiento + recuadros de resumen + analítica siguen al mes que se está
   // viendo en el calendario (pautas sin fecha se mantienen visibles siempre, ver
   // pautasInMonth). El calendario mismo (AvCalendar) recibe `scopedPautas` sin este
@@ -254,6 +309,7 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
       <div className="mt-4">
         <AvPhaseTable
           pautas={monthPautas}
+          piezas={piezas}
           clients={scopedClients}
           audiovisualUsers={audiovisualUsers}
           allEmployees={employees.filter((u) => !u.deleted_at)}
@@ -265,15 +321,28 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
           onPhaseChange={setPhase}
           onChanged={handleChanged}
           onDeleted={handleDeleted}
+          onPautaClick={setDetailPauta}
         />
       </div>
 
-      <AvAnalytics pautas={monthPautas} lines={lines} usersById={usersById} />
+      <AvAnalytics
+        pautas={monthPautas}
+        lines={lines}
+        usersById={usersById}
+        piezasByPauta={piezasByPautaMap}
+      />
 
       {detailPauta && (
-        <PautaDetailCard
+        <PautaDetailModal
           pauta={detailPauta}
           usersById={usersById}
+          audiovisualUsers={audiovisualUsers}
+          piezas={piezas.filter((pz) => pz.pauta_id === detailPauta.id)}
+          canCoordinate={canCoordinate}
+          companyId={companyId}
+          onFields={handlePautaFields}
+          onPiezaChanged={handlePiezaChanged}
+          onPiezaDeleted={handlePiezaDeleted}
           onClose={() => setDetailPauta(null)}
         />
       )}

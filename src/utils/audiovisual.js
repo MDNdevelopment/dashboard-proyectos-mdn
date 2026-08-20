@@ -29,6 +29,52 @@ export const GRILLA_STATUS_LABELS = {
   incumple: 'Incumple',
 }
 
+/**
+ * Estados de una pieza individual dentro del checklist de edición (av_pauta_piezas).
+ * `PIEZA_STATUS_META` sigue el contrato de StatusPill (common/StatusPill.jsx): clases
+ * Tailwind LITERALES, nunca armadas en runtime (el JIT no las generaría). Misma paleta
+ * base que STATUS_BADGE de PautaDetailModal para que el módulo se vea
+ * consistente.
+ */
+export const PIEZA_STATUS_LABELS = {
+  pendiente: 'Pendiente',
+  en_edicion: 'En edición',
+  espera_aprobacion: 'Espera de aprobación',
+  listo: 'Listo',
+  cancelado: 'Cancelado',
+}
+
+export const PIEZA_STATUS_META = {
+  pendiente: {
+    label: 'Pendiente',
+    bg: 'bg-[#fdf4de]',
+    text: 'text-[#9a7400]',
+    dot: 'bg-[#e0b23d]',
+  },
+  en_edicion: {
+    label: 'En edición',
+    bg: 'bg-[#e6f0ff]',
+    text: 'text-[#2563eb]',
+    dot: 'bg-[#2563eb]',
+  },
+  espera_aprobacion: {
+    label: 'Espera de aprobación',
+    bg: 'bg-[#f3e8ff]',
+    text: 'text-[#7c3aed]',
+    dot: 'bg-[#7c3aed]',
+  },
+  listo: { label: 'Listo', bg: 'bg-[#e9f7ec]', text: 'text-[#1f8a43]', dot: 'bg-[#1f8a43]' },
+  cancelado: { label: 'Cancelado', bg: 'bg-[#f2f0ea]', text: 'text-[#888]', dot: 'bg-[#999]' },
+}
+
+export const PIEZA_STATUS_ORDER = [
+  'pendiente',
+  'en_edicion',
+  'espera_aprobacion',
+  'listo',
+  'cancelado',
+]
+
 const DAYNAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 const MON3 = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 
@@ -252,11 +298,18 @@ export function aggregatePiezasByLine(pautas, lines) {
  * varios recursos asignados — a cada uno se le atribuye el total completo, sin repartir),
  * quien edita produce piezas editadas — solo de pautas 'realizada'. Ordenado de mayor a
  * menor producción total.
+ *
+ * Cuando la pauta tiene piezas en el checklist (av_pauta_piezas), la edición se atribuye
+ * pieza por pieza a cada editor real (`editor_user_id`) en vez de al único
+ * `edita_user_id`/`edita_other` legacy — así el rendimiento no queda todo apilado en una
+ * sola persona cuando la pauta se repartió entre varios editores. Pautas anteriores a esta
+ * tabla (sin filas en `piezasByPauta`) caen al camino legacy.
  * @param {Array} pautas
  * @param {Map<string,object>} usersById
+ * @param {Map<string,Array>} [piezasByPauta] — pauta_id → piezas de esa pauta
  * @returns {Array<{name:string, graba:number, edita:number}>}
  */
-export function aggregateByResource(pautas, usersById) {
+export function aggregateByResource(pautas, usersById, piezasByPauta) {
   const byRes = new Map()
   const add = (name, key, n) => {
     if (!name) return
@@ -267,7 +320,19 @@ export function aggregateByResource(pautas, usersById) {
     if (p.status !== 'realizada') return
     const piezasTotales = Number(p.piezas_totales) || 0
     resourceNames(p, usersById).forEach((name) => add(name, 'graba', piezasTotales))
-    add(resourceName(p, 'edita', usersById), 'edita', Number(p.piezas_editadas) || 0)
+
+    const piezas = piezasByPauta?.get(p.id)
+    if (piezas?.length) {
+      piezas
+        .filter((pz) => pz.status === 'listo')
+        .forEach((pz) => {
+          const editor = pz.editor_user_id ? usersById.get(pz.editor_user_id) : null
+          const name = editor ? `${editor.first_name ?? ''} ${editor.last_name ?? ''}`.trim() : null
+          add(name, 'edita', 1)
+        })
+    } else {
+      add(resourceName(p, 'edita', usersById), 'edita', Number(p.piezas_editadas) || 0)
+    }
   })
   return [...byRes.values()].sort((a, b) => b.graba + b.edita - (a.graba + a.edita))
 }
@@ -283,6 +348,50 @@ export function sumPiezasForLine(pautas) {
     },
     { piezas: 0, editadas: 0 },
   )
+}
+
+// ─── Checklist de piezas por editor (av_pauta_piezas) ──────────────────────
+
+/**
+ * Progreso del checklist de una pauta: piezas 'listo' sobre el total de piezas activas
+ * (las canceladas no cuentan ni para el numerador ni para el denominador — no son trabajo
+ * pendiente ni trabajo hecho).
+ * @param {Array} piezas — piezas de UNA pauta
+ * @returns {{total:number, listas:number, canceladas:number, pct:number}}
+ */
+export function piezasProgress(piezas) {
+  const activas = (piezas ?? []).filter((pz) => pz.status !== 'cancelado')
+  const listas = activas.filter((pz) => pz.status === 'listo').length
+  const canceladas = (piezas ?? []).length - activas.length
+  return {
+    total: activas.length,
+    listas,
+    canceladas,
+    pct: activas.length ? Math.round((listas / activas.length) * 100) : 0,
+  }
+}
+
+/**
+ * Agrupa las piezas de una pauta por editor asignado, ordenadas por `position` dentro de
+ * cada grupo. La clave `null` agrupa las piezas sin editor (recién creadas por reparto, o
+ * huérfanas porque se quitó a su editor del modal).
+ * @param {Array} piezas — piezas de UNA pauta
+ * @returns {Map<string|null, Array>}
+ */
+export function piezasByEditor(piezas) {
+  const sorted = [...(piezas ?? [])].sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+  const grouped = new Map()
+  sorted.forEach((pz) => {
+    const key = pz.editor_user_id ?? null
+    if (!grouped.has(key)) grouped.set(key, [])
+    grouped.get(key).push(pz)
+  })
+  return grouped
+}
+
+/** Nombre por defecto de una pieza nueva, 1-indexado — editable después por el coordinador. */
+export function defaultPiezaName(index) {
+  return `Video #${index + 1}`
 }
 
 // ─── Generador de agenda para WhatsApp ─────────────────────────────────────

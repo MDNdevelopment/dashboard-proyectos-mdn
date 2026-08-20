@@ -7,12 +7,12 @@ import {
   GRILLA_STATUS_LABELS,
   formatCodes,
   formatDayShort,
-  resourceName,
   resourceNames,
   requesterName,
   briefComplete,
   visibleSolicitudes,
   grillaStatus,
+  piezasProgress,
 } from '../../utils/audiovisual'
 
 const PHASES = [
@@ -30,6 +30,7 @@ const PHASES = [
  */
 export default function AvPhaseTable({
   pautas,
+  piezas,
   clients,
   audiovisualUsers,
   allEmployees,
@@ -41,6 +42,7 @@ export default function AvPhaseTable({
   onPhaseChange,
   onChanged,
   onDeleted,
+  onPautaClick,
 }) {
   const [error, setError] = useState(null)
   const [confirmingId, setConfirmingId] = useState(null)
@@ -268,12 +270,12 @@ export default function AvPhaseTable({
         {phase === 'realizadas' && (
           <RealizadasTable
             realizadas={realizadas}
+            piezas={piezas}
             audiovisualUsers={audiovisualUsers}
             employeesById={employeesById}
-            canCoordinate={canCoordinate}
             confirmingId={confirmingId}
-            onFields={handleFields}
             onDelete={handleDelete}
+            onPautaClick={onPautaClick}
           />
         )}
       </div>
@@ -956,109 +958,91 @@ function AgendaRow({
 
 function RealizadasTable({
   realizadas,
+  piezas,
   audiovisualUsers,
   employeesById,
-  canCoordinate,
   confirmingId,
-  onFields,
   onDelete,
+  onPautaClick,
 }) {
   const audiovisualUsersById = usersById(audiovisualUsers)
   return (
     <table className="w-full border-collapse min-w-[860px]">
-      <Thead
-        cols={[
-          'Cliente',
-          'Solicitado por',
-          'Fecha',
-          'Recursos',
-          '✂️ Edita',
-          'Piezas (tot / edit)',
-          'Grilla',
-          '',
-        ]}
-      />
+      <Thead cols={['Cliente', 'Solicitado por', 'Fecha', 'Recursos', 'Piezas', 'Grilla', '']} />
       <tbody>
         {realizadas.length === 0 && (
           <tr>
-            <td colSpan={8} className="px-4 py-8 text-center text-[13px] text-[#a29b8c]">
+            <td colSpan={7} className="px-4 py-8 text-center text-[13px] text-[#a29b8c]">
               Aún no hay realizadas en este alcance.
             </td>
           </tr>
         )}
-        {realizadas.map((p) => (
-          <tr key={p.id} className="border-b border-[#f2efe6] align-top">
-            <td className="px-2 py-1.5 min-w-[170px]">
-              <div className="text-[14px] font-medium text-[#222]">{p.client_name || '—'}</div>
-              <div className="text-[11.5px] text-[#a29b8c] mt-0.5">
-                {p.tema} · {formatCodes(p)}
-              </div>
-            </td>
-            <td className="px-2 py-1.5 min-w-[110px]">
-              <span className="text-[12px] text-[#888]">
-                {requesterName(p, employeesById) || '—'}
-              </span>
-            </td>
-            <td className="px-2 py-1.5 text-[13px]">{formatDayShort(p.pauta_date)}</td>
-            <td className="px-2 py-1.5 min-w-[130px]">
-              <span className="text-[13px] text-[#333]">
-                {resourceNames(p, audiovisualUsersById).join(', ') || '—'}
-              </span>
-            </td>
-            <td className="px-2 py-1.5 min-w-[120px]">
-              <ResourceSelect
-                pauta={p}
-                which="edita"
-                users={audiovisualUsers}
-                canEdit={canCoordinate}
-                onFields={onFields}
-              />
-            </td>
-            <td className="px-2 py-1.5">
-              {canCoordinate ? (
-                <div className="flex items-center gap-1.5">
-                  <input
-                    type="number"
-                    min="0"
-                    className="input-base input-compact w-16 text-center"
-                    defaultValue={p.piezas_totales ?? 0}
-                    onBlur={(e) => onFields(p, { piezas_totales: Number(e.target.value) || 0 })}
-                  />
-                  <span className="text-[#ccc]">/</span>
-                  <input
-                    type="number"
-                    min="0"
-                    className="input-base input-compact w-16 text-center"
-                    defaultValue={p.piezas_editadas ?? 0}
-                    onBlur={(e) => onFields(p, { piezas_editadas: Number(e.target.value) || 0 })}
-                  />
+        {realizadas.map((p) => {
+          const pautaPiezas = (piezas ?? []).filter((pz) => pz.pauta_id === p.id)
+          const { total, listas, pct } = piezasProgress(pautaPiezas)
+          return (
+            <tr
+              key={p.id}
+              onClick={() => onPautaClick?.(p)}
+              className="border-b border-[#f2efe6] align-top cursor-pointer hover:bg-[#faf9f5] transition-colors"
+            >
+              <td className="px-2 py-1.5 min-w-[170px]">
+                <div className="text-[14px] font-medium text-[#222]">{p.client_name || '—'}</div>
+                <div className="text-[11.5px] text-[#a29b8c] mt-0.5">
+                  {p.tema} · {formatCodes(p)}
                 </div>
-              ) : (
-                <span className="font-mono text-[13px]">
-                  <strong className="text-[#3b6fd4]">{p.piezas_totales}</strong> /{' '}
-                  <strong className="text-[#1f8a43]">{p.piezas_editadas}</strong>
+              </td>
+              <td className="px-2 py-1.5 min-w-[110px]">
+                <span className="text-[12px] text-[#888]">
+                  {requesterName(p, employeesById) || '—'}
                 </span>
-              )}
-            </td>
-            <td className="px-2 py-1.5">
-              {p.link ? (
-                <a
-                  href={p.link}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-[12px] text-[#3b6fd4] underline"
-                >
-                  ver grilla
-                </a>
-              ) : (
-                <span className="text-[#bbb] text-[12px]">—</span>
-              )}
-            </td>
-            <td className="px-2 py-1.5">
-              <DeleteButton id={p.id} confirming={confirmingId === p.id} onDelete={onDelete} />
-            </td>
-          </tr>
-        ))}
+              </td>
+              <td className="px-2 py-1.5 text-[13px]">{formatDayShort(p.pauta_date)}</td>
+              <td className="px-2 py-1.5 min-w-[130px]">
+                <span className="text-[13px] text-[#333]">
+                  {resourceNames(p, audiovisualUsersById).join(', ') || '—'}
+                </span>
+              </td>
+              <td className="px-2 py-1.5 min-w-[110px]">
+                {total > 0 ? (
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-[12.5px] text-[#555] whitespace-nowrap">
+                      {listas}/{total}
+                    </span>
+                    <div className="w-14 h-1.5 bg-[#f0ede4] rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-[#1f8a43] rounded-full transition-all"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <span className="text-[#bbb] text-[12px]">
+                    {p.piezas_totales ? `0/${p.piezas_totales}` : 'sin piezas'}
+                  </span>
+                )}
+              </td>
+              <td className="px-2 py-1.5">
+                {p.link ? (
+                  <a
+                    href={p.link}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-[12px] text-[#3b6fd4] underline"
+                  >
+                    ver grilla
+                  </a>
+                ) : (
+                  <span className="text-[#bbb] text-[12px]">—</span>
+                )}
+              </td>
+              <td className="px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
+                <DeleteButton id={p.id} confirming={confirmingId === p.id} onDelete={onDelete} />
+              </td>
+            </tr>
+          )
+        })}
       </tbody>
     </table>
   )
@@ -1114,45 +1098,6 @@ function FormatToggle({ pauta, canEdit, onFields }) {
         )
       })}
     </div>
-  )
-}
-
-function ResourceSelect({ pauta, which, users, canEdit, onFields }) {
-  const userField = which === 'graba' ? 'graba_user_id' : 'edita_user_id'
-  const otherField = which === 'graba' ? 'graba_other' : 'edita_other'
-
-  if (!canEdit) {
-    return (
-      <span className="text-[13px] text-[#333]">
-        {resourceName(pauta, which, usersById(users)) || '—'}
-      </span>
-    )
-  }
-  return (
-    <>
-      <select
-        className="input-base input-compact"
-        value={pauta[userField] ?? ''}
-        onChange={(e) =>
-          onFields(pauta, { [userField]: e.target.value || null, [otherField]: null })
-        }
-      >
-        <option value="">— sin asignar</option>
-        {users.map((u) => (
-          <option key={u.user_id} value={u.user_id}>
-            {`${u.first_name ?? ''} ${u.last_name ?? ''}`.trim()}
-          </option>
-        ))}
-      </select>
-      {!pauta[userField] && (
-        <input
-          className="input-base input-compact mt-0.5"
-          defaultValue={pauta[otherField] ?? ''}
-          onBlur={(e) => onFields(pauta, { [otherField]: e.target.value.trim() || null })}
-          placeholder="O escribe un tercero"
-        />
-      )}
-    </>
   )
 }
 

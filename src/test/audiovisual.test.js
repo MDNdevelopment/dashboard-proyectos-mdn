@@ -16,6 +16,9 @@ import {
   aggregateByResource,
   sumPiezasForLine,
   generateAgendaText,
+  piezasProgress,
+  piezasByEditor,
+  defaultPiezaName,
 } from '../utils/audiovisual'
 
 function pauta(overrides = {}) {
@@ -334,6 +337,88 @@ describe('aggregateByResource', () => {
   it('ignora pautas que no están realizadas', () => {
     const pautas = [pauta({ status: 'programada', recurso_ids: ['u1'], piezas_totales: 5 })]
     expect(aggregateByResource(pautas, usersById)).toEqual([])
+  })
+
+  it('con piezas en el checklist, atribuye la edición pieza por pieza a cada editor real (no al edita_user_id legacy)', () => {
+    const pautas = [
+      pauta({
+        id: 'p1',
+        status: 'realizada',
+        recurso_ids: ['u1'],
+        edita_user_id: 'u2',
+        piezas_totales: 3,
+      }),
+    ]
+    const piezasByPauta = new Map([
+      [
+        'p1',
+        [
+          { editor_user_id: 'u1', status: 'listo' },
+          { editor_user_id: 'u2', status: 'listo' },
+          { editor_user_id: 'u2', status: 'pendiente' },
+        ],
+      ],
+    ])
+    const result = aggregateByResource(pautas, usersById, piezasByPauta)
+    expect(result).toContainEqual({ name: 'Diego', graba: 3, edita: 1 })
+    expect(result).toContainEqual({ name: 'Nadia', graba: 0, edita: 1 })
+  })
+
+  it('pautas sin piezas en el checklist caen al camino legacy (edita_user_id/piezas_editadas)', () => {
+    const pautas = [
+      pauta({
+        id: 'p1',
+        status: 'realizada',
+        recurso_ids: ['u1'],
+        edita_user_id: 'u2',
+        piezas_totales: 5,
+        piezas_editadas: 5,
+      }),
+    ]
+    const result = aggregateByResource(pautas, usersById, new Map())
+    expect(result).toContainEqual({ name: 'Nadia', graba: 0, edita: 5 })
+  })
+})
+
+describe('piezasProgress', () => {
+  it('cuenta listas sobre el total de piezas activas (excluye canceladas)', () => {
+    const piezas = [
+      { status: 'listo' },
+      { status: 'listo' },
+      { status: 'pendiente' },
+      { status: 'cancelado' },
+    ]
+    expect(piezasProgress(piezas)).toEqual({ total: 3, listas: 2, canceladas: 1, pct: 67 })
+  })
+
+  it('sin piezas, devuelve todo en cero', () => {
+    expect(piezasProgress([])).toEqual({ total: 0, listas: 0, canceladas: 0, pct: 0 })
+  })
+})
+
+describe('piezasByEditor', () => {
+  it('agrupa por editor_user_id ordenando por position dentro de cada grupo', () => {
+    const piezas = [
+      { id: 'b', editor_user_id: 'u1', position: 1 },
+      { id: 'a', editor_user_id: 'u1', position: 0 },
+      { id: 'c', editor_user_id: 'u2', position: 0 },
+    ]
+    const grouped = piezasByEditor(piezas)
+    expect([...grouped.keys()]).toEqual(['u1', 'u2'])
+    expect(grouped.get('u1').map((p) => p.id)).toEqual(['a', 'b'])
+  })
+
+  it('agrupa piezas sin editor bajo la clave null', () => {
+    const piezas = [{ id: 'a', editor_user_id: null, position: 0 }]
+    const grouped = piezasByEditor(piezas)
+    expect(grouped.get(null).map((p) => p.id)).toEqual(['a'])
+  })
+})
+
+describe('defaultPiezaName', () => {
+  it('genera nombres "Video #N" 1-indexados', () => {
+    expect(defaultPiezaName(0)).toBe('Video #1')
+    expect(defaultPiezaName(4)).toBe('Video #5')
   })
 })
 

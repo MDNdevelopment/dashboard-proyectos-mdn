@@ -94,6 +94,53 @@ export async function deletePauta(pautaId) {
   return supabase.from('av_pautas').delete().eq('id', pautaId)
 }
 
+// ─── Piezas (checklist por editor de una pauta 'realizada') ───────────────────
+
+/**
+ * Carga todas las piezas de la empresa (igual criterio de volumen bajo que loadPautas:
+ * el filtrado por pauta se hace client-side, agrupando por pauta_id).
+ */
+export async function loadPiezas(companyId) {
+  return supabase
+    .from('av_pauta_piezas')
+    .select('*')
+    .eq('company_id', companyId)
+    .order('position', { ascending: true })
+}
+
+/** Inserta un lote de piezas nuevas para un editor, continuando `position` desde `startPosition`. */
+export async function createPiezas(companyId, pautaId, editorUserId, nombres, startPosition = 0) {
+  const rows = nombres.map((nombre, i) => ({
+    company_id: companyId,
+    pauta_id: pautaId,
+    editor_user_id: editorUserId,
+    nombre,
+    position: startPosition + i,
+  }))
+  return supabase.from('av_pauta_piezas').insert(rows).select()
+}
+
+export async function updatePieza(piezaId, fields) {
+  const updates = { ...sanitizePiezaFields(fields), updated_at: new Date().toISOString() }
+  return supabase.from('av_pauta_piezas').update(updates).eq('id', piezaId).select().single()
+}
+
+export async function deletePiezas(ids) {
+  if (!ids?.length) return { data: null, error: null }
+  return supabase.from('av_pauta_piezas').delete().in('id', ids)
+}
+
+function sanitizePiezaFields(fields) {
+  const allowed = ['editor_user_id', 'nombre', 'status', 'position']
+  const out = {}
+  for (const key of allowed) {
+    if (key in fields) out[key] = fields[key] === '' ? null : fields[key]
+  }
+  // 'nombre' vacío es válido (input en blanco mientras se escribe), no debe pisarse a null.
+  if ('nombre' in fields) out.nombre = fields.nombre ?? ''
+  return out
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Solo persiste los campos explícitamente presentes en `fields` (updates parciales). */

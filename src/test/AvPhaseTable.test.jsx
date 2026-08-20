@@ -252,3 +252,54 @@ describe('AvPhaseTable — Agenda: "Recursos" (selección múltiple, reemplaza a
     expect(screen.getByText('Buscar por nombre')).toBeInTheDocument()
   })
 })
+
+describe('AvPhaseTable — Realizadas: columna única "Piezas" + fila clickeable', () => {
+  const PAUTA_REALIZADA = {
+    id: 'p1',
+    client_name: 'Cliente A',
+    status: 'realizada',
+    formats: [],
+    recurso_ids: [],
+    attendee_ids: [],
+    piezas_totales: 4,
+    piezas_editadas: 0,
+  }
+
+  it('ya no muestra "✂️ Edita" ni "Piezas (tot / edit)" — solo la columna "Piezas" con progreso', () => {
+    renderTable({ initialPhase: 'realizadas', editMode: 'coordina', pautas: [PAUTA_REALIZADA] })
+    expect(screen.queryByText('✂️ Edita')).not.toBeInTheDocument()
+    expect(screen.queryByText('Piezas (tot / edit)')).not.toBeInTheDocument()
+    expect(screen.getByText('Piezas')).toBeInTheDocument()
+  })
+
+  it('con piezas cargadas, muestra el progreso listas/total de esa pauta', () => {
+    const piezas = [
+      { id: 'pz1', pauta_id: 'p1', status: 'listo' },
+      { id: 'pz2', pauta_id: 'p1', status: 'pendiente' },
+    ]
+    renderTable({
+      initialPhase: 'realizadas',
+      editMode: 'coordina',
+      pautas: [PAUTA_REALIZADA],
+      piezas,
+    })
+    expect(screen.getByText('1/2')).toBeInTheDocument()
+  })
+
+  it('sin piezas cargadas todavía, cae al total manual de la pauta ("0/N")', () => {
+    renderTable({ initialPhase: 'realizadas', editMode: 'coordina', pautas: [PAUTA_REALIZADA] })
+    expect(screen.getByText('0/4')).toBeInTheDocument()
+  })
+
+  it('click en la fila llama a onPautaClick con la pauta', () => {
+    const onPautaClick = vi.fn()
+    renderTable({
+      initialPhase: 'realizadas',
+      editMode: 'coordina',
+      pautas: [PAUTA_REALIZADA],
+      onPautaClick,
+    })
+    fireEvent.click(screen.getByText('Cliente A'))
+    expect(onPautaClick).toHaveBeenCalledWith(PAUTA_REALIZADA)
+  })
+})

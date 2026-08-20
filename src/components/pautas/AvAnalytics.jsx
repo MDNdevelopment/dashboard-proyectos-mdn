@@ -1,9 +1,9 @@
 import { aggregatePiezasByLine, aggregateByResource } from '../../utils/audiovisual'
 
 /** «Piezas totales vs. editadas por línea» + «Rendimiento por recurso» (quién graba/edita). */
-export default function AvAnalytics({ pautas, lines, usersById }) {
+export default function AvAnalytics({ pautas, lines, usersById, piezasByPauta }) {
   const byLine = aggregatePiezasByLine(pautas, lines).filter((l) => l.totales || l.editadas)
-  const byResource = aggregateByResource(pautas, usersById)
+  const byResource = aggregateByResource(pautas, usersById, piezasByPauta)
 
   return (
     <div className="grid md:grid-cols-2 gap-4 mb-4">

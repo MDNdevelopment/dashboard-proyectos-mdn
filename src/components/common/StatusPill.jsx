@@ -49,7 +49,12 @@ export default function StatusPill({
   const menuRef = useRef(null)
 
   const opts = options ?? Object.keys(meta)
-  const current = meta[value] ?? { label: value, bg: 'bg-[#f5f3eb]', text: 'text-[#555]', dot: 'bg-[#999]' }
+  const current = meta[value] ?? {
+    label: value,
+    bg: 'bg-[#f5f3eb]',
+    text: 'text-[#555]',
+    dot: 'bg-[#999]',
+  }
 
   // Antes de que el menú se monte no hay altura real que medir; se estima con el
   // tamaño fijo de cada opción (py-1.5 + texto) para decidir si abre hacia arriba
@@ -61,7 +66,8 @@ export default function StatusPill({
     const estimatedHeight = opts.length * 34 + 8
     const menuHeight = menuRef.current?.offsetHeight || estimatedHeight
     const gap = 4
-    const opensAbove = window.innerHeight - rect.bottom < menuHeight + margin && rect.top > menuHeight + margin
+    const opensAbove =
+      window.innerHeight - rect.bottom < menuHeight + margin && rect.top > menuHeight + margin
     setMenuPos({
       top: opensAbove ? rect.top - menuHeight - gap : rect.bottom + gap,
       left: rect.left,
@@ -97,7 +103,9 @@ export default function StatusPill({
 
   if (!editable) {
     return (
-      <span className={`inline-flex items-center rounded-full font-mono font-semibold ${padding} ${current.bg} ${current.text}`}>
+      <span
+        className={`inline-flex items-center rounded-full font-mono font-semibold ${padding} ${current.bg} ${current.text}`}
+      >
         {current.label}
       </span>
     )
@@ -119,41 +127,75 @@ export default function StatusPill({
         disabled={pending}
         className={`inline-flex items-center gap-1.5 rounded-full font-mono font-semibold transition-opacity hover:opacity-80 disabled:opacity-60 ${padding} ${current.bg} ${current.text}`}
       >
-        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${current.dot ?? current.text.replace('text-', 'bg-')}`} />
+        <span
+          className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${current.dot ?? current.text.replace('text-', 'bg-')}`}
+        />
         {current.label}
-        <svg width="8" height="8" viewBox="0 0 8 8" fill="none" className={`flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}>
-          <path d="M1.5 3l2.5 2.5L6.5 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        <svg
+          width="8"
+          height="8"
+          viewBox="0 0 8 8"
+          fill="none"
+          className={`flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}
+        >
+          <path
+            d="M1.5 3l2.5 2.5L6.5 3"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
         </svg>
       </button>
 
-      {open && menuPos && createPortal(
-        <div
-          ref={menuRef}
-          style={{ position: 'fixed', top: menuPos.top, left: menuPos.left, minWidth: menuPos.minWidth }}
-          className="z-30 bg-white border border-[#e0ddd4] rounded-xl shadow-lg overflow-hidden py-1"
-        >
-          {opts.map((key) => {
-            const m = meta[key] ?? {}
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => handlePick(key)}
-                className="flex items-center gap-2 w-full px-3 py-1.5 text-[13.5px] text-[#333] hover:bg-[#f5f3eb] transition-colors text-left"
-              >
-                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${m.dot ?? 'bg-[#999]'}`} />
-                {m.label ?? key}
-                {key === value && (
-                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none" className="ml-auto flex-shrink-0 text-[#111]">
-                    <path d="M2.5 6.2L5 8.7L9.5 3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-              </button>
-            )
-          })}
-        </div>,
-        document.body
-      )}
+      {open &&
+        menuPos &&
+        createPortal(
+          <div
+            ref={menuRef}
+            style={{
+              position: 'fixed',
+              top: menuPos.top,
+              left: menuPos.left,
+              minWidth: menuPos.minWidth,
+              zIndex: 9999,
+            }}
+            className="bg-white border border-[#e0ddd4] rounded-xl shadow-lg overflow-hidden py-1"
+          >
+            {opts.map((key) => {
+              const m = meta[key] ?? {}
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => handlePick(key)}
+                  className="flex items-center gap-2 w-full px-3 py-1.5 text-[13.5px] text-[#333] hover:bg-[#f5f3eb] transition-colors text-left"
+                >
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${m.dot ?? 'bg-[#999]'}`} />
+                  {m.label ?? key}
+                  {key === value && (
+                    <svg
+                      width="11"
+                      height="11"
+                      viewBox="0 0 12 12"
+                      fill="none"
+                      className="ml-auto flex-shrink-0 text-[#111]"
+                    >
+                      <path
+                        d="M2.5 6.2L5 8.7L9.5 3.5"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  )}
+                </button>
+              )
+            })}
+          </div>,
+          document.body,
+        )}
     </div>
   )
 }
