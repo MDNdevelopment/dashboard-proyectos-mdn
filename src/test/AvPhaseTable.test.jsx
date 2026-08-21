@@ -306,6 +306,25 @@ describe('AvPhaseTable — Realizadas: columna única "Piezas" + fila clickeable
     fireEvent.click(screen.getByText('Cliente A'))
     expect(onPautaClick).toHaveBeenCalledWith(PAUTA_REALIZADA)
   })
+
+  it('columna "Recursos" combina quién graba (recurso_ids) y quién edita (piezas.editor_user_id)', () => {
+    const pauta = {
+      ...PAUTA_REALIZADA,
+      recurso_ids: ['rec-1'],
+    }
+    const piezas = [{ id: 'pz1', pauta_id: 'p1', status: 'pendiente', editor_user_id: 'edit-1' }]
+    const audiovisualUsers = [{ user_id: 'rec-1', first_name: 'Rosa', last_name: 'Grabadora' }]
+    const editorUsers = [{ user_id: 'edit-1', first_name: 'Erick', last_name: 'Editor' }]
+    renderTable({
+      initialPhase: 'realizadas',
+      editMode: 'coordina',
+      pautas: [pauta],
+      piezas,
+      audiovisualUsers,
+      editorUsers,
+    })
+    expect(screen.getByText('Rosa Grabadora, Erick Editor')).toBeInTheDocument()
+  })
 })
 
 describe('AvPhaseTable — Papelera (soft delete + restaurar)', () => {

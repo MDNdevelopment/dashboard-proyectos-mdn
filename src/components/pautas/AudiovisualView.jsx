@@ -1,17 +1,21 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../supabase'
 import { loadCompanyEmployees } from '../metricas/metricsApi'
-import { loadPautas, createPauta, loadPiezas, updatePauta } from './avPautasApi'
+import { loadPautas, loadPiezas, updatePauta } from './avPautasApi'
+import { loadExternalResources } from './externalResourcesApi'
 import {
   avEditMode,
   nextAgendaDeadline,
   pautasInScope,
   pautasInMonth,
+  externalAsUser,
+  externalUsersForRole,
 } from '../../utils/audiovisual'
 import AvCalendar from './AvCalendar'
 import AvPhaseTable from './AvPhaseTable'
 import AvAnalytics from './AvAnalytics'
 import PautaDetailModal from './PautaDetailModal'
+import DayPautasModal from './DayPautasModal'
 import WhatsAppAgendaModal from './WhatsAppAgendaModal'
 
 const ALL_LINES = '__all__'
@@ -45,6 +49,7 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
   const [pautas, setPautas] = useState([])
   const [piezas, setPiezas] = useState([])
   const [employees, setEmployees] = useState([])
+  const [externalResources, setExternalResources] = useState([])
   const [loading, setLoading] = useState(true)
   // Solo relevante cuando canViewAll (badges "Todos"/línea): sin ese permiso, el alcance queda
   // SIEMPRE derivado de `lines` (la única línea visible de la jefa) — nunca en estado, para
@@ -52,6 +57,7 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
   // (p. ej. mientras la página aún está cargando) y termine mostrando pautas de otras líneas.
   const [scopeLineId, setScopeLineId] = useState(ALL_LINES)
   const [detailPauta, setDetailPauta] = useState(null)
+  const [dayDetail, setDayDetail] = useState(null)
   const [waOpen, setWaOpen] = useState(false)
   // Pestaña activa de AvPhaseTable, levantada aquí (en vez de vivir dentro de
   // AvPhaseTable) porque `onPhaseChange` la necesita tras crear/guardar una solicitud
@@ -68,14 +74,16 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
   const loadAll = useCallback(async () => {
     if (!companyId) return
     setLoading(true)
-    const [pautasRes, employeesRes, piezasRes] = await Promise.all([
+    const [pautasRes, employeesRes, piezasRes, externalRes] = await Promise.all([
       loadPautas(companyId),
       loadCompanyEmployees(companyId),
       loadPiezas(companyId),
+      loadExternalResources(companyId),
     ])
     setPautas(pautasRes.data ?? [])
     setEmployees(employeesRes.data ?? [])
     setPiezas(piezasRes.data ?? [])
+    setExternalResources(externalRes.data ?? [])
     setLoading(false)
   }, [companyId])
 
@@ -172,7 +180,22 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
   const visibleScopedPautas = scopedPautas.filter((p) => !p.deleted_at)
   const scopedClients = clients.filter((c) => !scopeLine || c.line_id === scopeLine)
   const audiovisualUsers = employees.filter((u) => u.department_id === 2 && !u.deleted_at)
-  const usersById = new Map(employees.map((u) => [u.user_id, u]))
+  // Recursos externos (no son empleados, ver ARQUITECTURA.md): se modelan como
+  // pseudo-usuarios (`ext:<uuid>`) e inyectan en los mismos pickers/usersById que los
+  // empleados de Audiovisual, filtrados por el rol correspondiente. Nunca entran como
+  // asistentes (allEmployees más abajo usa solo `employees`).
+  const recursoOptions = [
+    ...audiovisualUsers,
+    ...externalUsersForRole(externalResources, 'grabacion'),
+  ]
+  const editorOptions = [...audiovisualUsers, ...externalUsersForRole(externalResources, 'edicion')]
+  const usersById = new Map([
+    ...employees.map((u) => [u.user_id, u]),
+    ...externalResources.map((r) => {
+      const u = externalAsUser(r)
+      return [u.user_id, u]
+    }),
+  ])
   const piezasByPautaMap = new Map()
   piezas.forEach((pz) => {
     if (!piezasByPautaMap.has(pz.pauta_id)) piezasByPautaMap.set(pz.pauta_id, [])
@@ -297,23 +320,7 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
         pautas={visibleScopedPautas}
         statusFilter={calendarStatusFilter}
         onMonthChange={(y, m) => setPeriod({ year: y, month: m })}
-        onDayClick={async (date) => {
-          // Solo la coordinadora crea directo desde el calendario (pauta ya 'programada',
-          // por eso sí aparece ahí). El rol "solicita" arma su borrador con "+ Solicitar
-          // pauta" en la tabla — una solicitud nunca se ve en el calendario de todos modos
-          // (AvCalendar solo pinta 'programada'/'realizada'), así que el clic en un día no
-          // hace nada para ese rol, en vez de escribir en la base de datos sin necesidad.
-          if (editMode !== 'coordina') return
-          const pad = (n) => String(n).padStart(2, '0')
-          const dateStr = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-          const { data, error } = await createPauta(
-            companyId,
-            { status: 'programada', pauta_date: dateStr },
-            userProfile?.user_id,
-            defaultLineId,
-          )
-          if (!error && data) handleChanged(data)
-        }}
+        onDayClick={setDayDetail}
         onPautaClick={setDetailPauta}
       />
 
@@ -322,7 +329,8 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
           pautas={monthPautas}
           piezas={piezas}
           clients={scopedClients}
-          audiovisualUsers={audiovisualUsers}
+          audiovisualUsers={recursoOptions}
+          editorUsers={editorOptions}
           allEmployees={employees.filter((u) => !u.deleted_at)}
           companyId={companyId}
           userId={userProfile?.user_id}
@@ -347,7 +355,7 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
         <PautaDetailModal
           pauta={detailPauta}
           usersById={usersById}
-          audiovisualUsers={audiovisualUsers}
+          audiovisualUsers={editorOptions}
           piezas={piezas.filter((pz) => pz.pauta_id === detailPauta.id)}
           canCoordinate={canCoordinate}
           companyId={companyId}
@@ -355,6 +363,19 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
           onPiezaChanged={handlePiezaChanged}
           onPiezaDeleted={handlePiezaDeleted}
           onClose={() => setDetailPauta(null)}
+        />
+      )}
+
+      {dayDetail && (
+        <DayPautasModal
+          date={dayDetail}
+          pautas={visibleScopedPautas}
+          usersById={usersById}
+          onClose={() => setDayDetail(null)}
+          onPautaClick={(p) => {
+            setDayDetail(null)
+            setDetailPauta(p)
+          }}
         />
       )}
 

@@ -193,6 +193,25 @@ export function resourceNames(pauta, usersById) {
 }
 
 /**
+ * Nombres únicos de los editores asignados a las piezas de una pauta (`editor_user_id`,
+ * empleados o recursos externos con rol `edicion`) — complemento de `resourceNames`, que
+ * solo resuelve quién graba (`recurso_ids`). Usa `piezasByEditor` para agrupar y descarta
+ * la clave `null` (piezas sin editor asignado).
+ * @param {Array} piezas — piezas de UNA pauta
+ * @param {Map<string,object>} usersById  user_id -> { first_name, last_name }
+ * @returns {string[]}
+ */
+export function editorNames(piezas, usersById) {
+  const names = [...piezasByEditor(piezas).keys()]
+    .filter(Boolean)
+    .map((id) => usersById?.get(id))
+    .filter(Boolean)
+    .map((u) => `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim())
+    .filter(Boolean)
+  return [...new Set(names)]
+}
+
+/**
  * Nombre a mostrar de quien solicitó/creó la pauta (`created_by`), resuelto vía
  * `usersById`. A diferencia de `resourceName`, no tiene fallback de texto libre:
  * `created_by` siempre es un user_id o null (pauta creada antes de este campo, o
@@ -204,6 +223,51 @@ export function requesterName(pauta, usersById) {
   const u = usersById?.get(pauta.created_by)
   if (!u) return null
   return `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() || null
+}
+
+// ─── Recursos externos (grabación/edición/ads, no son empleados) ──────────
+
+/** Prefijo que distingue un id de recurso externo de un `user_id` real de empleado. */
+export const EXTERNAL_PREFIX = 'ext:'
+
+/** true si `id` corresponde a un recurso externo (`ext:<uuid>`), no a un empleado. */
+export function isExternalId(id) {
+  return typeof id === 'string' && id.startsWith(EXTERNAL_PREFIX)
+}
+
+/**
+ * Da forma de "pseudo-usuario" a un recurso externo (fila de `external_resources`) para
+ * poder inyectarlo en las mismas listas/`usersById` que usan `AttendeePicker`,
+ * `resourceNames`, `piezasByEditor`, etc. — así esos helpers no necesitan una rama
+ * "es externo" propia: solo ven otro objeto con `user_id`/`first_name`/`last_name`.
+ * El `user_id` se prefija con `EXTERNAL_PREFIX` para no poder colisionar nunca con un
+ * uuid real de `users`.
+ * @param {{id:string, full_name:string, roles:string[], deleted_at:string|null}} resource
+ */
+export function externalAsUser(resource) {
+  const name = (resource.full_name ?? '').trim()
+  const [first, ...rest] = name.split(/\s+/)
+  return {
+    user_id: EXTERNAL_PREFIX + resource.id,
+    first_name: first ?? '',
+    last_name: rest.join(' '),
+    avatar_url: null,
+    is_external: true,
+    roles: resource.roles ?? [],
+    deleted_at: resource.deleted_at ?? null,
+  }
+}
+
+/**
+ * Recursos externos activos con un rol dado, ya en forma de pseudo-usuario — listos
+ * para concatenar a `audiovisualUsers` antes de pasarlos a un `AttendeePicker`.
+ * @param {Array} externalResources  filas crudas de `external_resources`
+ * @param {'grabacion'|'edicion'|'ads'} role
+ */
+export function externalUsersForRole(externalResources, role) {
+  return (externalResources ?? [])
+    .filter((r) => !r.deleted_at && (r.roles ?? []).includes(role))
+    .map(externalAsUser)
 }
 
 // ─── Alcance por línea ──────────────────────────────────────────────────────
@@ -396,6 +460,11 @@ export function defaultPiezaName(index) {
 
 // ─── Generador de agenda para WhatsApp ─────────────────────────────────────
 
+/** 'YYYY-MM-DD' local, mismo formato que `pauta_date` — comparable lexicográficamente. */
+function isoDateKey(date) {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
 function attendeeNames(pauta, usersById) {
   return (pauta.attendee_ids ?? [])
     .map((id) => usersById?.get(id))
@@ -423,14 +492,18 @@ function pautaLine(pauta, usersById) {
 /**
  * Genera el texto de agenda semanal para copiar a WhatsApp: pautas 'programada'
  * agrupadas por fecha, resumen por línea y sección de "por agendar" (sin fecha).
+ * Los días con fecha ya pasada (anteriores a hoy) se omiten: la agenda es para lo
+ * que viene, no para lo que ya ocurrió.
  * @param {Array} pautas          en el alcance activo (ya filtradas por línea si aplica)
  * @param {Array<{id:string,name:string}>} lines  líneas a resumir en "Pautas por Team"
  * @param {Map<string,object>} usersById
+ * @param {Date} today
  * @returns {string}
  */
-export function generateAgendaText(pautas, lines, usersById) {
+export function generateAgendaText(pautas, lines, usersById, today = new Date()) {
+  const todayKey = isoDateKey(today)
   const programadas = pautas.filter((p) => p.status === 'programada')
-  const dated = programadas.filter((p) => p.pauta_date)
+  const dated = programadas.filter((p) => p.pauta_date && p.pauta_date >= todayKey)
   const undated = programadas.filter((p) => !p.pauta_date)
 
   const byDate = new Map()
@@ -456,11 +529,11 @@ export function generateAgendaText(pautas, lines, usersById) {
 
   out += '⏩ Pautas por Team\n'
   lines.forEach((l) => {
-    const agendadas = programadas.filter((p) => p.line_id === l.id && p.pauta_date).length
-    const porAgendar = programadas.filter((p) => p.line_id === l.id && !p.pauta_date).length
+    const agendadas = dated.filter((p) => p.line_id === l.id).length
+    const porAgendar = undated.filter((p) => p.line_id === l.id).length
     out += `🔵 - ${l.name.toUpperCase()}: ${agendadas}${porAgendar ? ` Y ${porAgendar} P.A` : ''}\n`
   })
-  out += `⏩ TOTAL DE PAUTAS: ${programadas.length}\n`
+  out += `⏩ TOTAL DE PAUTAS: ${dated.length + undated.length}\n`
 
   if (undated.length) {
     out += '\n⏳ POR AGENDAR\n'
@@ -468,5 +541,31 @@ export function generateAgendaText(pautas, lines, usersById) {
       out += pautaLine(p, usersById) + '\n'
     })
   }
+  return out.trim()
+}
+
+/**
+ * Genera el texto de agenda de un solo día para copiar a WhatsApp: pautas
+ * 'programada' de esa fecha exacta, sin resumen por línea.
+ * @param {string} dateKey  'YYYY-MM-DD'
+ * @param {Array} pautas
+ * @param {Map<string,object>} usersById
+ * @returns {string}
+ */
+export function generateDayAgendaText(dateKey, pautas, usersById) {
+  const items = pautas
+    .filter((p) => p.pauta_date === dateKey && p.status === 'programada')
+    .sort((a, b) => (a.salida || '').localeCompare(b.salida || ''))
+
+  const d = parseISODate(dateKey)
+  let out = `${DAYNAMES[d.getDay()]} ${d.getDate()} ${MON3[d.getMonth()]}\n`
+  if (!items.length) {
+    out += '(Sin pautas agendadas este día)'
+    return out
+  }
+  items.forEach((p) => {
+    out += pautaLine(p, usersById) + '\n'
+  })
+  out += `TOTAL DE PAUTAS: ${items.length}`
   return out.trim()
 }

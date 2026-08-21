@@ -3,7 +3,7 @@
  * AudiovisualView para que los SummaryCard "Agendadas"/"Realizadas" filtren el calendario
  * al hacer click), además del filtro base (solo pautas 'programada'/'realizada' con fecha).
  */
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { vi } from 'vitest'
 import AvCalendar from '../components/pautas/AvCalendar'
 
@@ -81,5 +81,34 @@ describe('AvCalendar', () => {
       pautas: [pauta({ id: 'p1', client_name: 'Cliente Solicitud', status: 'solicitada' })],
     })
     expect(screen.queryByText('Cliente Solicitud')).not.toBeInTheDocument()
+  })
+
+  it('clic en "+N más" propaga a onDayClick del día (abre el modal de detalle del día, no crea nada)', () => {
+    const onDayClick = vi.fn()
+    renderCalendar({
+      onDayClick,
+      pautas: [
+        pauta({ id: 'p1', client_name: 'Cliente 1' }),
+        pauta({ id: 'p2', client_name: 'Cliente 2' }),
+        pauta({ id: 'p3', client_name: 'Cliente 3' }),
+        pauta({ id: 'p4', client_name: 'Cliente 4' }),
+      ],
+    })
+    fireEvent.click(screen.getByText('+1 más'))
+    expect(onDayClick).toHaveBeenCalledTimes(1)
+    expect(onDayClick).toHaveBeenCalledWith(DAY_15)
+  })
+
+  it('clic en una pill de pauta abre su detalle y NO dispara onDayClick', () => {
+    const onDayClick = vi.fn()
+    const onPautaClick = vi.fn()
+    renderCalendar({
+      onDayClick,
+      onPautaClick,
+      pautas: [pauta({ id: 'p1', client_name: 'Cliente 1' })],
+    })
+    fireEvent.click(screen.getByText('Cliente 1'))
+    expect(onPautaClick).toHaveBeenCalledWith(expect.objectContaining({ id: 'p1' }))
+    expect(onDayClick).not.toHaveBeenCalled()
   })
 })

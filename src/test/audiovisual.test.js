@@ -16,9 +16,14 @@ import {
   aggregateByResource,
   sumPiezasForLine,
   generateAgendaText,
+  generateDayAgendaText,
   piezasProgress,
   piezasByEditor,
+  editorNames,
   defaultPiezaName,
+  isExternalId,
+  externalAsUser,
+  externalUsersForRole,
 } from '../utils/audiovisual'
 
 function pauta(overrides = {}) {
@@ -415,6 +420,35 @@ describe('piezasByEditor', () => {
   })
 })
 
+describe('editorNames', () => {
+  const usersById = new Map([
+    ['u1', { first_name: 'Lizdania', last_name: 'Pérez' }],
+    ['u2', { first_name: 'Georgina', last_name: 'Ríos' }],
+    [
+      'ext:r1',
+      externalAsUser({ id: 'r1', full_name: 'Alan Puentes', roles: ['edicion'], deleted_at: null }),
+    ],
+  ])
+
+  it('resuelve nombres únicos de editores, empleados y externos', () => {
+    const piezas = [
+      { editor_user_id: 'u1', position: 0 },
+      { editor_user_id: 'ext:r1', position: 1 },
+      { editor_user_id: 'u1', position: 2 },
+    ]
+    expect(editorNames(piezas, usersById)).toEqual(['Lizdania Pérez', 'Alan Puentes'])
+  })
+
+  it('ignora piezas sin editor asignado', () => {
+    const piezas = [{ editor_user_id: null, position: 0 }]
+    expect(editorNames(piezas, usersById)).toEqual([])
+  })
+
+  it('sin piezas → array vacío', () => {
+    expect(editorNames([], usersById)).toEqual([])
+  })
+})
+
 describe('defaultPiezaName', () => {
   it('genera nombres "Video #N" 1-indexados', () => {
     expect(defaultPiezaName(0)).toBe('Video #1')
@@ -457,7 +491,7 @@ describe('generateAgendaText', () => {
         recurso_ids: ['u1'],
       }),
     ]
-    const text = generateAgendaText(pautas, lines, usersById)
+    const text = generateAgendaText(pautas, lines, usersById, TODAY)
     expect(text).toContain('TURBO PRE')
     expect(text).toContain('LIZDANIA')
     expect(text).toContain('GEORGINA: 1')
@@ -469,7 +503,7 @@ describe('generateAgendaText', () => {
     const pautas = [
       pauta({ id: 'p1', line_id: 'l1', status: 'programada', client_name: 'Agrolago' }),
     ]
-    const text = generateAgendaText(pautas, lines, usersById)
+    const text = generateAgendaText(pautas, lines, usersById, TODAY)
     expect(text).toContain('POR AGENDAR')
     expect(text).toContain('AGROLAGO')
   })
@@ -477,5 +511,192 @@ describe('generateAgendaText', () => {
   it('sin pautas programadas con fecha, deja la nota correspondiente', () => {
     const text = generateAgendaText([], lines, usersById)
     expect(text).toContain('Sin pautas agendadas con fecha')
+  })
+
+  it('omite los días con fecha ya pasada respecto a "today"', () => {
+    const pautas = [
+      pauta({
+        id: 'p1',
+        line_id: 'l1',
+        status: 'programada',
+        client_name: 'Ya Pasó',
+        pauta_date: '2026-07-10', // antes de TODAY (15 jul 2026)
+      }),
+      pauta({
+        id: 'p2',
+        line_id: 'l1',
+        status: 'programada',
+        client_name: 'Por Venir',
+        pauta_date: '2026-07-17',
+      }),
+    ]
+    const text = generateAgendaText(pautas, lines, usersById, TODAY)
+    expect(text).not.toContain('YA PASÓ')
+    expect(text).toContain('POR VENIR')
+    expect(text).toContain('GEORGINA: 1')
+  })
+
+  it('el día de hoy (today) no se considera pasado', () => {
+    const pautas = [
+      pauta({
+        id: 'p1',
+        line_id: 'l1',
+        status: 'programada',
+        client_name: 'Hoy Mismo',
+        pauta_date: '2026-07-15', // == TODAY
+      }),
+    ]
+    const text = generateAgendaText(pautas, lines, usersById, TODAY)
+    expect(text).toContain('HOY MISMO')
+  })
+})
+
+describe('generateDayAgendaText', () => {
+  const usersById = new Map([['u1', { first_name: 'Lizdania', last_name: '' }]])
+
+  it('lista solo las pautas programadas de la fecha exacta', () => {
+    const pautas = [
+      pauta({
+        id: 'p1',
+        status: 'programada',
+        client_name: 'Cliente Del Día',
+        pauta_date: '2026-07-17',
+        salida: '09:00:00',
+      }),
+      pauta({
+        id: 'p2',
+        status: 'programada',
+        client_name: 'Otro Día',
+        pauta_date: '2026-07-18',
+      }),
+      pauta({
+        id: 'p3',
+        status: 'solicitada',
+        client_name: 'Sin Confirmar',
+        pauta_date: '2026-07-17',
+      }),
+    ]
+    const text = generateDayAgendaText('2026-07-17', pautas, usersById)
+    expect(text).toContain('CLIENTE DEL DÍA')
+    expect(text).not.toContain('OTRO DÍA')
+    expect(text).not.toContain('SIN CONFIRMAR')
+    expect(text).toContain('TOTAL DE PAUTAS: 1')
+  })
+
+  it('sin pautas ese día, deja la nota correspondiente', () => {
+    const text = generateDayAgendaText('2026-07-17', [], usersById)
+    expect(text).toContain('Sin pautas agendadas este día')
+  })
+})
+
+describe('isExternalId', () => {
+  it('reconoce un id de recurso externo por su prefijo', () => {
+    expect(isExternalId('ext:abc-123')).toBe(true)
+  })
+
+  it('no confunde un user_id real de empleado con uno externo', () => {
+    expect(isExternalId('abc-123')).toBe(false)
+    expect(isExternalId(null)).toBe(false)
+    expect(isExternalId(undefined)).toBe(false)
+  })
+})
+
+describe('externalAsUser', () => {
+  it('da forma de pseudo-usuario prefijando el id y partiendo el nombre en first/last', () => {
+    const u = externalAsUser({
+      id: 'abc-123',
+      full_name: 'Alan Puentes',
+      roles: ['grabacion'],
+      deleted_at: null,
+    })
+    expect(u).toEqual({
+      user_id: 'ext:abc-123',
+      first_name: 'Alan',
+      last_name: 'Puentes',
+      avatar_url: null,
+      is_external: true,
+      roles: ['grabacion'],
+      deleted_at: null,
+    })
+  })
+
+  it('con un nombre de un solo token, deja last_name vacío', () => {
+    const u = externalAsUser({ id: 'x', full_name: 'Madonna', roles: [] })
+    expect(u.first_name).toBe('Madonna')
+    expect(u.last_name).toBe('')
+  })
+})
+
+describe('externalUsersForRole', () => {
+  const resources = [
+    { id: 'r1', full_name: 'Alan Puentes', roles: ['grabacion'], deleted_at: null },
+    { id: 'r2', full_name: 'Jeremy Gando', roles: ['grabacion', 'edicion'], deleted_at: null },
+    { id: 'r3', full_name: 'David Martinez', roles: ['ads'], deleted_at: null },
+    {
+      id: 'r4',
+      full_name: 'Archivado',
+      roles: ['grabacion'],
+      deleted_at: '2026-01-01T00:00:00Z',
+    },
+  ]
+
+  it('filtra por rol: solo grabación entra al picker de recursos', () => {
+    const result = externalUsersForRole(resources, 'grabacion')
+    expect(result.map((u) => u.user_id)).toEqual(['ext:r1', 'ext:r2'])
+  })
+
+  it('filtra por rol: solo edición entra al picker de editores', () => {
+    const result = externalUsersForRole(resources, 'edicion')
+    expect(result.map((u) => u.user_id)).toEqual(['ext:r2'])
+  })
+
+  it('un recurso solo-ads no aparece en el picker de recursos ni en el de editores', () => {
+    expect(externalUsersForRole(resources, 'grabacion')).not.toContainEqual(
+      expect.objectContaining({ user_id: 'ext:r3' }),
+    )
+    expect(externalUsersForRole(resources, 'edicion')).not.toContainEqual(
+      expect.objectContaining({ user_id: 'ext:r3' }),
+    )
+  })
+
+  it('excluye recursos archivados (deleted_at)', () => {
+    const result = externalUsersForRole(resources, 'grabacion')
+    expect(result.map((u) => u.user_id)).not.toContain('ext:r4')
+  })
+})
+
+describe('recursos externos integrados en los helpers de resolución existentes', () => {
+  const usersById = new Map([
+    ['u1', { first_name: 'Diego', last_name: '' }],
+    [
+      'ext:r1',
+      externalAsUser({
+        id: 'r1',
+        full_name: 'Alan Puentes',
+        roles: ['grabacion'],
+        deleted_at: null,
+      }),
+    ],
+  ])
+
+  it('resourceNames resuelve un recurso externo igual que un empleado', () => {
+    const p = pauta({ recurso_ids: ['u1', 'ext:r1'] })
+    expect(resourceNames(p, usersById)).toEqual(['Diego', 'Alan Puentes'])
+  })
+
+  it('piezasByEditor agrupa piezas cuyo editor es un recurso externo', () => {
+    const piezas = [
+      { editor_user_id: 'ext:r1', position: 0 },
+      { editor_user_id: 'u1', position: 1 },
+    ]
+    const grouped = piezasByEditor(piezas)
+    expect([...grouped.keys()]).toEqual(['ext:r1', 'u1'])
+  })
+
+  it('aggregateByResource suma piezas de un editor externo por su nombre resuelto', () => {
+    const pautas = [pauta({ status: 'realizada', recurso_ids: ['u1'], piezas_totales: 4 })]
+    const piezasByPauta = new Map([['p1', [{ editor_user_id: 'ext:r1', status: 'listo' }]]])
+    const result = aggregateByResource(pautas, usersById, piezasByPauta)
+    expect(result).toContainEqual({ name: 'Alan Puentes', graba: 0, edita: 1 })
   })
 })

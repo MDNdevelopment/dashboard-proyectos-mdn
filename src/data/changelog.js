@@ -74,6 +74,7 @@ export const CHANGELOG = [
       'Corregido: al presionar "+ Solicitar pauta" / "+ Agregar pauta" en Audiovisual, la pantalla ahora baja sola hasta la nueva solicitud (antes parecía que el botón no hacía nada si el calendario ocupaba toda la pantalla).',
       'Ahora puedes registrar teléfono, fecha de ingreso y fecha de cumpleaños al crear un empleado nuevo (antes solo se podía agregar editándolo después).',
       'El selector de fecha ahora permite saltar rápido entre años y meses eligiéndolos de una lista, en vez de tener que avanzar mes por mes — útil para poner fechas de nacimiento antiguas.',
+      'Corregido: en Audiovisual → Realizadas, la columna "Recursos" solo mostraba a quién grabó; ahora también muestra a quién editó cada pieza (empleados o recursos externos de edición).',
     ],
   },
   {

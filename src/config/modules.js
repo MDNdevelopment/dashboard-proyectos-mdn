@@ -60,6 +60,10 @@ export const MODULES = [
       { key: 'tareas.fijas.manage', label: 'Tildar tareas fijas' },
       { key: 'audiovisual.manage', label: 'Solicitar / editar pautas audiovisuales' },
       { key: 'audiovisual.coordina', label: 'Agendar / aprobar pautas audiovisuales' },
+      {
+        key: 'audiovisual.notificaciones',
+        label: 'Recibir notificaciones de pautas audiovisuales',
+      },
       { key: 'audiovisual.ver_todo', label: 'Ver pautas audiovisuales de todas las líneas' },
       { key: 'chequeo.manage', label: 'Registrar fechas de última publicación (Chequeo)' },
     ],

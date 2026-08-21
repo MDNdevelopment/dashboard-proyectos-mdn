@@ -210,7 +210,7 @@ describe('AttendeePicker — quitar participantes agregados', () => {
   })
 })
 
-describe('AttendeePicker — hideQuickGroups (Audiovisual: solo búsqueda manual)', () => {
+describe('AttendeePicker — hideQuickGroups (Audiovisual: lista navegable + búsqueda)', () => {
   it('con hideQuickGroups no se renderizan los botones de selección rápida por cargo', () => {
     render(
       <AttendeePicker employees={EMPLOYEES} selectedIds={[]} onChange={vi.fn()} hideQuickGroups />,
@@ -241,5 +241,47 @@ describe('AttendeePicker — hideQuickGroups (Audiovisual: solo búsqueda manual
     )
     await user.click(screen.getByRole('button', { name: 'Quitar a todos' }))
     expect(onChange).toHaveBeenCalledWith([])
+  })
+
+  it('con hideQuickGroups se puede elegir directo de una lista, sin escribir en el buscador', () => {
+    render(
+      <AttendeePicker employees={EMPLOYEES} selectedIds={[]} onChange={vi.fn()} hideQuickGroups />,
+    )
+    const list = within(screen.getByTestId('attendee-browsable-list'))
+    expect(list.getByRole('button', { name: 'Ana Director' })).toBeInTheDocument()
+    expect(list.getByRole('button', { name: 'Beto Jefe' })).toBeInTheDocument()
+    expect(list.getByRole('button', { name: 'Carla Coord' })).toBeInTheDocument()
+    expect(list.getByRole('button', { name: 'Dario Empleado' })).toBeInTheDocument()
+  })
+
+  it('sin hideQuickGroups NO aparece la lista navegable (sigue solo apareciendo al escribir)', () => {
+    renderPicker()
+    expect(screen.queryByTestId('attendee-browsable-list')).not.toBeInTheDocument()
+  })
+
+  it('click en la lista navegable agrega, y click de nuevo quita (toggle), sin resetear el buscador', async () => {
+    const user = userEvent.setup()
+    const onChange = vi.fn()
+    render(
+      <AttendeePicker employees={EMPLOYEES} selectedIds={[]} onChange={onChange} hideQuickGroups />,
+    )
+    const search = screen.getByPlaceholderText('Buscar empleado por nombre…')
+    await user.type(search, 'Carla')
+    const list = within(screen.getByTestId('attendee-browsable-list'))
+    await user.click(list.getByRole('button', { name: 'Carla Coord' }))
+    expect(onChange).toHaveBeenCalledWith(['coord-1'])
+    // A diferencia del buscador de sugerencias (overlay), esta lista no resetea el texto
+    expect(search.value).toBe('Carla')
+  })
+
+  it('la lista navegable se filtra igual que el buscador', async () => {
+    const user = userEvent.setup()
+    render(
+      <AttendeePicker employees={EMPLOYEES} selectedIds={[]} onChange={vi.fn()} hideQuickGroups />,
+    )
+    await user.type(screen.getByPlaceholderText('Buscar empleado por nombre…'), 'Carla')
+    const list = within(screen.getByTestId('attendee-browsable-list'))
+    expect(list.getByRole('button', { name: 'Carla Coord' })).toBeInTheDocument()
+    expect(list.queryByRole('button', { name: 'Ana Director' })).not.toBeInTheDocument()
   })
 })

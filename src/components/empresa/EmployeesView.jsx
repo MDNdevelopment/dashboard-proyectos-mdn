@@ -7,6 +7,7 @@ import VacationsDialog from './VacationsDialog'
 import NewEmployeeDialog from './NewEmployeeDialog'
 import EmployeeInfoModal from '../metricas/EmployeeInfoModal'
 import ConfirmDeleteDialog from '../common/ConfirmDeleteDialog'
+import ExternalResourcesView from './ExternalResourcesView'
 
 const VIEW_STORAGE_KEY = 'empresa.empleados.view'
 const LEVELS = [1, 2, 3, 4]
@@ -706,6 +707,10 @@ export default function EmployeesView({ companyId }) {
           confirming={archiving}
         />
       )}
+
+      {/* Recursos externos (grabación/edición/ads): no son empleados, viven en su propia
+          tabla y solo se usan en Pautas — ver ExternalResourcesView. */}
+      <ExternalResourcesView companyId={companyId} />
     </>
   )
 }

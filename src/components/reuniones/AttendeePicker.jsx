@@ -46,13 +46,26 @@ export default function AttendeePicker({
   // estaba en `selectedIds` (reunión pasada) sigue resolviéndose vía `selected`
   // arriba, que filtra sobre la lista completa `employees`, no sobre esta.
   const suggestions = useMemo(() => {
+    if (hideQuickGroups) return [] // reemplazado por la lista navegable de abajo
     const q = query.trim().toLowerCase()
     if (!q) return []
     return employees
       .filter((u) => !u.deleted_at && fullName(u).toLowerCase().includes(q))
       .sort((a, b) => fullName(a).localeCompare(fullName(b), 'es', { sensitivity: 'base' }))
       .slice(0, MAX_SUGGESTIONS)
-  }, [query, employees])
+  }, [query, employees, hideQuickGroups])
+
+  // Lista navegable completa (Recursos/Editores/Asistentes de Audiovisual): a diferencia
+  // del buscador de arriba (pensado para plantillas grandes, solo sugiere al escribir),
+  // acá la población suele ser chica — se puede elegir con un click sin tener que
+  // teclear el nombre. El buscador igual filtra esta lista si se escribe algo.
+  const browsable = useMemo(() => {
+    if (!hideQuickGroups) return []
+    const q = query.trim().toLowerCase()
+    return employees
+      .filter((u) => !u.deleted_at && (!q || fullName(u).toLowerCase().includes(q)))
+      .sort((a, b) => fullName(a).localeCompare(fullName(b), 'es', { sensitivity: 'base' }))
+  }, [query, employees, hideQuickGroups])
 
   /** Reemplaza la selección completa por el cargo elegido — el último botón predomina. */
   function setGroup(test) {
@@ -75,6 +88,14 @@ export default function AttendeePicker({
     if (selectedSet.has(userId)) remove(userId)
     else add(userId)
     setQuery('')
+  }
+
+  /** Igual que toggleFromSearch, pero sin resetear la búsqueda: la lista navegable de
+   * hideQuickGroups no es un overlay que deba cerrarse, así que el filtro se mantiene
+   * para poder tildar varios seguidos. */
+  function toggleFromList(userId) {
+    if (selectedSet.has(userId)) remove(userId)
+    else add(userId)
   }
 
   return (
@@ -127,12 +148,12 @@ export default function AttendeePicker({
       <div className="relative mb-2.5">
         <input
           type="text"
-          className="input-base w-full"
+          className={`input-base w-full ${hideQuickGroups ? 'input-compact' : ''}`}
           placeholder="Buscar empleado por nombre…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        {query.trim() && (
+        {!hideQuickGroups && query.trim() && (
           <div
             data-testid="attendee-suggestions"
             className="absolute z-30 top-full left-0 right-0 mt-1 bg-white border border-[#e0ddd4] rounded-xl shadow-lg overflow-hidden max-h-48 overflow-y-auto"
@@ -184,6 +205,60 @@ export default function AttendeePicker({
           </div>
         )}
       </div>
+
+      {/* Lista navegable (Recursos/Editores/Asistentes de Audiovisual): población chica,
+          se puede elegir con un click sin tener que teclear el nombre. */}
+      {hideQuickGroups && (
+        <div
+          data-testid="attendee-browsable-list"
+          className="space-y-0.5 max-h-48 overflow-y-auto mb-3 border border-[#ece9df] rounded-xl p-1.5"
+        >
+          {browsable.length === 0 ? (
+            <p className="text-[13px] text-[#999] px-2 py-1">Sin resultados</p>
+          ) : (
+            browsable.map((u) => {
+              const name = fullName(u)
+              const isSelected = selectedSet.has(u.user_id)
+              return (
+                <button
+                  key={u.user_id}
+                  type="button"
+                  onClick={() => toggleFromList(u.user_id)}
+                  title={isSelected ? `Quitar a ${name}` : `Agregar a ${name}`}
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left hover:bg-[#f5f3eb] transition-colors"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 overflow-hidden bg-[#eee]"
+                  >
+                    {u.avatar_url ? (
+                      <img src={u.avatar_url} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-[#888]">{initials(u)}</span>
+                    )}
+                  </span>
+                  <span className="text-[13px] font-medium text-[#333] flex-1">{name}</span>
+                  {isSelected && (
+                    <svg
+                      width="15"
+                      height="15"
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      stroke="#16a34a"
+                      strokeWidth="2.2"
+                      className="flex-shrink-0"
+                      aria-hidden="true"
+                      data-testid="already-added-check"
+                    >
+                      <path d="M3 8.5l3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </button>
+              )
+            })
+          )}
+        </div>
+      )}
 
       {/* Participantes agregados — mismo estilo de pill removible que Empresa › Líneas */}
       {selected.length === 0 ? (

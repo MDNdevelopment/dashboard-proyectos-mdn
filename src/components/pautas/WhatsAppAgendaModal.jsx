@@ -1,20 +1,9 @@
-import { useState } from 'react'
 import { generateAgendaText } from '../../utils/audiovisual'
+import WhatsAppTextPanel from './WhatsAppTextPanel'
 
 /** Genera el texto de agenda semanal de pautas programadas, listo para copiar a WhatsApp. */
 export default function WhatsAppAgendaModal({ pautas, lines, usersById, onClose }) {
-  const [copied, setCopied] = useState(false)
   const text = generateAgendaText(pautas, lines, usersById)
-
-  async function handleCopy() {
-    try {
-      await navigator.clipboard.writeText(text)
-    } catch {
-      // Fallback silencioso: el usuario puede seleccionar y copiar manualmente.
-    }
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1400)
-  }
 
   return (
     <div
@@ -37,11 +26,7 @@ export default function WhatsAppAgendaModal({ pautas, lines, usersById, onClose 
           <p className="text-[12px] text-[#999] mb-2">
             Generado del alcance actual. Revisa y copia al grupo.
           </p>
-          <textarea
-            readOnly
-            value={text}
-            className="w-full h-[320px] border border-[#e6e2d8] rounded-lg p-3 text-[12.5px] font-mono text-[#333] bg-[#fbfaf6] leading-relaxed resize-none focus:outline-none focus:border-[#FFB800]"
-          />
+          <WhatsAppTextPanel text={text} height={320} />
         </div>
         <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-[#ece9df]">
           <button
@@ -49,12 +34,6 @@ export default function WhatsAppAgendaModal({ pautas, lines, usersById, onClose 
             className="text-[13px] font-semibold text-[#555] px-3 py-1.5 hover:text-[#111]"
           >
             Cerrar
-          </button>
-          <button
-            onClick={handleCopy}
-            className="text-[13px] font-semibold text-[#111] bg-[#FFB800] px-3.5 py-1.5 rounded-lg hover:brightness-95"
-          >
-            {copied ? '¡Copiado!' : 'Copiar texto'}
           </button>
         </div>
       </div>

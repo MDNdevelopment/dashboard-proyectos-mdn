@@ -17,6 +17,7 @@ import {
   formatCodes,
   formatDayShort,
   resourceNames,
+  editorNames,
   requesterName,
   briefComplete,
   visibleSolicitudes,
@@ -43,6 +44,7 @@ export default function AvPhaseTable({
   piezas,
   clients,
   audiovisualUsers,
+  editorUsers,
   allEmployees,
   companyId,
   userId,
@@ -63,6 +65,12 @@ export default function AvPhaseTable({
   const [expandedAttendeesId, setExpandedAttendeesId] = useState(null)
   const [expandedRecursosId, setExpandedRecursosId] = useState(null)
   const tableScrollRef = useRef(null)
+  // El card de la tabla vive debajo del calendario, que puede ser bastante alto — al
+  // solicitar/agregar una pauta el renglón nuevo aparece arriba de la tabla pero fuera de
+  // vista si el usuario no había bajado el scroll de la página, dando la sensación de que
+  // el botón "no hizo nada". Se referencia el card entero (no solo la tabla) para que el
+  // encabezado con las pestañas quede visible junto con el renglón nuevo.
+  const cardRef = useRef(null)
   // Los pickers de Recursos y Asistentes son mutuamente excluyentes en una misma fila: abrir
   // uno cierra el otro (evita dos buscadores abiertos a la vez apilados en la misma fila).
   // Al abrir uno, volvemos el scroll horizontal al inicio: esas columnas están al final de la
@@ -132,6 +140,10 @@ export default function AvPhaseTable({
   // "+ Solicitar pauta" (rol solicita) agrega un borrador solo en memoria; "+ Agregar pauta"
   // (coordina) sigue creando de inmediato en la base de datos, sin cambios.
   function handleCreate() {
+    // jsdom (tests) no implementa scrollIntoView — solo el navegador real lo tiene.
+    if (typeof cardRef.current?.scrollIntoView === 'function') {
+      cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
     if (editMode === 'solicita') {
       setDrafts((prev) => [...prev, makeDraft()])
       onPhaseChange('solicitudes')
@@ -242,7 +254,7 @@ export default function AvPhaseTable({
   }
 
   return (
-    <div className="bg-white border border-[#e0ddd4] rounded-xl mb-4">
+    <div ref={cardRef} className="bg-white border border-[#e0ddd4] rounded-xl mb-4">
       {/* overflow-hidden acotado a esta franja superior (para las esquinas redondeadas del
           card) — NO envuelve la tabla de abajo, para no recortar el dropdown de sugerencias
           del AttendeePicker (position:absolute) que se abre en la fila de Agenda. */}
@@ -325,6 +337,7 @@ export default function AvPhaseTable({
             realizadas={realizadas}
             piezas={piezas}
             audiovisualUsers={audiovisualUsers}
+            editorUsers={editorUsers}
             employeesById={employeesById}
             confirmingId={confirmingId}
             onDelete={handleDelete}
@@ -1038,12 +1051,14 @@ function RealizadasTable({
   realizadas,
   piezas,
   audiovisualUsers,
+  editorUsers,
   employeesById,
   confirmingId,
   onDelete,
   onPautaClick,
 }) {
   const audiovisualUsersById = usersById(audiovisualUsers)
+  const editorUsersById = usersById(editorUsers ?? [])
   return (
     <table className="w-full border-collapse min-w-[860px]">
       <Thead cols={['Cliente', 'Solicitado por', 'Fecha', 'Recursos', 'Piezas', 'Grilla', '']} />
@@ -1078,7 +1093,12 @@ function RealizadasTable({
               <td className="px-2 py-1.5 text-[13px]">{formatDayShort(p.pauta_date)}</td>
               <td className="px-2 py-1.5 min-w-[130px]">
                 <span className="text-[13px] text-[#333]">
-                  {resourceNames(p, audiovisualUsersById).join(', ') || '—'}
+                  {[
+                    ...new Set([
+                      ...resourceNames(p, audiovisualUsersById),
+                      ...editorNames(pautaPiezas, editorUsersById),
+                    ]),
+                  ].join(', ') || '—'}
                 </span>
               </td>
               <td className="px-2 py-1.5 min-w-[110px]">
