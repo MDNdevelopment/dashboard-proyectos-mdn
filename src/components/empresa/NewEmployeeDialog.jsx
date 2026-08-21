@@ -3,6 +3,7 @@ import { supabase } from '../../supabase'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import { useAuth } from '../../context/AuthContext'
 import { isFinancePrivileged } from '../../lib/permissions'
+import DateInput from '../common/DateInput'
 
 /**
  * Dialog para crear un nuevo empleado vía la Netlify function create-employee.
@@ -19,6 +20,9 @@ export default function NewEmployeeDialog({ departments, positions, onClose, onC
     email: '',
     first_name: '',
     last_name: '',
+    phone_number: '',
+    birth_date: '',
+    hire_date: '',
     department_id: '',
     position_id: '',
     access_level: 1,
@@ -102,6 +106,9 @@ export default function NewEmployeeDialog({ departments, positions, onClose, onC
           email: form.email.trim(),
           first_name: form.first_name.trim(),
           last_name: form.last_name.trim(),
+          phone_number: form.phone_number.trim() || null,
+          birth_date: form.birth_date || null,
+          hire_date: form.hire_date || null,
           department_id: form.department_id || null,
           position_id: form.position_id || null,
           access_level: Number(form.access_level),
@@ -212,6 +219,36 @@ export default function NewEmployeeDialog({ departments, positions, onClose, onC
                 onChange={(e) => set('last_name', e.target.value)}
                 placeholder="Apellido"
               />
+            </div>
+          </div>
+
+          {/* Teléfono */}
+          <div>
+            <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+              Teléfono
+            </label>
+            <input
+              type="text"
+              className="input-base"
+              value={form.phone_number}
+              onChange={(e) => set('phone_number', e.target.value)}
+              placeholder="+58 412 000 0000"
+            />
+          </div>
+
+          {/* Fechas */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+                Fecha de nacimiento
+              </label>
+              <DateInput value={form.birth_date} onChange={(v) => set('birth_date', v)} />
+            </div>
+            <div>
+              <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+                Fecha de ingreso
+              </label>
+              <DateInput value={form.hire_date} onChange={(v) => set('hire_date', v)} />
             </div>
           </div>
 

@@ -98,6 +98,59 @@ describe('DateInput', () => {
     expect(screen.queryByRole('button', { name: /limpiar fecha/i })).not.toBeInTheDocument()
   })
 
+  it('permite saltar de año/mes vía la vista de rejilla (ej. cumpleaños de 2001)', async () => {
+    const user = userEvent.setup()
+    const onChange = vi.fn()
+    render(<DateInput value="2026-08-01" onChange={onChange} />)
+
+    await user.click(screen.getByRole('textbox'))
+    await waitFor(() => expect(screen.getByText(/agosto 2026/i)).toBeInTheDocument())
+
+    // Header de días -> vista de meses
+    await user.click(screen.getByText(/agosto 2026/i))
+    await waitFor(() => expect(screen.getByText('2026')).toBeInTheDocument())
+
+    // Header de meses (año) -> vista de años
+    await user.click(screen.getByText('2026'))
+    await waitFor(() => expect(screen.getByText(/^\d{4}–\d{4}$/)).toBeInTheDocument())
+
+    // Retroceder páginas de años hasta llegar a la que contiene 2001
+    while (!screen.queryByRole('button', { name: '2001' })) {
+      await user.click(screen.getByRole('button', { name: /años anteriores/i }))
+    }
+    await user.click(screen.getByRole('button', { name: '2001' }))
+
+    // Vuelve a vista de meses, ahora en 2001
+    await waitFor(() => expect(screen.getByText('2001')).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: /^mar$/i }))
+
+    // Vuelve a vista de días, en marzo 2001
+    await waitFor(() => expect(screen.getByText(/marzo 2001/i)).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: '11' }))
+
+    expect(onChange).toHaveBeenCalledWith('2001-03-11')
+  })
+
+  it('la vista de años pagina de a 12 años', async () => {
+    const user = userEvent.setup()
+    render(<DateInput value="2026-08-01" onChange={() => {}} />)
+
+    await user.click(screen.getByRole('textbox'))
+    await waitFor(() => expect(screen.getByText(/agosto 2026/i)).toBeInTheDocument())
+    await user.click(screen.getByText(/agosto 2026/i))
+    await user.click(screen.getByText('2026'))
+
+    const rangeBefore = screen.getByText(/^\d{4}–\d{4}$/).textContent
+    const [startBefore] = rangeBefore.split('–').map(Number)
+
+    await user.click(screen.getByRole('button', { name: /años anteriores/i }))
+
+    const rangeAfter = screen.getByText(/^\d{4}–\d{4}$/).textContent
+    const [startAfter] = rangeAfter.split('–').map(Number)
+
+    expect(startBefore - startAfter).toBe(12)
+  })
+
   it('disabled: no permite abrir el calendario ni editar el texto', async () => {
     const user = userEvent.setup()
     render(<DateInput value="2026-01-11" onChange={() => {}} disabled />)

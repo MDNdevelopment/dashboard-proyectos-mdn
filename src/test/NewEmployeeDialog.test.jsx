@@ -97,6 +97,13 @@ describe('NewEmployeeDialog', () => {
     expect(screen.getByDisplayValue('Sin cargo')).toBeInTheDocument()
   })
 
+  it('renderiza teléfono, fecha de nacimiento y fecha de ingreso', () => {
+    renderDialog()
+    expect(screen.getByPlaceholderText('+58 412 000 0000')).toBeInTheDocument()
+    expect(screen.getByText('Fecha de nacimiento')).toBeInTheDocument()
+    expect(screen.getByText('Fecha de ingreso')).toBeInTheDocument()
+  })
+
   // ── Validación ──────────────────────────────────────────────────────────────
   it('muestra error y no llama fetch si email está vacío', async () => {
     const user = userEvent.setup()
@@ -199,6 +206,11 @@ describe('NewEmployeeDialog', () => {
     await user.type(screen.getByPlaceholderText('empleado@empresa.com'), 'nuevo@test.com')
     await user.type(screen.getByPlaceholderText('Nombre'), 'Nuevo')
     await user.type(screen.getByPlaceholderText('Apellido'), 'Empleado')
+    await user.type(screen.getByPlaceholderText('+58 412 000 0000'), '+58 412 555 1234')
+    // Orden en el formulario: [0]=fecha de nacimiento, [1]=fecha de ingreso
+    const [birthInput, hireInput] = screen.getAllByPlaceholderText('dd/mm/aaaa')
+    await user.type(birthInput, '11/03/2001')
+    await user.type(hireInput, '05/01/2026')
     // getAllByRole('combobox'): [0]=departamento
     await userEvent.selectOptions(screen.getAllByRole('combobox')[0], 'd1')
 
@@ -213,11 +225,31 @@ describe('NewEmployeeDialog', () => {
     expect(body.email).toBe('nuevo@test.com')
     expect(body.first_name).toBe('Nuevo')
     expect(body.last_name).toBe('Empleado')
+    expect(body.phone_number).toBe('+58 412 555 1234')
+    expect(body.birth_date).toBe('2001-03-11')
+    expect(body.hire_date).toBe('2026-01-05')
     expect(body.department_id).toBe('d1')
     expect(body.access_level).toBe(1)
     expect(body.admin).toBe(false)
     // Los nuevos empleados entran "en prueba" por defecto
     expect(body.on_probation).toBe(true)
+  })
+
+  it('envía phone_number/birth_date/hire_date como null cuando quedan vacíos', async () => {
+    const user = userEvent.setup()
+    renderDialog()
+
+    await user.type(screen.getByPlaceholderText('empleado@empresa.com'), 'nuevo@test.com')
+    await user.type(screen.getByPlaceholderText('Nombre'), 'Nuevo')
+    await user.type(screen.getByPlaceholderText('Apellido'), 'Empleado')
+    await user.click(screen.getByRole('button', { name: 'Crear empleado' }))
+
+    await waitFor(() => expect(fetch).toHaveBeenCalled())
+
+    const body = JSON.parse(fetch.mock.calls[0][1].body)
+    expect(body.phone_number).toBeNull()
+    expect(body.birth_date).toBeNull()
+    expect(body.hire_date).toBeNull()
   })
 
   // ── Error del servidor ───────────────────────────────────────────────────────
