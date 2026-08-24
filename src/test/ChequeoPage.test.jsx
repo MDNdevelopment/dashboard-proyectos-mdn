@@ -54,13 +54,15 @@ describe('ChequeoPage', () => {
     })
   })
 
-  it('muestra la grilla de última publicación', async () => {
+  it('muestra la grilla de publicaciones con el selector de mes y semana', async () => {
     renderPage()
     await waitFor(() => {
       expect(screen.getByText('Pepsi')).toBeInTheDocument()
     })
     expect(
-      screen.getByText('Última publicación por red social — Publicaciones, Reels e Highlights'),
+      screen.getByText('Publicaciones por semana — Publicaciones, Reels e Highlights'),
     ).toBeInTheDocument()
+    // Selector de semana: al menos S1, arranca en la semana que contiene hoy.
+    expect(screen.getByText('S1')).toBeInTheDocument()
   })
 })

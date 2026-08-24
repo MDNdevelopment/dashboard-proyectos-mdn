@@ -18,7 +18,7 @@ import { isReportFrozen } from '../../utils/reportPeriod'
 import { calcTotal, sumScore, crecimientoCliente } from '../../utils/metricsScore'
 import { buildFixedWeeks, computeProductividad } from '../../utils/fixedTasks'
 import { computePlataformasProductividad } from '../../utils/chequeo'
-import { loadCheckEvents } from '../chequeo/chequeoApi'
+import { loadChecks } from '../chequeo/chequeoApi'
 import {
   MONTHS,
   INDICATORS,
@@ -87,7 +87,7 @@ export default function OperacionesView({ line, companyId, year, month, closed =
       heldRes,
       fixedTaskMarksRes,
       piezasRes,
-      checkEventsRes,
+      checksRes,
     ] = await Promise.all([
       loadReport(line.id, year, month),
       loadPrevReport(line.id, year, month),
@@ -99,7 +99,7 @@ export default function OperacionesView({ line, companyId, year, month, closed =
       loadHeldClientIdsForLine(companyId, line.id, { month, year }),
       loadFixedTaskMarks(line.id, year, month),
       countPiezasForLine(companyId, line.id, { month, year }),
-      loadCheckEvents(line.id, year, month),
+      loadChecks(companyId, year, month),
     ])
     setCompanyClientsById(Object.fromEntries((companyClientsRes.data ?? []).map((c) => [c.id, c])))
     setAds(adsRes.data ?? [])
@@ -180,8 +180,8 @@ export default function OperacionesView({ line, companyId, year, month, closed =
     const isFijasEra =
       year > TAREAS_FIJAS_MODULE_START.year ||
       (year === TAREAS_FIJAS_MODULE_START.year && month >= TAREAS_FIJAS_MODULE_START.month)
+    const weeks = buildFixedWeeks(year, month)
     if (isFijasEra && !closed) {
-      const weeks = buildFixedWeeks(year, month)
       synced.productividad.tareas = computeProductividad(
         fixedTaskMarksRes.data ?? [],
         activeLineClients,
@@ -190,16 +190,17 @@ export default function OperacionesView({ line, companyId, year, month, closed =
     }
 
     // Fila «Actualización de Plataformas» del mismo indicador — se mudó al módulo
-    // Chequeo (ver utils/chequeo.js → computePlataformasProductividad). Antes del
-    // lanzamiento no hay eventos que derivar, así que esos meses no la agregan (evita un
-    // meta>0/real=0 falso; conserva la fila si ya estaba guardada de antes).
+    // Chequeo (ver utils/chequeo.js → computePlataformasProductividad), derivada de la
+    // grilla semanal de publication_checks (ya no de publication_check_events, en
+    // desuso). Antes del lanzamiento no hay celdas que derivar, así que esos meses no la
+    // agregan (evita un meta>0/real=0 falso; conserva la fila si ya estaba guardada de antes).
     const isChequeoEra =
       year > CHEQUEO_PRODUCTIVIDAD_START.year ||
       (year === CHEQUEO_PRODUCTIVIDAD_START.year && month >= CHEQUEO_PRODUCTIVIDAD_START.month)
     if (isChequeoEra && !closed) {
       synced.productividad.tareas = [
         ...synced.productividad.tareas.filter((t) => t.nombre !== 'Actualización de Plataformas'),
-        computePlataformasProductividad(checkEventsRes.data ?? [], activeLineClients),
+        computePlataformasProductividad(checksRes.data ?? [], activeLineClients, weeks),
       ]
     }
 

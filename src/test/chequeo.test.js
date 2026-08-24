@@ -1,74 +1,138 @@
 import { describe, it, expect } from 'vitest'
 import {
+  weekCheckStatus,
+  currentFixedWeekN,
+  mostRecentCheck,
   daysSince,
-  checkStatus,
+  recentCheckStatus,
   formatCheckDate,
   CONTENT_TYPES,
   CONTENT_LABELS,
   contentTypeApplies,
+  WEEKLY_EXEMPT_NETWORKS,
   computePlataformasProductividad,
 } from '../utils/chequeo'
+import { buildFixedWeeks } from '../utils/fixedTasks'
 
-describe('daysSince', () => {
-  it('cuenta días de calendario entre la fecha y hoy', () => {
-    expect(daysSince('2026-08-13', new Date('2026-08-19T15:00:00'))).toBe(6)
-    expect(daysSince('2026-08-19', new Date('2026-08-19T00:00:00'))).toBe(0)
+// Agosto 2026: miércoles 4, 11, 18, 25 → 4 semanas. S3 = monIni 16 ago, dom 22 ago.
+const WEEKS = buildFixedWeeks(2026, 8)
+const S3 = WEEKS.find((w) => w.n === 3)
+
+describe('weekCheckStatus', () => {
+  it('con fecha registrada → cumplido, sin importar si la semana cerró', () => {
+    expect(weekCheckStatus('2026-08-20', S3, 'Instagram', new Date('2026-08-30'))).toBe('cumplido')
   })
 
-  it('devuelve null sin fecha o con fecha inválida', () => {
-    expect(daysSince(null, new Date('2026-08-19'))).toBeNull()
-    expect(daysSince('no-es-fecha', new Date('2026-08-19'))).toBeNull()
+  it('sin fecha y la semana no cerró (hoy cae dentro de ella) → pendiente', () => {
+    expect(weekCheckStatus(null, S3, 'Instagram', new Date(2026, 7, 20))).toBe('pendiente')
+  })
+
+  it('sin fecha y la semana ya cerró (hoy > domingo de esa semana) → incumplido', () => {
+    expect(weekCheckStatus(null, S3, 'Instagram', new Date('2026-08-25'))).toBe('incumplido')
+  })
+
+  it('YouTube y Mailchimp nunca incumplen, aunque la semana ya haya cerrado', () => {
+    expect(weekCheckStatus(null, S3, 'YouTube', new Date('2026-08-25'))).toBe('pendiente')
+    expect(weekCheckStatus(null, S3, 'Mailchimp', new Date('2026-08-25'))).toBe('pendiente')
+  })
+
+  it('YouTube Shorts no está exento: usa el default como cualquier otra red', () => {
+    expect(weekCheckStatus(null, S3, 'YouTube Shorts', new Date('2026-08-25'))).toBe('incumplido')
   })
 })
 
-describe('checkStatus', () => {
-  const today = new Date('2026-08-19T12:00:00')
-
-  it('sin fecha registrada → vacio', () => {
-    expect(checkStatus(null, today)).toBe('vacio')
+describe('currentFixedWeekN', () => {
+  it('devuelve la semana cuyo rango [monIni, dom] contiene la fecha', () => {
+    expect(currentFixedWeekN(WEEKS, new Date(2026, 7, 20))).toBe(3)
+    expect(currentFixedWeekN(WEEKS, S3.monIni)).toBe(3)
+    expect(currentFixedWeekN(WEEKS, S3.dom)).toBe(3)
   })
 
-  it('0-5 días → normal', () => {
-    expect(checkStatus('2026-08-19', today)).toBe('normal') // 0 días
-    expect(checkStatus('2026-08-14', today)).toBe('normal') // 5 días
+  it('null si la fecha cae fuera de todas las semanas del mes', () => {
+    expect(currentFixedWeekN(WEEKS, new Date('2026-09-15'))).toBeNull()
+  })
+})
+
+describe('mostRecentCheck', () => {
+  function check(overrides = {}) {
+    return {
+      client_id: 'c1',
+      network: 'Instagram',
+      content_type: 'publicaciones',
+      last_published_at: '2026-08-05',
+      period_week: 1,
+      ...overrides,
+    }
+  }
+
+  it('devuelve la celda con la fecha más reciente entre varias semanas', () => {
+    const checks = [
+      check({ period_week: 1, last_published_at: '2026-08-05' }),
+      check({ period_week: 3, last_published_at: '2026-08-19' }),
+      check({ period_week: 2, last_published_at: '2026-08-12' }),
+    ]
+    const result = mostRecentCheck(checks, 'c1', 'Instagram', 'publicaciones')
+    expect(result.last_published_at).toBe('2026-08-19')
+    expect(result.period_week).toBe(3)
   })
 
-  it('6-11 días → naranja (fronteras)', () => {
-    expect(checkStatus('2026-08-13', today)).toBe('naranja') // 6 días
-    expect(checkStatus('2026-08-08', today)).toBe('naranja') // 11 días
+  it('ignora celdas de otro cliente/red/tipo de contenido', () => {
+    const checks = [
+      check({ client_id: 'c2', last_published_at: '2026-08-30' }),
+      check({ network: 'Facebook', last_published_at: '2026-08-30' }),
+      check({ content_type: 'reels', last_published_at: '2026-08-30' }),
+      check({ last_published_at: '2026-08-05' }),
+    ]
+    expect(mostRecentCheck(checks, 'c1', 'Instagram', 'publicaciones').last_published_at).toBe(
+      '2026-08-05',
+    )
   })
 
-  it('12+ días → rojo (frontera)', () => {
-    expect(checkStatus('2026-08-07', today)).toBe('rojo') // 12 días
-    expect(checkStatus('2026-07-01', today)).toBe('rojo')
+  it('ignora filas sin fecha registrada', () => {
+    const checks = [check({ last_published_at: null }), check({ last_published_at: '' })]
+    expect(mostRecentCheck(checks, 'c1', 'Instagram', 'publicaciones')).toBeNull()
   })
 
-  it('caso del enunciado: fecha de julio evaluada en agosto sigue en rojo', () => {
-    // "post 18 jul" sin publicaciones nuevas, evaluado el 19 de agosto → 32 días.
-    expect(checkStatus('2026-07-18', new Date('2026-08-19'))).toBe('rojo')
+  it('sin ninguna coincidencia → null', () => {
+    expect(mostRecentCheck([], 'c1', 'Instagram', 'publicaciones')).toBeNull()
+  })
+})
+
+describe('daysSince', () => {
+  it('calcula días de calendario entre dos fechas', () => {
+    expect(daysSince('2026-08-01', new Date(2026, 7, 13))).toBe(12)
+    expect(daysSince('2026-08-13', new Date(2026, 7, 13))).toBe(0)
   })
 
-  it('Mailchimp nunca entra en naranja/rojo, sin importar cuán vieja sea la fecha', () => {
-    expect(checkStatus('2026-01-01', today, 'Mailchimp')).toBe('normal')
-    expect(checkStatus('2020-01-01', today, 'Mailchimp')).toBe('normal')
-    expect(checkStatus(today.toISOString().slice(0, 10), today, 'Mailchimp')).toBe('normal')
+  it('sin fecha → null', () => {
+    expect(daysSince(null)).toBeNull()
+  })
+})
+
+describe('recentCheckStatus', () => {
+  it('sin fecha → vacio', () => {
+    expect(recentCheckStatus(null, 'Instagram')).toBe('vacio')
   })
 
-  it('Mailchimp sin fecha sigue mostrando vacio', () => {
-    expect(checkStatus(null, today, 'Mailchimp')).toBe('vacio')
+  it('0-5 días → normal, 6-11 → naranja, 12+ → rojo', () => {
+    const today = new Date(2026, 7, 20)
+    expect(recentCheckStatus('2026-08-16', 'Instagram', today)).toBe('normal') // 4 días
+    expect(recentCheckStatus('2026-08-12', 'Instagram', today)).toBe('naranja') // 8 días
+    expect(recentCheckStatus('2026-08-01', 'Instagram', today)).toBe('rojo') // 19 días
   })
 
-  it('YouTube (horizontal) nunca pasa por naranja: normal hasta el día 29, rojo al mes', () => {
-    expect(checkStatus('2026-08-13', today, 'YouTube')).toBe('normal') // 6 días — sería naranja en el default
-    expect(checkStatus('2026-08-07', today, 'YouTube')).toBe('normal') // 12 días — sería rojo en el default
-    expect(checkStatus('2026-07-21', today, 'YouTube')).toBe('normal') // 29 días
-    expect(checkStatus('2026-07-20', today, 'YouTube')).toBe('rojo') // 30 días
-    expect(checkStatus('2026-01-01', today, 'YouTube')).toBe('rojo')
+  it('Mailchimp con fecha siempre es normal, sin importar cuán vieja', () => {
+    expect(recentCheckStatus('2020-01-01', 'Mailchimp', new Date(2026, 7, 20))).toBe('normal')
   })
 
-  it('YouTube Shorts usa el default (igual que Instagram u otra red), no la regla de YouTube horizontal', () => {
-    expect(checkStatus('2026-08-13', today, 'YouTube Shorts')).toBe('naranja') // 6 días
-    expect(checkStatus('2026-08-07', today, 'YouTube Shorts')).toBe('rojo') // 12 días
+  it('YouTube (horizontal) solo pasa a rojo a los 30 días, nunca naranja', () => {
+    const today = new Date(2026, 7, 20)
+    expect(recentCheckStatus('2026-08-12', 'YouTube', today)).toBe('normal') // 8 días, no naranja
+    expect(recentCheckStatus('2026-07-01', 'YouTube', today)).toBe('rojo') // 50 días
+  })
+
+  it('YouTube Shorts no está exento: usa el default 6/12 días', () => {
+    expect(recentCheckStatus('2026-08-12', 'YouTube Shorts', new Date(2026, 7, 20))).toBe('naranja')
   })
 })
 
@@ -104,6 +168,14 @@ describe('contentTypeApplies', () => {
   })
 })
 
+describe('WEEKLY_EXEMPT_NETWORKS', () => {
+  it('incluye YouTube y Mailchimp, no YouTube Shorts', () => {
+    expect(WEEKLY_EXEMPT_NETWORKS).toContain('YouTube')
+    expect(WEEKLY_EXEMPT_NETWORKS).toContain('Mailchimp')
+    expect(WEEKLY_EXEMPT_NETWORKS).not.toContain('YouTube Shorts')
+  })
+})
+
 // ─── computePlataformasProductividad ───────────────────────────────────────────────
 
 function client(overrides = {}) {
@@ -114,68 +186,82 @@ function clientNets(reds, overrides = {}) {
   return client({ social_links: reds.map((red) => ({ red, link: '' })), ...overrides })
 }
 
-function event(overrides = {}) {
+function check(overrides = {}) {
   return {
     client_id: 'c1',
     network: 'Instagram',
     content_type: 'publicaciones',
-    published_at: '2026-08-05',
+    last_published_at: '2026-08-05',
+    period_week: 1,
     ...overrides,
   }
 }
 
 describe('computePlataformasProductividad', () => {
-  it('meta = celdas aplicables × 4 (cadencia semanal)', () => {
+  it('meta = celdas aplicables × nº de semanas del mes', () => {
     // Instagram: publicaciones + reels + highlights aplican (3 celdas); Facebook: solo
-    // publicaciones (1 celda) → 4 celdas × 4 = 16.
+    // publicaciones (1 celda) → 4 celdas × 4 semanas = 16.
     const clients = [clientNets(['Instagram', 'Facebook'])]
-    const row = computePlataformasProductividad([], clients)
+    const row = computePlataformasProductividad([], clients, WEEKS)
     expect(row.nombre).toBe('Actualización de Plataformas')
     expect(row.meta).toBe(16)
     expect(row.realizado).toBe(0)
   })
 
-  it('real cuenta los eventos del mes por celda, topado en 4', () => {
+  it('real cuenta las semanas distintas con fecha registrada por celda, topado en el nº de semanas', () => {
     const clients = [clientNets(['Instagram'])]
-    const events = [
-      event({ published_at: '2026-08-05' }),
-      event({ published_at: '2026-08-12' }),
-      event({ published_at: '2026-08-19' }),
-      event({ published_at: '2026-08-20' }),
-      event({ published_at: '2026-08-21' }), // 5.ª: no suma más allá del tope
+    const checks = [
+      check({ period_week: 1 }),
+      check({ period_week: 2 }),
+      check({ period_week: 3 }),
+      check({ period_week: 4 }),
     ]
-    const row = computePlataformasProductividad(events, clients)
-    // 3 celdas de Instagram (publicaciones/reels/highlights) × 4 = 12 de meta.
-    // Solo la celda "publicaciones" tiene eventos: 5 eventos, topados en 4.
+    const row = computePlataformasProductividad(checks, clients, WEEKS)
+    // 3 celdas de Instagram (publicaciones/reels/highlights) × 4 semanas = 12 de meta.
+    // Solo la celda "publicaciones" tiene registros: las 4 semanas del mes.
     expect(row.meta).toBe(12)
     expect(row.realizado).toBe(4)
   })
 
-  it('no cuenta eventos de otra celda (network/content_type distintos)', () => {
+  it('no cuenta registros de otra celda (network/content_type distintos)', () => {
     const clients = [clientNets(['Instagram'])]
-    const events = [event({ content_type: 'reels' }), event({ network: 'Facebook' })]
-    const row = computePlataformasProductividad(events, clients)
-    // El evento de reels sí cuenta (Instagram aplica a reels); el de Facebook no
+    const checks = [check({ content_type: 'reels' }), check({ network: 'Facebook' })]
+    const row = computePlataformasProductividad(checks, clients, WEEKS)
+    // El registro de reels sí cuenta (Instagram aplica a reels); el de Facebook no
     // (Facebook no está en las redes del cliente).
     expect(row.realizado).toBe(1)
   })
 
   it('cliente sin redes aporta 0 a la meta', () => {
-    const row = computePlataformasProductividad([], [clientNets([])])
+    const row = computePlataformasProductividad([], [clientNets([])], WEEKS)
     expect(row.meta).toBe(0)
     expect(row.realizado).toBe(0)
   })
 
   it('social_links ausente se trata como sin redes', () => {
-    const row = computePlataformasProductividad([], [client({ social_links: undefined })])
+    const row = computePlataformasProductividad([], [client({ social_links: undefined })], WEEKS)
     expect(row.meta).toBe(0)
   })
 
   it('fixed_tasks.plataformas=false excluye la cuenta y todas sus redes', () => {
     const clients = [clientNets(['Instagram'], { fixed_tasks: { plataformas: false } })]
-    const events = [event()]
-    const row = computePlataformasProductividad(events, clients)
+    const checks = [check()]
+    const row = computePlataformasProductividad(checks, clients, WEEKS)
     expect(row.meta).toBe(0)
     expect(row.realizado).toBe(0)
+  })
+
+  it('redes exentas (YouTube/Mailchimp) tienen meta 1/mes, no 1/semana', () => {
+    const clients = [clientNets(['YouTube'])]
+    const row = computePlataformasProductividad([], clients, WEEKS)
+    expect(row.meta).toBe(1)
+  })
+
+  it('redes exentas: basta un registro en cualquier semana del mes para cumplir', () => {
+    const clients = [clientNets(['YouTube'])]
+    const checks = [check({ network: 'YouTube', period_week: 2 })]
+    const row = computePlataformasProductividad(checks, clients, WEEKS)
+    expect(row.meta).toBe(1)
+    expect(row.realizado).toBe(1)
   })
 })

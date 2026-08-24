@@ -55,7 +55,7 @@ const mockLoadAds = vi.fn()
 const mockCountMeetingsHeldForLine = vi.fn()
 const mockLoadHeldClientIdsForLine = vi.fn()
 const mockLoadFixedTaskMarks = vi.fn()
-const mockLoadCheckEvents = vi.fn()
+const mockLoadChecks = vi.fn()
 
 vi.mock('../components/metricas/metricsApi', () => ({
   loadReport: (...a) => mockLoadReport(...a),
@@ -67,7 +67,7 @@ vi.mock('../components/metricas/metricsApi', () => ({
 }))
 
 vi.mock('../components/chequeo/chequeoApi', () => ({
-  loadCheckEvents: (...a) => mockLoadCheckEvents(...a),
+  loadChecks: (...a) => mockLoadChecks(...a),
 }))
 
 vi.mock('../components/ads/campaignSpendApi', async () => {
@@ -95,10 +95,10 @@ function renderView(props = {}) {
   return render(<OperacionesView line={LINE} companyId="co-1" year={2026} month={7} {...props} />)
 }
 
-// Default sin eventos de Chequeo — vi.clearAllMocks() (usado en los beforeEach de cada
+// Default sin celdas de Chequeo — vi.clearAllMocks() (usado en los beforeEach de cada
 // describe) limpia calls/results pero no la implementación, así que este default
-// sobrevive salvo que un test lo pise explícitamente con mockLoadCheckEvents.mockResolvedValue(...).
-mockLoadCheckEvents.mockResolvedValue({ data: [], error: null })
+// sobrevive salvo que un test lo pise explícitamente con mockLoadChecks.mockResolvedValue(...).
+mockLoadChecks.mockResolvedValue({ data: [], error: null })
 
 describe('OperacionesView — columna Inversión Ads (Crecimiento de seguidores)', () => {
   beforeEach(() => {
@@ -345,11 +345,12 @@ describe('OperacionesView — "Productividad – Tareas Fijas" antes del lanzami
     expect(within(section).queryByText('Agregar tarea')).not.toBeInTheDocument()
   })
 
-  it('agrega la fila "Actualización de Plataformas" derivada de los eventos de Chequeo del mes', async () => {
+  it('agrega la fila "Actualización de Plataformas" derivada de la grilla de Chequeo del mes', async () => {
     const data = makeReportData()
     mockLoadReport.mockResolvedValue({ data: { data }, error: null })
     // c-1 tiene Instagram (social_links) → 3 celdas aplicables (publicaciones/reels/highlights)
-    // × 4 = meta 12. Un evento de publicaciones del mes → real 1.
+    // × 5 semanas de septiembre 2026 (buildFixedWeeks) = meta 15. Una celda con fecha en
+    // una semana → real 1.
     mockLoadClients.mockResolvedValue({
       data: [
         { ...MOCK_CLIENTS[0], social_links: [{ red: 'Instagram', link: '' }] },
@@ -357,13 +358,16 @@ describe('OperacionesView — "Productividad – Tareas Fijas" antes del lanzami
       ],
       error: null,
     })
-    mockLoadCheckEvents.mockResolvedValueOnce({
+    mockLoadChecks.mockResolvedValueOnce({
       data: [
         {
           client_id: 'c-1',
           network: 'Instagram',
           content_type: 'publicaciones',
-          published_at: '2026-09-05',
+          last_published_at: '2026-09-05',
+          period_year: 2026,
+          period_month: 9,
+          period_week: 1,
         },
       ],
       error: null,
@@ -377,7 +381,7 @@ describe('OperacionesView — "Productividad – Tareas Fijas" antes del lanzami
     // "Real" y "Meta" de esa fila son los últimos inputs de la sección.
     const numberInputs = within(section).getAllByRole('spinbutton')
     expect(numberInputs.at(-2).value).toBe('1') // real
-    expect(numberInputs.at(-1).value).toBe('12') // meta
+    expect(numberInputs.at(-1).value).toBe('15') // meta
   })
 })
 

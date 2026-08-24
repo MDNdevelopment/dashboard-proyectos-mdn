@@ -5,6 +5,7 @@ import { loadLines, loadClients } from '../components/metricas/metricsApi'
 import { MONTHS } from '../components/metricas/constants'
 import { visibleLinesForUser } from '../utils/lineMembers'
 import { buildFixedWeeks } from '../utils/fixedTasks'
+import { loadChecks } from '../components/chequeo/chequeoApi'
 import FixedTasksGrid from '../components/tareas-fijas/FixedTasksGrid'
 import FixedTasksReportPreview from '../components/tareas-fijas/FixedTasksReportPreview'
 
@@ -25,7 +26,7 @@ export default function TareasFijasPage() {
   const [clients, setClients] = useState([])
   const [companyUsers, setCompanyUsers] = useState([])
   const [marks, setMarks] = useState([])
-  const [checkEvents, setCheckEvents] = useState([])
+  const [checks, setChecks] = useState([])
   const [loading, setLoading] = useState(true)
   const [activeLineId, setActiveLineId] = useState(null)
   const [{ year, month }, setPeriod] = useState(currentYearMonth)
@@ -89,31 +90,22 @@ export default function TareasFijasPage() {
     loadMarks()
   }, [loadMarks])
 
-  // Eventos de Chequeo del mes en alcance (para el preview de «Actualización de
+  // Celdas de Chequeo del mes en alcance (para el preview de «Actualización de
   // Plataformas» dentro de Productividad — ver components/tareas-fijas/FixedTasksReportPreview.jsx
   // y utils/chequeo.js → computePlataformasProductividad).
-  const loadCheckEventsForScope = useCallback(async () => {
-    if (scopedLineIds.length === 0) {
-      setCheckEvents([])
+  const loadChecksForScope = useCallback(async () => {
+    if (scopedLineIds.length === 0 || !userProfile?.company_id) {
+      setChecks([])
       return
     }
-    const from = `${year}-${String(month).padStart(2, '0')}-01`
-    const nextMonth = month === 12 ? 1 : month + 1
-    const nextYear = month === 12 ? year + 1 : year
-    const to = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`
-    const { data } = await supabase
-      .from('publication_check_events')
-      .select('*')
-      .in('line_id', scopedLineIds)
-      .gte('published_at', from)
-      .lt('published_at', to)
-    setCheckEvents(data ?? [])
+    const { data } = await loadChecks(userProfile.company_id, year, month)
+    setChecks((data ?? []).filter((c) => scopedLineIds.includes(c.line_id)))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scopedLineIds.join(','), year, month])
+  }, [scopedLineIds.join(','), year, month, userProfile?.company_id])
 
   useEffect(() => {
-    loadCheckEventsForScope()
-  }, [loadCheckEventsForScope])
+    loadChecksForScope()
+  }, [loadChecksForScope])
 
   // Realtime: cambios de otros usuarios en la grilla del mes activo.
   useEffect(() => {
@@ -290,7 +282,7 @@ export default function TareasFijasPage() {
               clients={clients}
               marks={marks}
               weeks={weeks}
-              checkEvents={checkEvents}
+              checks={checks}
               showMatrix={activeLineId === ALL_LINES}
               lineLabel={activeLine?.name}
             />

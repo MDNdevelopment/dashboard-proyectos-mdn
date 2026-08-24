@@ -77,6 +77,8 @@ export const CHANGELOG = [
       'Corregido: en Audiovisual → Realizadas, la columna "Recursos" solo mostraba a quién grabó; ahora también muestra a quién editó cada pieza (empleados o recursos externos de edición).',
       'En Audiovisual, al asignar un Recurso ahora se revisa su disponibilidad ese día. Si los horarios de las dos pautas se pisan de verdad, no se permite asignarlo y se indica con cuál choca. Si el choque es solo probable —porque la otra pauta no tiene hora de cierre y se asumen 3 horas de duración—, o si la persona quedaría con 3 o más pautas ese día, aparece un aviso para confirmar o cancelar.',
       'Corregido: en Audiovisual → Solicitudes y Agenda, al corregir la fecha u hora de una pauta la fila ya no se pierde. Ahora se resalta un momento si cambia de lugar en la tabla, y si la nueva fecha cae en otro mes se queda visible con un aviso para saltar directo a ese mes.',
+      'En Chequeo ahora se registra por mes y por semana: arriba eliges el mes y la semana (S1, S2…) y la grilla muestra lo de ese período. Una celda queda en verde si esa semana se publicó y en rojo si la semana cerró sin publicar — a diferencia de antes, las semanas pasadas ya no cambian de color con el paso de los días. YouTube (horizontal) y Mailchimp se evalúan una vez al mes, no por semana. Puedes corregir semanas anteriores; al hacerlo se te avisa de que esa semana ya cerró antes de guardar.',
+      'Nuevo botón "Ver fecha más reciente" en Chequeo: muestra, por cuenta y columna, la última fecha registrada en cualquier semana del mes (sin tener que ir semana por semana), con el semáforo de verde/naranja/rojo de siempre según los días que lleva sin publicar. Es solo de consulta, no permite editar desde ahí.',
     ],
   },
   {

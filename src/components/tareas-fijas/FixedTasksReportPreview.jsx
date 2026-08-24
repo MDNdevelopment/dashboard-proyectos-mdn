@@ -10,8 +10,8 @@ const PREVIEW_LABELS = [...Object.values(TASK_LABELS), PLATAFORMAS_LABEL]
 /**
  * Vista previa de solo-lectura del indicador «2. Productividad – Tareas Fijas»
  * del reporte mensual, calculado en vivo desde la grilla de arriba (todas las
- * semanas del mes) más la fila «Actualización de Plataformas» derivada de los eventos
- * de Chequeo del mes. Es exactamente lo que OperacionesView derivará y guardará en
+ * semanas del mes) más la fila «Actualización de Plataformas» derivada de la grilla de
+ * Chequeo del mes. Es exactamente lo que OperacionesView derivará y guardará en
  * `report.productividad.tareas` — ver utils/fixedTasks.js:computeProductividad y
  * utils/chequeo.js:computePlataformasProductividad.
  *
@@ -22,17 +22,17 @@ export default function FixedTasksReportPreview({
   clients,
   marks,
   weeks,
-  checkEvents,
+  checks,
   showMatrix,
   lineLabel,
 }) {
   function rowsForLine(line) {
     const lineClients = clients.filter((c) => c.line_id === line.id)
     const lineMarks = marks.filter((m) => m.line_id === line.id)
-    const lineEvents = (checkEvents ?? []).filter((e) => e.line_id === line.id)
+    const lineChecks = (checks ?? []).filter((c) => c.line_id === line.id)
     return [
       ...computeProductividad(lineMarks, lineClients, weeks),
-      computePlataformasProductividad(lineEvents, lineClients),
+      computePlataformasProductividad(lineChecks, lineClients, weeks),
     ]
   }
 

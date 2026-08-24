@@ -44,10 +44,12 @@ export const TAREAS_FIJAS_MODULE_START = { year: 2026, month: 9 }
 export const AUDIOVISUAL_MODULE_START = { year: 2026, month: 9 }
 
 // Mes en que arranca el auto-llenado de la fila «Actualización de Plataformas» (dentro
-// de Productividad) desde los eventos del módulo Chequeo (tabla `publication_check_events`,
-// migración 20260823000000_create_publication_check_events.sql). Antes de este mes no hay
-// eventos que derivar — esa fila se omite en vez de mostrar meta>0/real=0 falso. Reemplaza
-// a la columna "Actualización de Plataformas" que antes vivía en Tareas Fijas.
+// de Productividad) desde la grilla semanal del módulo Chequeo (tabla
+// `publication_checks`, periodizada por mes/semana desde
+// 20260831000000_publication_checks_weekly_periods.sql — `publication_check_events` quedó
+// en desuso). Antes de este mes no hay celdas que derivar — esa fila se omite en vez de
+// mostrar meta>0/real=0 falso. Reemplaza a la columna "Actualización de Plataformas" que
+// antes vivía en Tareas Fijas.
 export const CHEQUEO_PRODUCTIVIDAD_START = { year: 2026, month: 9 }
 
 export const INDICATORS = [
