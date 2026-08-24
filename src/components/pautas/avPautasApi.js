@@ -46,6 +46,25 @@ export async function countPiezasForLine(companyId, lineId, { month, year }) {
   return { ...sumPiezasForLine(data ?? []), error: null }
 }
 
+/**
+ * Pautas activas ('programada'|'realizada') de un día exacto, en CUALQUIER línea —
+ * usado para validar disponibilidad de recursos (ver `resourceConflicts` en
+ * utils/audiovisual.js). A diferencia de `loadPautas`, filtra por fecha en el
+ * servidor (usa `av_pautas_company_date_idx`) y excluye la pauta que se está editando.
+ * Select acotado a los campos que la validación necesita.
+ */
+export async function fetchPautasByDate(companyId, dateStr, excludeId) {
+  let query = supabase
+    .from('av_pautas')
+    .select('id, client_name, tema, salida, llegada, recurso_ids, status')
+    .eq('company_id', companyId)
+    .eq('pauta_date', dateStr)
+    .is('deleted_at', null)
+    .in('status', ['programada', 'realizada'])
+  if (excludeId) query = query.neq('id', excludeId)
+  return query
+}
+
 // ─── Escritura ────────────────────────────────────────────────────────────────
 
 /**

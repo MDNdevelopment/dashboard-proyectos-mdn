@@ -13,6 +13,7 @@ const mockUpdatePauta = vi.fn()
 const mockDeletePauta = vi.fn()
 const mockRestorePauta = vi.fn()
 const mockPermanentlyDeletePauta = vi.fn()
+const mockFetchPautasByDate = vi.fn()
 
 vi.mock('../components/pautas/avPautasApi', () => ({
   createPauta: (...a) => mockCreatePauta(...a),
@@ -20,6 +21,7 @@ vi.mock('../components/pautas/avPautasApi', () => ({
   deletePauta: (...a) => mockDeletePauta(...a),
   restorePauta: (...a) => mockRestorePauta(...a),
   permanentlyDeletePauta: (...a) => mockPermanentlyDeletePauta(...a),
+  fetchPautasByDate: (...a) => mockFetchPautasByDate(...a),
 }))
 
 import AvPhaseTable from '../components/pautas/AvPhaseTable'
@@ -47,6 +49,11 @@ function TableWrapper({ initialPhase = 'solicitudes', ...props }) {
       onDeleted={vi.fn()}
       phase={phase}
       onPhaseChange={setPhase}
+      // Coincide con las fechas usadas en los tests (2026-09-04): así, salvo que un test
+      // pase viewYear/viewMonth explícitos, las pautas no aparecen "fuera de mes".
+      viewYear={2026}
+      viewMonth={9}
+      onGoToMonth={vi.fn()}
       {...props}
     />
   )
@@ -177,6 +184,7 @@ describe('AvPhaseTable — Agenda: "Recursos" (selección múltiple, reemplaza a
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mockFetchPautasByDate.mockResolvedValue({ data: [], error: null })
   })
 
   it('el encabezado dice "Recursos" y no "Graba"', () => {
@@ -254,6 +262,239 @@ describe('AvPhaseTable — Agenda: "Recursos" (selección múltiple, reemplaza a
     fireEvent.click(screen.getAllByText('Seleccionar…')[1])
     expect(screen.queryByText('Recursos (quién graba fotos/video)')).not.toBeInTheDocument()
     expect(screen.getByText('Buscar por nombre')).toBeInTheDocument()
+  })
+})
+
+describe('AvPhaseTable — disponibilidad de recursos al asignar (Agenda)', () => {
+  const AV_USERS = [{ user_id: 'r1', first_name: 'Nadia', last_name: 'Torres', deleted_at: null }]
+  const RESOURCE_USERS_BY_ID = new Map(AV_USERS.map((u) => [u.user_id, u]))
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  function selectNadia() {
+    fireEvent.click(screen.getAllByText('Seleccionar…')[0])
+    const search = screen.getByPlaceholderText('Buscar empleado por nombre…')
+    fireEvent.change(search, { target: { value: 'Nadia' } })
+    fireEvent.click(screen.getByRole('button', { name: /Nadia Torres/ }))
+  }
+
+  it('sin conflicto: consulta el día y guarda normalmente', async () => {
+    mockFetchPautasByDate.mockResolvedValue({ data: [], error: null })
+    mockUpdatePauta.mockResolvedValue({ data: { id: 'p1' }, error: null })
+    const pauta = {
+      id: 'p1',
+      client_name: 'Cliente A',
+      status: 'programada',
+      formats: [],
+      recurso_ids: [],
+      pauta_date: '2026-09-04',
+      salida: '09:00',
+      llegada: '11:00',
+    }
+    renderTable({
+      initialPhase: 'agenda',
+      editMode: 'coordina',
+      audiovisualUsers: AV_USERS,
+      resourceUsersById: RESOURCE_USERS_BY_ID,
+      pautas: [pauta],
+    })
+
+    selectNadia()
+
+    await waitFor(() => expect(mockUpdatePauta).toHaveBeenCalledWith('p1', { recurso_ids: ['r1'] }))
+  })
+
+  it('solapamiento: bloquea el guardado y muestra el conflicto', async () => {
+    mockFetchPautasByDate.mockResolvedValue({
+      data: [
+        {
+          id: 'p2',
+          client_name: 'Cliente B',
+          salida: '10:00',
+          llegada: '12:00',
+          recurso_ids: ['r1'],
+          status: 'programada',
+        },
+      ],
+      error: null,
+    })
+    const pauta = {
+      id: 'p1',
+      client_name: 'Cliente A',
+      status: 'programada',
+      formats: [],
+      recurso_ids: [],
+      pauta_date: '2026-09-04',
+      salida: '09:00',
+      llegada: '11:00',
+    }
+    renderTable({
+      initialPhase: 'agenda',
+      editMode: 'coordina',
+      audiovisualUsers: AV_USERS,
+      resourceUsersById: RESOURCE_USERS_BY_ID,
+      pautas: [pauta],
+    })
+
+    selectNadia()
+
+    // El aviso debe vivir DENTRO del panel de Recursos desplegado, no en el banner de la
+    // cabecera del card: la tabla es larga y ese banner queda fuera de pantalla cuando se
+    // está editando una fila de abajo — el usuario no ve nada y parece que el click no hizo
+    // nada. Por eso se ancla al panel y se verifica la contención, no solo su presencia.
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent(/Cliente B/)
+    expect(alert).toHaveTextContent(/Nadia Torres/)
+
+    const panel = screen.getByText('Recursos (quién graba fotos/video)').closest('td')
+    expect(panel).toContainElement(alert)
+
+    expect(mockUpdatePauta).not.toHaveBeenCalled()
+  })
+
+  it('el conflicto desaparece al cerrar y reabrir el selector de Recursos', async () => {
+    mockFetchPautasByDate.mockResolvedValue({
+      data: [
+        {
+          id: 'p2',
+          client_name: 'Cliente B',
+          salida: '10:00',
+          llegada: '12:00',
+          recurso_ids: ['r1'],
+          status: 'programada',
+        },
+      ],
+      error: null,
+    })
+    const pauta = {
+      id: 'p1',
+      client_name: 'Cliente A',
+      status: 'programada',
+      formats: [],
+      recurso_ids: [],
+      pauta_date: '2026-09-04',
+      salida: '09:00',
+      llegada: '11:00',
+    }
+    renderTable({
+      initialPhase: 'agenda',
+      editMode: 'coordina',
+      audiovisualUsers: AV_USERS,
+      resourceUsersById: RESOURCE_USERS_BY_ID,
+      pautas: [pauta],
+    })
+
+    selectNadia()
+    await screen.findByRole('alert')
+
+    fireEvent.click(screen.getByLabelText('Cerrar selector de recursos'))
+    fireEvent.click(screen.getAllByText('Seleccionar…')[0])
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('pauta previa sin hora de cierre: pide confirmar (no bloquea) si cae en la ventana asumida', async () => {
+    // Gisely ya tiene una pauta a la 1 pm sin hora de cierre; se le quiere asignar otra a
+    // las 3 pm. El choque solo existe asumiendo 3 h, así que se pregunta en vez de bloquear.
+    mockFetchPautasByDate.mockResolvedValue({
+      data: [
+        {
+          id: 'p2',
+          client_name: 'Cliente B',
+          salida: '13:00:00',
+          llegada: null,
+          recurso_ids: ['r1'],
+          status: 'programada',
+        },
+      ],
+      error: null,
+    })
+    mockUpdatePauta.mockResolvedValue({ data: { id: 'p1' }, error: null })
+    const pauta = {
+      id: 'p1',
+      client_name: 'Cliente A',
+      status: 'programada',
+      formats: [],
+      recurso_ids: [],
+      pauta_date: '2026-09-04',
+      salida: '15:00:00',
+      llegada: null,
+    }
+    renderTable({
+      initialPhase: 'agenda',
+      editMode: 'coordina',
+      audiovisualUsers: AV_USERS,
+      resourceUsersById: RESOURCE_USERS_BY_ID,
+      pautas: [pauta],
+    })
+
+    selectNadia()
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Asignar igual/ })).toBeInTheDocument(),
+    )
+    expect(screen.getByText(/sin hora de cierre/)).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument() // no se bloqueó
+    expect(mockUpdatePauta).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: /Asignar igual/ }))
+
+    await waitFor(() => expect(mockUpdatePauta).toHaveBeenCalledWith('p1', { recurso_ids: ['r1'] }))
+  })
+
+  it('sobrecarga (3ª pauta del día): pide confirmar antes de guardar', async () => {
+    mockFetchPautasByDate.mockResolvedValue({
+      data: [
+        {
+          id: 'p2',
+          client_name: 'B',
+          salida: null,
+          llegada: null,
+          recurso_ids: ['r1'],
+          status: 'programada',
+        },
+        {
+          id: 'p3',
+          client_name: 'C',
+          salida: null,
+          llegada: null,
+          recurso_ids: ['r1'],
+          status: 'programada',
+        },
+      ],
+      error: null,
+    })
+    mockUpdatePauta.mockResolvedValue({ data: { id: 'p1' }, error: null })
+    const pauta = {
+      id: 'p1',
+      client_name: 'Cliente A',
+      status: 'programada',
+      formats: [],
+      recurso_ids: [],
+      pauta_date: '2026-09-04',
+      salida: null,
+      llegada: null,
+    }
+    renderTable({
+      initialPhase: 'agenda',
+      editMode: 'coordina',
+      audiovisualUsers: AV_USERS,
+      resourceUsersById: RESOURCE_USERS_BY_ID,
+      pautas: [pauta],
+    })
+
+    selectNadia()
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Asignar igual/ })).toBeInTheDocument(),
+    )
+    expect(mockUpdatePauta).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: /Asignar igual/ }))
+
+    await waitFor(() => expect(mockUpdatePauta).toHaveBeenCalledWith('p1', { recurso_ids: ['r1'] }))
   })
 })
 
@@ -453,5 +694,124 @@ describe('AvPhaseTable — Papelera (soft delete + restaurar)', () => {
     fireEvent.click(screen.getByText('Cancelar'))
     expect(screen.queryByText('Eliminar pauta')).not.toBeInTheDocument()
     expect(mockPermanentlyDeletePauta).not.toHaveBeenCalled()
+  })
+})
+
+describe('AvPhaseTable — Agenda: la fila no se pierde al editar fecha/hora', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('al guardar una nueva fecha/hora, la fila queda resaltada y el resaltado se apaga solo', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    mockUpdatePauta.mockResolvedValue({
+      data: { id: 'p1', client_name: 'Cliente A', status: 'programada', pauta_date: '2026-09-10' },
+      error: null,
+    })
+    const pauta = {
+      id: 'p1',
+      client_name: 'Cliente A',
+      status: 'programada',
+      formats: [],
+      recurso_ids: [],
+      pauta_date: '2026-09-04',
+    }
+    renderTable({ initialPhase: 'agenda', editMode: 'coordina', pautas: [pauta] })
+
+    const dateInput = screen.getByDisplayValue('2026-09-04')
+    fireEvent.blur(dateInput, { target: { value: '2026-09-10' } })
+
+    await waitFor(() => expect(mockUpdatePauta).toHaveBeenCalled())
+    await waitFor(() => expect(dateInput.closest('tr')).toHaveClass('bg-[#FFF9E8]'))
+
+    await vi.advanceTimersByTimeAsync(2600)
+    expect(dateInput.closest('tr')).not.toHaveClass('bg-[#FFF9E8]')
+
+    vi.useRealTimers()
+  })
+
+  it('una pauta con fecha de otro mes muestra el aviso "↗ mes" y permite saltar a él', () => {
+    const onGoToMonth = vi.fn()
+    const pauta = {
+      id: 'p1',
+      client_name: 'Cliente A',
+      status: 'programada',
+      formats: [],
+      recurso_ids: [],
+      pauta_date: '2026-10-15',
+    }
+    renderTable({
+      initialPhase: 'agenda',
+      editMode: 'coordina',
+      pautas: [pauta],
+      viewYear: 2026,
+      viewMonth: 9,
+      onGoToMonth,
+    })
+
+    const chip = screen.getByText(/octubre/i)
+    fireEvent.click(chip)
+    expect(onGoToMonth).toHaveBeenCalledWith(2026, 10)
+  })
+
+  it('sin conflicto de mes, no se muestra el aviso "↗ mes"', () => {
+    const pauta = {
+      id: 'p1',
+      client_name: 'Cliente A',
+      status: 'programada',
+      formats: [],
+      recurso_ids: [],
+      pauta_date: '2026-09-04',
+    }
+    renderTable({
+      initialPhase: 'agenda',
+      editMode: 'coordina',
+      pautas: [pauta],
+      viewYear: 2026,
+      viewMonth: 9,
+    })
+    expect(screen.queryByText(/septiembre/i)).not.toBeInTheDocument()
+  })
+
+  it('si el guardado es rechazado por un conflicto bloqueante, el input vuelve a mostrar la fecha persistida', async () => {
+    mockFetchPautasByDate.mockResolvedValue({
+      data: [
+        {
+          id: 'p2',
+          client_name: 'Cliente B',
+          salida: '10:00',
+          llegada: '12:00',
+          recurso_ids: ['r1'],
+          status: 'programada',
+        },
+      ],
+      error: null,
+    })
+    const AV_USERS = [{ user_id: 'r1', first_name: 'Nadia', last_name: 'Torres', deleted_at: null }]
+    const pauta = {
+      id: 'p1',
+      client_name: 'Cliente A',
+      status: 'programada',
+      formats: [],
+      recurso_ids: ['r1'],
+      pauta_date: '2026-09-04',
+      salida: '09:00',
+      llegada: '11:00',
+    }
+    renderTable({
+      initialPhase: 'agenda',
+      editMode: 'coordina',
+      audiovisualUsers: AV_USERS,
+      resourceUsersById: new Map(AV_USERS.map((u) => [u.user_id, u])),
+      pautas: [pauta],
+    })
+
+    const dateInput = screen.getByDisplayValue('2026-09-04')
+    fireEvent.blur(dateInput, { target: { value: '2026-09-10' } })
+
+    // El remonte forzado (revertTick) hace que el input vuelva a mostrar la fecha original,
+    // ya que el conflicto bloqueante impidió el guardado.
+    await waitFor(() => expect(screen.getByDisplayValue('2026-09-04')).toBeInTheDocument())
+    expect(mockUpdatePauta).not.toHaveBeenCalled()
   })
 })

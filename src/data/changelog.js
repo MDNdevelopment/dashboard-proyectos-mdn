@@ -75,6 +75,8 @@ export const CHANGELOG = [
       'Ahora puedes registrar teléfono, fecha de ingreso y fecha de cumpleaños al crear un empleado nuevo (antes solo se podía agregar editándolo después).',
       'El selector de fecha ahora permite saltar rápido entre años y meses eligiéndolos de una lista, en vez de tener que avanzar mes por mes — útil para poner fechas de nacimiento antiguas.',
       'Corregido: en Audiovisual → Realizadas, la columna "Recursos" solo mostraba a quién grabó; ahora también muestra a quién editó cada pieza (empleados o recursos externos de edición).',
+      'En Audiovisual, al asignar un Recurso ahora se revisa su disponibilidad ese día. Si los horarios de las dos pautas se pisan de verdad, no se permite asignarlo y se indica con cuál choca. Si el choque es solo probable —porque la otra pauta no tiene hora de cierre y se asumen 3 horas de duración—, o si la persona quedaría con 3 o más pautas ese día, aparece un aviso para confirmar o cancelar.',
+      'Corregido: en Audiovisual → Solicitudes y Agenda, al corregir la fecha u hora de una pauta la fila ya no se pierde. Ahora se resalta un momento si cambia de lugar en la tabla, y si la nueva fecha cae en otro mes se queda visible con un aviso para saltar directo a ese mes.',
     ],
   },
   {

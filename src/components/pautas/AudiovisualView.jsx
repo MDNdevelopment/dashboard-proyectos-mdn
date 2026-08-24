@@ -8,6 +8,7 @@ import {
   nextAgendaDeadline,
   pautasInScope,
   pautasInMonth,
+  isOutOfMonth,
   externalAsUser,
   externalUsersForRole,
 } from '../../utils/audiovisual'
@@ -67,6 +68,10 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
   // Filtro del calendario, controlado únicamente por los SummaryCard de arriba
   // (Todas/Agendadas/Realizadas) — deliberadamente independiente de `phase`.
   const [calendarFilter, setCalendarFilter] = useState('todas')
+  // Ids de pautas "ancladas": se editó su fecha a un mes distinto del que se está viendo
+  // y se mantienen visibles en AvPhaseTable (con aviso) en vez de desaparecer de golpe.
+  // Es estado transitorio — se limpia al cambiar de mes/pestaña o recargar, nunca persiste.
+  const [pinnedIds, setPinnedIds] = useState(() => new Set())
 
   const defaultLineId = !canViewAll ? (lines[0]?.id ?? null) : null
   const scopeLine = canViewAll ? (scopeLineId === ALL_LINES ? null : scopeLineId) : defaultLineId
@@ -84,6 +89,7 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
     setEmployees(employeesRes.data ?? [])
     setPiezas(piezasRes.data ?? [])
     setExternalResources(externalRes.data ?? [])
+    setPinnedIds(new Set())
     setLoading(false)
   }, [companyId])
 
@@ -146,6 +152,11 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
       return exists ? prev.map((p) => (p.id === pauta.id ? pauta : p)) : [...prev, pauta]
     })
     setDetailPauta((prev) => (prev && prev.id === pauta.id ? pauta : prev))
+    // Si la edición le puso una fecha de otro mes, se ancla para que no desaparezca de
+    // AvPhaseTable de golpe — ver `monthPautas` más abajo y el aviso "↗ mes" en las filas.
+    if (isOutOfMonth(pauta, year, month)) {
+      setPinnedIds((prev) => (prev.has(pauta.id) ? prev : new Set(prev).add(pauta.id)))
+    }
   }
 
   // Solo para el borrado DEFINITIVO desde la Papelera (AvPhaseTable → ConfirmDeleteDialog) —
@@ -211,8 +222,13 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
   // AvPhaseTable, que necesita verlas para poder listarlas en la pestaña Papelera. Todo lo
   // demás (calendario, recuadros de resumen, analítica) debe excluirlas explícitamente —
   // una pauta en la papelera no es "programada"/"realizada" a efectos de esas vistas.
-  const monthPautas = pautasInMonth(scopedPautas, year, month)
-  const visiblePautas = monthPautas.filter((p) => !p.deleted_at)
+  //
+  // `monthPautas` incluye además las pautas "ancladas" (`pinnedIds`): se les cambió la fecha
+  // a otro mes y se mantienen visibles en AvPhaseTable con un aviso, en vez de desaparecer.
+  // Los recuadros de resumen y AvAnalytics usan `visiblePautas`, que NO ancla nada — una
+  // pauta anclada de otro mes no debe seguir contando como "Agendada"/"Realizada" de este mes.
+  const monthPautas = pautasInMonth(scopedPautas, year, month, pinnedIds)
+  const visiblePautas = pautasInMonth(scopedPautas, year, month).filter((p) => !p.deleted_at)
 
   const { deadline } = nextAgendaDeadline()
   // "Agendadas" = pautas con status 'programada' (con o sin fecha) — mismo número que la
@@ -319,7 +335,10 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
         month={month}
         pautas={visibleScopedPautas}
         statusFilter={calendarStatusFilter}
-        onMonthChange={(y, m) => setPeriod({ year: y, month: m })}
+        onMonthChange={(y, m) => {
+          setPeriod({ year: y, month: m })
+          setPinnedIds(new Set())
+        }}
         onDayClick={setDayDetail}
         onPautaClick={setDetailPauta}
       />
@@ -332,12 +351,22 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
           audiovisualUsers={recursoOptions}
           editorUsers={editorOptions}
           allEmployees={employees.filter((u) => !u.deleted_at)}
+          resourceUsersById={usersById}
           companyId={companyId}
           userId={userProfile?.user_id}
           defaultLineId={defaultLineId}
           editMode={editMode}
           phase={phase}
-          onPhaseChange={setPhase}
+          onPhaseChange={(p) => {
+            setPhase(p)
+            setPinnedIds(new Set())
+          }}
+          viewYear={year}
+          viewMonth={month}
+          onGoToMonth={(y, m) => {
+            setPeriod({ year: y, month: m })
+            setPinnedIds(new Set())
+          }}
           onChanged={handleChanged}
           onDeleted={handleDeleted}
           onPautaClick={setDetailPauta}

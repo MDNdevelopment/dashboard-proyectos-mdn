@@ -9,6 +9,10 @@ import {
   requesterName,
   pautasInScope,
   pautasInMonth,
+  isOutOfMonth,
+  monthLabel,
+  agendaSortKey,
+  sortAgenda,
   avEditMode,
   briefComplete,
   visibleSolicitudes,
@@ -24,6 +28,10 @@ import {
   isExternalId,
   externalAsUser,
   externalUsersForRole,
+  timeRangesOverlap,
+  assumedEnd,
+  resourceConflicts,
+  RESOURCE_DAILY_LIMIT,
 } from '../utils/audiovisual'
 
 function pauta(overrides = {}) {
@@ -215,6 +223,84 @@ describe('pautasInMonth', () => {
     ]
     expect(pautasInMonth(pautas, 2026, 7).map((p) => p.id)).toEqual(['p1'])
     expect(pautasInMonth(pautas, 2026, 12).map((p) => p.id)).toEqual(['p1'])
+  })
+
+  it('sin pinnedIds se comporta igual que antes (una pauta de otro mes no aparece)', () => {
+    const pautas = [pauta({ id: 'p1', pauta_date: '2026-08-02' })]
+    expect(pautasInMonth(pautas, 2026, 7).map((p) => p.id)).toEqual([])
+  })
+
+  it('con pinnedIds, una pauta anclada aparece aunque su fecha sea de otro mes', () => {
+    const pautas = [
+      pauta({ id: 'p1', pauta_date: '2026-08-02' }),
+      pauta({ id: 'p2', pauta_date: '2026-07-10' }),
+    ]
+    const pinned = new Set(['p1'])
+    expect(pautasInMonth(pautas, 2026, 7, pinned).map((p) => p.id)).toEqual(['p1', 'p2'])
+  })
+})
+
+describe('isOutOfMonth', () => {
+  it('false si la pauta no tiene fecha', () => {
+    expect(isOutOfMonth(pauta({ pauta_date: null }), 2026, 7)).toBe(false)
+  })
+
+  it('false si la fecha cae en el año/mes dado', () => {
+    expect(isOutOfMonth(pauta({ pauta_date: '2026-07-15' }), 2026, 7)).toBe(false)
+  })
+
+  it('true si la fecha cae en otro mes o año', () => {
+    expect(isOutOfMonth(pauta({ pauta_date: '2026-08-15' }), 2026, 7)).toBe(true)
+    expect(isOutOfMonth(pauta({ pauta_date: '2027-07-15' }), 2026, 7)).toBe(true)
+  })
+})
+
+describe('monthLabel', () => {
+  it('devuelve mes y año en español', () => {
+    expect(monthLabel('2026-09-15')).toMatch(/septiembre/i)
+    expect(monthLabel('2026-09-15')).toMatch(/2026/)
+  })
+
+  it('vacío si no hay fecha', () => {
+    expect(monthLabel(null)).toBe('')
+  })
+})
+
+describe('sortAgenda', () => {
+  it('ordena por fecha y luego por hora de salida', () => {
+    const pautas = [
+      pauta({ id: 'p1', pauta_date: '2026-07-20', salida: '10:00' }),
+      pauta({ id: 'p2', pauta_date: '2026-07-15', salida: '14:00' }),
+      pauta({ id: 'p3', pauta_date: '2026-07-15', salida: '09:00' }),
+    ]
+    expect(sortAgenda(pautas).map((p) => p.id)).toEqual(['p3', 'p2', 'p1'])
+  })
+
+  it('las pautas sin fecha quedan al final', () => {
+    const pautas = [
+      pauta({ id: 'p1', pauta_date: null }),
+      pauta({ id: 'p2', pauta_date: '2026-07-15', salida: '09:00' }),
+    ]
+    expect(sortAgenda(pautas).map((p) => p.id)).toEqual(['p2', 'p1'])
+  })
+
+  it('es estable: pautas con la misma clave conservan siempre el mismo orden relativo', () => {
+    const pautas = [
+      pauta({ id: 'pb', pauta_date: '2026-07-15', salida: '09:00' }),
+      pauta({ id: 'pa', pauta_date: '2026-07-15', salida: '09:00' }),
+    ]
+    const once = sortAgenda(pautas).map((p) => p.id)
+    const twice = sortAgenda(sortAgenda(pautas)).map((p) => p.id)
+    expect(twice).toEqual(once)
+  })
+
+  it('agendaSortKey compone fecha+hora con las pautas sin dato al final', () => {
+    expect(agendaSortKey(pauta({ pauta_date: '2026-07-15', salida: '09:00' }))).toBe(
+      '2026-07-15T09:00000',
+    )
+    const sinDato = agendaSortKey(pauta({ pauta_date: null, salida: null }))
+    const conDato = agendaSortKey(pauta({ pauta_date: '2026-12-31', salida: '23:59' }))
+    expect(sinDato > conDato).toBe(true)
   })
 })
 
@@ -698,5 +784,184 @@ describe('recursos externos integrados en los helpers de resolución existentes'
     const piezasByPauta = new Map([['p1', [{ editor_user_id: 'ext:r1', status: 'listo' }]]])
     const result = aggregateByResource(pautas, usersById, piezasByPauta)
     expect(result).toContainEqual({ name: 'Alan Puentes', graba: 0, edita: 1 })
+  })
+})
+
+describe('timeRangesOverlap', () => {
+  it('solapa cuando los rangos se cruzan', () => {
+    expect(timeRangesOverlap('09:00', '11:00', '10:00', '12:00')).toBe(true)
+  })
+
+  it('no solapa cuando son adyacentes (semiabierto [inicio, fin))', () => {
+    expect(timeRangesOverlap('09:00', '11:00', '11:00', '13:00')).toBe(false)
+  })
+
+  it('solapa cuando un rango contiene al otro', () => {
+    expect(timeRangesOverlap('09:00', '13:00', '10:00', '11:00')).toBe(true)
+  })
+
+  it('no solapa cuando no se cruzan en absoluto', () => {
+    expect(timeRangesOverlap('09:00', '10:00', '11:00', '12:00')).toBe(false)
+  })
+
+  it('sin horas en ninguno de los dos lados no se puede afirmar solapamiento', () => {
+    expect(timeRangesOverlap(null, null, null, null)).toBe(false)
+    expect(timeRangesOverlap(undefined, undefined, '09:00', '10:00')).toBe(false)
+  })
+
+  it('un rango solo con salida (instante) solapa si cae dentro del otro rango', () => {
+    expect(timeRangesOverlap('10:30', null, '10:00', '12:00')).toBe(true)
+    expect(timeRangesOverlap('12:00', null, '10:00', '12:00')).toBe(false) // fin exclusivo
+    expect(timeRangesOverlap('13:00', null, '10:00', '12:00')).toBe(false)
+  })
+
+  it('dos instantes solo solapan si son exactamente iguales', () => {
+    expect(timeRangesOverlap('10:00', null, '10:00', null)).toBe(true)
+    expect(timeRangesOverlap('10:00', null, '10:05', null)).toBe(false)
+  })
+})
+
+describe('assumedEnd', () => {
+  it('suma la ventana asumida a la hora de salida', () => {
+    expect(assumedEnd('13:00')).toBe('16:00')
+    expect(assumedEnd('09:30')).toBe('12:30')
+  })
+
+  it('acepta el formato time de Postgres (HH:MM:SS)', () => {
+    expect(assumedEnd('13:00:00')).toBe('16:00')
+  })
+
+  it('topa al final del día en vez de derramarse al siguiente', () => {
+    expect(assumedEnd('22:00')).toBe('24:00')
+    expect(assumedEnd('23:45')).toBe('24:00')
+  })
+
+  it('sin salida no hay fin que asumir', () => {
+    expect(assumedEnd(null)).toBe(null)
+    expect(assumedEnd(undefined)).toBe(null)
+    expect(assumedEnd('')).toBe(null)
+  })
+})
+
+describe('resourceConflicts', () => {
+  const usersById = new Map([
+    ['r1', { first_name: 'Nadia', last_name: 'Torres' }],
+    ['ext:r2', { first_name: 'Alan', last_name: 'Puentes' }],
+  ])
+
+  it('sin conflicto: no hay bloqueos ni avisos', () => {
+    const candidate = { recurso_ids: ['r1'], salida: '09:00', llegada: '11:00' }
+    const sameDay = [
+      { id: 'p2', recurso_ids: ['r1'], salida: '12:00', llegada: '13:00', client_name: 'B' },
+    ]
+    const result = resourceConflicts(candidate, sameDay, usersById)
+    expect(result.blocking).toEqual([])
+    expect(result.warnings).toEqual([])
+  })
+
+  it('bloquea cuando el recurso ya está en una pauta del día con horario solapado', () => {
+    const candidate = { recurso_ids: ['r1'], salida: '09:00', llegada: '11:00' }
+    const clashing = {
+      id: 'p2',
+      recurso_ids: ['r1'],
+      salida: '10:00',
+      llegada: '12:00',
+      client_name: 'B',
+    }
+    const result = resourceConflicts(candidate, [clashing], usersById)
+    expect(result.blocking).toEqual([{ resourceId: 'r1', name: 'Nadia Torres', pauta: clashing }])
+  })
+
+  it('avisa cuando el recurso llega al límite diario y no bloquea', () => {
+    const candidate = { recurso_ids: ['r1'], salida: null, llegada: null }
+    const sameDay = [
+      { id: 'p2', recurso_ids: ['r1'], salida: null, llegada: null, client_name: 'B' },
+      { id: 'p3', recurso_ids: ['r1'], salida: null, llegada: null, client_name: 'C' },
+    ]
+    const result = resourceConflicts(candidate, sameDay, usersById)
+    expect(result.blocking).toEqual([])
+    expect(result.warnings).toEqual([
+      { kind: 'daily_limit', resourceId: 'r1', name: 'Nadia Torres', count: RESOURCE_DAILY_LIMIT },
+    ])
+  })
+
+  it('no repite el aviso si el recurso ya tenía el límite y no cambió (previousRecursoIds)', () => {
+    const candidate = { recurso_ids: ['r1'], salida: null, llegada: null }
+    const sameDay = [
+      { id: 'p2', recurso_ids: ['r1'], salida: null, llegada: null, client_name: 'B' },
+      { id: 'p3', recurso_ids: ['r1'], salida: null, llegada: null, client_name: 'C' },
+    ]
+    const result = resourceConflicts(candidate, sameDay, usersById, ['r1'])
+    expect(result.warnings).toEqual([])
+  })
+
+  // Ventana asumida de 3 h para pautas sin hora de llegada: el choque deja de ser un hecho
+  // y pasa a ser una suposición, así que avisa (confirmable) en vez de bloquear.
+  it('avisa (no bloquea) cuando el choque solo existe bajo la ventana asumida de 3 h', () => {
+    // Existente 13:00 sin cierre → se asume 13:00–16:00. Nueva a las 15:00 cae dentro.
+    const candidate = { recurso_ids: ['r1'], salida: '15:00', llegada: null }
+    const existente = {
+      id: 'p2',
+      recurso_ids: ['r1'],
+      salida: '13:00',
+      llegada: null,
+      client_name: 'B',
+    }
+    const result = resourceConflicts(candidate, [existente], usersById)
+
+    expect(result.blocking).toEqual([])
+    expect(result.warnings).toEqual([
+      { kind: 'probable_overlap', resourceId: 'r1', name: 'Nadia Torres', pauta: existente },
+    ])
+  })
+
+  it('fuera de la ventana asumida de 3 h no avisa nada', () => {
+    // Existente 13:00 sin cierre → 13:00–16:00. Nueva a las 16:30 queda fuera.
+    const candidate = { recurso_ids: ['r1'], salida: '16:30', llegada: null }
+    const existente = { id: 'p2', recurso_ids: ['r1'], salida: '13:00', llegada: null }
+    const result = resourceConflicts(candidate, [existente], usersById)
+
+    expect(result.blocking).toEqual([])
+    expect(result.warnings).toEqual([])
+  })
+
+  it('sigue BLOQUEANDO cuando el choque se deduce de horas reales, sin suponer nada', () => {
+    // La nueva sale 14:00 (sin cierre) y la existente es 14:00–14:30 real: el instante de
+    // salida cae dentro de un rango conocido, así que el choque es un hecho, no una hipótesis.
+    const candidate = { recurso_ids: ['r1'], salida: '14:00', llegada: null }
+    const existente = {
+      id: 'p2',
+      recurso_ids: ['r1'],
+      salida: '14:00',
+      llegada: '14:30',
+      client_name: 'RE/MAX',
+    }
+    const result = resourceConflicts(candidate, [existente], usersById)
+
+    expect(result.blocking).toHaveLength(1)
+    expect(result.warnings).toEqual([])
+  })
+
+  it('el aviso de solape probable no se filtra por previousRecursoIds (mover la hora debe avisar)', () => {
+    const candidate = { recurso_ids: ['r1'], salida: '15:00', llegada: null }
+    const existente = { id: 'p2', recurso_ids: ['r1'], salida: '13:00', llegada: null }
+    // 'r1' ya estaba asignado antes del cambio: aun así debe avisar, porque lo que cambió
+    // fue el horario.
+    const result = resourceConflicts(candidate, [existente], usersById, ['r1'])
+
+    expect(result.warnings.map((w) => w.kind)).toEqual(['probable_overlap'])
+  })
+
+  it('trata un recurso externo (ext:) igual que un empleado', () => {
+    const candidate = { recurso_ids: ['ext:r2'], salida: '09:00', llegada: '10:00' }
+    const clashing = {
+      id: 'p2',
+      recurso_ids: ['ext:r2'],
+      salida: '09:30',
+      llegada: '10:30',
+      client_name: 'B',
+    }
+    const result = resourceConflicts(candidate, [clashing], usersById)
+    expect(result.blocking[0].name).toBe('Alan Puentes')
   })
 })

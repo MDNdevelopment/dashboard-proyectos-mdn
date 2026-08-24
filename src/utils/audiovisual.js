@@ -270,6 +270,137 @@ export function externalUsersForRole(externalResources, role) {
     .map(externalAsUser)
 }
 
+// ─── Disponibilidad de recursos (Agenda) ───────────────────────────────────
+
+/** A partir de cuántas pautas del mismo día se avisa que un recurso está sobrecargado. */
+export const RESOURCE_DAILY_LIMIT = 3
+
+/**
+ * Duración que se ASUME para una pauta sin hora de llegada. No es un dato real: muchas
+ * pautas se agendan sin cierre, así que para poder detectar choques probables se les
+ * atribuye esta ventana. Al ser una suposición, un choque que dependa de ella nunca
+ * bloquea — solo avisa (ver `resourceConflicts`).
+ */
+export const ASSUMED_DURATION_HOURS = 3
+
+/** Normaliza 'HH:MM:SS' (formato `time` de Postgres) a 'HH:MM' para comparar como string. */
+function hhmm(value) {
+  return value ? String(value).slice(0, 5) : value
+}
+
+/**
+ * Fin asumido de una pauta sin `llegada`: `salida` + ASSUMED_DURATION_HOURS, topado al
+ * final del día (una pauta no se derrama al día siguiente a efectos de disponibilidad).
+ * @param {string|null} salida  'HH:MM' o 'HH:MM:SS'
+ * @returns {string|null} 'HH:MM', o null si no hay salida
+ */
+export function assumedEnd(salida) {
+  if (!salida) return null
+  const [h, m] = hhmm(salida).split(':').map(Number)
+  const end = h + ASSUMED_DURATION_HOURS
+  return end >= 24 ? '24:00' : `${pad(end)}:${pad(m)}`
+}
+
+/**
+ * Compara dos rangos horarios ('HH:MM' o 'HH:MM:SS') y devuelve true si se solapan. Los
+ * rangos son SEMIABIERTOS [inicio, fin): una pauta que llega a las 11:00 y otra que sale a
+ * las 11:00 NO se consideran solapadas (la agenda se arma en bloques consecutivos).
+ *
+ * Un rango con inicio pero SIN fin se trata como un instante — solo se afirma lo que se
+ * sabe con certeza: que el recurso está ocupado en ese momento exacto. Rellenar el fin con
+ * una duración estimada es responsabilidad del llamador (ver `assumedEnd`), justamente para
+ * que "seguro" y "probable" no se confundan.
+ */
+export function timeRangesOverlap(aStart, aEnd, bStart, bEnd) {
+  const [as, ae, bs, be] = [aStart, aEnd, bStart, bEnd].map(hhmm)
+  const missing = (start, end) => !start && !end
+  const isInstant = (start, end) => Boolean(start) && !end
+
+  if (missing(as, ae) || missing(bs, be)) return false
+
+  if (isInstant(as, ae) && isInstant(bs, be)) return as === bs
+  if (isInstant(as, ae)) return as >= bs && as < be
+  if (isInstant(bs, be)) return bs >= as && bs < ae
+
+  return as < be && bs < ae
+}
+
+/** Solapamiento usando la ventana asumida de 3 h cuando falta la hora de llegada. */
+function assumedRangesOverlap(a, b) {
+  return timeRangesOverlap(
+    a.salida,
+    a.llegada ?? assumedEnd(a.salida),
+    b.salida,
+    b.llegada ?? assumedEnd(b.salida),
+  )
+}
+
+/**
+ * Conflictos de disponibilidad al asignar `candidate.recurso_ids` (la pauta YA con los
+ * cambios propuestos aplicados, no la pauta original). `sameDayPautas` son las demás
+ * pautas activas ('programada'|'realizada') del mismo `pauta_date`, en CUALQUIER línea
+ * (la disponibilidad de un recurso no respeta el alcance por línea que ve la coordinadora)
+ * y sin incluir a `candidate` mismo.
+ *
+ * Hay DOS niveles de certeza, y de ahí que un choque de horario a veces bloquee y a veces
+ * solo avise:
+ *
+ * - `blocking`: el choque es un HECHO, porque se deduce solo de horas reales guardadas
+ *   (`timeRangesOverlap` trata una pauta sin `llegada` como el instante de su salida —
+ *   no inventa duración). Basta un choque para bloquear el guardado completo.
+ * - `warnings` de tipo `probable_overlap`: los rangos NO chocan con las horas reales, pero
+ *   sí al rellenar la `llegada` faltante con `ASSUMED_DURATION_HOURS`. Como el choque
+ *   depende de una suposición, se pregunta en vez de bloquear.
+ * - `warnings` de tipo `daily_limit`: el recurso alcanza `RESOURCE_DAILY_LIMIT` pautas ese
+ *   día. Solo se avisa por recursos nuevos respecto a `previousRecursoIds`, para no repetir
+ *   el aviso al tocar otro campo de una pauta que ya tenía 3+ y no cambió sus recursos.
+ *   `probable_overlap` NO se filtra por `previousRecursoIds`: mover la hora de una pauta con
+ *   recursos ya asignados es justamente cuando puede nacer un choque nuevo.
+ * @param {object} candidate  { recurso_ids, pauta_date, salida, llegada, ... }
+ * @param {Array} sameDayPautas
+ * @param {Map<string,object>} usersById
+ * @param {string[]} [previousRecursoIds]  recurso_ids antes del cambio (para no repetir avisos)
+ * @returns {{blocking: Array<{resourceId:string,name:string,pauta:object}>, warnings: Array<object>}}
+ */
+export function resourceConflicts(candidate, sameDayPautas, usersById, previousRecursoIds = []) {
+  const recursos = candidate.recurso_ids ?? []
+  const prevSet = new Set(previousRecursoIds)
+  const nameOf = (id) => {
+    const u = usersById?.get(id)
+    return u ? `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() : id
+  }
+
+  const blocking = []
+  const warnings = []
+
+  recursos.forEach((resourceId) => {
+    const pautasDelRecurso = sameDayPautas.filter((p) => (p.recurso_ids ?? []).includes(resourceId))
+    const name = nameOf(resourceId)
+
+    const clash = pautasDelRecurso.find((p) =>
+      timeRangesOverlap(candidate.salida, candidate.llegada, p.salida, p.llegada),
+    )
+    if (clash) {
+      blocking.push({ resourceId, name, pauta: clash })
+      return // un choque seguro ya bloquea; no hace falta además avisar nada más
+    }
+
+    const probable = pautasDelRecurso.find((p) => assumedRangesOverlap(candidate, p))
+    if (probable) {
+      warnings.push({ kind: 'probable_overlap', resourceId, name, pauta: probable })
+    }
+
+    if (!prevSet.has(resourceId)) {
+      const count = pautasDelRecurso.length + 1 // + la propia `candidate`
+      if (count >= RESOURCE_DAILY_LIMIT) {
+        warnings.push({ kind: 'daily_limit', resourceId, name, count })
+      }
+    }
+  })
+
+  return { blocking, warnings }
+}
+
 // ─── Alcance por línea ──────────────────────────────────────────────────────
 
 /** Pautas dentro del alcance de una línea, o todas si `lineId` es null/undefined. */
@@ -286,11 +417,45 @@ export function pautasInScope(pautas, lineId) {
  * importar el mes — de lo contrario desaparecerían de la tabla hasta que alguien les
  * ponga fecha, escondiendo justo lo que falta agendar.
  */
-export function pautasInMonth(pautas, year, month) {
+export function pautasInMonth(pautas, year, month, pinnedIds = null) {
   return pautas.filter((p) => {
     if (!p.pauta_date) return true
+    if (pinnedIds?.has(p.id)) return true
     const [y, m] = p.pauta_date.split('-').map(Number)
     return y === year && m === month
+  })
+}
+
+/** true si la pauta tiene fecha y esa fecha cae fuera del año/mes que se está viendo. */
+export function isOutOfMonth(pauta, year, month) {
+  if (!pauta.pauta_date) return false
+  const [y, m] = pauta.pauta_date.split('-').map(Number)
+  return y !== year || m !== month
+}
+
+/** Nombre del mes+año de una fecha 'YYYY-MM-DD', para el aviso "↗ mes" de una fila anclada. */
+export function monthLabel(dateStr) {
+  if (!dateStr) return ''
+  const [y, m, d] = dateStr.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString('es-VE', { month: 'long', year: 'numeric' })
+}
+
+/** Clave de orden de la Agenda: fecha + hora de salida, sin fecha al final. */
+export function agendaSortKey(p) {
+  return `${p.pauta_date || '9999-99-99'}T${(p.salida || '99:99:99').padEnd(8, '0')}`
+}
+
+/**
+ * Orden estable de la Agenda por fecha+salida, desempatando por id — evita que dos pautas
+ * con la misma clave (p. ej. sin fecha) intercambien posición entre renders sin haber
+ * cambiado nada.
+ */
+export function sortAgenda(pautas) {
+  return [...pautas].sort((a, b) => {
+    const ka = agendaSortKey(a)
+    const kb = agendaSortKey(b)
+    if (ka !== kb) return ka < kb ? -1 : 1
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
   })
 }
 

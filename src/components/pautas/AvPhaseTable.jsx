@@ -1,12 +1,14 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import AttendeePicker from '../reuniones/AttendeePicker'
 import ConfirmDeleteDialog from '../common/ConfirmDeleteDialog'
+import ResourceWarningDialog from './ResourceWarningDialog'
 import {
   createPauta,
   updatePauta,
   deletePauta,
   restorePauta,
   permanentlyDeletePauta,
+  fetchPautasByDate,
 } from './avPautasApi'
 import { fmtDate } from '../../utils/formatDate'
 import {
@@ -16,6 +18,7 @@ import {
   LIFECYCLE_LABELS,
   formatCodes,
   formatDayShort,
+  formatTime12,
   resourceNames,
   editorNames,
   requesterName,
@@ -23,7 +26,14 @@ import {
   visibleSolicitudes,
   grillaStatus,
   piezasProgress,
+  resourceConflicts,
+  sortAgenda,
+  isOutOfMonth,
+  monthLabel,
 } from '../../utils/audiovisual'
+
+/** Campos que, al cambiar, pueden crear un conflicto de disponibilidad de recursos. */
+const AVAILABILITY_FIELDS = ['recurso_ids', 'pauta_date', 'salida', 'llegada']
 
 const PHASES = [
   { key: 'solicitudes', label: 'Solicitudes' },
@@ -46,12 +56,16 @@ export default function AvPhaseTable({
   audiovisualUsers,
   editorUsers,
   allEmployees,
+  resourceUsersById,
   companyId,
   userId,
   defaultLineId,
   editMode,
   phase,
   onPhaseChange,
+  viewYear,
+  viewMonth,
+  onGoToMonth,
   onChanged,
   onDeleted,
   onPautaClick,
@@ -64,6 +78,22 @@ export default function AvPhaseTable({
   const [permanentDeleting, setPermanentDeleting] = useState(false)
   const [expandedAttendeesId, setExpandedAttendeesId] = useState(null)
   const [expandedRecursosId, setExpandedRecursosId] = useState(null)
+  // Asignación de recursos con aviso de sobrecarga (3+ pautas el mismo día) pendiente de
+  // confirmar — ver handleFields/resourceConflicts. `null` = sin diálogo abierto.
+  const [pendingAssign, setPendingAssign] = useState(null)
+  // Conflicto de horario que bloqueó una asignación, anclado a SU fila (`{pautaId, message}`)
+  // en vez de al banner `error` de la cabecera: se pinta dentro del selector de Recursos,
+  // que es donde el usuario está mirando cuando ocurre. Ver handleFields.
+  const [assignError, setAssignError] = useState(null)
+  // Fila que acaba de cambiar de fecha/hora: se resalta unos segundos y se hace scroll hacia
+  // ella si quedó fuera de vista tras el reordenamiento de Agenda — ver commitFields.
+  const [highlightId, setHighlightId] = useState(null)
+  const highlightTimerRef = useRef(null)
+  useEffect(() => () => clearTimeout(highlightTimerRef.current), [])
+  // Se incrementa cuando un guardado de fecha/hora es rechazado por un conflicto bloqueante
+  // (ver handleFields): fuerza el remonte de los inputs no controlados de esa fila para que
+  // vuelvan a mostrar el valor persistido en vez del que el usuario tecleó y no se guardó.
+  const [revertTick, setRevertTick] = useState(0)
   const tableScrollRef = useRef(null)
   // El card de la tabla vive debajo del calendario, que puede ser bastante alto — al
   // solicitar/agregar una pauta el renglón nuevo aparece arriba de la tabla pero fuera de
@@ -89,6 +119,9 @@ export default function AvPhaseTable({
   function toggleRecursos(id) {
     setExpandedRecursosId(id)
     setExpandedAttendeesId(null)
+    // El conflicto pertenece al panel que se está cerrando/cambiando: no debe sobrevivir
+    // a la reapertura del selector ni saltar a la fila de otra pauta.
+    setAssignError(null)
     if (id) scrollTableToStart()
   }
   // Borradores 100% locales del rol "solicita" (jefe de línea): no tocan la base de datos
@@ -113,11 +146,7 @@ export default function AvPhaseTable({
 
   const solicitudes = visibleSolicitudes(activePautas, { canCoordinate })
   const declinadas = activePautas.filter((p) => p.status === 'declinada')
-  const agenda = [...activePautas.filter((p) => p.status === 'programada')].sort((a, b) =>
-    (a.pauta_date || '9999') + (a.salida || '') < (b.pauta_date || '9999') + (b.salida || '')
-      ? -1
-      : 1,
-  )
+  const agenda = sortAgenda(activePautas.filter((p) => p.status === 'programada'))
   const realizadas = activePautas.filter((p) => p.status === 'realizada')
 
   const counts = {
@@ -127,7 +156,7 @@ export default function AvPhaseTable({
     papelera: papelera.length,
   }
 
-  async function handleFields(pauta, fields) {
+  async function commitFields(pauta, fields) {
     setError(null)
     const { data, error: err } = await updatePauta(pauta.id, fields)
     if (err) {
@@ -135,6 +164,88 @@ export default function AvPhaseTable({
       return
     }
     onChanged(data)
+    // Cambiar fecha/hora puede mover la fila (reordenamiento de Agenda) o sacarla del mes
+    // visible (queda anclada por AudiovisualView) — resaltarla brevemente para que no se
+    // pierda de vista en ninguno de los dos casos.
+    if (['pauta_date', 'salida', 'llegada'].some((key) => key in fields)) {
+      clearTimeout(highlightTimerRef.current)
+      setHighlightId(pauta.id)
+      highlightTimerRef.current = setTimeout(() => setHighlightId(null), 2500)
+    }
+  }
+
+  // `recurso_ids`/`pauta_date`/`salida`/`llegada` son los únicos campos que pueden crear
+  // un conflicto de disponibilidad (ver resourceConflicts). El resto de los campos editables
+  // de la fila (cliente, tema, formatos, asistentes...) se guarda directo, sin consultar
+  // la base — evita una consulta de red en cada tecla/blur que no la necesita.
+  async function handleFields(pauta, fields) {
+    const touchesAvailability = AVAILABILITY_FIELDS.some((key) => key in fields)
+    if (!touchesAvailability) {
+      await commitFields(pauta, fields)
+      return
+    }
+
+    const next = { ...pauta, ...fields }
+    if (!next.pauta_date || !(next.recurso_ids ?? []).length) {
+      await commitFields(pauta, fields)
+      return
+    }
+
+    setError(null)
+    setAssignError(null)
+    const { data: sameDay, error: fetchErr } = await fetchPautasByDate(
+      companyId,
+      next.pauta_date,
+      pauta.id,
+    )
+    if (fetchErr) {
+      setError(fetchErr.message)
+      return
+    }
+
+    const { blocking, warnings } = resourceConflicts(
+      next,
+      sameDay ?? [],
+      resourceUsersById,
+      pauta.recurso_ids ?? [],
+    )
+
+    if (blocking.length) {
+      const first = blocking[0]
+      const range =
+        first.pauta.salida || first.pauta.llegada
+          ? `${formatTime12(first.pauta.salida) || '—'} – ${formatTime12(first.pauta.llegada) || '—'}`
+          : 'sin horario definido'
+      // El aviso se ancla a la fila (no al banner de la cabecera del card): la tabla es
+      // larga y el usuario está mirando el selector de Recursos, muy por debajo del
+      // encabezado — un error pintado arriba del todo queda fuera de pantalla y parece
+      // que "no pasó nada".
+      setAssignError({
+        pautaId: pauta.id,
+        message:
+          `${first.name} ya está en la pauta de ${first.pauta.client_name || 'sin cliente'} ` +
+          `(${range}) ese día. Ajusta el horario o elige otro recurso.`,
+      })
+      // El guardado no ocurrió, pero los inputs de fecha/hora no son controlados (defaultValue)
+      // y siguen mostrando lo que el usuario tecleó — forzar su remonte para que vuelvan a
+      // reflejar el valor realmente persistido.
+      setRevertTick((n) => n + 1)
+      return
+    }
+
+    if (warnings.length) {
+      setPendingAssign({ pauta, fields, warnings, pautaDate: next.pauta_date })
+      return
+    }
+
+    await commitFields(pauta, fields)
+  }
+
+  async function handleConfirmPendingAssign() {
+    if (!pendingAssign) return
+    const { pauta, fields } = pendingAssign
+    setPendingAssign(null)
+    await commitFields(pauta, fields)
   }
 
   // "+ Solicitar pauta" (rol solicita) agrega un borrador solo en memoria; "+ Agregar pauta"
@@ -314,6 +425,11 @@ export default function AvPhaseTable({
             confirmingId={confirmingId}
             onFields={handleFields}
             onDelete={handleDelete}
+            highlightId={highlightId}
+            revertTick={revertTick}
+            viewYear={viewYear}
+            viewMonth={viewMonth}
+            onGoToMonth={onGoToMonth}
           />
         )}
         {phase === 'agenda' && (
@@ -328,8 +444,14 @@ export default function AvPhaseTable({
             onToggleAttendees={toggleAttendees}
             expandedRecursosId={expandedRecursosId}
             onToggleRecursos={toggleRecursos}
+            assignError={assignError}
             onFields={handleFields}
             onDelete={handleDelete}
+            highlightId={highlightId}
+            revertTick={revertTick}
+            viewYear={viewYear}
+            viewMonth={viewMonth}
+            onGoToMonth={onGoToMonth}
           />
         )}
         {phase === 'realizadas' && (
@@ -370,6 +492,15 @@ export default function AvPhaseTable({
           onCancel={() => setPermanentDeleteTarget(null)}
         />
       )}
+
+      {pendingAssign && (
+        <ResourceWarningDialog
+          warnings={pendingAssign.warnings}
+          dateLabel={formatDayShort(pendingAssign.pautaDate)}
+          onConfirm={handleConfirmPendingAssign}
+          onCancel={() => setPendingAssign(null)}
+        />
+      )}
     </div>
   )
 }
@@ -391,6 +522,11 @@ function SolicitudesTable({
   confirmingId,
   onFields,
   onDelete,
+  highlightId,
+  revertTick,
+  viewYear,
+  viewMonth,
+  onGoToMonth,
 }) {
   return (
     <table className="w-full border-collapse min-w-[960px]">
@@ -438,6 +574,10 @@ function SolicitudesTable({
             confirming={confirmingId === p.id}
             onFields={onFields}
             onDelete={onDelete}
+            highlighted={highlightId === p.id}
+            revertTick={revertTick}
+            outOfMonth={isOutOfMonth(p, viewYear, viewMonth)}
+            onGoToMonth={onGoToMonth}
           />
         ))}
         {declinadas.length > 0 && (
@@ -497,12 +637,21 @@ function SolicitudRow({
   confirming,
   onFields,
   onDelete,
+  highlighted = false,
+  revertTick = 0,
+  outOfMonth = false,
+  onGoToMonth,
 }) {
   const editableBrief = canCoordinate || (canEdit && !p.submitted)
   const complete = briefComplete(p)
+  const rowRef = useRef(null)
+  useScrollIntoViewWhenHighlighted(rowRef, highlighted)
 
   return (
-    <tr className="border-b border-[#f2efe6] align-top">
+    <tr
+      ref={rowRef}
+      className={`border-b border-[#f2efe6] align-top ${highlighted ? 'bg-[#FFF9E8] ring-1 ring-inset ring-[#FFB800] transition-colors duration-500' : ''}`}
+    >
       <td className="px-2 py-1.5 min-w-[160px]">
         {editableBrief ? (
           <select
@@ -544,12 +693,14 @@ function SolicitudRow({
         {editableBrief ? (
           <>
             <input
+              key={`date-${revertTick}`}
               type="date"
               className="input-base input-compact"
               defaultValue={p.pauta_date ?? ''}
               onBlur={(e) => onFields(p, { pauta_date: e.target.value || null })}
             />
             <input
+              key={`salida-${revertTick}`}
               type="time"
               className="input-base input-compact mt-0.5"
               defaultValue={p.salida ?? ''}
@@ -559,6 +710,7 @@ function SolicitudRow({
         ) : (
           <span className="text-[13px] text-[#333]">{formatDayShort(p.pauta_date)}</span>
         )}
+        {outOfMonth && <OutOfMonthChip pauta={p} onGoToMonth={onGoToMonth} />}
       </td>
       <td className="px-2 py-1.5">
         <FormatToggle pauta={p} canEdit={editableBrief} onFields={onFields} />
@@ -818,8 +970,14 @@ function AgendaTable({
   onToggleAttendees,
   expandedRecursosId,
   onToggleRecursos,
+  assignError,
   onFields,
   onDelete,
+  highlightId,
+  revertTick,
+  viewYear,
+  viewMonth,
+  onGoToMonth,
 }) {
   return (
     <table className="w-full border-collapse min-w-[980px]">
@@ -858,8 +1016,13 @@ function AgendaTable({
             onToggleAttendees={onToggleAttendees}
             expandedRecursos={expandedRecursosId === p.id}
             onToggleRecursos={onToggleRecursos}
+            assignErrorMessage={assignError?.pautaId === p.id ? assignError.message : null}
             onFields={onFields}
             onDelete={onDelete}
+            highlighted={highlightId === p.id}
+            revertTick={revertTick}
+            outOfMonth={isOutOfMonth(p, viewYear, viewMonth)}
+            onGoToMonth={onGoToMonth}
           />
         ))}
       </tbody>
@@ -878,14 +1041,24 @@ function AgendaRow({
   onToggleAttendees,
   expandedRecursos,
   onToggleRecursos,
+  assignErrorMessage,
   onFields,
   onDelete,
+  highlighted = false,
+  revertTick = 0,
+  outOfMonth = false,
+  onGoToMonth,
 }) {
   const gStatus = grillaStatus(p)
   const expanded = expandedAttendees || expandedRecursos
+  const rowRef = useRef(null)
+  useScrollIntoViewWhenHighlighted(rowRef, highlighted)
   return (
     <>
-      <tr className="border-b border-[#f2efe6] align-top">
+      <tr
+        ref={rowRef}
+        className={`border-b border-[#f2efe6] align-top ${highlighted ? 'bg-[#FFF9E8] ring-1 ring-inset ring-[#FFB800] transition-colors duration-500' : ''}`}
+      >
         <td className="px-2 py-1.5 min-w-[170px]">
           <div className="text-[14px] font-medium text-[#222]">{p.client_name || '—'}</div>
           <div className="text-[11.5px] text-[#a29b8c] mt-0.5">{p.tema}</div>
@@ -904,6 +1077,7 @@ function AgendaRow({
         <td className="px-2 py-1.5 min-w-[120px]">
           {canCoordinate ? (
             <input
+              key={`date-${revertTick}`}
               type="date"
               className="input-base input-compact"
               defaultValue={p.pauta_date ?? ''}
@@ -914,17 +1088,20 @@ function AgendaRow({
               {p.pauta_date ? formatDayShort(p.pauta_date) : 'por agendar'}
             </span>
           )}
+          {outOfMonth && <OutOfMonthChip pauta={p} onGoToMonth={onGoToMonth} />}
         </td>
         <td className="px-2 py-1.5 min-w-[140px]">
           {canCoordinate ? (
             <>
               <input
+                key={`salida-${revertTick}`}
                 type="time"
                 className="input-base input-compact"
                 defaultValue={p.salida ?? ''}
                 onBlur={(e) => onFields(p, { salida: e.target.value || null })}
               />
               <input
+                key={`llegada-${revertTick}`}
                 type="time"
                 className="input-base input-compact mt-0.5"
                 defaultValue={p.llegada ?? ''}
@@ -1007,6 +1184,14 @@ function AgendaRow({
                     ✕
                   </button>
                 </div>
+                {assignErrorMessage && (
+                  <div
+                    role="alert"
+                    className="mb-2 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-red-700 text-[12.5px]"
+                  >
+                    {assignErrorMessage}
+                  </div>
+                )}
                 <AttendeePicker
                   employees={audiovisualUsers}
                   selectedIds={p.recurso_ids ?? []}
@@ -1223,6 +1408,42 @@ function RestoreButton({ onRestore }) {
         <path d="M2 3v3.5h3.5" />
       </svg>
       Restaurar
+    </button>
+  )
+}
+
+// ─── Resaltado de fila movida / aviso de mes ───────────────────────────────
+
+/**
+ * Al resaltar una fila (recién editada), la trae a la vista si quedó fuera del viewport —
+ * pero solo entonces: si ya se ve, no se mueve el scroll, para no dar un tirón cada vez que
+ * el usuario simplemente hace blur en un input. jsdom (tests) no implementa scrollIntoView,
+ * de ahí el chequeo `typeof … === 'function'` (mismo patrón que handleCreate más arriba).
+ */
+function useScrollIntoViewWhenHighlighted(rowRef, highlighted) {
+  useEffect(() => {
+    if (!highlighted) return
+    const el = rowRef.current
+    if (!el || typeof el.getBoundingClientRect !== 'function') return
+    const rect = el.getBoundingClientRect()
+    const inView = rect.top >= 0 && rect.bottom <= (window.innerHeight ?? Infinity)
+    if (!inView && typeof el.scrollIntoView === 'function') {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [highlighted, rowRef])
+}
+
+/** Aviso "↗ mes" para una fila cuya pauta_date quedó fuera del mes que se está viendo —
+ * permite saltar directo a ese mes en vez de perder la pauta de vista. */
+function OutOfMonthChip({ pauta, onGoToMonth }) {
+  const [y, m] = pauta.pauta_date.split('-').map(Number)
+  return (
+    <button
+      type="button"
+      onClick={() => onGoToMonth?.(y, m)}
+      className="mt-0.5 text-[10.5px] font-semibold text-[#b98900] hover:underline"
+    >
+      ↗ {monthLabel(pauta.pauta_date)}
     </button>
   )
 }
