@@ -39,9 +39,9 @@ select option {
 .input-base {
   width: 100%;
   border: 1px solid #d8d4c8;
-  border-radius: 12px;
-  padding: 10px 14px;
-  font-size: 15px;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 14px;
   font-family: 'DM Sans', system-ui, sans-serif;
   color: #111;
   background: #fff;

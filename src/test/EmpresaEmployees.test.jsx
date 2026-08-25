@@ -749,3 +749,28 @@ describe('EmployeesView — período de prueba', () => {
     expect(screen.queryByText('Ana Pérez')).not.toBeInTheDocument()
   })
 })
+
+describe('EmployeesView — calendario de fechas del equipo', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('se muestra sobre la lista de empleados en modo activos', async () => {
+    renderAsAdmin()
+    await waitFor(() => {
+      expect(screen.getByText('Fechas del equipo')).toBeInTheDocument()
+    })
+  })
+
+  it('se oculta al activar "Ver eliminados"', async () => {
+    const user = userEvent.setup()
+    renderAsAdmin()
+    await waitFor(() => {
+      expect(screen.getByText('Fechas del equipo')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: /ver eliminados/i }))
+
+    expect(screen.queryByText('Fechas del equipo')).not.toBeInTheDocument()
+  })
+})

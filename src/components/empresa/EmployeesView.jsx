@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { format } from 'date-fns'
 import { supabase } from '../../supabase'
 import { useAuth } from '../../context/AuthContext'
 import { Avatar } from '../tareas/UserPickerSingle'
@@ -8,6 +9,11 @@ import NewEmployeeDialog from './NewEmployeeDialog'
 import EmployeeInfoModal from '../metricas/EmployeeInfoModal'
 import ConfirmDeleteDialog from '../common/ConfirmDeleteDialog'
 import ExternalResourcesView from './ExternalResourcesView'
+import EmployeeDatesCalendar from './EmployeeDatesCalendar'
+import EmployeeDayEventsModal from './EmployeeDayEventsModal'
+import { activeEmployees as activeEmployeesList } from '../../lib/employees'
+import { fetchVacationsInRange } from '../../lib/vacations'
+import { monthGridRange, buildEmployeeCalendarEvents } from '../../utils/employeeCalendar'
 
 const VIEW_STORAGE_KEY = 'empresa.empleados.view'
 const LEVELS = [1, 2, 3, 4]
@@ -365,6 +371,14 @@ export default function EmployeesView({ companyId }) {
   const [archiving, setArchiving] = useState(false)
   const [error, setError] = useState(null)
 
+  // Calendario de fechas del equipo: mes visible, vacaciones del rango y día expandido.
+  const [calMonth, setCalMonth] = useState(() => {
+    const now = new Date()
+    return { year: now.getFullYear(), month: now.getMonth() + 1 }
+  })
+  const [calVacations, setCalVacations] = useState([])
+  const [calDay, setCalDay] = useState(null) // Date | null — día con el modal de detalle abierto
+
   // ── Carga de datos ──────────────────────────────────────────────────────────
   const loadAll = useCallback(async () => {
     if (!companyId) return
@@ -390,18 +404,41 @@ export default function EmployeesView({ companyId }) {
     loadAll()
   }, [loadAll])
 
+  // ── Calendario: vacaciones del mes visible ──────────────────────────────────
+  // Deps por string de ids (no el array `employees`, que se recrea en cada loadAll)
+  // para no disparar un fetch en bucle.
+  const activeIdsKey = activeEmployeesList(employees)
+    .map((e) => e.user_id)
+    .join(',')
+  const loadVacations = useCallback(async () => {
+    const userIds = activeIdsKey ? activeIdsKey.split(',') : []
+    if (userIds.length === 0) {
+      setCalVacations([])
+      return
+    }
+    const { fetchStartKey, endKey } = monthGridRange(calMonth.year, calMonth.month)
+    const data = await fetchVacationsInRange(userIds, fetchStartKey, endKey)
+    setCalVacations(data)
+  }, [activeIdsKey, calMonth.year, calMonth.month])
+
+  useEffect(() => {
+    loadVacations()
+  }, [loadVacations])
+
   // ── Realtime ────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!companyId) return
     const channel = supabase
       .channel('empresa-empleados-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, () => loadAll())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'vacations' }, () => loadAll())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'vacations' }, () =>
+        loadVacations(),
+      )
       .subscribe()
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [companyId, loadAll])
+  }, [companyId, loadAll, loadVacations])
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   function handleEmployeeSaved(saved) {
@@ -455,6 +492,17 @@ export default function EmployeesView({ companyId }) {
       setError(err.message)
     }
   }
+
+  // ── Calendario de fechas del equipo ──────────────────────────────────────────
+  const calEvents = buildEmployeeCalendarEvents({
+    employees: activeEmployeesList(employees),
+    vacations: calVacations,
+    year: calMonth.year,
+    month: calMonth.month,
+  })
+  const calDayEvents = calDay
+    ? calEvents.filter((ev) => ev.dateKey === format(calDay, 'yyyy-MM-dd'))
+    : []
 
   // ── Split activos / archivados + filtro local ────────────────────────────────
   const activeEmployees = employees.filter((e) => !e.deleted_at)
@@ -512,7 +560,7 @@ export default function EmployeesView({ companyId }) {
         </p>
         <input
           type="text"
-          className="input-base max-w-xs"
+          className="input-base input-compact max-w-xs"
           placeholder="Buscar por nombre, email, cargo o departamento…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -539,7 +587,7 @@ export default function EmployeesView({ companyId }) {
         >
           {showProbationOnly ? 'Mostrando solo prueba' : `Solo en prueba (${probationCount})`}
         </button>
-        <div className="ml-auto flex items-center gap-3">
+        <div className="flex items-center gap-3 sm:ml-auto">
           {canSeeLevels && <ViewToggle view={view} onChange={setView} />}
           {!showArchived && (
             <button
@@ -557,6 +605,17 @@ export default function EmployeesView({ companyId }) {
         <div className="mb-4 bg-red-50 border border-red-300 rounded-xl px-4 py-3 text-[14px] text-red-700 font-medium">
           {error}
         </div>
+      )}
+
+      {/* Calendario de fechas del equipo */}
+      {!showArchived && (
+        <EmployeeDatesCalendar
+          year={calMonth.year}
+          month={calMonth.month}
+          events={calEvents}
+          onMonthChange={(year, month) => setCalMonth({ year, month })}
+          onDayClick={setCalDay}
+        />
       )}
 
       {/* Estado vacío */}
@@ -674,6 +733,15 @@ export default function EmployeesView({ companyId }) {
       {/* Ficha de detalle (solo lectura) */}
       {infoEmployee !== null && (
         <EmployeeInfoModal employee={infoEmployee} onClose={() => setInfoEmployee(null)} />
+      )}
+
+      {/* Detalle del día del calendario de fechas del equipo */}
+      {calDay !== null && (
+        <EmployeeDayEventsModal
+          date={calDay}
+          events={calDayEvents}
+          onClose={() => setCalDay(null)}
+        />
       )}
 
       {/* Dialog crear empleado */}

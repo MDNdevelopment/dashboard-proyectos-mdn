@@ -24,6 +24,7 @@ export function makeQuery(result = [], { error = null } = {}) {
     neq: vi.fn(() => q),
     is: vi.fn(() => q),
     in: vi.fn(() => q),
+    not: vi.fn(() => q),
     gt: vi.fn(() => q),
     gte: vi.fn(() => q),
     lt: vi.fn(() => q),

@@ -89,6 +89,13 @@ export const CHANGELOG = [
       'Junto al ícono flotante de MAPPI ahora aparece una burbuja con "¿En qué te puedo ayudar?" y preguntas rápidas: al elegir una, se abre el chat y se envía sola. Se puede cerrar con la ✕.',
       'MAPPI ya puede responder cuántas pautas audiovisuales hay hoy (o en otro día puntual), con la hora y el cliente de cada una, en vez de solo el resumen del mes completo.',
       'Corregido: si preguntabas a MAPPI por finanzas de un mes sin reporte cargado, respondía $0 como si fuera un dato real. Ahora avisa que no hay reporte en vez de inventar cifras, y hace lo mismo si preguntas por un año que todavía no está disponible.',
+      'Nuevo: en Empresa → Empleados hay un calendario del mes con las fechas importantes del equipo: cumpleaños, aniversarios de ingreso, fin del período de prueba, e inicio y regreso de vacaciones. Al tocar un día se ven los detalles de cada persona.',
+      'Cada tipo de fecha en el calendario de Empleados ahora tiene su propio ícono (pastel, estrella, reloj de arena, avión, maletín), además del color.',
+      'Corregido: las vacaciones no aparecían en el calendario de Empleados aunque estuvieran confirmadas.',
+      'En el calendario de Empleados, al ver un cumpleaños ahora se indica cuántos años cumple la persona (igual que ya pasaba con los aniversarios de ingreso). Si falta la fecha de nacimiento, se muestra el mensaje genérico sin la cantidad.',
+      'En el calendario de Empleados, al hacer click en una fecha ya no se abre el perfil del empleado: solo se muestra la información del evento (cumpleaños, aniversario, fin de prueba o vacaciones).',
+      'Se redujo el padding de los campos de texto en todo el sistema para que se vean más compactos.',
+      'En Empresa, las pestañas (Inicio, Líneas, Departamentos, etc.) y la barra de búsqueda de Empleados se ajustaron para verse mejor en pantallas angostas.',
     ],
   },
   {

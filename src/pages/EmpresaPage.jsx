@@ -9,22 +9,22 @@ import LinesView from '../components/empresa/LinesView'
 import PermisosView from '../components/empresa/PermisosView'
 
 const ALL_TABS = [
-  { key: 'general',       label: 'Inicio',         path: '/empresa' },
-  { key: 'lineas',        label: 'Líneas',          path: '/empresa/lineas' },
-  { key: 'departamentos', label: 'Departamentos',   path: '/empresa/departamentos' },
-  { key: 'empleados',     label: 'Empleados',       path: '/empresa/empleados' },
-  { key: 'preguntas',     label: 'Preguntas',       path: '/empresa/preguntas' },
-  { key: 'clientes',      label: 'Clientes',        path: '/empresa/clientes' },
-  { key: 'permisos',      label: 'Permisos',        path: '/empresa/permisos' },
+  { key: 'general', label: 'Inicio', path: '/empresa' },
+  { key: 'lineas', label: 'Líneas', path: '/empresa/lineas' },
+  { key: 'departamentos', label: 'Departamentos', path: '/empresa/departamentos' },
+  { key: 'empleados', label: 'Empleados', path: '/empresa/empleados' },
+  { key: 'preguntas', label: 'Preguntas', path: '/empresa/preguntas' },
+  { key: 'clientes', label: 'Clientes', path: '/empresa/clientes' },
+  { key: 'permisos', label: 'Permisos', path: '/empresa/permisos' },
 ]
 
 function pathToKey(pathname) {
   if (pathname.startsWith('/empresa/departamentos')) return 'departamentos'
-  if (pathname.startsWith('/empresa/empleados'))     return 'empleados'
-  if (pathname.startsWith('/empresa/preguntas'))     return 'preguntas'
-  if (pathname.startsWith('/empresa/clientes'))      return 'clientes'
-  if (pathname.startsWith('/empresa/lineas'))        return 'lineas'
-  if (pathname.startsWith('/empresa/permisos'))      return 'permisos'
+  if (pathname.startsWith('/empresa/empleados')) return 'empleados'
+  if (pathname.startsWith('/empresa/preguntas')) return 'preguntas'
+  if (pathname.startsWith('/empresa/clientes')) return 'clientes'
+  if (pathname.startsWith('/empresa/lineas')) return 'lineas'
+  if (pathname.startsWith('/empresa/permisos')) return 'permisos'
   return 'general'
 }
 
@@ -34,7 +34,7 @@ export default function EmpresaPage() {
   const navigate = useNavigate()
 
   // Cada tab se muestra solo si el usuario tiene la capacidad correspondiente
-  const tabs = ALL_TABS.filter(t => can(`empresa.${t.key}`))
+  const tabs = ALL_TABS.filter((t) => can(`empresa.${t.key}`))
   const activeKey = pathToKey(location.pathname)
 
   // Redirigir si el usuario no tiene acceso a la ruta activa
@@ -48,7 +48,6 @@ export default function EmpresaPage() {
   return (
     <main className="flex-1 overflow-y-auto main-bg h-screen">
       <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
-
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -58,12 +57,12 @@ export default function EmpresaPage() {
         </div>
 
         {/* Tab switcher */}
-        <div className="flex flex-wrap gap-1 bg-white border border-[#e0ddd4] rounded-xl p-1 w-fit mb-6">
-          {tabs.map(tab => (
+        <div className="flex flex-wrap gap-1 bg-white border border-[#e0ddd4] rounded-xl p-1 mb-6 w-fit">
+          {tabs.map((tab) => (
             <button
               key={tab.key}
               onClick={() => navigate(tab.path)}
-              className={`px-4 py-1.5 rounded-lg text-[14.5px] font-semibold transition-all ${
+              className={`whitespace-nowrap px-3 py-1.5 rounded-lg text-[14px] font-semibold transition-all ${
                 activeKey === tab.key
                   ? 'bg-[#111] text-white'
                   : 'text-[#666] hover:text-[#111] hover:bg-[#f5f3eb]'
@@ -104,16 +103,12 @@ export default function EmpresaPage() {
         )}
 
         {activeKey === 'lineas' && can('empresa.lineas') && (
-          <LinesView
-            companyId={userProfile.company_id}
-            canManage={can('empresa.lineas.manage')}
-          />
+          <LinesView companyId={userProfile.company_id} canManage={can('empresa.lineas.manage')} />
         )}
 
         {activeKey === 'permisos' && can('empresa.permisos') && (
           <PermisosView companyId={userProfile.company_id} />
         )}
-
       </div>
     </main>
   )
