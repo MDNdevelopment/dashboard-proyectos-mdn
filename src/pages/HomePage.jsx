@@ -24,6 +24,9 @@ import { MONTHS } from '../components/metricas/constants'
 import { visibleLinesForUser } from '../utils/lineMembers'
 import { canSeeCeoAnalysis } from '../lib/ceoAnalysisAccess'
 import CeoAnalysisCard from '../components/home/CeoAnalysisCard'
+import HomeDatesCalendar from '../components/home/HomeDatesCalendar'
+import HomeDayEventsModal from '../components/home/HomeDayEventsModal'
+import { buildHomeCalendarEvents } from '../utils/homeCalendar'
 
 // Íconos simples reutilizados por los accesos rápidos (mismo estilo que Sidebar).
 // Oculto temporalmente hasta nuevo aviso (solicitado por el usuario)
@@ -317,10 +320,19 @@ export default function HomePage() {
   const [clients, setClients] = useState([])
   const [meetings, setMeetings] = useState([])
   const [loadingMeetings, setLoadingMeetings] = useState(true)
-  const [meetingEmployees, setMeetingEmployees] = useState([])
+  // Empleados de la empresa. Se usan para el nombre/avatar de "Mis reuniones" y para
+  // derivar los cumpleaños/aniversarios de hoy del bloque "Fechas del equipo y clientes".
+  const [companyEmployees, setCompanyEmployees] = useState([])
   // Set de user_id activos (no archivados) de la empresa — usado para excluir
   // empleados dados de baja de los conteos (KPI de empresa y de línea).
   const [activeEmployeeIds, setActiveEmployeeIds] = useState(null)
+  // Mes visible y día seleccionado del calendario "Fechas del equipo y clientes"
+  // (mismo patrón de estado que EmployeesView.jsx para su calendario).
+  const [calMonth, setCalMonth] = useState(() => {
+    const now = new Date()
+    return { year: now.getFullYear(), month: now.getMonth() + 1 }
+  })
+  const [calDay, setCalDay] = useState(null)
 
   const isDirector = userProfile?.access_level >= 4 || userProfile?.admin === true
   // A nivel 4 no se le asignan tareas directamente, solo se le pone como apoyo de dirección.
@@ -376,18 +388,20 @@ export default function HomePage() {
     }
   }, [userProfile?.company_id, showReuniones])
 
-  // Empleados de la empresa — solo para mostrar nombre/avatar de los participantes de "Mis reuniones".
+  // Empleados de la empresa — nombre/avatar de "Mis reuniones" y cumpleaños/aniversarios
+  // de "Fechas del equipo y clientes". Se carga siempre (no solo con permiso de reuniones)
+  // porque ese aviso lo debe ver todo el mundo.
   useEffect(() => {
-    if (!userProfile?.company_id || !showReuniones) return
+    if (!userProfile?.company_id) return
     let cancelled = false
     loadCompanyEmployees(userProfile.company_id).then(({ data }) => {
       if (cancelled) return
-      setMeetingEmployees(data ?? [])
+      setCompanyEmployees(data ?? [])
     })
     return () => {
       cancelled = true
     }
-  }, [userProfile?.company_id, showReuniones])
+  }, [userProfile?.company_id])
 
   useEffect(() => {
     if (!userProfile?.company_id || !(isDirector || isLineLead)) return
@@ -403,11 +417,14 @@ export default function HomePage() {
     }
   }, [userProfile?.company_id, isDirector, isLineLead])
 
-  // Líneas + reportes + clientes del año: los usa el director (salud/conteos de empresa) y el
-  // nivel 3 (salud/conteos de su línea). Para nivel 3, loadYearReports ya viene filtrado por RLS
-  // a los reportes de su propia línea; clientes y líneas se filtran client-side por line_id.
+  // Líneas + reportes + clientes del año: los usa el director (salud/conteos de empresa), el
+  // nivel 3 (salud/conteos de su línea) y "Fechas del equipo y clientes" (necesita `lines` para
+  // saber de qué línea es miembro el usuario, y `clients` para sus fechas). Para nivel 3,
+  // loadYearReports ya viene filtrado por RLS a los reportes de su propia línea; clientes y
+  // líneas se filtran client-side por line_id. Se carga para cualquier usuario (no solo
+  // director/nivel 3) porque cualquier miembro de una línea puede tener clientes con fechas.
   useEffect(() => {
-    if (!userProfile?.company_id || !(isDirector || isLineLead)) return
+    if (!userProfile?.company_id) return
     let cancelled = false
     Promise.all([
       loadLines(userProfile.company_id),
@@ -434,6 +451,22 @@ export default function HomePage() {
   const myMeetings = meetings.filter(
     (m) => m.status === 'programada' && (m.attendee_ids ?? []).includes(myUserId),
   )
+
+  // "Fechas del equipo y clientes": calendario del mes visible con cumpleaños/aniversario
+  // del equipo MDN + aniversario empresa / cliente MDN desde / cumpleaños de contacto de
+  // los clientes. Se calcula en el cliente (no depende del cron de notificaciones) a
+  // partir de datos ya cargados arriba.
+  const homeCalEvents = buildHomeCalendarEvents({
+    employees: activeEmployees(companyEmployees),
+    clients,
+    lines,
+    userProfile,
+    year: calMonth.year,
+    month: calMonth.month,
+  })
+  const homeCalDayEvents = calDay
+    ? homeCalEvents.filter((ev) => ev.dateKey === format(calDay, 'yyyy-MM-dd'))
+    : []
 
   const greetingName = userProfile?.first_name ?? ''
   const roleLine = [userProfile?.department?.department_name, userProfile?.position?.position_name]
@@ -525,6 +558,22 @@ export default function HomePage() {
           </div>
         </div>
 
+        {/* Fechas del equipo y clientes */}
+        <HomeDatesCalendar
+          year={calMonth.year}
+          month={calMonth.month}
+          events={homeCalEvents}
+          onMonthChange={(year, month) => setCalMonth({ year, month })}
+          onDayClick={setCalDay}
+        />
+        {calDay !== null && (
+          <HomeDayEventsModal
+            date={calDay}
+            events={homeCalDayEvents}
+            onClose={() => setCalDay(null)}
+          />
+        )}
+
         {/* Análisis IA — oculto temporalmente hasta nuevo aviso (solicitado por el usuario) */}
         {SHOW_CEO_ANALYSIS && canSeeCeoAnalysis(userProfile) && (
           <section className="mb-8 rise-in" style={{ animationDelay: '60ms' }}>
@@ -602,7 +651,7 @@ export default function HomePage() {
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                 {myMeetings.map((m) => {
-                  const attendees = meetingEmployees.filter((u) =>
+                  const attendees = companyEmployees.filter((u) =>
                     (m.attendee_ids ?? []).includes(u.user_id),
                   )
                   const isVideo = m.modality === 'videollamada'

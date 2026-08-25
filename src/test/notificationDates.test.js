@@ -51,10 +51,36 @@ function contactBirthdayMatches(contact, targetDate) {
  * @returns {string[]} distinct user_ids
  */
 function computeClientRecipients(allUsers, lineMembers, lineId) {
-  const level4Ids = allUsers.filter(u => u.access_level >= 4).map(u => u.user_id)
+  const level4Ids = allUsers.filter((u) => u.access_level >= 4).map((u) => u.user_id)
   if (!lineId) return [...new Set(level4Ids)]
   const combined = [...(lineMembers ?? []), ...level4Ids]
   return [...new Set(combined)]
+}
+
+/**
+ * Same as computeClientRecipients, but excludes soft-deleted (archived) employees —
+ * mirrors notif_client_recipients() as fixed in
+ * supabase/migrations/20260901000000_fix_notif_date_cron_hardening.sql, which restores
+ * the `deleted_at is null` filter that 20260829000001_fix_notif_empty_birthdate_crash.sql
+ * had accidentally dropped.
+ * @param {{ user_id: string, access_level: number, deleted_at: string|null }[]} allUsers
+ */
+function computeClientRecipientsActiveOnly(allUsers, lineMembers, lineId) {
+  const active = allUsers.filter((u) => !u.deleted_at)
+  const activeIds = new Set(active.map((u) => u.user_id))
+  // El SQL real hace `join public.users u on ... where u.deleted_at is null`, así que un
+  // line member archivado nunca aparece — se filtra igual que allUsers.
+  const activeLineMembers = (lineMembers ?? []).filter((id) => activeIds.has(id))
+  return computeClientRecipients(active, activeLineMembers, lineId)
+}
+
+/**
+ * Mirrors the ''::int crash fix: birth_day/birth_month coming from the form as an empty
+ * string must be treated as "no data", not cause a cast error (nullif(x,'')::int in SQL).
+ */
+function normalizeBirthField(value) {
+  if (value === '' || value == null) return null
+  return Number(value)
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────
@@ -150,11 +176,11 @@ describe('computeClientRecipients', () => {
 
   it('when line_id is provided: returns union of line members + level-4 users (deduplicated)', () => {
     const recipients = computeClientRecipients(users, lineMembers, 'line-abc')
-    expect(recipients).toContain('u1')   // line member
-    expect(recipients).toContain('u2')   // line member
-    expect(recipients).toContain('u6')   // line member (orphan, still included)
-    expect(recipients).toContain('u4')   // level-4
-    expect(recipients).toContain('u5')   // level-4
+    expect(recipients).toContain('u1') // line member
+    expect(recipients).toContain('u2') // line member
+    expect(recipients).toContain('u6') // line member (orphan, still included)
+    expect(recipients).toContain('u4') // level-4
+    expect(recipients).toContain('u5') // level-4
     expect(recipients).not.toContain('u3') // level-3, not in line
     // All distinct
     expect(new Set(recipients).size).toBe(recipients.length)
@@ -185,8 +211,54 @@ describe('computeClientRecipients', () => {
   it('deduplicates when a level-4 user is also a line member', () => {
     const lineWithLevel4 = ['u4', 'u1']
     const recipients = computeClientRecipients(users, lineWithLevel4, 'line-x')
-    const u4Count = recipients.filter(id => id === 'u4').length
+    const u4Count = recipients.filter((id) => id === 'u4').length
     expect(u4Count).toBe(1)
+  })
+})
+
+describe('computeClientRecipientsActiveOnly — empleados archivados excluidos', () => {
+  const users = [
+    { user_id: 'u1', access_level: 1, deleted_at: null },
+    { user_id: 'u4', access_level: 4, deleted_at: null },
+    { user_id: 'u5', access_level: 4, deleted_at: '2026-06-01T00:00:00Z' }, // archivado
+  ]
+  const lineMembers = ['u1', 'u5']
+
+  it('un empleado de línea archivado no aparece como destinatario', () => {
+    const recipients = computeClientRecipientsActiveOnly(users, lineMembers, 'line-1')
+    expect(recipients).toContain('u1')
+    expect(recipients).not.toContain('u5')
+  })
+
+  it('un nivel-4 archivado tampoco aparece', () => {
+    const recipients = computeClientRecipientsActiveOnly(users, [], null)
+    expect(recipients).toContain('u4')
+    expect(recipients).not.toContain('u5')
+  })
+})
+
+describe('normalizeBirthField — dato vacío no rompe (regresión del crash ""::int)', () => {
+  it('convierte "" en null', () => {
+    expect(normalizeBirthField('')).toBeNull()
+  })
+
+  it('convierte null/undefined en null', () => {
+    expect(normalizeBirthField(null)).toBeNull()
+    expect(normalizeBirthField(undefined)).toBeNull()
+  })
+
+  it('convierte un string numérico a number', () => {
+    expect(normalizeBirthField('15')).toBe(15)
+  })
+
+  it('un contacto con birth_day/birth_month "" nunca matchea (sin lanzar error)', () => {
+    const july3 = new Date('2026-07-03T00:00:00Z')
+    const contact = {
+      birth_day: normalizeBirthField(''),
+      birth_month: normalizeBirthField(''),
+    }
+    expect(() => contactBirthdayMatches(contact, july3)).not.toThrow()
+    expect(contactBirthdayMatches(contact, july3)).toBe(false)
   })
 })
 
@@ -203,7 +275,7 @@ describe('3-day-before matching integration', () => {
 
   it('year-end rollover: Dec 29 → today+3 target is Jan 1', () => {
     const dec29 = new Date('2026-12-29T00:00:00Z')
-    const jan1  = new Date('2027-01-01T00:00:00Z')
+    const jan1 = new Date('2027-01-01T00:00:00Z')
     expect(matchesYearlyDate('2000-01-01', jan1)).toBe(true)
     expect(matchesYearlyDate('2000-01-01', dec29)).toBe(false)
   })

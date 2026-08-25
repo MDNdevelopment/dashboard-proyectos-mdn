@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { vi } from 'vitest'
 import { startOfWeek, addDays } from 'date-fns'
@@ -228,7 +228,8 @@ describe('HomePage — Mis tareas (nivel 1)', () => {
     renderPage({ access_level: 1 })
     // t1 y t2 son de u1 y están activas; t5 es de u1 pero está Terminada → no cuenta
     await waitFor(() => {
-      expect(screen.getByText('2')).toBeInTheDocument()
+      const card = screen.getByText('Asignadas activas').closest('div')
+      expect(within(card).getByText('2')).toBeInTheDocument()
     })
   })
 

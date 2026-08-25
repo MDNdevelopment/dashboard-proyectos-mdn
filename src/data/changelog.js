@@ -100,6 +100,8 @@ export const CHANGELOG = [
       'Nuevo: ahora puedes preguntarle a MAPPI "¿cuáles son mis próximas reuniones?" y te responde con tus reuniones agendadas identificándote automáticamente, sin pedirte tu nombre.',
       'MAPPI ahora usa el modelo gratuito de OpenRouter (que rota entre varios modelos sin costo) en vez del router automático anterior.',
       'MAPPI ya no responde preguntas fuera de la gestión de MDN (por ejemplo, programación o cultura general): ahora aclara que está fuera de su rol y ofrece ayudar con algo operativo de la empresa.',
+      'Corregido de fondo: el aviso anterior sobre cumpleaños/aniversarios que no llegaban solo tapó un caso puntual. Ahora, si un solo dato con error impide notificar un cumpleaños o aniversario, ya no se cancelan las notificaciones de todos los demás — cada aviso se procesa por separado.',
+      'Nuevo en Inicio: un calendario mensual con las fechas importantes del equipo (cumpleaños, aniversarios de ingreso) y de los clientes (aniversario empresa, cliente MDN desde, cumpleaños de contacto), cada tipo con su propio ícono. Al tocar un día se ven los detalles; cada quien ve los clientes que le corresponden.',
     ],
   },
   {

@@ -90,7 +90,7 @@ export function monthGridRange(year, month) {
  * el rango [startKey, endKey] (cubre grillas que cruzan diciembre/enero). 29/02 se
  * proyecta a 28/02 en años no bisiestos. Devuelve las claves 'yyyy-MM-dd' dentro de rango.
  */
-function projectRecurringDate(sourceKey, startKey, endKey) {
+export function projectRecurringDate(sourceKey, startKey, endKey) {
   if (!sourceKey) return []
   const [, srcMonth, srcDay] = sourceKey.split('-').map(Number)
   const fromYear = Number(startKey.slice(0, 4))

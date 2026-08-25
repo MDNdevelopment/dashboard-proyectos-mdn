@@ -217,7 +217,14 @@ export default function ClientModal({
       monthly_fee,
       campaign_budget,
       social_links: form.social_links.filter((s) => s.link.trim()),
-      contacts: form.contacts.filter((c) => c.name.trim()),
+      contacts: form.contacts
+        .filter((c) => c.name.trim())
+        .map((c) => ({
+          ...c,
+          // Nunca guardar '' — rompía el cron de cumpleaños (''::int). Vacío = null.
+          birth_day: c.birth_day === '' || c.birth_day == null ? null : Number(c.birth_day),
+          birth_month: c.birth_month === '' || c.birth_month == null ? null : Number(c.birth_month),
+        })),
       anniversary_date: form.anniversary_date || null,
       mdn_since: form.mdn_since || null,
       contract_end: form.contract_end || null,

@@ -1,9 +1,10 @@
 /**
  * Icono por tipo de evento del calendario de fechas del equipo (ver
- * utils/employeeCalendar.js#EVENT_TYPES). Compartido entre EmployeeDatesCalendar (pills +
- * leyenda) y EmployeeDayEventsModal, para que el mismo tipo se reconozca siempre con el
- * mismo dibujo. Usa `currentColor`: el color lo pone el className del llamador
- * (EVENT_TYPES[type].iconColor).
+ * utils/employeeCalendar.js#EVENT_TYPES) y del calendario del Home (ver
+ * utils/homeCalendar.js#EVENT_TYPES, que agrega los 3 casos de cliente). Compartido entre
+ * EmployeeDatesCalendar/EmployeeDayEventsModal y HomeDatesCalendar/HomeDayEventsModal, para
+ * que el mismo tipo se reconozca siempre con el mismo dibujo. Usa `currentColor`: el color
+ * lo pone el className del llamador (EVENT_TYPES[type].iconColor).
  */
 export default function EventTypeIcon({ type, size = 11, className = '' }) {
   const props = {
@@ -62,6 +63,42 @@ export default function EventTypeIcon({ type, size = 11, className = '' }) {
           <rect x="1.5" y="4.5" width="11" height="7.5" rx="1.2" />
           <path d="M5 4.5v-1a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1" />
           <line x1="1.5" y1="8" x2="12.5" y2="8" />
+        </svg>
+      )
+    case 'client_anniversary':
+      // Edificio (aniversario de la empresa cliente)
+      return (
+        <svg {...props}>
+          <rect x="3" y="1.5" width="8" height="11" rx="0.6" />
+          <line x1="5" y1="4" x2="6.2" y2="4" />
+          <line x1="7.8" y1="4" x2="9" y2="4" />
+          <line x1="5" y1="6.5" x2="6.2" y2="6.5" />
+          <line x1="7.8" y1="6.5" x2="9" y2="6.5" />
+          <line x1="5" y1="9" x2="6.2" y2="9" />
+          <line x1="7.8" y1="9" x2="9" y2="9" />
+          <path d="M1.5 12.5h11" />
+        </svg>
+      )
+    case 'client_mdn_anniversary':
+      // Apretón de manos (cliente MDN desde)
+      return (
+        <svg {...props}>
+          <path d="M1.5 6.5 4 4.5c.5-.4 1.2-.4 1.6.1L7 6" />
+          <path d="M12.5 6.5 10 4.5c-.5-.4-1.2-.4-1.6.1L7 6" />
+          <path d="M4 6.5l2 2c.5.5 1.3.5 1.8 0l.2-.2c.4-.4.4-1 0-1.4L7 6" />
+          <path d="M10 6.5 8.5 8c-.5.5-.5 1.3 0 1.8" />
+          <path d="M2.5 5.5 1 7l2.5 2.5 1.3-1.2" />
+          <path d="M11.5 5.5 13 7l-2.5 2.5-1.2-1.1" />
+        </svg>
+      )
+    case 'client_contact_birthday':
+      // Pastel con una vela (cumpleaños de contacto, distinto del de empleado)
+      return (
+        <svg {...props}>
+          <path d="M1.5 8.5h11v4h-11z" />
+          <path d="M1.5 8.5c1.5-1.2 3-1.2 4.5 0s3 1.2 4.5 0 1.5-1.2 2-1.2" />
+          <line x1="7" y1="5" x2="7" y2="7.5" />
+          <path d="M7 2.2c-.7.7-.7 1.6 0 2.3" />
         </svg>
       )
     default:
