@@ -99,6 +99,7 @@ export const CHANGELOG = [
       'Corregido: MAPPI a veces decía "no tengo acceso" a preguntas sobre reuniones, comparación de finanzas entre líneas o reportes de las jefas, aunque sí tenía esa información. Ahora reconoce esas preguntas mejor: puede comparar las finanzas ya consultadas de varias líneas y entiende que "reportes de las jefas" se refiere al score de línea.',
       'Nuevo: ahora puedes preguntarle a MAPPI "¿cuáles son mis próximas reuniones?" y te responde con tus reuniones agendadas identificándote automáticamente, sin pedirte tu nombre.',
       'MAPPI ahora usa el modelo gratuito de OpenRouter (que rota entre varios modelos sin costo) en vez del router automático anterior.',
+      'MAPPI ya no responde preguntas fuera de la gestión de MDN (por ejemplo, programación o cultura general): ahora aclara que está fuera de su rol y ofrece ayudar con algo operativo de la empresa.',
     ],
   },
   {
