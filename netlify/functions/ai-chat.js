@@ -14,7 +14,7 @@ const MAX_TOOL_ITERATIONS = 5
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 // "openrouter/auto" deja que OpenRouter elija el modelo subyacente según el prompt
 // (NotDiamond router) en vez de fijar uno nosotros.
-const OPENROUTER_MODEL = 'openrouter/auto'
+const OPENROUTER_MODEL = 'openrouter/free'
 
 const SYSTEM_INSTRUCTION = `
 Eres el asistente ejecutivo de MDN Publicidad, una agencia de publicidad venezolana. Respondes
@@ -28,6 +28,12 @@ vez de intentar adivinar.
 Cuando el usuario pregunte "por qué" cambió un score, usa score_de_linea y explica con el desglose
 de indicadores cuál subió o bajó, no des explicaciones genéricas.
 
+Los "reportes mensuales" (o "reportes de las jefas/líderes de línea") son los reportes que cada
+línea llena cada mes y que alimentan el score — son lo mismo que score_de_linea/ranking_lineas, no
+una herramienta distinta. Si preguntan qué línea tiene mejor desempeño "en los reportes", "según
+las jefas" o similar, usa directamente ranking_lineas o score_de_linea; no digas que no tienes
+acceso a los reportes.
+
 Si un dato corresponde al mes en curso (es_mes_en_curso: true), aclara que es preliminar porque el
 mes todavía no cierra.
 
@@ -38,6 +44,11 @@ da el detalle (motivo del bloqueo o días de atraso) después de un resumen_tare
 Además tienes resumen_reuniones (agendadas/realizadas/canceladas del mes) y resumen_pautas
 (grabaciones audiovisuales: solicitadas/agendadas/realizadas, piezas grabadas y editadas). A
 diferencia de las métricas de línea, estas dos usan el mes ACTUAL por defecto, no el último cerrado.
+
+Si preguntan "qué reuniones tengo yo", "mis próximas reuniones" o algo similar sobre el usuario que
+está hablando contigo (no sobre otra persona ni sobre una línea), usa mis_reuniones — identifica
+automáticamente al usuario actual, no le pidas su nombre ni user_id. Para reuniones agregadas de una
+línea o de toda la empresa en un mes, usa resumen_reuniones en su lugar.
 
 Si preguntan cuántas pautas hay HOY, MAÑANA o en una fecha concreta (no un mes completo), usa
 pautas_del_dia en vez de resumen_pautas — te da el listado del día con hora y cliente. La fecha de
@@ -50,6 +61,11 @@ números por línea/mes: no proyectes, no extrapoles a rentabilidad general de l
 sobre sueldos, presupuestos ni nada que no venga literal en el resultado de "finanzas". Si preguntan
 algo financiero que esa herramienta no cubre (ej. "¿cuánto ganamos en el año?", "¿somos rentables?"),
 dilo en una frase y ofrece el detalle mes a mes de una línea en su lugar.
+
+Si preguntan qué línea tiene mejor desempeño financiero, sí puedes llamar "finanzas" para cada línea
+del mes en cuestión y comparar sus "diferencia" (ingresos - egresos) ya devueltas para decir cuál es
+mayor — eso es comparar cifras reales, no extrapolar. Lo que no debes hacer es opinar sobre por qué,
+proyectar a futuro o hablar de rentabilidad más allá de esa comparación directa.
 
 Sé breve: 2-5 frases por respuesta salvo que el usuario pida detalle. Puedes usar **negrita** (con
 doble asterisco) para resaltar la cifra o el nombre más importante de la respuesta, sin abusar.
@@ -135,6 +151,9 @@ export const handler = async (event) => {
   let dataset
   try {
     dataset = await loadMetricsDataset(caller.company_id)
+    // user_id del caller autenticado (ver requireAdmin.js), usado por la tool mis_reuniones
+    // para filtrar meetings.attendee_ids sin que el modelo tenga que adivinarlo.
+    dataset.callerUserId = caller.user_id
   } catch (err) {
     return json(500, { error: err.message })
   }

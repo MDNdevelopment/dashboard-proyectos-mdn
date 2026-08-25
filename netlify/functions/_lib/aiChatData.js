@@ -34,7 +34,9 @@ export async function loadMetricsDataset(companyId) {
       .is('deleted_at', null),
     supabase
       .from('meetings')
-      .select('id, line_id, client_name, starts_at, status')
+      .select(
+        'id, line_id, title, client_name, starts_at, status, attendee_ids, modality, location, meeting_url',
+      )
       .eq('company_id', companyId),
     supabase
       .from('av_pautas')

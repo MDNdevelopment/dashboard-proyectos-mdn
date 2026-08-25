@@ -11,6 +11,7 @@ import {
   resumenTareas,
   tareasCriticas,
   resumenReuniones,
+  misReuniones,
   resumenPautas,
   pautasDelDia,
   executeTool,
@@ -490,6 +491,60 @@ describe('resumenReuniones', () => {
   })
 })
 
+describe('misReuniones', () => {
+  const inDays = (n) => new Date(Date.now() + n * 24 * 60 * 60 * 1000).toISOString()
+
+  it('devuelve error si el dataset no trae callerUserId', () => {
+    expect(misReuniones({}, { lines: LINES, meetings: [] }).error).toBeDefined()
+  })
+
+  it('solo incluye reuniones donde el caller es participante', () => {
+    const dataset = {
+      lines: LINES,
+      callerUserId: 'u1',
+      meetings: [
+        meeting({ id: '1', attendee_ids: ['u1'], starts_at: inDays(1) }),
+        meeting({ id: '2', attendee_ids: ['u2'], starts_at: inDays(1) }),
+      ],
+    }
+    const res = misReuniones({}, dataset)
+    expect(res.total).toBe(1)
+    expect(res.reuniones[0].fecha).toBeDefined()
+  })
+
+  it('excluye reuniones pasadas o canceladas, y ordena por fecha ascendente', () => {
+    const dataset = {
+      lines: LINES,
+      callerUserId: 'u1',
+      meetings: [
+        meeting({ id: 'pasada', attendee_ids: ['u1'], starts_at: inDays(-1) }),
+        meeting({
+          id: 'cancelada',
+          attendee_ids: ['u1'],
+          status: 'cancelada',
+          starts_at: inDays(2),
+        }),
+        meeting({ id: 'lejos', attendee_ids: ['u1'], title: 'Lejos', starts_at: inDays(5) }),
+        meeting({ id: 'cerca', attendee_ids: ['u1'], title: 'Cerca', starts_at: inDays(2) }),
+      ],
+    }
+    const res = misReuniones({}, dataset)
+    expect(res.total).toBe(2)
+    expect(res.reuniones.map((r) => r.titulo)).toEqual(['Cerca', 'Lejos'])
+  })
+
+  it('respeta el límite pedido', () => {
+    const dataset = {
+      lines: LINES,
+      callerUserId: 'u1',
+      meetings: [1, 2, 3].map((n) =>
+        meeting({ id: String(n), attendee_ids: ['u1'], starts_at: inDays(n) }),
+      ),
+    }
+    expect(misReuniones({ limite: 2 }, dataset).reuniones).toHaveLength(2)
+  })
+})
+
 describe('resumenPautas', () => {
   it('desglosa por estado y suma piezas de las realizadas del mes actual', () => {
     const dataset = {
@@ -632,8 +687,8 @@ describe('executeTool', () => {
 })
 
 describe('TOOL_DECLARATIONS', () => {
-  it('declara las 11 herramientas con nombre y parámetros', () => {
-    expect(TOOL_DECLARATIONS).toHaveLength(11)
+  it('declara las 12 herramientas con nombre y parámetros', () => {
+    expect(TOOL_DECLARATIONS).toHaveLength(12)
     TOOL_DECLARATIONS.forEach((t) => {
       expect(t.name).toBeTruthy()
       expect(t.description).toBeTruthy()

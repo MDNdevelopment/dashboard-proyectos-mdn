@@ -41,6 +41,11 @@ function dateKey(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+/** "HH:MM" en hora local. */
+function timeKey(d) {
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
 function normalize(str) {
   return String(str ?? '')
     .toLowerCase()
@@ -463,6 +468,41 @@ export function resumenReuniones(args, dataset) {
   }
 }
 
+/**
+ * Próximas reuniones programadas donde el usuario que pregunta es participante
+ * (attendee_ids incluye dataset.callerUserId, seteado por ai-chat.js con el caller del JWT).
+ */
+export function misReuniones(args, dataset) {
+  const callerId = dataset.callerUserId
+  if (!callerId) return { error: 'No se pudo identificar tu usuario para buscar tus reuniones.' }
+
+  const meetings = dataset.meetings ?? []
+  const now = new Date()
+  const limite = Math.min(Math.max(Number(args.limite) || 10, 1), 30)
+
+  const proximas = meetings
+    .filter((m) => (m.attendee_ids ?? []).includes(callerId))
+    .filter((m) => m.status === 'programada' && new Date(m.starts_at) >= now)
+    .sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at))
+    .slice(0, limite)
+
+  return {
+    total: proximas.length,
+    reuniones: proximas.map((m) => {
+      const d = new Date(m.starts_at)
+      return {
+        titulo: m.title ?? '(sin título)',
+        cliente: m.client_name ?? null,
+        linea: lineName(m.line_id, dataset),
+        fecha: dateKey(d),
+        hora: timeKey(d),
+        modalidad: m.modality ?? null,
+        ubicacion: m.modality === 'videollamada' ? (m.meeting_url ?? null) : (m.location ?? null),
+      }
+    }),
+  }
+}
+
 /** Pautas audiovisuales de un mes (por estado), piezas grabadas/editadas, de toda la empresa o de una línea. */
 export function resumenPautas(args, dataset) {
   const pautas = dataset.pautas ?? []
@@ -665,6 +705,21 @@ export const TOOL_DECLARATIONS = [
     },
   },
   {
+    name: 'mis_reuniones',
+    description:
+      'Próximas reuniones programadas donde el usuario que está usando el chat (no otro empleado) es participante, ordenadas por fecha más próxima primero. Úsala para "mis reuniones", "qué reuniones tengo yo/tengo esta semana" — no resumen_reuniones, que agrega por línea/empresa sin identificar personas.',
+    parameters: {
+      type: 'object',
+      properties: {
+        limite: {
+          type: 'integer',
+          description: 'Máximo de reuniones a devolver. Por defecto 10.',
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'resumen_pautas',
     description:
       'Pautas audiovisuales (grabaciones) de un mes: cuántas solicitadas, agendadas, realizadas o declinadas, solicitudes pendientes de agendar, y piezas grabadas/editadas. De toda la empresa o de una línea si se especifica. Sin mes/año, usa el mes actual.',
@@ -706,6 +761,7 @@ const EXECUTORS = {
   resumen_tareas: resumenTareas,
   tareas_criticas: tareasCriticas,
   resumen_reuniones: resumenReuniones,
+  mis_reuniones: misReuniones,
   resumen_pautas: resumenPautas,
   pautas_del_dia: pautasDelDia,
 }

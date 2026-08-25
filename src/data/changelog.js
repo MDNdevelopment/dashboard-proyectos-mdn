@@ -96,6 +96,9 @@ export const CHANGELOG = [
       'En el calendario de Empleados, al hacer click en una fecha ya no se abre el perfil del empleado: solo se muestra la información del evento (cumpleaños, aniversario, fin de prueba o vacaciones).',
       'Se redujo el padding de los campos de texto en todo el sistema para que se vean más compactos.',
       'En Empresa, las pestañas (Inicio, Líneas, Departamentos, etc.) y la barra de búsqueda de Empleados se ajustaron para verse mejor en pantallas angostas.',
+      'Corregido: MAPPI a veces decía "no tengo acceso" a preguntas sobre reuniones, comparación de finanzas entre líneas o reportes de las jefas, aunque sí tenía esa información. Ahora reconoce esas preguntas mejor: puede comparar las finanzas ya consultadas de varias líneas y entiende que "reportes de las jefas" se refiere al score de línea.',
+      'Nuevo: ahora puedes preguntarle a MAPPI "¿cuáles son mis próximas reuniones?" y te responde con tus reuniones agendadas identificándote automáticamente, sin pedirte tu nombre.',
+      'MAPPI ahora usa el modelo gratuito de OpenRouter (que rota entre varios modelos sin costo) en vez del router automático anterior.',
     ],
   },
   {

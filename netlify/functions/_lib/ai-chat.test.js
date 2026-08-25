@@ -74,11 +74,11 @@ describe('ai-chat.js handler', () => {
     expect(res.statusCode).toBe(400)
   })
 
-  it('usa el modelo openrouter/auto', async () => {
+  it('usa el modelo openrouter/free', async () => {
     fetchMock.mockResolvedValue(okResponse({ choices: [{ message: { content: 'Todo bien.' } }] }))
     await handler(makeEvent({ messages: [{ role: 'user', text: '¿Cómo va la empresa?' }] }))
     const requestBody = JSON.parse(fetchMock.mock.calls[0][1].body)
-    expect(requestBody.model).toBe('openrouter/auto')
+    expect(requestBody.model).toBe('openrouter/free')
   })
 
   it('happy path sin tool calls: devuelve el texto de OpenRouter', async () => {
