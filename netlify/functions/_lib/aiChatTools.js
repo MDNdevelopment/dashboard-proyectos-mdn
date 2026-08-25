@@ -1,0 +1,722 @@
+// Herramientas (function calling de Gemini) del chat IA para el CEO. Todas puras: operan
+// en memoria sobre un `dataset` ya cargado por ai-chat.js (una sola carga por request, ver
+// aiChatData.js). Reutilizan las mismas funciones de src/utils/ que usa el módulo Métricas,
+// para que las cifras del chat sean idénticas a las que ve el CEO en /reportes.
+import { calcTotal, sumScore } from '../../../src/utils/metricsScore.js'
+import { calcFinanzas } from '../../../src/utils/metricsFinance.js'
+import { aggregateMetricsDashboard } from '../../../src/utils/aggregateMetricsDashboard.js'
+import {
+  isClosed,
+  isLate,
+  isBlocked,
+  isDragged,
+  parseD,
+  daysBetween,
+  today,
+} from '../../../src/components/tareas/constants.js'
+
+const MONTH_NAMES = [
+  'enero',
+  'febrero',
+  'marzo',
+  'abril',
+  'mayo',
+  'junio',
+  'julio',
+  'agosto',
+  'septiembre',
+  'octubre',
+  'noviembre',
+  'diciembre',
+]
+
+function round(n, decimals = 1) {
+  if (n == null || Number.isNaN(n)) return null
+  const f = 10 ** decimals
+  return Math.round(n * f) / f
+}
+
+/** "YYYY-MM-DD" en hora local, evitando el corrimiento de día de toISOString() (UTC). */
+function dateKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function normalize(str) {
+  return String(str ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .trim()
+}
+
+/**
+ * Referencia por defecto: el último mes CERRADO (mes actual - 1, cae a diciembre del año
+ * anterior en enero). Mismo criterio que netlify/functions/ceo-analysis.js — los meses en
+ * curso pueden tener indicadores derivados (productividad, piezas, reuniones) desactualizados
+ * porque solo se recalculan cuando alguien abre Operaciones.
+ */
+export function defaultPeriod(today = new Date()) {
+  const currentMonth = today.getMonth() + 1
+  const month = currentMonth === 1 ? 12 : currentMonth - 1
+  const year = currentMonth === 1 ? today.getFullYear() - 1 : today.getFullYear()
+  return { year, month }
+}
+
+/**
+ * Resuelve un nombre de línea escrito en lenguaje natural contra el catálogo de líneas.
+ * Estrategia: match exacto → prefijo → substring. Ambiguo o inexistente devuelve error
+ * legible con el catálogo, para que el modelo repregunte en vez de alucinar un id.
+ */
+export function resolveLine(nombre, lines) {
+  const q = normalize(nombre)
+  if (!q) {
+    return {
+      error: `Falta indicar la línea. Líneas disponibles: ${lines.map((l) => l.name).join(', ')}.`,
+    }
+  }
+  const exact = lines.filter((l) => normalize(l.name) === q)
+  if (exact.length === 1) return { line: exact[0] }
+
+  const prefix = lines.filter((l) => normalize(l.name).startsWith(q))
+  if (prefix.length === 1) return { line: prefix[0] }
+
+  const substr = lines.filter((l) => normalize(l.name).includes(q))
+  if (substr.length === 1) return { line: substr[0] }
+
+  const candidates = prefix.length > 1 ? prefix : substr.length > 1 ? substr : []
+  if (candidates.length > 1) {
+    return {
+      error: `"${nombre}" es ambiguo, coincide con: ${candidates.map((l) => l.name).join(', ')}. Especifica cuál.`,
+    }
+  }
+  return {
+    error: `No se encontró la línea "${nombre}". Líneas disponibles: ${lines.map((l) => l.name).join(', ')}.`,
+  }
+}
+
+/**
+ * Valida `year` contra el rango de años que aiChatData.js realmente cargó (ver
+ * `dataset.availableYears`). Sin esto, un año fuera de rango se ve idéntico a un año sin
+ * actividad ("no hay reporte") y el modelo lo reporta como dato real.
+ */
+function yearRangeError(year, dataset) {
+  const range = dataset.availableYears
+  if (!range) return null
+  if (year < range.min || year > range.max) {
+    return `Solo tengo datos cargados de ${range.min} y ${range.max}. No tengo información de ${year}.`
+  }
+  return null
+}
+
+function reportsForLine(dataset, lineId) {
+  return dataset.reports.filter((r) => r.line_id === lineId)
+}
+
+function reportOf(dataset, lineId, year, month) {
+  return (
+    dataset.reports.find((r) => r.line_id === lineId && r.year === year && r.month === month) ??
+    null
+  )
+}
+
+function prevReportOf(dataset, lineId, year, month) {
+  const prevMonth = month === 1 ? 12 : month - 1
+  const prevYear = month === 1 ? year - 1 : year
+  return reportOf(dataset, lineId, prevYear, prevMonth)
+}
+
+/** Desglose de los 6 indicadores ponderados (peso 20/20/20/10/20/10) de un mes de una línea. */
+export function scoreDeLinea(args, dataset) {
+  const { line, error } = resolveLine(args.linea, dataset.lines)
+  if (error) return { error }
+
+  const { year, month } =
+    args.mes && args.anio ? { year: args.anio, month: args.mes } : defaultPeriod()
+
+  const rangeError = yearRangeError(year, dataset)
+  if (rangeError) return { error: rangeError }
+
+  const report = reportOf(dataset, line.id, year, month)
+  if (!report || report.data?.incompleto) {
+    return {
+      linea: line.name,
+      periodo: `${MONTH_NAMES[month - 1]} ${year}`,
+      error: 'No hay reporte cerrado para ese mes.',
+    }
+  }
+  const prev = prevReportOf(dataset, line.id, year, month)
+  const parciales = calcTotal(report.data, prev?.data ?? null)
+  const pesos = {
+    reuniones: 20,
+    productividad: 20,
+    crecimiento: 20,
+    solicitudes: 10,
+    pautas: 20,
+    piezas: 10,
+  }
+
+  return {
+    linea: line.name,
+    periodo: `${MONTH_NAMES[month - 1]} ${year}`,
+    score_total: round(sumScore(parciales), 1),
+    desglose_indicadores: Object.entries(parciales).map(([indicador, obtenido]) => ({
+      indicador,
+      obtenido: round(obtenido, 1),
+      maximo: pesos[indicador],
+    })),
+    es_mes_en_curso: month === new Date().getMonth() + 1 && year === new Date().getFullYear(),
+  }
+}
+
+/** Ranking de líneas de un mes (por defecto el último cerrado), con promedios y cobertura. */
+export function rankingLineas(args, dataset) {
+  const { year, month } =
+    args.mes && args.anio ? { year: args.anio, month: args.mes } : defaultPeriod()
+
+  const rangeError = yearRangeError(year, dataset)
+  if (rangeError) return { error: rangeError }
+
+  const yearReports = dataset.reports.filter((r) => r.year === year)
+  const agg = aggregateMetricsDashboard(
+    dataset.lines,
+    yearReports,
+    year,
+    calcTotal,
+    sumScore,
+    calcFinanzas,
+    month,
+  )
+
+  return {
+    periodo: `${MONTH_NAMES[month - 1]} ${year}`,
+    ranking: agg.ranking.map((r) => ({ linea: r.line.name, score: round(r.score, 1) })),
+    promedio_mes: agg.promMesActual != null ? round(agg.promMesActual, 1) : null,
+    promedio_anual: round(agg.promAnual, 1),
+    lider: agg.lider ? agg.lider.line.name : null,
+    cobertura_reportes_pct: round(agg.cobertura),
+  }
+}
+
+/** Evolución del score de una línea a lo largo de un año (mes o null si no hay reporte). */
+export function evolucionLinea(args, dataset) {
+  const { line, error } = resolveLine(args.linea, dataset.lines)
+  if (error) return { error }
+
+  const year = args.anio ?? new Date().getFullYear()
+  const rangeError = yearRangeError(year, dataset)
+  if (rangeError) return { error: rangeError }
+
+  const yearReports = dataset.reports.filter((r) => r.year === year)
+  const agg = aggregateMetricsDashboard(
+    dataset.lines,
+    yearReports,
+    year,
+    calcTotal,
+    sumScore,
+    calcFinanzas,
+  )
+
+  return {
+    linea: line.name,
+    anio: year,
+    meses: (agg.matrix[line.id] ?? Array(12).fill(null)).map((score, i) => ({
+      mes: MONTH_NAMES[i],
+      score: score != null ? round(score, 1) : null,
+    })),
+  }
+}
+
+/** Finanzas (ingresos/egresos/diferencia) de un mes, por línea o de toda la empresa. */
+export function finanzas(args, dataset) {
+  const { year, month } =
+    args.mes && args.anio ? { year: args.anio, month: args.mes } : defaultPeriod()
+
+  const rangeError = yearRangeError(year, dataset)
+  if (rangeError) return { error: rangeError }
+
+  if (args.linea) {
+    const { line, error } = resolveLine(args.linea, dataset.lines)
+    if (error) return { error }
+    const report = reportOf(dataset, line.id, year, month)
+    if (!report) {
+      return {
+        periodo: `${MONTH_NAMES[month - 1]} ${year}`,
+        linea: line.name,
+        error: 'No hay reporte cargado para ese mes.',
+      }
+    }
+    const f = calcFinanzas(report.data)
+    return {
+      periodo: `${MONTH_NAMES[month - 1]} ${year}`,
+      linea: line.name,
+      ingresos: round(f.totIngresos, 2),
+      egresos: round(f.totEgresos, 2),
+      diferencia: round(f.diferencia, 2),
+    }
+  }
+
+  // Líneas sin reporte para el mes van con `sin_reporte: true` (en vez de ceros) para que
+  // el modelo no las confunda con facturación real de $0, y quedan fuera de total_empresa.
+  const porLinea = dataset.lines.map((line) => {
+    const report = reportOf(dataset, line.id, year, month)
+    if (!report) return { linea: line.name, sin_reporte: true }
+    const f = calcFinanzas(report.data)
+    return {
+      linea: line.name,
+      ingresos: round(f.totIngresos, 2),
+      egresos: round(f.totEgresos, 2),
+      diferencia: round(f.diferencia, 2),
+    }
+  })
+  const conReporte = porLinea.filter((l) => !l.sin_reporte)
+  const totales = conReporte.reduce(
+    (acc, l) => ({
+      ingresos: acc.ingresos + l.ingresos,
+      egresos: acc.egresos + l.egresos,
+      diferencia: acc.diferencia + l.diferencia,
+    }),
+    { ingresos: 0, egresos: 0, diferencia: 0 },
+  )
+
+  return {
+    periodo: `${MONTH_NAMES[month - 1]} ${year}`,
+    por_linea: porLinea,
+    total_empresa: {
+      ingresos: round(totales.ingresos, 2),
+      egresos: round(totales.egresos, 2),
+      diferencia: round(totales.diferencia, 2),
+    },
+    ...(conReporte.length < porLinea.length
+      ? {
+          nota: 'total_empresa no incluye las líneas marcadas sin_reporte (no tienen reporte cargado para este mes).',
+        }
+      : {}),
+  }
+}
+
+/**
+ * Compara el score entre dos meses (misma línea, o toda la empresa si no se indica).
+ * No incluye cifras financieras — ver nota "finanzas deshabilitada" junto a TOOL_DECLARATIONS.
+ */
+export function compararMeses(args, dataset) {
+  const year = args.anio ?? new Date().getFullYear()
+  const rangeError = yearRangeError(year, dataset)
+  if (rangeError) return { error: rangeError }
+
+  let line = null
+  if (args.linea) {
+    const resolved = resolveLine(args.linea, dataset.lines)
+    if (resolved.error) return { error: resolved.error }
+    line = resolved.line
+  }
+
+  function snapshot(month) {
+    if (line) {
+      const report = reportOf(dataset, line.id, year, month)
+      if (!report || report.data?.incompleto) return { score: null }
+      const prev = prevReportOf(dataset, line.id, year, month)
+      const score = sumScore(calcTotal(report.data, prev?.data ?? null))
+      return { score: round(score, 1) }
+    }
+    const yearReports = dataset.reports.filter((r) => r.year === year)
+    const agg = aggregateMetricsDashboard(
+      dataset.lines,
+      yearReports,
+      year,
+      calcTotal,
+      sumScore,
+      calcFinanzas,
+      month,
+    )
+    return { score: agg.promMesActual != null ? round(agg.promMesActual, 1) : null }
+  }
+
+  const a = snapshot(args.mes_a)
+  const b = snapshot(args.mes_b)
+
+  return {
+    linea: line ? line.name : 'Toda la empresa',
+    [MONTH_NAMES[args.mes_a - 1]]: a,
+    [MONTH_NAMES[args.mes_b - 1]]: b,
+    delta_score: a.score != null && b.score != null ? round(b.score - a.score, 1) : null,
+  }
+}
+
+export function listarLineas(_args, dataset) {
+  return { lineas: dataset.lines.map((l) => l.name) }
+}
+
+function userName(userId, dataset) {
+  const u = (dataset.users ?? []).find((x) => x.user_id === userId)
+  return u ? `${u.first_name} ${u.last_name}`.trim() : null
+}
+
+function lineName(lineId, dataset) {
+  return dataset.lines.find((l) => l.id === lineId)?.name ?? null
+}
+
+/** Panorama operativo de tareas: activas, atrasadas, bloqueadas, arrastradas, por estado. */
+export function resumenTareas(args, dataset) {
+  const tasks = dataset.tasks ?? []
+  let scoped = tasks
+  let linea = null
+  if (args.linea) {
+    const resolved = resolveLine(args.linea, dataset.lines)
+    if (resolved.error) return { error: resolved.error }
+    linea = resolved.line
+    scoped = tasks.filter((t) => t.team_id === linea.id)
+  }
+
+  const active = scoped.filter((t) => !isClosed(t))
+  const late = active.filter(isLate)
+  const blocked = active.filter(isBlocked)
+  const dragged = active.filter(isDragged)
+
+  const byStatus = {}
+  for (const t of active) byStatus[t.status] = (byStatus[t.status] ?? 0) + 1
+
+  const closedWithDates = scoped.filter((t) => isClosed(t) && t.due_date && t.closed_date)
+  const onTime = closedWithDates.filter(
+    (t) => daysBetween(parseD(t.due_date), parseD(t.closed_date)) <= 0,
+  )
+  const porcentajeATiempo = closedWithDates.length
+    ? round((onTime.length / closedWithDates.length) * 100, 0)
+    : null
+
+  return {
+    linea: linea ? linea.name : 'Toda la empresa',
+    tareas_activas: active.length,
+    atrasadas: late.length,
+    bloqueadas: blocked.length,
+    arrastradas_de_meses_anteriores: dragged.length,
+    por_estado: byStatus,
+    porcentaje_entregado_a_tiempo: porcentajeATiempo,
+  }
+}
+
+/** Lista de tareas críticas (bloqueadas o atrasadas) con su motivo/atraso, línea y responsables. */
+export function tareasCriticas(args, dataset) {
+  const tipo = args.tipo === 'atrasadas' ? 'atrasadas' : 'bloqueadas'
+  const tasks = (dataset.tasks ?? []).filter((t) => !isClosed(t))
+  const filtered = tipo === 'bloqueadas' ? tasks.filter(isBlocked) : tasks.filter(isLate)
+
+  const items = filtered.slice(0, 30).map((t) => ({
+    tarea: t.description ?? '(sin descripción)',
+    linea: lineName(t.team_id, dataset),
+    responsables: (t.assignee_ids ?? []).map((id) => userName(id, dataset)).filter(Boolean),
+    ...(tipo === 'bloqueadas'
+      ? { motivo: t.blocked_reason ?? 'Sin motivo registrado' }
+      : { dias_de_atraso: t.due_date ? daysBetween(parseD(t.due_date), today()) : null }),
+  }))
+
+  return {
+    tipo,
+    total: filtered.length,
+    mostrando: items.length,
+    tareas: items,
+  }
+}
+
+function currentPeriod() {
+  const now = new Date()
+  return { year: now.getFullYear(), month: now.getMonth() + 1 }
+}
+
+function monthYearOfDate(d) {
+  if (!d || Number.isNaN(d.getTime())) return null
+  return { year: d.getFullYear(), month: d.getMonth() + 1 }
+}
+
+/** Reuniones (agendadas/realizadas/canceladas) de un mes, de toda la empresa o de una línea. */
+export function resumenReuniones(args, dataset) {
+  const meetings = dataset.meetings ?? []
+  let scoped = meetings
+  let linea = null
+  if (args.linea) {
+    const resolved = resolveLine(args.linea, dataset.lines)
+    if (resolved.error) return { error: resolved.error }
+    linea = resolved.line
+    scoped = scoped.filter((m) => m.line_id === linea.id)
+  }
+
+  const { year, month } =
+    args.mes && args.anio ? { year: args.anio, month: args.mes } : currentPeriod()
+  const inPeriod = scoped.filter((m) => {
+    const my = monthYearOfDate(new Date(m.starts_at))
+    return my && my.year === year && my.month === month
+  })
+
+  const programadas = inPeriod.filter((m) => m.status === 'programada')
+  const realizadas = inPeriod.filter((m) => m.status === 'realizada')
+  const canceladas = inPeriod.filter((m) => m.status === 'cancelada')
+  const now = new Date()
+  const vencidasSinMarcar = programadas.filter((m) => new Date(m.starts_at) < now)
+
+  return {
+    linea: linea ? linea.name : 'Toda la empresa',
+    periodo: `${MONTH_NAMES[month - 1]} ${year}`,
+    total: inPeriod.length,
+    programadas: programadas.length,
+    realizadas: realizadas.length,
+    canceladas: canceladas.length,
+    vencidas_sin_marcar: vencidasSinMarcar.length,
+  }
+}
+
+/** Pautas audiovisuales de un mes (por estado), piezas grabadas/editadas, de toda la empresa o de una línea. */
+export function resumenPautas(args, dataset) {
+  const pautas = dataset.pautas ?? []
+  let scoped = pautas
+  let linea = null
+  if (args.linea) {
+    const resolved = resolveLine(args.linea, dataset.lines)
+    if (resolved.error) return { error: resolved.error }
+    linea = resolved.line
+    scoped = scoped.filter((p) => p.line_id === linea.id)
+  }
+
+  const { year, month } =
+    args.mes && args.anio ? { year: args.anio, month: args.mes } : currentPeriod()
+  const sinFecha = scoped.filter((p) => !p.pauta_date)
+  const inPeriod = scoped.filter((p) => {
+    const my = monthYearOfDate(parseD(p.pauta_date))
+    return my && my.year === year && my.month === month
+  })
+
+  const byStatus = {}
+  for (const p of inPeriod) byStatus[p.status] = (byStatus[p.status] ?? 0) + 1
+
+  const realizadas = inPeriod.filter((p) => p.status === 'realizada')
+  const piezasTotales = realizadas.reduce((a, p) => a + (Number(p.piezas_totales) || 0), 0)
+  const piezasEditadas = realizadas.reduce((a, p) => a + (Number(p.piezas_editadas) || 0), 0)
+
+  return {
+    linea: linea ? linea.name : 'Toda la empresa',
+    periodo: `${MONTH_NAMES[month - 1]} ${year}`,
+    por_estado: byStatus,
+    solicitudes_sin_agendar: sinFecha.filter((p) => p.status === 'solicitada').length,
+    piezas_totales: piezasTotales,
+    piezas_editadas: piezasEditadas,
+  }
+}
+
+/**
+ * Agenda de pautas audiovisuales de un día concreto (por defecto hoy), con hora, cliente
+ * y estado — para preguntas operativas del día ("¿cuántas pautas hay hoy?", "¿qué hay
+ * agendado mañana?"). Solo 'programada'/'realizada' con fecha aparecen en el calendario
+ * (mismo criterio que AvCalendar.jsx/DayPautasModal.jsx en el frontend).
+ */
+export function pautasDelDia(args, dataset) {
+  const pautas = dataset.pautas ?? []
+  let scoped = pautas
+  let linea = null
+  if (args.linea) {
+    const resolved = resolveLine(args.linea, dataset.lines)
+    if (resolved.error) return { error: resolved.error }
+    linea = resolved.line
+    scoped = scoped.filter((p) => p.line_id === linea.id)
+  }
+
+  const fecha = args.fecha || dateKey(today())
+  const delDia = scoped
+    .filter(
+      (p) => p.pauta_date === fecha && (p.status === 'programada' || p.status === 'realizada'),
+    )
+    .sort((a, b) => (a.salida ?? '').localeCompare(b.salida ?? ''))
+
+  return {
+    linea: linea ? linea.name : 'Toda la empresa',
+    fecha,
+    total: delDia.length,
+    pautas: delDia.map((p) => ({
+      cliente: p.client_name ?? '(sin cliente)',
+      linea: lineName(p.line_id, dataset),
+      hora: p.salida ? `${p.salida}${p.llegada ? ` - ${p.llegada}` : ''}` : null,
+      estado: p.status,
+    })),
+  }
+}
+
+const monthProp = {
+  type: 'integer',
+  description: 'Mes 1-12. Si se omite junto con anio, se usa el último mes cerrado.',
+}
+const yearProp = {
+  type: 'integer',
+  description: 'Año (ej. 2026). Si se omite junto con mes, se usa el último mes cerrado.',
+}
+const lineaProp = {
+  type: 'string',
+  description: 'Nombre de la línea operativa tal como lo diría el usuario.',
+}
+
+export const TOOL_DECLARATIONS = [
+  {
+    name: 'listar_lineas',
+    description:
+      'Lista las líneas operativas de la empresa. Útil para saber qué nombres existen antes de preguntar por una en concreto.',
+    parameters: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'score_de_linea',
+    description:
+      'Score 0-100 de una línea operativa en un mes, con el desglose de los 6 indicadores que lo componen (reuniones, productividad, crecimiento, solicitudes, pautas, piezas). Usar para explicar por qué subió o bajó un score.',
+    parameters: {
+      type: 'object',
+      properties: { linea: lineaProp, mes: monthProp, anio: yearProp },
+      required: ['linea'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'ranking_lineas',
+    description:
+      'Ranking de todas las líneas operativas en un mes, con el promedio de la empresa, la línea líder y la cobertura de reportes cargados.',
+    parameters: {
+      type: 'object',
+      properties: { mes: monthProp, anio: yearProp },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'evolucion_linea',
+    description: 'Evolución mes a mes del score de una línea a lo largo de un año.',
+    parameters: {
+      type: 'object',
+      properties: { linea: lineaProp, anio: yearProp },
+      required: ['linea'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'finanzas',
+    description:
+      'Ingresos, egresos y diferencia (ganancia o pérdida) de una línea en un mes, tal como están cargados en su reporte mensual. Es la ÚNICA fuente de finanzas permitida: no extrapoles, proyectes ni opines sobre rentabilidad más allá de estos 3 números por línea/mes.',
+    parameters: {
+      type: 'object',
+      properties: {
+        mes: monthProp,
+        anio: yearProp,
+        linea: {
+          ...lineaProp,
+          description: 'Opcional: si se omite, devuelve el total de la empresa por línea.',
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'resumen_tareas',
+    description:
+      'Panorama operativo de tareas: cuántas activas, atrasadas, bloqueadas y arrastradas de meses anteriores, desglose por estado, y el % de tareas entregadas a tiempo. De toda la empresa o de una línea si se especifica.',
+    parameters: {
+      type: 'object',
+      properties: {
+        linea: { ...lineaProp, description: 'Opcional: limita el resumen a una línea.' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'tareas_criticas',
+    description:
+      'Lista de tareas activas bloqueadas (con su motivo) o atrasadas (con los días de atraso), con la línea y los responsables de cada una. Úsala para dar detalle después de resumen_tareas, o cuando pregunten qué está trabado.',
+    parameters: {
+      type: 'object',
+      properties: {
+        tipo: {
+          type: 'string',
+          enum: ['bloqueadas', 'atrasadas'],
+          description: 'Qué tipo de tareas críticas listar.',
+        },
+      },
+      required: ['tipo'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'comparar_meses',
+    description:
+      'Compara el score entre dos meses del mismo año, para una línea o para toda la empresa.',
+    parameters: {
+      type: 'object',
+      properties: {
+        mes_a: { ...monthProp, description: 'Mes 1-12 a comparar (el más antiguo).' },
+        mes_b: { ...monthProp, description: 'Mes 1-12 a comparar (el más reciente).' },
+        anio: yearProp,
+        linea: lineaProp,
+      },
+      required: ['mes_a', 'mes_b'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'resumen_reuniones',
+    description:
+      'Reuniones de un mes: cuántas programadas, realizadas, canceladas y cuántas ya vencieron sin marcarse. De toda la empresa o de una línea si se especifica. Sin mes/año, usa el mes actual (no el último cerrado).',
+    parameters: {
+      type: 'object',
+      properties: {
+        linea: { ...lineaProp, description: 'Opcional: limita a una línea.' },
+        mes: monthProp,
+        anio: yearProp,
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'resumen_pautas',
+    description:
+      'Pautas audiovisuales (grabaciones) de un mes: cuántas solicitadas, agendadas, realizadas o declinadas, solicitudes pendientes de agendar, y piezas grabadas/editadas. De toda la empresa o de una línea si se especifica. Sin mes/año, usa el mes actual.',
+    parameters: {
+      type: 'object',
+      properties: {
+        linea: { ...lineaProp, description: 'Opcional: limita a una línea.' },
+        mes: monthProp,
+        anio: yearProp,
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'pautas_del_dia',
+    description:
+      'Agenda de pautas audiovisuales agendadas o realizadas de un día concreto, con hora, cliente y estado. Úsala cuando pregunten "cuántas pautas hay hoy/mañana/tal fecha" en vez de resumen_pautas, que solo agrega por mes. Sin fecha, usa el día de hoy.',
+    parameters: {
+      type: 'object',
+      properties: {
+        linea: { ...lineaProp, description: 'Opcional: limita a una línea.' },
+        fecha: {
+          type: 'string',
+          description: 'Fecha en formato YYYY-MM-DD. Si se omite, se usa el día de hoy.',
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+]
+
+const EXECUTORS = {
+  listar_lineas: listarLineas,
+  score_de_linea: scoreDeLinea,
+  ranking_lineas: rankingLineas,
+  evolucion_linea: evolucionLinea,
+  finanzas,
+  comparar_meses: compararMeses,
+  resumen_tareas: resumenTareas,
+  tareas_criticas: tareasCriticas,
+  resumen_reuniones: resumenReuniones,
+  resumen_pautas: resumenPautas,
+  pautas_del_dia: pautasDelDia,
+}
+
+/** Ejecuta una tool por nombre sobre el dataset cargado. Nunca lanza: errores van en `{error}`. */
+export function executeTool(name, args, dataset) {
+  const fn = EXECUTORS[name]
+  if (!fn) return { error: `Herramienta desconocida: ${name}` }
+  try {
+    return fn(args ?? {}, dataset)
+  } catch (err) {
+    return { error: `Error ejecutando ${name}: ${err.message}` }
+  }
+}

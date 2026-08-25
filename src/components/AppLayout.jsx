@@ -9,6 +9,7 @@ import MDNLogo from './MDNLogo'
 import InstallBanner from './InstallBanner'
 import NotificationBell from './notifications/NotificationBell'
 import WhatsNewModal from './WhatsNewModal'
+import AiChatWidget from './ai/AiChatWidget'
 import { useWhatsNew } from '../hooks/useWhatsNew'
 import { exportProjectsToMarkdown, downloadMarkdown } from '../utils/exportProjectsToMarkdown'
 
@@ -192,6 +193,8 @@ export default function AppLayout() {
       <InstallBanner />
 
       <WhatsNewModal entries={whatsNewEntries} onClose={dismissWhatsNew} />
+
+      <AiChatWidget />
 
       {detailProject && (
         <ProjectDetailModal

@@ -36,6 +36,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/ai-chat"
+  to = "/.netlify/functions/ai-chat"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/employees/manage"
   to = "/.netlify/functions/archive-employee"
   status = 200
