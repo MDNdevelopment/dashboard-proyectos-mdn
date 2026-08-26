@@ -108,14 +108,14 @@ export default function AiChatPanel({ messages, sending, error, send, clear, onC
           onKeyDown={handleKeyDown}
           placeholder="Escribe tu pregunta…"
           rows={1}
-          className="input-base flex-1 resize-none max-h-24"
+          className="input-base flex-1 min-w-0 resize-none max-h-24"
           disabled={sending}
         />
         <button
           type="button"
           onClick={() => handleSend()}
           disabled={sending || !input.trim()}
-          className="aspect-square h-auto flex-shrink-0 rounded-xl bg-[#FFB800] disabled:opacity-40 flex items-center justify-center text-[#111] font-semibold transition-opacity"
+          className="w-11 h-11 flex-shrink-0 rounded-xl bg-[#FFB800] disabled:opacity-40 flex items-center justify-center text-[#111] font-semibold transition-opacity"
           aria-label="Enviar"
         >
           →

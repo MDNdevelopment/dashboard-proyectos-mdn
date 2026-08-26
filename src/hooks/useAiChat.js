@@ -50,7 +50,12 @@ export function useAiChat() {
       try {
         payload = await res.json()
       } catch {
-        setError('Respuesta inválida del servidor. Intenta de nuevo.')
+        const isTimeout = [502, 503, 504, 408].includes(res.status)
+        setError(
+          isTimeout
+            ? 'El servidor tardó demasiado en responder. Intenta de nuevo.'
+            : 'Respuesta inválida del servidor. Intenta de nuevo.',
+        )
         setSending(false)
         return
       }
