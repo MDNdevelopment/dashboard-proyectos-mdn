@@ -27,6 +27,9 @@ export function notifIcon(type) {
     meeting_reminder_hour: '⏰',
     campaign_autoclosed: '✅',
     ad_autoclosed: '✅',
+    av_pauta_solicitada: '🎬',
+    av_pauta_programada: '📅',
+    av_agenda_reminder: '⏰',
   }
   return icons[type] ?? '🔔'
 }
@@ -52,6 +55,9 @@ export function notifLabel(type) {
     meeting_reminder_hour: 'Recordatorio de reunión',
     campaign_autoclosed: 'Campaña finalizada',
     ad_autoclosed: 'Ad finalizado',
+    av_pauta_solicitada: 'Pauta solicitada',
+    av_pauta_programada: 'Pauta agendada',
+    av_agenda_reminder: 'Agenda audiovisual',
   }
   return labels[type] ?? 'Notificación'
 }
@@ -84,6 +90,12 @@ export function notifRoute(notif) {
     // Deep-link to the project modal via ?projectId=uuid (AppLayout reads this param)
     if (entity_id) return `/?projectId=${entity_id}`
     return '/'
+  }
+  if (entity_type === 'av_pauta') {
+    // Deep-link al detalle de la pauta vía ?pautaId=uuid (AudiovisualView lo lee y abre
+    // PautaDetailModal). av_agenda_reminder no trae entity_id (recordatorio genérico).
+    if (entity_id) return `/tareas/pautas?pautaId=${entity_id}`
+    return '/tareas/pautas'
   }
   if (entity_type === 'campaign' || entity_type === 'ad') return '/ads'
   if (entity_type === 'client') return '/empresa/clientes'

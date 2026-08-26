@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../supabase'
 import { loadCompanyEmployees } from '../metricas/metricsApi'
 import { loadPautas, loadPiezas, updatePauta } from './avPautasApi'
@@ -72,6 +73,7 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
   // y se mantienen visibles en AvPhaseTable (con aviso) en vez de desaparecer de golpe.
   // Es estado transitorio — se limpia al cambiar de mes/pestaña o recargar, nunca persiste.
   const [pinnedIds, setPinnedIds] = useState(() => new Set())
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const defaultLineId = !canViewAll ? (lines[0]?.id ?? null) : null
   const scopeLine = canViewAll ? (scopeLineId === ALL_LINES ? null : scopeLineId) : defaultLineId
@@ -96,6 +98,39 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
   useEffect(() => {
     loadAll()
   }, [loadAll])
+
+  // Abrir el detalle de una pauta específica desde ?pautaId=uuid (deeplink desde la
+  // campanita de notificaciones — mismo patrón que ?meetingId= en ReunionesPage y
+  // ?taskId= en TareasPage). Además de abrir el modal, mueve el calendario/tabla al
+  // mes y pestaña de la pauta para que no quede oculta tras los filtros vigentes.
+  useEffect(() => {
+    const pautaId = searchParams.get('pautaId')
+    if (!pautaId || pautas.length === 0) return
+    const pauta = pautas.find((p) => p.id === pautaId)
+    if (pauta) {
+      setDetailPauta(pauta)
+      if (pauta.pauta_date) {
+        const d = new Date(pauta.pauta_date)
+        setPeriod({ year: d.getFullYear(), month: d.getMonth() + 1 })
+      }
+      setPhase(
+        pauta.status === 'programada'
+          ? 'agenda'
+          : pauta.status === 'realizada'
+            ? 'realizadas'
+            : 'solicitudes',
+      )
+      if (canViewAll && pauta.line_id) setScopeLineId(pauta.line_id)
+    }
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete('pautaId')
+        return next
+      },
+      { replace: true },
+    )
+  }, [searchParams, pautas, canViewAll, setSearchParams])
 
   // Realtime: canal creado sincrónicamente (evita el race de StrictMode), patrón
   // AppLayout/ReunionesPage/TareasFijasPage.

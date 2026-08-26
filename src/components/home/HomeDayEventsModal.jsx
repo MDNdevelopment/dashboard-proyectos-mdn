@@ -68,22 +68,21 @@ export default function HomeDayEventsModal({ date, events, onClose }) {
 
 /**
  * Un evento es de empleado (`employeeId`/`employeeName`) o de cliente (`clientId`/
- * `clientName`) — nunca ambos. Se arma un objeto `user` sintético para reutilizar `Avatar`
- * en los dos casos: con foto para empleados, con iniciales del nombre (empleado o cliente)
- * cuando no hay `avatar_url`.
+ * `clientName`) — nunca ambos. El avatar (foto o iniciales) solo aplica a personas del
+ * equipo; las marcas/clientes no tienen foto ni círculo de iniciales.
  */
 function EventRow({ event }) {
   const meta = EVENT_TYPES[event.type]
   const name = event.employeeName ?? event.clientName ?? ''
+  const isEmployee = event.employeeId != null
   const user = {
-    user_id: event.employeeId ?? event.clientId,
+    user_id: event.employeeId,
     first_name: name.split(' ')[0],
     last_name: name.split(' ').slice(1).join(' '),
     avatar_url: event.avatarUrl ?? null,
   }
   return (
     <li className="flex items-start gap-2.5 rounded-xl border border-[#ece9df] bg-[#faf9f5] px-3.5 py-3">
-      <Avatar user={user} size={28} />
       <div className="min-w-0 flex-1">
         <p className="text-[13.5px] font-semibold text-[#222] truncate">{event.label}</p>
         <p
@@ -94,6 +93,7 @@ function EventRow({ event }) {
         </p>
         {event.detail && <p className="text-[11.5px] text-[#999] mt-1">{event.detail}</p>}
       </div>
+      {isEmployee && <Avatar user={user} size={40} />}
     </li>
   )
 }

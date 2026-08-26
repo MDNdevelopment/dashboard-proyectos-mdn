@@ -14,6 +14,7 @@ import { es } from 'date-fns/locale'
 import { EVENT_TYPES } from '../../utils/homeCalendar'
 import { groupEventsByDay } from '../../utils/employeeCalendar'
 import EventTypeIcon from '../empresa/EventTypeIcon'
+import { Avatar } from '../tareas/UserPickerSingle'
 
 const WEEKDAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 const MAX_PILLS = 2
@@ -184,14 +185,22 @@ export default function HomeDatesCalendar({ year, month, events, onMonthChange, 
  */
 function EventPill({ event }) {
   const meta = EVENT_TYPES[event.type]
-  const name = event.employeeName ?? event.clientName
+  const name = event.employeeName ?? event.clientName ?? ''
+  const isEmployee = event.employeeId != null
+  const user = {
+    user_id: event.employeeId,
+    first_name: name.split(' ')[0],
+    last_name: name.split(' ').slice(1).join(' '),
+    avatar_url: event.avatarUrl ?? null,
+  }
   return (
     <div
       title={event.label}
       className={`flex items-center gap-1 rounded px-1.5 py-1 border text-[10.5px] font-medium truncate transition-colors ${meta.pill}`}
     >
       <EventTypeIcon type={event.type} className={meta.iconColor} />
-      <span className="truncate">{name}</span>
+      <span className="truncate flex-1">{name}</span>
+      {isEmployee && <Avatar user={user} size={22} />}
     </div>
   )
 }

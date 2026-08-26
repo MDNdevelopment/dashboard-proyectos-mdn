@@ -1,4 +1,5 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { vi } from 'vitest'
 import { createSupabaseMock, makeQuery } from './helpers/supabaseMock'
 
@@ -153,7 +154,7 @@ vi.mock('../supabase', () => ({
 
 import AudiovisualView from '../components/pautas/AudiovisualView'
 
-function renderView({ userProfile, can, lines = LINES }) {
+function renderView({ userProfile, can, lines = LINES, initialEntries = ['/tareas/pautas'] }) {
   return render(
     <AudiovisualView
       companyId="co-1"
@@ -162,6 +163,11 @@ function renderView({ userProfile, can, lines = LINES }) {
       lines={lines}
       clients={MOCK_CLIENTS}
     />,
+    {
+      wrapper: ({ children }) => (
+        <MemoryRouter initialEntries={initialEntries}>{children}</MemoryRouter>
+      ),
+    },
   )
 }
 
@@ -406,5 +412,59 @@ describe('AudiovisualView — la tabla de seguimiento sigue al mes que se ve en 
     fireEvent.click(screen.getByRole('button', { name: /^Solicitudes/ }))
     expect(screen.getByDisplayValue('Cliente Georgina')).toBeInTheDocument()
     expect(screen.getByDisplayValue('Cliente Sabrina')).toBeInTheDocument()
+  })
+})
+
+// ── Deep-link ?pautaId= (abierto desde la campanita de notificaciones) ──────────
+
+function LocationProbe() {
+  const location = useLocation()
+  return <div data-testid="loc-search">{location.search}</div>
+}
+
+function renderWithPautaId(pautaId, { userProfile, can, lines = LINES } = {}) {
+  return render(
+    <MemoryRouter initialEntries={[`/tareas/pautas?pautaId=${pautaId}`]}>
+      <LocationProbe />
+      <AudiovisualView
+        companyId="co-1"
+        userProfile={userProfile}
+        can={can}
+        lines={lines}
+        clients={MOCK_CLIENTS}
+      />
+    </MemoryRouter>,
+  )
+}
+
+describe('AudiovisualView — deep-link ?pautaId=', () => {
+  const ADMIN_PROFILE = { user_id: 'coord-1', company_id: 'co-1', access_level: 4, admin: true }
+  const CAN_ALL = () => true
+
+  it('abre PautaDetailModal con la pauta indicada y limpia el param de la URL', async () => {
+    renderWithPautaId('p1', { userProfile: ADMIN_PROFILE, can: CAN_ALL })
+    await waitFor(() => {
+      expect(screen.getByLabelText('Cerrar')).toBeInTheDocument()
+    })
+    expect(screen.getAllByText('Cliente Georgina').length).toBeGreaterThan(0)
+    await waitFor(() => {
+      expect(screen.getByTestId('loc-search').textContent).toBe('')
+    })
+  })
+
+  it('mueve el mes/pestaña al de una pauta agendada de otro mes', async () => {
+    renderWithPautaId('p3', { userProfile: ADMIN_PROFILE, can: CAN_ALL })
+    await waitFor(() => {
+      expect(screen.getByLabelText('Cerrar')).toBeInTheDocument()
+    })
+    expect(screen.getAllByText('Cliente Agendada').length).toBeGreaterThan(0)
+  })
+
+  it('un pautaId inexistente no rompe la vista y limpia igual el param', async () => {
+    renderWithPautaId('no-existe', { userProfile: ADMIN_PROFILE, can: CAN_ALL })
+    await waitFor(() => {
+      expect(screen.getByTestId('loc-search').textContent).toBe('')
+    })
+    expect(screen.queryByLabelText('Cerrar')).not.toBeInTheDocument()
   })
 })

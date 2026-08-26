@@ -21,10 +21,19 @@ export default function PautasPage() {
       loadClients(companyId),
     ])
 
-    setLines(visibleLinesForUser(linesRes.data ?? [], userProfile))
+    // extraViewAll: `visibleLinesForUser` solo conoce access_level/admin/tasks_view_all —
+    // sin esto, alguien con la capability `audiovisual.ver_todo` (p. ej. Lizdania, nivel 2
+    // y sin membresía en ninguna línea) recibía un `lines` vacío y no podía ver la info
+    // por línea ni en el calendario ni en el mensaje de WhatsApp, aunque AudiovisualView ya
+    // calculaba `canViewAll=true` para ella con la prop que sí le llegaba.
+    setLines(
+      visibleLinesForUser(linesRes.data ?? [], userProfile, {
+        extraViewAll: can('audiovisual.ver_todo'),
+      }),
+    )
     setClients(clientsRes.data ?? [])
     setLoading(false)
-  }, [userProfile])
+  }, [userProfile, can])
 
   useEffect(() => {
     loadAll()

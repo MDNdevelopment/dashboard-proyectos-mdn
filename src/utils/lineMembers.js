@@ -55,15 +55,20 @@ export function assignMemberToLine(lines, lineId, userId) {
  * Determina si un usuario debe ver todas las líneas (sin scoping).
  * - Nivel 4+ o admin: ve todas las líneas.
  * - tasks_view_all=true: ve todas las líneas (bypass por usuario, sin cambiar nivel).
+ * - extraViewAll=true: bypass adicional para módulos con su propia capability de "ver
+ *   todo" (p. ej. Pautas → `audiovisual.ver_todo`), sin tener que subir el nivel del
+ *   usuario ni volverlo miembro de todas las líneas.
  *
  * @param {object|null} userProfile - Perfil del usuario (de useAuth)
+ * @param {{ extraViewAll?: boolean }} [opts]
  * @returns {boolean}
  */
-export function userViewsAllLines(userProfile) {
+export function userViewsAllLines(userProfile, { extraViewAll = false } = {}) {
   return (
     userProfile?.access_level >= 4 ||
     userProfile?.admin === true ||
-    userProfile?.tasks_view_all === true
+    userProfile?.tasks_view_all === true ||
+    extraViewAll
   )
 }
 
@@ -74,11 +79,12 @@ export function userViewsAllLines(userProfile) {
  *
  * @param {Array} lines - Todas las líneas cargadas de metric_lines
  * @param {object|null} userProfile - Perfil del usuario (de useAuth)
+ * @param {{ extraViewAll?: boolean }} [opts] - ver `userViewsAllLines`
  * @returns {Array}
  */
-export function visibleLinesForUser(lines, userProfile) {
+export function visibleLinesForUser(lines, userProfile, opts) {
   if (!lines) return []
-  if (userViewsAllLines(userProfile)) return lines
+  if (userViewsAllLines(userProfile, opts)) return lines
   const uid = userProfile?.user_id
   if (!uid) return []
   return lines.filter((l) => (l.member_user_ids ?? []).includes(uid))

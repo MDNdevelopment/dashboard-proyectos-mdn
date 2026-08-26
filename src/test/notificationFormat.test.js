@@ -42,6 +42,11 @@ describe('notifIcon', () => {
     expect(notifIcon('campaign_autoclosed')).toBe('✅')
     expect(notifIcon('ad_autoclosed')).toBe('✅')
   })
+  it('returns 🎬 for av_pauta_solicitada, 📅 for av_pauta_programada, ⏰ for av_agenda_reminder', () => {
+    expect(notifIcon('av_pauta_solicitada')).toBe('🎬')
+    expect(notifIcon('av_pauta_programada')).toBe('📅')
+    expect(notifIcon('av_agenda_reminder')).toBe('⏰')
+  })
   it('returns 🔔 for unknown types', () => {
     expect(notifIcon('unknown_type')).toBe('🔔')
     expect(notifIcon('')).toBe('🔔')
@@ -77,6 +82,11 @@ describe('notifLabel', () => {
   })
   it('returns human-readable label for ad_autoclosed', () => {
     expect(notifLabel('ad_autoclosed')).toBe('Ad finalizado')
+  })
+  it('returns human-readable labels for av_pauta_* types', () => {
+    expect(notifLabel('av_pauta_solicitada')).toBe('Pauta solicitada')
+    expect(notifLabel('av_pauta_programada')).toBe('Pauta agendada')
+    expect(notifLabel('av_agenda_reminder')).toBe('Agenda audiovisual')
   })
   it('returns fallback for unknown types', () => {
     expect(notifLabel('whatever')).toBe('Notificación')
@@ -161,6 +171,21 @@ describe('notifRoute', () => {
       notifRoute({ type: 'campaign_autoclosed', entity_type: 'campaign', entity_id: 'k1' }),
     ).toBe('/ads')
     expect(notifRoute({ type: 'ad_autoclosed', entity_type: 'ad', entity_id: 'a1' })).toBe('/ads')
+  })
+
+  it('routes av_pauta_* types to /tareas/pautas?pautaId=<id> (deeplink al detalle de la pauta)', () => {
+    expect(
+      notifRoute({ type: 'av_pauta_solicitada', entity_type: 'av_pauta', entity_id: 'p1' }),
+    ).toBe('/tareas/pautas?pautaId=p1')
+    expect(
+      notifRoute({ type: 'av_pauta_programada', entity_type: 'av_pauta', entity_id: 'p1' }),
+    ).toBe('/tareas/pautas?pautaId=p1')
+  })
+
+  it('routes av_pauta_* types to /tareas/pautas (sin query) cuando no hay entity_id', () => {
+    expect(
+      notifRoute({ type: 'av_agenda_reminder', entity_type: 'av_pauta', entity_id: null }),
+    ).toBe('/tareas/pautas')
   })
 
   it('falls back to / for unknown types', () => {
