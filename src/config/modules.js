@@ -49,7 +49,6 @@ export const MODULES = [
     tabs: [
       { key: 'team', label: 'Dashboard' },
       { key: 'base', label: 'Base' },
-      { key: 'kanban', label: 'Kanban' },
       { key: 'standup', label: 'Stand-up' },
       { key: 'fijas', label: 'Tareas Fijas' },
       { key: 'pautas', label: 'Pautas' },

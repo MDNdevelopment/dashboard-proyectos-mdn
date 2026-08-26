@@ -145,12 +145,14 @@ describe('condición position', () => {
 describe('AND dentro de grupo', () => {
   const config = {
     ads: {
-      rules: [{
-        all: [
-          { type: 'department', ids: [10] },
-          { type: 'min_level', value: 2 },
-        ],
-      }],
+      rules: [
+        {
+          all: [
+            { type: 'department', ids: [10] },
+            { type: 'min_level', value: 2 },
+          ],
+        },
+      ],
     },
   }
 
@@ -178,7 +180,12 @@ describe('OR entre grupos (caso exacto del usuario)', () => {
   const config = {
     ads: {
       rules: [
-        { all: [{ type: 'department', ids: [10] }, { type: 'min_level', value: 2 }] },
+        {
+          all: [
+            { type: 'department', ids: [10] },
+            { type: 'min_level', value: 2 },
+          ],
+        },
         { all: [{ type: 'user', ids: ['persona-x'] }] },
       ],
     },
@@ -245,9 +252,9 @@ describe('capacidades granulares — empresa (escenario del usuario)', () => {
 
   // empresa.general → sin reglas = abierto a todos
   const configEmpresa = {
-    'empresa.clientes':        { rules: [{ all: [{ type: 'min_level', value: 2 }] }] },
-    'empresa.lineas':          { rules: [{ all: [{ type: 'min_level', value: 2 }] }] },
-    'empresa.lineas.manage':   { rules: [{ all: [{ type: 'min_level', value: 4 }] }] },
+    'empresa.clientes': { rules: [{ all: [{ type: 'min_level', value: 2 }] }] },
+    'empresa.lineas': { rules: [{ all: [{ type: 'min_level', value: 2 }] }] },
+    'empresa.lineas.manage': { rules: [{ all: [{ type: 'min_level', value: 4 }] }] },
     'empresa.clientes.manage': { rules: [{ all: [{ type: 'min_level', value: 2 }] }] },
   }
 
@@ -314,12 +321,14 @@ describe('negación de condiciones', () => {
     // Regla: nivel ≥ 2  Y  usuario NO es user-1
     const config = {
       ads: {
-        rules: [{
-          all: [
-            { type: 'min_level', value: 2 },
-            { type: 'user', ids: ['user-1'], negate: true },
-          ],
-        }],
+        rules: [
+          {
+            all: [
+              { type: 'min_level', value: 2 },
+              { type: 'user', ids: ['user-1'], negate: true },
+            ],
+          },
+        ],
       },
     }
 
@@ -383,7 +392,12 @@ describe('negación de condiciones', () => {
     const config = {
       ads: {
         rules: [
-          { all: [{ type: 'min_level', value: 2 }, { type: 'user', ids: ['user-1'], negate: true }] },
+          {
+            all: [
+              { type: 'min_level', value: 2 },
+              { type: 'user', ids: ['user-1'], negate: true },
+            ],
+          },
           { all: [{ type: 'user', ids: ['user-1'] }] },
         ],
       },
@@ -434,10 +448,10 @@ describe('negación de condiciones', () => {
 describe('capacidades granulares — tareas (tabs por nivel)', () => {
   const configTareas = {
     'tareas.panorama': { rules: [{ all: [{ type: 'min_level', value: 2 }] }] },
-    'tareas.team':     { rules: [{ all: [{ type: 'min_level', value: 2 }] }] },
-    'tareas.standup':  { rules: [{ all: [{ type: 'min_level', value: 2 }] }] },
-    // base y kanban sin reglas → abiertos
-    'tareas.manage':   { rules: [{ all: [{ type: 'min_level', value: 2 }] }] },
+    'tareas.team': { rules: [{ all: [{ type: 'min_level', value: 2 }] }] },
+    'tareas.standup': { rules: [{ all: [{ type: 'min_level', value: 2 }] }] },
+    // base sin reglas → abierto
+    'tareas.manage': { rules: [{ all: [{ type: 'min_level', value: 2 }] }] },
   }
 
   it('nivel 1 no ve Panorama', () => {
@@ -462,8 +476,8 @@ describe('capacidades granulares — tareas (tabs por nivel)', () => {
 // Exclusiones (deny) — "todo el mundo MENOS X"
 // ──────────────────────────────────────────────
 describe('exclusiones (deny)', () => {
-  const DISENO_USER  = { ...BASE_USER, department_id: 5 }
-  const OTRO_USER    = { ...BASE_USER, department_id: 99, user_id: 'user-99' }
+  const DISENO_USER = { ...BASE_USER, department_id: 5 }
+  const OTRO_USER = { ...BASE_USER, department_id: 99, user_id: 'user-99' }
   const ADMIN_DISENO = { ...ADMIN_USER, department_id: 5 }
 
   // ── deny por department ────────────────────
@@ -502,7 +516,7 @@ describe('exclusiones (deny)', () => {
     const config = {
       ads: {
         rules: [{ all: [{ type: 'min_level', value: 1 }] }],
-        deny:  [{ type: 'department', ids: [5] }],
+        deny: [{ type: 'department', ids: [5] }],
       },
     }
 
@@ -555,8 +569,8 @@ describe('exclusiones (deny)', () => {
   describe('retrocompatibilidad — config sin deny funciona igual que antes', () => {
     it('config con solo rules (sin deny) no se ve afectado', () => {
       const config = { ads: { rules: [{ all: [{ type: 'min_level', value: 2 }] }] } }
-      expect(canAccessModule('ads', BASE_USER, config)).toBe(false)   // nivel 1 no pasa
-      expect(canAccessModule('ads', LEVEL2_USER, config)).toBe(true)  // nivel 2 sí pasa
+      expect(canAccessModule('ads', BASE_USER, config)).toBe(false) // nivel 1 no pasa
+      expect(canAccessModule('ads', LEVEL2_USER, config)).toBe(true) // nivel 2 sí pasa
     })
 
     it('deny: [] vacío no excluye a nadie', () => {

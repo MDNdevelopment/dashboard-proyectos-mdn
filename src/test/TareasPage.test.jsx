@@ -120,7 +120,6 @@ describe('TareasPage', () => {
     expect(screen.queryByRole('button', { name: 'Panorama' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Dashboard' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Base' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Kanban' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Stand-up' })).toBeInTheDocument()
   })
 
@@ -166,7 +165,7 @@ describe('TareasPage', () => {
     })
   })
 
-  it('shows the period selector on Dashboard/Base/Kanban but not on Stand-up', async () => {
+  it('shows the period selector on Dashboard/Base but not on Stand-up', async () => {
     const user = userEvent.setup()
     renderPage()
     await waitFor(() => {
@@ -176,9 +175,6 @@ describe('TareasPage', () => {
     expect(screen.getByText('Período')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Base' }))
-    expect(screen.getByText('Período')).toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: 'Kanban' }))
     expect(screen.getByText('Período')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Stand-up' }))

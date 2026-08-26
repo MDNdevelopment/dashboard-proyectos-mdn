@@ -28,6 +28,7 @@ export const CHANGELOG = [
       'Corregido: las tareas pendientes y en proceso de Energon y Maxxis se habían quedado en el equipo anterior al mover esas marcas a Team Sabrina. Ya se movieron al equipo nuevo y quedaron a cargo de la jefa de línea.',
       'Nuevo: se puede conectar Claude (computadora o iPhone) a la base de datos del dashboard para hacer preguntas y análisis en el chat, en modo solo lectura. Se conecta agregando un enlace en Settings → Connectors de Claude e iniciando sesión con una contraseña, sin instalar nada.',
       'Corregido: ahora se puede eliminar un empleado (u otro elemento) aunque su nombre tenga espacios de más al escribirlo para confirmar.',
+      'Se quitó la pestaña "Kanban" de Gestión de Tareas.',
       'En Empresa → Empleados, los usuarios de nivel 1 y 2 ya no ven el nivel de cada empleado ni la vista por columnas que lo dejaba entrever.',
       'En el calendario del Inicio, "Cliente MDN desde" ahora tiene un ícono de medalla y "Cumpleaños de contacto" usa el mismo pastel de 3 velas que los cumpleaños del equipo.',
       'Corregido: el título "Fechas del equipo y clientes" (Inicio y Empresa) aparecía con cada palabra en mayúscula inicial.',

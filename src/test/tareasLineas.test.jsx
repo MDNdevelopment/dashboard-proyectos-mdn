@@ -7,30 +7,69 @@ import { vi } from 'vitest'
 const USER_ID_MEMBER = 'u-mgr'
 
 const MOCK_LINES = [
-  { id: 'line-1', company_id: 'co-1', name: 'Georgina',  color: '#FAB51A', sort_order: 0, member_user_ids: [USER_ID_MEMBER] },
-  { id: 'line-2', company_id: 'co-1', name: 'Daniellys', color: '#3B82F6', sort_order: 1, member_user_ids: [] },
+  {
+    id: 'line-1',
+    company_id: 'co-1',
+    name: 'Georgina',
+    color: '#FAB51A',
+    sort_order: 0,
+    member_user_ids: [USER_ID_MEMBER],
+  },
+  {
+    id: 'line-2',
+    company_id: 'co-1',
+    name: 'Daniellys',
+    color: '#3B82F6',
+    sort_order: 1,
+    member_user_ids: [],
+  },
 ]
 
 const MOCK_TASKS = [
   {
-    id: 'task-1', company_id: 'co-1', team_id: 'line-1',
-    client: 'Banco Exterior', description: 'Diseñar banner',
-    status: 'En proceso', assignee_id: null, support_id: null,
-    request_date: '2026-06-01', due_date: '2026-06-30', closed_date: null,
-    source: null, created_by: null, created_at: '2026-06-01T00:00:00Z',
+    id: 'task-1',
+    company_id: 'co-1',
+    team_id: 'line-1',
+    client: 'Banco Exterior',
+    description: 'Diseñar banner',
+    status: 'En proceso',
+    assignee_id: null,
+    support_id: null,
+    request_date: '2026-06-01',
+    due_date: '2026-06-30',
+    closed_date: null,
+    source: null,
+    created_by: null,
+    created_at: '2026-06-01T00:00:00Z',
   },
   {
-    id: 'task-2', company_id: 'co-1', team_id: 'line-2',
-    client: 'Farmacia Salud', description: 'Editar reel',
-    status: 'Pendiente', assignee_id: null, support_id: null,
-    request_date: '2026-06-02', due_date: '2026-06-28', closed_date: null,
-    source: null, created_by: null, created_at: '2026-06-02T00:00:00Z',
+    id: 'task-2',
+    company_id: 'co-1',
+    team_id: 'line-2',
+    client: 'Farmacia Salud',
+    description: 'Editar reel',
+    status: 'Pendiente',
+    assignee_id: null,
+    support_id: null,
+    request_date: '2026-06-02',
+    due_date: '2026-06-28',
+    closed_date: null,
+    source: null,
+    created_by: null,
+    created_at: '2026-06-02T00:00:00Z',
   },
 ]
 
 const MOCK_USERS = [
-  { user_id: 'u-1', company_id: 'co-1', first_name: 'Ana', last_name: 'González',
-    avatar_url: null, access_level: 1, position: null },
+  {
+    user_id: 'u-1',
+    company_id: 'co-1',
+    first_name: 'Ana',
+    last_name: 'González',
+    avatar_url: null,
+    access_level: 1,
+    position: null,
+  },
 ]
 
 // Mutable: algunos tests (grupo "Independientes") reasignan la lista de usuarios
@@ -38,16 +77,16 @@ const MOCK_USERS = [
 let mockUsersData = MOCK_USERS
 
 // ── Mock metricsApi ────────────────────────────────────────────────────────────
-const mockLoadLines   = vi.fn().mockResolvedValue({ data: MOCK_LINES, error: null })
+const mockLoadLines = vi.fn().mockResolvedValue({ data: MOCK_LINES, error: null })
 const mockLoadClients = vi.fn().mockResolvedValue({ data: [], error: null })
 
 vi.mock('../components/metricas/metricsApi', () => ({
-  loadLines:          (...a) => mockLoadLines(...a),
-  loadClients:        (...a) => mockLoadClients(...a),
-  updateLine:         vi.fn(),
-  deleteLine:         vi.fn(),
-  createLine:         vi.fn(),
-  loadCompanyUsers:   vi.fn(),
+  loadLines: (...a) => mockLoadLines(...a),
+  loadClients: (...a) => mockLoadClients(...a),
+  updateLine: vi.fn(),
+  deleteLine: vi.fn(),
+  createLine: vi.fn(),
+  loadCompanyUsers: vi.fn(),
   seedMetricsIfEmpty: vi.fn(),
 }))
 
@@ -56,8 +95,8 @@ vi.mock('../components/metricas/metricsApi', () => ({
 vi.mock('../supabase', () => {
   const makeMockTable = (defaultData) => ({
     select: vi.fn().mockReturnThis(),
-    eq:     vi.fn().mockReturnThis(),
-    order:  vi.fn().mockResolvedValue({ data: defaultData, error: null }),
+    eq: vi.fn().mockReturnThis(),
+    order: vi.fn().mockResolvedValue({ data: defaultData, error: null }),
   })
   const channelStub = { on: vi.fn().mockReturnThis(), subscribe: vi.fn().mockReturnThis() }
   return {
@@ -67,7 +106,7 @@ vi.mock('../supabase', () => {
         if (table === 'users') return makeMockTable(mockUsersData)
         return makeMockTable([])
       }),
-      channel:       vi.fn(() => channelStub),
+      channel: vi.fn(() => channelStub),
       removeChannel: vi.fn(),
     },
   }
@@ -98,7 +137,7 @@ function renderPage(profileOverride = {}) {
   return render(
     <MemoryRouter>
       <TareasPage />
-    </MemoryRouter>
+    </MemoryRouter>,
   )
 }
 
@@ -207,21 +246,6 @@ describe('TareasPage — líneas desde metric_lines', () => {
       expect(screen.getByText('Diseñar banner')).toBeInTheDocument()
       expect(screen.queryByText('Editar reel')).not.toBeInTheDocument()
     })
-
-    it('Kanban combina tareas de todas las líneas visibles', async () => {
-      const user = userEvent.setup()
-      renderPage({ access_level: 4, admin: false, user_id: 'u-otro' })
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: 'Todos' })).toBeInTheDocument()
-      })
-
-      await user.click(screen.getByRole('button', { name: 'Kanban' }))
-
-      await waitFor(() => {
-        expect(screen.getByText('Banco Exterior')).toBeInTheDocument()
-      })
-      expect(screen.getByText('Farmacia Salud')).toBeInTheDocument()
-    })
   })
 
   // ── Grupo "Independientes" (empleados sin línea, is_general) ──────────────────
@@ -229,12 +253,27 @@ describe('TareasPage — líneas desde metric_lines', () => {
     const USER_ID_SIN_LINEA = 'u-sin-linea'
     const LINES_WITH_GENERAL = [
       ...MOCK_LINES,
-      { id: 'line-general', company_id: 'co-1', name: 'Independientes', color: '#9CA3AF', sort_order: 9999, is_general: true, member_user_ids: [] },
+      {
+        id: 'line-general',
+        company_id: 'co-1',
+        name: 'Independientes',
+        color: '#9CA3AF',
+        sort_order: 9999,
+        is_general: true,
+        member_user_ids: [],
+      },
     ]
     const USERS_WITH_UNASSIGNED = [
       ...MOCK_USERS,
-      { user_id: USER_ID_SIN_LINEA, company_id: 'co-1', first_name: 'Iván', last_name: 'Tech',
-        avatar_url: null, access_level: 2, position: null },
+      {
+        user_id: USER_ID_SIN_LINEA,
+        company_id: 'co-1',
+        first_name: 'Iván',
+        last_name: 'Tech',
+        avatar_url: null,
+        access_level: 2,
+        position: null,
+      },
     ]
 
     beforeEach(() => {
