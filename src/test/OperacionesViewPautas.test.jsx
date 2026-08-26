@@ -1,8 +1,9 @@
 /**
- * Tests de OperacionesView — sección "6. Nº Piezas vs Piezas editadas".
+ * Tests de OperacionesView — sección "5. Nº Pautas" (campo "Realizadas" por marca).
  * Cubre el auto-llenado desde las pautas 'realizada' de Tareas Fijas → Audiovisual
  * (AUDIOVISUAL_MODULE_START = sept. 2026): antes de esa era sigue siendo manual, desde
- * esa era queda de solo lectura y derivado, y un reporte cerrado conserva el valor guardado.
+ * esa era "Realizadas" queda de solo lectura y derivado por cliente, "Meta" sigue
+ * siempre editable, y un reporte cerrado conserva el valor guardado sin recalcular.
  */
 import { render, screen, waitFor, within } from '@testing-library/react'
 import { vi } from 'vitest'
@@ -17,8 +18,8 @@ function makeReportData() {
     productividad: { tareas: [] },
     crecimiento: { items: [] },
     solicitudes: { solicitudes: 0, editadas: 0 },
-    pautas: { items: [] },
-    piezas: { piezas: 12, editadas: 9 },
+    pautas: { items: [{ clienteId: 'c-1', realizadas: 3, meta: 5 }] },
+    piezas: { piezas: 0, editadas: 0 },
     feedback: { items: [] },
     finanzas: { ingresos: [], gastosOperativos: [], sueldos: [], otrosGastos: [] },
   }
@@ -75,7 +76,7 @@ function renderView(props = {}) {
   return render(<OperacionesView line={LINE} companyId="co-1" year={2026} month={7} {...props} />)
 }
 
-describe('OperacionesView — "6. Nº Piezas vs Piezas editadas"', () => {
+describe('OperacionesView — "5. Nº Pautas" (Realizadas)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockLoadPrevReport.mockResolvedValue({ data: null, error: null })
@@ -86,50 +87,64 @@ describe('OperacionesView — "6. Nº Piezas vs Piezas editadas"', () => {
     mockCountMeetingsHeldForLine.mockResolvedValue({ count: 0, error: null })
     mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: [], error: null })
     mockLoadFixedTaskMarks.mockResolvedValue({ data: [], error: null })
-    mockCountPautasRealizadasByClient.mockResolvedValue({ byClient: {}, error: null })
+    mockCountPiezasForLine.mockResolvedValue({ piezas: 0, editadas: 0, error: null })
   })
 
-  it('agosto 2026 (previo a septiembre): el valor guardado a mano se puede editar', async () => {
+  it('agosto 2026 (previo a septiembre): Realizadas y Meta se pueden editar a mano', async () => {
     mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
-    mockCountPiezasForLine.mockResolvedValue({ piezas: 999, editadas: 999, error: null })
+    mockCountPautasRealizadasByClient.mockResolvedValue({ byClient: { 'c-1': 999 }, error: null })
     renderView({ month: 8 })
     await waitFor(() => {
       expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
     })
-    const piezasInput = screen.getByDisplayValue('12')
-    expect(piezasInput).not.toBeDisabled()
-    const editadasInput = screen.getByDisplayValue('9')
-    expect(editadasInput).not.toBeDisabled()
+    const realizadasInput = screen.getByDisplayValue('3')
+    const metaInput = screen.getByDisplayValue('5')
+    expect(realizadasInput).not.toBeDisabled()
+    expect(metaInput).not.toBeDisabled()
     expect(screen.queryByText('Derivado de Audiovisual')).not.toBeInTheDocument()
   })
 
-  it('septiembre 2026 (lanzamiento del módulo, inclusive): queda de solo lectura y usa el conteo automático', async () => {
+  it('septiembre 2026 (lanzamiento del módulo, inclusive): Realizadas queda de solo lectura con el conteo por cliente, Meta sigue editable', async () => {
     mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
-    mockCountPiezasForLine.mockResolvedValue({ piezas: 20, editadas: 15, error: null })
+    mockCountPautasRealizadasByClient.mockResolvedValue({ byClient: { 'c-1': 7 }, error: null })
     renderView({ month: 9 })
     await waitFor(() => {
       expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
     })
-    const piezasInput = screen.getByDisplayValue('20')
-    const editadasInput = screen.getByDisplayValue('15')
-    expect(piezasInput).toBeDisabled()
-    expect(editadasInput).toBeDisabled()
-    // Acotado a la sección de Piezas: el punto 5 (Pautas) también muestra su propio
-    // "Derivado de Audiovisual" desde esta misma era, cubierto en OperacionesViewPautas.test.jsx.
-    const piezasSection = screen
-      .getByText('6. Nº Piezas vs Piezas editadas')
-      .closest('div.space-y-3')
-    expect(within(piezasSection).getAllByText('Derivado de Audiovisual').length).toBe(2)
+    // El título es único al input de Realizadas derivado; se ubica la fila del cliente
+    // a partir de ahí para encontrar, dentro de esa misma fila, el input de Meta.
+    const realizadasInput = screen.getByTitle(
+      'Derivado automáticamente de Audiovisual: pautas realizadas del cliente en el mes',
+    )
+    expect(realizadasInput).toBeDisabled()
+    expect(realizadasInput.value).toBe('7')
+    const row = realizadasInput.closest('div.grid')
+    const metaInput = within(row).getByDisplayValue('5')
+    expect(metaInput).not.toBeDisabled()
+    expect(within(row).getByText('Derivado de Audiovisual')).toBeInTheDocument()
+  })
+
+  it('un cliente sin pautas realizadas ese mes cae a 0, no se deja el valor guardado', async () => {
+    mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
+    mockCountPautasRealizadasByClient.mockResolvedValue({ byClient: {}, error: null })
+    renderView({ month: 9 })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
+    const realizadasInput = screen.getByTitle(
+      'Derivado automáticamente de Audiovisual: pautas realizadas del cliente en el mes',
+    )
+    expect(realizadasInput.value).toBe('0')
   })
 
   it('reporte cerrado en la era del módulo: conserva el valor guardado sin recalcular', async () => {
     mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
-    mockCountPiezasForLine.mockResolvedValue({ piezas: 999, editadas: 999, error: null })
+    mockCountPautasRealizadasByClient.mockResolvedValue({ byClient: { 'c-1': 999 }, error: null })
     renderView({ month: 9, closed: true })
     await waitFor(() => {
       expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
     })
-    expect(screen.getByDisplayValue('12')).toBeInTheDocument()
-    expect(screen.getByDisplayValue('9')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('3')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('5')).toBeInTheDocument()
   })
 })

@@ -23,15 +23,13 @@ import { MONTHS } from './constants'
 
 const CURRENT_YEAR = new Date().getFullYear()
 const CURRENT_MONTH = new Date().getMonth() + 1
-const PREV_MONTH = CURRENT_MONTH === 1 ? 12 : CURRENT_MONTH - 1
-const DEFAULT_YEAR = CURRENT_MONTH === 1 ? CURRENT_YEAR - 1 : CURRENT_YEAR
 const YEARS = Array.from({ length: 4 }, (_, i) => CURRENT_YEAR - i)
 
 export default function DashboardView({ companyId, lines }) {
   const navigate = useNavigate()
   const { can = () => true } = useAuth()
-  const [year, setYear] = useState(DEFAULT_YEAR)
-  const [selectedMonth, setSelectedMonth] = useState(PREV_MONTH)
+  const [year, setYear] = useState(CURRENT_YEAR)
+  const [selectedMonth, setSelectedMonth] = useState(CURRENT_MONTH)
   const [reports, setReports] = useState([])
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)

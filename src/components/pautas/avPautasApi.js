@@ -47,6 +47,34 @@ export async function countPiezasForLine(companyId, lineId, { month, year }) {
 }
 
 /**
+ * Cuenta pautas 'realizada' por cliente en una línea/mes — usado por Reportes →
+ * Operaciones para sembrar "Realizadas" del indicador «5. Nº Pautas» desde
+ * AUDIOVISUAL_MODULE_START. La Meta de cada marca sigue siendo manual.
+ */
+export async function countPautasRealizadasByClient(companyId, lineId, { month, year }) {
+  const monthStart = new Date(year, month - 1, 1)
+  const monthEnd = new Date(year, month, 1)
+  const toISODate = (d) => d.toISOString().slice(0, 10)
+
+  const { data, error } = await supabase
+    .from('av_pautas')
+    .select('client_id')
+    .eq('company_id', companyId)
+    .eq('line_id', lineId)
+    .eq('status', 'realizada')
+    .gte('pauta_date', toISODate(monthStart))
+    .lt('pauta_date', toISODate(monthEnd))
+
+  if (error) return { byClient: {}, error }
+  const byClient = {}
+  for (const row of data ?? []) {
+    if (!row.client_id) continue
+    byClient[row.client_id] = (byClient[row.client_id] ?? 0) + 1
+  }
+  return { byClient, error: null }
+}
+
+/**
  * Pautas activas ('programada'|'realizada') de un día exacto, en CUALQUIER línea —
  * usado para validar disponibilidad de recursos (ver `resourceConflicts` en
  * utils/audiovisual.js). A diferencia de `loadPautas`, filtra por fecha en el

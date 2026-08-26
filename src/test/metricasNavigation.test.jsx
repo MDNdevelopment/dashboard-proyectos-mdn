@@ -259,14 +259,26 @@ describe('DashboardView — KPI "Línea líder" y tarjetas financieras clickeabl
 })
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 1d. LineView — filtrado de meses futuros en el selector
+// 1d. LineView — el selector de mes siempre permite el actual y el siguiente
 // ══════════════════════════════════════════════════════════════════════════════
 
 const REAL_CURRENT_YEAR = new Date().getFullYear()
 const REAL_CURRENT_MONTH = new Date().getMonth() + 1
+const REAL_NEXT_MONTH = Math.min(REAL_CURRENT_MONTH + 1, 12)
 
-describe('LineView — selector de mes oculta periodos futuros', () => {
-  it('con el año actual, el selector de mes solo muestra meses hasta el mes en curso', () => {
+describe('LineView — el selector de mes permite el mes actual y el siguiente', () => {
+  it('por defecto, sin ?month= en la URL, arranca en el mes actual', () => {
+    renderWithRouter(<LineView line={MOCK_LINE} companyId="co-1" />, {
+      initialEntry: '/reportes/linea/l-1?tab=operaciones',
+    })
+    const monthSelect = [...document.querySelectorAll('select')].find((s) =>
+      [...s.options].every((o) => Number(o.value) <= 12),
+    )
+    expect(monthSelect).toBeTruthy()
+    expect(Number(monthSelect.value)).toBe(REAL_CURRENT_MONTH)
+  })
+
+  it('con el año actual, el selector de mes muestra hasta el mes siguiente al actual', () => {
     renderWithRouter(<LineView line={MOCK_LINE} companyId="co-1" />, {
       initialEntry: `/reportes/linea/l-1?tab=operaciones&year=${REAL_CURRENT_YEAR}`,
     })
@@ -275,10 +287,10 @@ describe('LineView — selector de mes oculta periodos futuros', () => {
     )
     expect(monthSelect).toBeTruthy()
     const values = [...monthSelect.options].map((o) => Number(o.value))
-    // No debe haber ningún mes mayor al mes actual
-    expect(values.every((v) => v <= REAL_CURRENT_MONTH)).toBe(true)
-    // Debe haber exactamente REAL_CURRENT_MONTH opciones
-    expect(values.length).toBe(REAL_CURRENT_MONTH)
+    // No debe haber ningún mes más allá del siguiente al actual
+    expect(values.every((v) => v <= REAL_NEXT_MONTH)).toBe(true)
+    // El mes siguiente al actual sí debe estar disponible
+    expect(values).toContain(REAL_NEXT_MONTH)
   })
 
   it('con un año pasado, el selector de mes muestra los 12 meses', () => {
@@ -293,19 +305,31 @@ describe('LineView — selector de mes oculta periodos futuros', () => {
     expect(monthSelect.options.length).toBe(12)
   })
 
-  it('un ?month= futuro en la URL queda saneado al mes actual en el selector', () => {
-    // Solo tiene sentido si no estamos en Diciembre
-    if (REAL_CURRENT_MONTH >= 12) return
-    const futureMonth = REAL_CURRENT_MONTH + 1
+  it('?month= igual al mes siguiente al actual se respeta, sin sanear', () => {
+    if (REAL_NEXT_MONTH === REAL_CURRENT_MONTH) return // ya estamos en diciembre
     renderWithRouter(<LineView line={MOCK_LINE} companyId="co-1" />, {
-      initialEntry: `/reportes/linea/l-1?tab=operaciones&year=${REAL_CURRENT_YEAR}&month=${futureMonth}`,
+      initialEntry: `/reportes/linea/l-1?tab=operaciones&year=${REAL_CURRENT_YEAR}&month=${REAL_NEXT_MONTH}`,
     })
     const monthSelect = [...document.querySelectorAll('select')].find((s) =>
       [...s.options].every((o) => Number(o.value) <= 12),
     )
     expect(monthSelect).toBeTruthy()
-    // El valor efectivo debe ser el mes actual (clamped), no el futuro
-    expect(Number(monthSelect.value)).toBe(REAL_CURRENT_MONTH)
+    expect(Number(monthSelect.value)).toBe(REAL_NEXT_MONTH)
+  })
+
+  it('un ?month= más allá del mes siguiente queda saneado a ese mes siguiente', () => {
+    // Solo tiene sentido si hay al menos 2 meses de margen antes de fin de año
+    if (REAL_CURRENT_MONTH >= 11) return
+    const tooFarMonth = REAL_CURRENT_MONTH + 2
+    renderWithRouter(<LineView line={MOCK_LINE} companyId="co-1" />, {
+      initialEntry: `/reportes/linea/l-1?tab=operaciones&year=${REAL_CURRENT_YEAR}&month=${tooFarMonth}`,
+    })
+    const monthSelect = [...document.querySelectorAll('select')].find((s) =>
+      [...s.options].every((o) => Number(o.value) <= 12),
+    )
+    expect(monthSelect).toBeTruthy()
+    // El valor efectivo debe ser el mes siguiente al actual (clamped), no el lejano
+    expect(Number(monthSelect.value)).toBe(REAL_NEXT_MONTH)
   })
 })
 

@@ -33,7 +33,7 @@ import { Avatar } from '../tareas/UserPickerSingle'
 import { loadAds, spentByClientInPeriod } from '../ads/campaignSpendApi'
 import { fmtUSD } from '../../utils/metricsFinance'
 import { countMeetingsHeldForLine, loadHeldClientIdsForLine } from '../reuniones/meetingsApi'
-import { countPiezasForLine } from '../pautas/avPautasApi'
+import { countPiezasForLine, countPautasRealizadasByClient } from '../pautas/avPautasApi'
 import { countCnpSolicitudesForLine } from '../cnp/cnpApi'
 import { countTareasSolicitudesForLine } from '../tareas/tareasMetricsApi'
 import ReunionesClientesModal from './ReunionesClientesModal'
@@ -90,6 +90,7 @@ export default function OperacionesView({ line, companyId, year, month, closed =
       heldRes,
       fixedTaskMarksRes,
       piezasRes,
+      pautasRealizadasRes,
       checksRes,
       cnpSolRes,
       tareasSolRes,
@@ -104,6 +105,7 @@ export default function OperacionesView({ line, companyId, year, month, closed =
       loadHeldClientIdsForLine(companyId, line.id, { month, year }),
       loadFixedTaskMarks(line.id, year, month),
       countPiezasForLine(companyId, line.id, { month, year }),
+      countPautasRealizadasByClient(companyId, line.id, { month, year }),
       loadChecks(companyId, year, month),
       countCnpSolicitudesForLine(companyId, line.id, { month, year }),
       countTareasSolicitudesForLine(companyId, line.id, { month, year }),
@@ -221,6 +223,17 @@ export default function OperacionesView({ line, companyId, year, month, closed =
     if (isAvEra && !closed) {
       synced.piezas.piezas = piezasRes.piezas
       synced.piezas.editadas = piezasRes.editadas
+    }
+
+    // "Nº Pautas" (Realizadas) ya no se captura a mano por marca — se deriva del conteo
+    // de pautas 'realizada' de Audiovisual por cliente, mismo corte de fecha que Piezas.
+    // La Meta de cada marca sigue siendo manual (no tiene equivalente en av_pautas).
+    if (isAvEra && !closed) {
+      const byClient = pautasRealizadasRes.byClient
+      synced.pautas.items = synced.pautas.items.map((item) => ({
+        ...item,
+        realizadas: byClient[item.clienteId] ?? 0,
+      }))
     }
 
     // "Solicitudes vs Entregados" ya no se captura a mano — se deriva de CNP + Gestión
@@ -1017,15 +1030,35 @@ export default function OperacionesView({ line, companyId, year, month, closed =
                   className="grid grid-cols-[minmax(100px,1fr)_auto_auto] gap-2 items-center"
                 >
                   <ClientLink clienteId={item.clienteId} />
-                  <div className="flex items-center gap-1">
-                    <span className="text-[11px] text-[#aaa]">Realizadas</span>
-                    <input
-                      type="number"
-                      min="0"
-                      className="input-base w-20 text-[13px]"
-                      value={item.realizadas ?? ''}
-                      onChange={(e) => setItemField('pautas', idx, 'realizadas', e.target.value)}
-                    />
+                  <div className="flex flex-col gap-0.5">
+                    <div className="flex items-center gap-1">
+                      <span className="text-[11px] text-[#aaa]">Realizadas</span>
+                      <input
+                        type="number"
+                        min="0"
+                        className={
+                          isAvEra
+                            ? 'input-base w-20 text-[13px] bg-[#f2f0e8] text-[#888] cursor-not-allowed'
+                            : 'input-base w-20 text-[13px]'
+                        }
+                        value={item.realizadas ?? ''}
+                        disabled={isAvEra}
+                        readOnly={isAvEra}
+                        onChange={
+                          isAvEra
+                            ? undefined
+                            : (e) => setItemField('pautas', idx, 'realizadas', e.target.value)
+                        }
+                        title={
+                          isAvEra
+                            ? 'Derivado automáticamente de Audiovisual: pautas realizadas del cliente en el mes'
+                            : undefined
+                        }
+                      />
+                    </div>
+                    {isAvEra && (
+                      <p className="text-[10px] font-mono text-[#888]">Derivado de Audiovisual</p>
+                    )}
                   </div>
                   <div className="flex items-center gap-1">
                     <span className="text-[11px] text-[#aaa]">Meta</span>
