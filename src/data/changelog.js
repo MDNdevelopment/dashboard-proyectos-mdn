@@ -29,6 +29,7 @@ export const CHANGELOG = [
       'Corregido: ahora se puede eliminar un empleado (u otro elemento) aunque su nombre tenga espacios de más al escribirlo para confirmar.',
       'En Empresa → Empleados, los usuarios de nivel 1 y 2 ya no ven el nivel de cada empleado ni la vista por columnas que lo dejaba entrever.',
       'En el calendario del Inicio, "Cliente MDN desde" ahora tiene un ícono de medalla y "Cumpleaños de contacto" usa el mismo pastel de 3 velas que los cumpleaños del equipo.',
+      'Corregido: el título "Fechas del equipo y clientes" (Inicio y Empresa) aparecía con cada palabra en mayúscula inicial.',
       'Corregido: al crear un empleado con un correo que ya existe aparecía un mensaje de error técnico. Ahora avisa claramente si el correo ya pertenece a un empleado activo, o si pertenece a uno archivado (indicando que debe restaurarse desde "Ver eliminados").',
       'Corregido: en el Perfil del empleado (Evaluaciones), el conteo de "Tareas asignadas" no contaba las tareas con varios responsables; ahora sí las incluye.',
       'En el Perfil del empleado (Evaluaciones) ahora se abre mostrando el mes actual (con botón para ver el histórico completo). El recuadro de estado operativo suma un contador de tareas Pendientes y ahora refleja el mes elegido, y cada proyecto muestra su fecha de inicio y se filtra según el mes seleccionado.',

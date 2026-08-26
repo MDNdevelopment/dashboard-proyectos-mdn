@@ -54,8 +54,8 @@ export default function EmployeeDatesCalendar({ year, month, events, onMonthChan
     <div className="bg-white border border-[#e0ddd4] rounded-2xl overflow-hidden mb-4">
       <div className="flex items-center justify-between px-4 py-3 border-b border-[#ece9df]">
         <div>
-          <h2 className="text-[15px] font-bold text-[#111] capitalize">Fechas del equipo</h2>
-          <p className="text-[12px] text-[#999] capitalize">
+          <h2 className="text-[15px] font-bold text-[#111]">Fechas del equipo</h2>
+          <p className="text-[12px] text-[#999] first-letter:capitalize">
             {format(anchor, 'MMMM yyyy', { locale: es })} · {events.length} evento
             {events.length === 1 ? '' : 's'}
           </p>

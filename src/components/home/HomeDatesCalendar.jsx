@@ -58,10 +58,8 @@ export default function HomeDatesCalendar({ year, month, events, onMonthChange, 
     >
       <div className="flex items-center justify-between px-4 py-3 border-b border-[#ece9df]">
         <div>
-          <h2 className="text-[15px] font-bold text-[#111] capitalize">
-            Fechas del equipo y clientes
-          </h2>
-          <p className="text-[12px] text-[#999] capitalize">
+          <h2 className="text-[15px] font-bold text-[#111]">Fechas del equipo y clientes</h2>
+          <p className="text-[12px] text-[#999] first-letter:capitalize">
             {format(anchor, 'MMMM yyyy', { locale: es })} · {events.length} evento
             {events.length === 1 ? '' : 's'}
           </p>
