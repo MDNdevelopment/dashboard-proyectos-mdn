@@ -19,8 +19,11 @@ function currentYearMonth() {
 export default function ChequeoPage() {
   const { userProfile, can = () => true } = useAuth()
   const canManage = can('chequeo.manage')
-  // "Todas las líneas" es exclusivo de nivel 4 / admin (mismo criterio que Tareas Fijas).
-  const canViewAll = userProfile?.access_level >= 4 || userProfile?.admin === true
+  // "Todas las líneas" es de dirección (nivel≥4), admin, o quien tenga explícitamente
+  // chequeo.ver_todo (configurable en Empresa → Permisos, mismo patrón que
+  // audiovisual.ver_todo en AudiovisualView.jsx).
+  const canViewAll =
+    userProfile?.access_level >= 4 || userProfile?.admin === true || can('chequeo.ver_todo')
 
   const [lines, setLines] = useState([])
   const [clients, setClients] = useState([])
@@ -72,13 +75,15 @@ export default function ChequeoPage() {
       loadChecks(companyId, year, month),
     ])
 
-    const visible = visibleLinesForUser(linesRes.data ?? [], userProfile)
+    const visible = visibleLinesForUser(linesRes.data ?? [], userProfile, {
+      extraViewAll: can('chequeo.ver_todo'),
+    })
     setLines(visible)
     setClients(clientsRes.data ?? [])
     setChecks(checksRes.data ?? [])
     setActiveLineId((prev) => prev ?? (canViewAll ? ALL_LINES : (visible[0]?.id ?? null)))
     setLoading(false)
-  }, [userProfile, canViewAll, year, month])
+  }, [userProfile, canViewAll, can, year, month])
 
   useEffect(() => {
     loadAll()

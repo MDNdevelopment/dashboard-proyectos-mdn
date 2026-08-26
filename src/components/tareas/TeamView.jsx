@@ -9,32 +9,8 @@ import {
   fmtShort,
   COL_META,
   ESTADOS,
-} from "./constants";
-
-function KpiCard({ label, value, sub, color, onClick }) {
-  const Tag = onClick ? "button" : "div";
-  return (
-    <Tag
-      onClick={onClick}
-      className={`bg-white rounded-xl border border-[#e0ddd4] px-4 py-3.5 text-left w-full ${
-        onClick
-          ? "hover:border-[#FFB800] hover:shadow-md transition-all cursor-pointer"
-          : ""
-      }`}
-    >
-      <p className="text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1">
-        {label}
-      </p>
-      <p
-        className="text-[24px] font-bold text-[#111] leading-none"
-        style={color ? { color } : {}}
-      >
-        {value}
-      </p>
-      {sub && <p className="text-[13.5px] text-[#888] mt-1">{sub}</p>}
-    </Tag>
-  );
-}
+} from './constants'
+import KpiCard from './KpiCard'
 
 export default function TeamView({
   team,
@@ -52,42 +28,34 @@ export default function TeamView({
           Selecciona un team para ver su dashboard
         </p>
       </div>
-    );
+    )
   }
 
-  const all = tasks.filter((t) => t.team_id === team.id);
-  const monthTasks = all.filter((t) => taskInMonth(t, monthIdx));
-  const total = monthTasks.length;
-  const closed = monthTasks.filter(isClosed).length;
-  const pct = total ? Math.round((closed / total) * 100) : 0;
-  const blocked = all.filter(isBlocked).length;
-  const late = all.filter(isLate).length;
-  const supportCount = all.filter((t) => t.support_id && !isClosed(t)).length;
+  const all = tasks.filter((t) => t.team_id === team.id)
+  const monthTasks = all.filter((t) => taskInMonth(t, monthIdx))
+  const total = monthTasks.length
+  const closed = monthTasks.filter(isClosed).length
+  const pct = total ? Math.round((closed / total) * 100) : 0
+  const blocked = all.filter(isBlocked).length
+  const late = all.filter(isLate).length
+  const supportCount = all.filter((t) => t.support_id && !isClosed(t)).length
 
   const semLabel = !total
-    ? "Sin movimiento"
+    ? 'Sin movimiento'
     : pct >= 90
-      ? "Team al día"
+      ? 'Team al día'
       : pct >= 70
-        ? "Atención: retrasos leves"
-        : "Alerta: plan de acción";
-  const semColor = !total
-    ? "#bbb"
-    : pct >= 90
-      ? "#16A34A"
-      : pct < 70
-        ? "#E14848"
-        : "#F0871F";
+        ? 'Atención: retrasos leves'
+        : 'Alerta: plan de acción'
+  const semColor = !total ? '#bbb' : pct >= 90 ? '#16A34A' : pct < 70 ? '#E14848' : '#F0871F'
 
   const counts = ESTADOS.map((e) => ({
     e,
     n: all.filter((t) => t.status === e).length,
-  }));
-  const tot = all.length;
+  }))
+  const tot = all.length
 
-  const clients = [
-    ...new Set(monthTasks.map((t) => t.client).filter(Boolean)),
-  ].sort();
+  const clients = [...new Set(monthTasks.map((t) => t.client).filter(Boolean))].sort()
 
   return (
     <div className="space-y-4">
@@ -108,7 +76,7 @@ export default function TeamView({
           value={`${closed}/${total}`}
           sub="Completadas"
           color="#16A34A"
-          onClick={() => onNavigateToBase({ status: "Terminado" })}
+          onClick={() => onNavigateToBase({ status: 'Terminado' })}
         />
         <KpiCard
           label="Cumplimiento"
@@ -120,22 +88,22 @@ export default function TeamView({
         <KpiCard
           label="Paralizados"
           value={blocked}
-          sub={blocked ? "Este mes" : "Sin paralizaciones"}
-          color={blocked ? "#E14848" : undefined}
-          onClick={() => onNavigateToBase({ status: "Paralizado" })}
+          sub={blocked ? 'Este mes' : 'Sin paralizaciones'}
+          color={blocked ? '#E14848' : undefined}
+          onClick={() => onNavigateToBase({ status: 'Paralizado' })}
         />
         <KpiCard
           label="Retrasados"
           value={late}
           sub="Entregas vencidas"
-          color={late ? "#E14848" : undefined}
-          onClick={() => onNavigateToBase({ alert: "late" })}
+          color={late ? '#E14848' : undefined}
+          onClick={() => onNavigateToBase({ alert: 'late' })}
         />
         <KpiCard
           label="Apoyo dir."
           value={supportCount}
-          sub={supportCount ? "Activos" : "Ninguno"}
-          onClick={() => onNavigateToBase({ support: "all" })}
+          sub={supportCount ? 'Activos' : 'Ninguno'}
+          onClick={() => onNavigateToBase({ support: 'all' })}
         />
       </div>
 
@@ -152,7 +120,7 @@ export default function TeamView({
                   key={c.e}
                   style={{
                     width: `${(c.n / tot) * 100}%`,
-                    background: COL_META[c.e]?.color ?? "#ccc",
+                    background: COL_META[c.e]?.color ?? '#ccc',
                   }}
                   title={`${c.e}: ${c.n}`}
                 />
@@ -160,17 +128,14 @@ export default function TeamView({
           </div>
           <div className="flex flex-wrap gap-3">
             {counts.map((c) => (
-              <span
-                key={c.e}
-                className="flex items-center gap-1.5 text-[14px] text-[#555]"
-              >
+              <span key={c.e} className="flex items-center gap-1.5 text-[14px] text-[#555]">
                 <span
                   style={{
                     width: 8,
                     height: 8,
-                    borderRadius: "50%",
-                    background: COL_META[c.e]?.color ?? "#ccc",
-                    display: "inline-block",
+                    borderRadius: '50%',
+                    background: COL_META[c.e]?.color ?? '#ccc',
+                    display: 'inline-block',
                     flexShrink: 0,
                   }}
                 />
@@ -183,12 +148,8 @@ export default function TeamView({
 
       {monthTasks.length === 0 ? (
         <div className="bg-white rounded-xl border border-[#e0ddd4] p-8 text-center">
-          <p className="text-[15px] text-[#888]">
-            Sin movimiento en {fmtMonth(monthIdx)}
-          </p>
-          <p className="text-[14px] text-[#bbb] mt-1">
-            No hay tareas activas en este mes
-          </p>
+          <p className="text-[15px] text-[#888]">Sin movimiento en {fmtMonth(monthIdx)}</p>
+          <p className="text-[14px] text-[#bbb] mt-1">No hay tareas activas en este mes</p>
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-[#e0ddd4] overflow-hidden">
@@ -214,77 +175,79 @@ export default function TeamView({
                 </tr>
               </thead>
               <tbody>
-                {(clients.length > 0 ? clients : ["(sin cliente)"]).map(
-                  (cl) => {
-                    const ct = monthTasks.filter(
-                      (t) => (t.client || "(sin cliente)") === cl,
-                    );
-                    const tt = ct.length;
-                    const cer = ct.filter(isClosed).length;
-                    const pp = tt ? Math.round((cer / tt) * 100) : 0;
-                    const lg = lightOf(pp, tt);
-                    return (
-                      <tr
-                        key={cl}
-                        className="border-b border-[#f5f3eb] last:border-0 hover:bg-[#faf9f5]"
-                      >
-                        <td className="px-4 py-3 font-medium text-[#111]">
-                          <div className="flex items-center gap-2 min-w-0">
-                            {(() => {
-                              const logoUrl = clientsById?.get(ct[0]?.client_id)?.logo_url;
-                              if (logoUrl)
-                                return <img src={logoUrl} alt={cl} className="w-7 h-7 rounded-full object-cover flex-shrink-0 border border-[#e0ddd4]" />;
-                              return <span className="w-7 h-7 rounded-full bg-[#f0ede3] flex items-center justify-center flex-shrink-0 text-[12px] font-bold text-[#aaa] uppercase">{cl[0]}</span>;
-                            })()}
-                            <span className="truncate">{cl}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-[#666] font-mono">
-                          {tt}
-                        </td>
-                        <td className="px-4 py-3 text-[#666] font-mono">
-                          {cer}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-[#111]">{pp}%</span>
-                            <div className="flex-1 h-1.5 rounded-full bg-[#f0ede3] overflow-hidden">
-                              <div
-                                className="h-full rounded-full"
-                                style={{
-                                  width: `${pp}%`,
-                                  background: lg.color,
-                                }}
-                              />
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span
-                            className="inline-flex items-center gap-1.5 text-[14px] font-semibold"
-                            style={{ color: lg.color }}
-                          >
-                            <span
+                {(clients.length > 0 ? clients : ['(sin cliente)']).map((cl) => {
+                  const ct = monthTasks.filter((t) => (t.client || '(sin cliente)') === cl)
+                  const tt = ct.length
+                  const cer = ct.filter(isClosed).length
+                  const pp = tt ? Math.round((cer / tt) * 100) : 0
+                  const lg = lightOf(pp, tt)
+                  return (
+                    <tr
+                      key={cl}
+                      className="border-b border-[#f5f3eb] last:border-0 hover:bg-[#faf9f5]"
+                    >
+                      <td className="px-4 py-3 font-medium text-[#111]">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {(() => {
+                            const logoUrl = clientsById?.get(ct[0]?.client_id)?.logo_url
+                            if (logoUrl)
+                              return (
+                                <img
+                                  src={logoUrl}
+                                  alt={cl}
+                                  className="w-7 h-7 rounded-full object-cover flex-shrink-0 border border-[#e0ddd4]"
+                                />
+                              )
+                            return (
+                              <span className="w-7 h-7 rounded-full bg-[#f0ede3] flex items-center justify-center flex-shrink-0 text-[12px] font-bold text-[#aaa] uppercase">
+                                {cl[0]}
+                              </span>
+                            )
+                          })()}
+                          <span className="truncate">{cl}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-[#666] font-mono">{tt}</td>
+                      <td className="px-4 py-3 text-[#666] font-mono">{cer}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-[#111]">{pp}%</span>
+                          <div className="flex-1 h-1.5 rounded-full bg-[#f0ede3] overflow-hidden">
+                            <div
+                              className="h-full rounded-full"
                               style={{
-                                width: 7,
-                                height: 7,
-                                borderRadius: "50%",
+                                width: `${pp}%`,
                                 background: lg.color,
-                                display: "inline-block",
                               }}
                             />
-                            {lg.label}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  },
-                )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className="inline-flex items-center gap-1.5 text-[14px] font-semibold"
+                          style={{ color: lg.color }}
+                        >
+                          <span
+                            style={{
+                              width: 7,
+                              height: 7,
+                              borderRadius: '50%',
+                              background: lg.color,
+                              display: 'inline-block',
+                            }}
+                          />
+                          {lg.label}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
         </div>
       )}
     </div>
-  );
+  )
 }

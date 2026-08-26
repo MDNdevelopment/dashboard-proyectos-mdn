@@ -160,7 +160,6 @@ describe('AiChatWidget', () => {
     mockAuth(true)
     render(<AiChatWidget />)
     expect(screen.getByText('¿En qué te puedo ayudar?')).toBeInTheDocument()
-    expect(screen.getByText('¿Cómo va la empresa este mes?')).toBeInTheDocument()
   })
 
   it('cierra la burbuja de CTAs con el botón de cerrar', () => {
@@ -170,19 +169,13 @@ describe('AiChatWidget', () => {
     expect(screen.queryByText('¿En qué te puedo ayudar?')).not.toBeInTheDocument()
   })
 
-  it('un CTA abre el panel y envía la pregunta de inmediato', async () => {
+  it('el CTA abre el panel sin enviar ninguna pregunta', () => {
     mockAuth(true)
-    global.fetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ reply: 'La empresa va bien.', toolsUsed: [] }),
-    })
-
     render(<AiChatWidget />)
-    fireEvent.click(screen.getByText('¿Cómo va la empresa este mes?'))
+    fireEvent.click(screen.getByText('¿En qué te puedo ayudar?'))
 
     expect(screen.getByRole('dialog', { name: /asistente ia/i })).toBeInTheDocument()
-    expect(screen.queryByText('¿En qué te puedo ayudar?')).not.toBeInTheDocument()
-    await waitFor(() => expect(screen.getByText('La empresa va bien.')).toBeInTheDocument())
+    expect(global.fetch).not.toHaveBeenCalled()
   })
 
   it('abrir el panel con el FAB oculta la burbuja de CTAs', () => {

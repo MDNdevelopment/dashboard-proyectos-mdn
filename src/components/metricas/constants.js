@@ -52,6 +52,13 @@ export const AUDIOVISUAL_MODULE_START = { year: 2026, month: 9 }
 // antes vivía en Tareas Fijas.
 export const CHEQUEO_PRODUCTIVIDAD_START = { year: 2026, month: 9 }
 
+// Mes en que arranca el auto-llenado de «4. Solicitudes vs Entregados» a partir de los
+// módulos CNP (tabla `cnp_requests`) y Gestión de Tareas (tabla `tasks`). El indicador se
+// reparte 5 pts CNP + 5 pts Gestión de Tareas (ver calcSolicitudes en metricsScore.js).
+// Antes de este mes ambas fuentes tienen pocos o ningún dato limpio (los CNP recién se
+// separan de `tasks`), así que esos reportes conservan la captura manual.
+export const SOLICITUDES_MODULE_START = { year: 2026, month: 9 }
+
 export const INDICATORS = [
   { key: 'reuniones', nombre: 'Reuniones realizadas', peso: 20, short: 'Reuniones' },
   {

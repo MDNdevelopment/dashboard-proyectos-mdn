@@ -65,6 +65,21 @@ export const MODULES = [
       },
       { key: 'audiovisual.ver_todo', label: 'Ver pautas audiovisuales de todas las líneas' },
       { key: 'chequeo.manage', label: 'Registrar fechas de última publicación (Chequeo)' },
+      { key: 'chequeo.ver_todo', label: 'Ver Chequeo de todas las líneas' },
+    ],
+  },
+  {
+    key: 'cnp',
+    label: 'CNP',
+    routePrefix: '/cnp',
+    description: 'Contenido No Planificado — solicitudes de clientes fuera de la planificación',
+    tabs: [
+      { key: 'dashboard', label: 'Dashboard' },
+      { key: 'base', label: 'Base' },
+    ],
+    manageActions: [
+      { key: 'cnp.manage', label: 'Crear / editar / eliminar CNP' },
+      { key: 'cnp.print.approve', label: 'Aprobar impresión de CNP (Paola / Stephanie)' },
     ],
   },
   {

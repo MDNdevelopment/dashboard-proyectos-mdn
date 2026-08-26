@@ -12,11 +12,16 @@ import Sidebar from '../components/Sidebar'
 function renderSidebar(userProfile, { initialRoute = '/' } = {}) {
   // permissionsLoaded + can abierto: simula permisos ya cargados sin reglas de exclusión,
   // el contrato de useAuth desde el fix del flash de módulos (21e5e2e).
-  useAuth.mockReturnValue({ signOut: vi.fn(), userProfile, can: () => true, permissionsLoaded: true })
+  useAuth.mockReturnValue({
+    signOut: vi.fn(),
+    userProfile,
+    can: () => true,
+    permissionsLoaded: true,
+  })
   return render(
     <MemoryRouter initialEntries={[initialRoute]}>
       <Sidebar />
-    </MemoryRouter>
+    </MemoryRouter>,
   )
 }
 
@@ -56,11 +61,16 @@ describe('Sidebar — Inicio', () => {
   })
 
   it('es siempre visible, sin gate de permisos (incluso si can() deniega todo)', () => {
-    useAuth.mockReturnValue({ signOut: vi.fn(), userProfile: USER, can: () => false, permissionsLoaded: true })
+    useAuth.mockReturnValue({
+      signOut: vi.fn(),
+      userProfile: USER,
+      can: () => false,
+      permissionsLoaded: true,
+    })
     render(
       <MemoryRouter initialEntries={['/']}>
         <Sidebar />
-      </MemoryRouter>
+      </MemoryRouter>,
     )
     expect(screen.getByRole('link', { name: /^inicio$/i })).toBeInTheDocument()
   })
@@ -78,15 +88,47 @@ describe('Sidebar — módulo Campañas', () => {
   })
 })
 
-describe('Sidebar — módulo Gestión de Tareas', () => {
-  it('muestra el enlace directo con el nuevo nombre "Gestión de Tareas"', () => {
+describe('Sidebar — sección Operación (desplegable)', () => {
+  it('muestra el botón desplegable "Operación"', () => {
     renderSidebar(USER)
+    expect(screen.getByRole('button', { name: /operación/i })).toBeInTheDocument()
+  })
+
+  it('Gestión de Tareas no es un enlace directo visible sin desplegar', () => {
+    renderSidebar(USER)
+    expect(screen.queryByRole('link', { name: /gestión de tareas/i })).not.toBeInTheDocument()
+  })
+
+  it('al hacer click en "Operación" despliega los enlaces internos', () => {
+    renderSidebar(USER)
+    fireEvent.click(screen.getByRole('button', { name: /operación/i }))
+    expect(screen.getByRole('link', { name: /gestión de tareas/i })).toHaveAttribute(
+      'href',
+      '/tareas',
+    )
+    expect(screen.getByRole('link', { name: /^cnp$/i })).toHaveAttribute('href', '/cnp')
+    expect(screen.getByRole('link', { name: /tareas fijas/i })).toHaveAttribute(
+      'href',
+      '/tareas/fijas',
+    )
+    expect(screen.getByRole('link', { name: /^pautas$/i })).toHaveAttribute(
+      'href',
+      '/tareas/pautas',
+    )
+    expect(screen.getByRole('link', { name: /^chequeo$/i })).toHaveAttribute(
+      'href',
+      '/tareas/chequeo',
+    )
+  })
+
+  it('al entrar por una ruta de /tareas el desplegable ya está abierto', () => {
+    renderSidebar(USER, { initialRoute: '/tareas' })
     expect(screen.getByRole('link', { name: /gestión de tareas/i })).toBeInTheDocument()
   })
 
-  it('el enlace apunta a /tareas', () => {
-    renderSidebar(USER)
-    expect(screen.getByRole('link', { name: /gestión de tareas/i })).toHaveAttribute('href', '/tareas')
+  it('al entrar por /cnp el desplegable ya está abierto', () => {
+    renderSidebar(USER, { initialRoute: '/cnp' })
+    expect(screen.getByRole('link', { name: /^cnp$/i })).toBeInTheDocument()
   })
 
   it('no aparece el nombre antiguo "Tareas QC / Cierre"', () => {
@@ -151,7 +193,10 @@ describe('Sidebar — Soporte Técnico (link único, sin desplegable)', () => {
 
   it('el enlace Soporte Técnico apunta a /tickets', () => {
     renderSidebar(USER)
-    expect(screen.getByRole('link', { name: /soporte técnico/i })).toHaveAttribute('href', '/tickets')
+    expect(screen.getByRole('link', { name: /soporte técnico/i })).toHaveAttribute(
+      'href',
+      '/tickets',
+    )
   })
 
   it('no hay botón desplegable para Soporte Técnico', () => {

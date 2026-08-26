@@ -15,6 +15,7 @@ import TicketsPage from './pages/TicketsPage.jsx'
 import AdsPage from './pages/AdsPage.jsx'
 import TareasPage from './pages/TareasPage.jsx'
 import TareasFijasPage from './pages/TareasFijasPage.jsx'
+import CnpPage from './pages/CnpPage.jsx'
 import PautasPage from './pages/PautasPage.jsx'
 import ChequeoPage from './pages/ChequeoPage.jsx'
 import EmpresaPage from './pages/EmpresaPage.jsx'
@@ -107,6 +108,16 @@ createRoot(document.getElementById('root')).render(
               element={
                 <RequireModule moduleKey="tareas">
                   <ChequeoPage />
+                </RequireModule>
+              }
+            />
+
+            {/* CNP — Contenido No Planificado */}
+            <Route
+              path="/cnp"
+              element={
+                <RequireModule moduleKey="cnp">
+                  <CnpPage />
                 </RequireModule>
               }
             />

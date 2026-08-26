@@ -30,6 +30,7 @@ export function notifIcon(type) {
     av_pauta_solicitada: '🎬',
     av_pauta_programada: '📅',
     av_agenda_reminder: '⏰',
+    cnp_print_approved: '🖨️',
   }
   return icons[type] ?? '🔔'
 }
@@ -58,6 +59,7 @@ export function notifLabel(type) {
     av_pauta_solicitada: 'Pauta solicitada',
     av_pauta_programada: 'Pauta agendada',
     av_agenda_reminder: 'Agenda audiovisual',
+    cnp_print_approved: 'CNP aprobado',
   }
   return labels[type] ?? 'Notificación'
 }
@@ -96,6 +98,11 @@ export function notifRoute(notif) {
     // PautaDetailModal). av_agenda_reminder no trae entity_id (recordatorio genérico).
     if (entity_id) return `/tareas/pautas?pautaId=${entity_id}`
     return '/tareas/pautas'
+  }
+  if (entity_type === 'cnp') {
+    // Deep-link al detalle del CNP vía ?cnpId=uuid (CnpPage lo lee y abre CnpModal)
+    if (entity_id) return `/cnp?cnpId=${entity_id}`
+    return '/cnp'
   }
   if (entity_type === 'campaign' || entity_type === 'ad') return '/ads'
   if (entity_type === 'client') return '/empresa/clientes'

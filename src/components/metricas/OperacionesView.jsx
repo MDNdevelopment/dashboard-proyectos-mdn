@@ -26,6 +26,7 @@ import {
   TAREAS_FIJAS_MODULE_START,
   AUDIOVISUAL_MODULE_START,
   CHEQUEO_PRODUCTIVIDAD_START,
+  SOLICITUDES_MODULE_START,
 } from './constants'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import { Avatar } from '../tareas/UserPickerSingle'
@@ -33,6 +34,8 @@ import { loadAds, spentByClientInPeriod } from '../ads/campaignSpendApi'
 import { fmtUSD } from '../../utils/metricsFinance'
 import { countMeetingsHeldForLine, loadHeldClientIdsForLine } from '../reuniones/meetingsApi'
 import { countPiezasForLine } from '../pautas/avPautasApi'
+import { countCnpSolicitudesForLine } from '../cnp/cnpApi'
+import { countTareasSolicitudesForLine } from '../tareas/tareasMetricsApi'
 import ReunionesClientesModal from './ReunionesClientesModal'
 
 /** Adapta un objeto cliente (logo_url) al shape que espera <Avatar> (avatar_url). */
@@ -88,6 +91,8 @@ export default function OperacionesView({ line, companyId, year, month, closed =
       fixedTaskMarksRes,
       piezasRes,
       checksRes,
+      cnpSolRes,
+      tareasSolRes,
     ] = await Promise.all([
       loadReport(line.id, year, month),
       loadPrevReport(line.id, year, month),
@@ -100,6 +105,8 @@ export default function OperacionesView({ line, companyId, year, month, closed =
       loadFixedTaskMarks(line.id, year, month),
       countPiezasForLine(companyId, line.id, { month, year }),
       loadChecks(companyId, year, month),
+      countCnpSolicitudesForLine(companyId, line.id, { month, year }),
+      countTareasSolicitudesForLine(companyId, line.id, { month, year }),
     ])
     setCompanyClientsById(Object.fromEntries((companyClientsRes.data ?? []).map((c) => [c.id, c])))
     setAds(adsRes.data ?? [])
@@ -214,6 +221,25 @@ export default function OperacionesView({ line, companyId, year, month, closed =
     if (isAvEra && !closed) {
       synced.piezas.piezas = piezasRes.piezas
       synced.piezas.editadas = piezasRes.editadas
+    }
+
+    // "Solicitudes vs Entregados" ya no se captura a mano — se deriva de CNP + Gestión
+    // de Tareas, 5 pts cada uno (ver calcSolicitudes en utils/metricsScore.js). Antes del
+    // lanzamiento esos meses conservan el valor que ya tenían guardado. Los dos campos
+    // planos (solicitudes/editadas) se mantienen como la suma de ambas fuentes para que
+    // reportes/queries antiguas que solo leen esas claves sigan funcionando.
+    const isSolicitudesEra =
+      year > SOLICITUDES_MODULE_START.year ||
+      (year === SOLICITUDES_MODULE_START.year && month >= SOLICITUDES_MODULE_START.month)
+    if (isSolicitudesEra && !closed) {
+      const cnp = { solicitudes: cnpSolRes.solicitudes, entregados: cnpSolRes.entregados }
+      const tareas = { solicitudes: tareasSolRes.solicitudes, entregados: tareasSolRes.entregados }
+      synced.solicitudes = {
+        solicitudes: cnp.solicitudes + tareas.solicitudes,
+        editadas: cnp.entregados + tareas.entregados,
+        cnp,
+        tareas,
+      }
     }
     setReport(synced)
     baselineRef.current = synced
@@ -367,6 +393,12 @@ export default function OperacionesView({ line, companyId, year, month, closed =
   const isAvEra =
     year > AUDIOVISUAL_MODULE_START.year ||
     (year === AUDIOVISUAL_MODULE_START.year && month >= AUDIOVISUAL_MODULE_START.month)
+
+  // Antes del lanzamiento del auto-llenado, "Solicitudes vs Entregados" se sigue
+  // capturando a mano (mismo criterio que en load(), ver SOLICITUDES_MODULE_START).
+  const isSolicitudesEra =
+    year > SOLICITUDES_MODULE_START.year ||
+    (year === SOLICITUDES_MODULE_START.year && month >= SOLICITUDES_MODULE_START.month)
 
   return (
     <fieldset disabled={closed} className="space-y-5 border-0 p-0 m-0 min-w-0">
@@ -894,36 +926,77 @@ export default function OperacionesView({ line, companyId, year, month, closed =
         score={scores?.solicitudes}
         max={INDICATORS[3].peso}
       >
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Field label="Solicitudes recibidas">
-            <input
-              type="number"
-              min="0"
-              className="input-base"
-              value={report.solicitudes.solicitudes ?? ''}
-              onChange={(e) =>
-                setField(
-                  'solicitudes.solicitudes',
-                  e.target.value === '' ? null : Number(e.target.value),
-                )
-              }
-            />
-          </Field>
-          <Field label="Editadas / Entregadas">
-            <input
-              type="number"
-              min="0"
-              className="input-base"
-              value={report.solicitudes.editadas ?? ''}
-              onChange={(e) =>
-                setField(
-                  'solicitudes.editadas',
-                  e.target.value === '' ? null : Number(e.target.value),
-                )
-              }
-            />
-          </Field>
-        </div>
+        {isSolicitudesEra ? (
+          <div
+            className="overflow-x-auto"
+            title="Derivado automáticamente de CNP y Gestión de Tareas"
+          >
+            <table className="w-full text-[14px]">
+              <thead>
+                <tr className="text-left text-[11px] font-mono font-bold tracking-[0.1em] uppercase text-[#aaa]">
+                  <th className="pb-1.5 font-normal">Fuente</th>
+                  <th className="pb-1.5 font-normal text-right">Entregados / Solicitados</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-t border-[#ece9df]">
+                  <td className="py-1.5 text-[#333]">CNP</td>
+                  <td className="py-1.5 text-right font-mono text-[#555]">
+                    {report.solicitudes.cnp?.entregados ?? 0} /{' '}
+                    {report.solicitudes.cnp?.solicitudes ?? 0}
+                  </td>
+                </tr>
+                <tr className="border-t border-[#ece9df]">
+                  <td className="py-1.5 text-[#333]">Gestión de Tareas</td>
+                  <td className="py-1.5 text-right font-mono text-[#555]">
+                    {report.solicitudes.tareas?.entregados ?? 0} /{' '}
+                    {report.solicitudes.tareas?.solicitudes ?? 0}
+                  </td>
+                </tr>
+                <tr className="border-t border-[#ece9df] font-semibold">
+                  <td className="py-1.5 text-[#111]">Total</td>
+                  <td className="py-1.5 text-right font-mono text-[#111]">
+                    {report.solicitudes.editadas ?? 0} / {report.solicitudes.solicitudes ?? 0}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <p className="mt-1 text-[12px] font-mono text-[#888]">
+              Derivado de CNP y Gestión de Tareas
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Field label="Solicitudes recibidas">
+              <input
+                type="number"
+                min="0"
+                className="input-base"
+                value={report.solicitudes.solicitudes ?? ''}
+                onChange={(e) =>
+                  setField(
+                    'solicitudes.solicitudes',
+                    e.target.value === '' ? null : Number(e.target.value),
+                  )
+                }
+              />
+            </Field>
+            <Field label="Editadas / Entregadas">
+              <input
+                type="number"
+                min="0"
+                className="input-base"
+                value={report.solicitudes.editadas ?? ''}
+                onChange={(e) =>
+                  setField(
+                    'solicitudes.editadas',
+                    e.target.value === '' ? null : Number(e.target.value),
+                  )
+                }
+              />
+            </Field>
+          </div>
+        )}
       </Section>
 
       {/* 5. PAUTAS */}

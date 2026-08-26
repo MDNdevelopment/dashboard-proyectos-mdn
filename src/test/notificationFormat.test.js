@@ -47,6 +47,9 @@ describe('notifIcon', () => {
     expect(notifIcon('av_pauta_programada')).toBe('📅')
     expect(notifIcon('av_agenda_reminder')).toBe('⏰')
   })
+  it('returns 🖨️ for cnp_print_approved', () => {
+    expect(notifIcon('cnp_print_approved')).toBe('🖨️')
+  })
   it('returns 🔔 for unknown types', () => {
     expect(notifIcon('unknown_type')).toBe('🔔')
     expect(notifIcon('')).toBe('🔔')
@@ -87,6 +90,9 @@ describe('notifLabel', () => {
     expect(notifLabel('av_pauta_solicitada')).toBe('Pauta solicitada')
     expect(notifLabel('av_pauta_programada')).toBe('Pauta agendada')
     expect(notifLabel('av_agenda_reminder')).toBe('Agenda audiovisual')
+  })
+  it('returns human-readable label for cnp_print_approved', () => {
+    expect(notifLabel('cnp_print_approved')).toBe('CNP aprobado')
   })
   it('returns fallback for unknown types', () => {
     expect(notifLabel('whatever')).toBe('Notificación')
@@ -186,6 +192,18 @@ describe('notifRoute', () => {
     expect(
       notifRoute({ type: 'av_agenda_reminder', entity_type: 'av_pauta', entity_id: null }),
     ).toBe('/tareas/pautas')
+  })
+
+  it('routes cnp_print_approved to /cnp?cnpId=<id> (deeplink al detalle del CNP)', () => {
+    expect(notifRoute({ type: 'cnp_print_approved', entity_type: 'cnp', entity_id: 'cnp-1' })).toBe(
+      '/cnp?cnpId=cnp-1',
+    )
+  })
+
+  it('routes cnp entity_type to /cnp (sin query) cuando no hay entity_id', () => {
+    expect(notifRoute({ type: 'cnp_print_approved', entity_type: 'cnp', entity_id: null })).toBe(
+      '/cnp',
+    )
   })
 
   it('falls back to / for unknown types', () => {

@@ -238,6 +238,9 @@ function Sidebar() {
   const isChequeoRoute = location.pathname.startsWith('/tareas/chequeo')
   const isTareasMainRoute =
     isTareasRoute && !isTareasFijasRoute && !isPautasRoute && !isChequeoRoute
+  const isCnpRoute = location.pathname.startsWith('/cnp')
+  const isOperacionRoute = isTareasRoute || isCnpRoute
+  const [operacionOpen, setOperacionOpen] = useState(isOperacionRoute)
   const isEmpresaRoute = location.pathname.startsWith('/empresa')
 
   const canEval = userProfile?.access_level >= 2 || userProfile?.admin === true
@@ -295,106 +298,189 @@ function Sidebar() {
             </Link>
           )}
 
-          {/* Gestión de Tareas — botón directo */}
-          {canR('tareas') && (
-            <Link
-              to="/tareas"
-              className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all ${
-                isTareasMainRoute
-                  ? 'bg-[#FFB800] text-[#111]'
-                  : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
-              }`}
-            >
-              <span
-                className={`flex-shrink-0 ${isTareasMainRoute ? 'text-[#111]' : 'text-[#666]'}`}
+          {/* Operación — menú desplegable (Gestión de Tareas, CNP, Tareas Fijas, Pautas, Chequeo) */}
+          {(canR('tareas') || canR('cnp')) && (
+            <>
+              <button
+                onClick={() => setOperacionOpen((o) => !o)}
+                className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all text-left ${
+                  isOperacionRoute && !operacionOpen
+                    ? 'bg-[#FFB800] text-[#111]'
+                    : isOperacionRoute
+                      ? 'text-[#111] bg-[#f5f3eb]'
+                      : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+                }`}
               >
-                {TASKS_ICON}
-              </span>
-              <span className="flex-1">Gestión de Tareas</span>
-            </Link>
-          )}
-
-          {/* Tareas Fijas — sub-link indentado bajo Gestión de Tareas */}
-          {canR('tareas') && canR('tareas.fijas') && (
-            <Link
-              to="/tareas/fijas"
-              className={`flex items-center gap-2.5 w-full ml-3 pl-3 px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all ${
-                isTareasFijasRoute
-                  ? 'bg-[#FFB800] text-[#111]'
-                  : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
-              }`}
-            >
-              <span
-                className={`flex-shrink-0 ${isTareasFijasRoute ? 'text-[#111]' : 'text-[#666]'}`}
-              >
+                <span
+                  className={`flex-shrink-0 ${isOperacionRoute ? 'text-[#111]' : 'text-[#666]'}`}
+                >
+                  {TASKS_ICON}
+                </span>
+                <span className="flex-1">Operación</span>
                 <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 16 16"
+                  width="10"
+                  height="10"
+                  viewBox="0 0 10 10"
                   fill="none"
                   stroke="currentColor"
-                  strokeWidth="1.7"
+                  strokeWidth="1.8"
+                  className={`flex-shrink-0 transition-transform duration-200 ${operacionOpen ? 'rotate-180' : ''}`}
                 >
-                  <rect x="2" y="2" width="12" height="12" rx="1.5" />
-                  <path d="M5 8l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M2 3.5l3 3 3-3" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-              </span>
-              <span className="flex-1">Tareas Fijas</span>
-            </Link>
-          )}
+              </button>
 
-          {/* Pautas — sub-link indentado bajo Gestión de Tareas, debajo de Tareas Fijas */}
-          {canR('tareas') && canR('tareas.pautas') && (
-            <Link
-              to="/tareas/pautas"
-              className={`flex items-center gap-2.5 w-full ml-3 pl-3 px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all ${
-                isPautasRoute
-                  ? 'bg-[#FFB800] text-[#111]'
-                  : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
-              }`}
-            >
-              <span className={`flex-shrink-0 ${isPautasRoute ? 'text-[#111]' : 'text-[#666]'}`}>
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                >
-                  <rect x="2" y="3" width="12" height="11" rx="1.5" />
-                  <path d="M2 6.5h12M5.5 2v2.4M10.5 2v2.4" strokeLinecap="round" />
-                </svg>
-              </span>
-              <span className="flex-1">Pautas</span>
-            </Link>
-          )}
+              {operacionOpen && (
+                <div className="ml-3 pl-3 border-l-2 border-[#ece9df] space-y-0.5 mt-0.5">
+                  {/* Gestión de Tareas */}
+                  {canR('tareas') && (
+                    <Link
+                      to="/tareas"
+                      className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all ${
+                        isTareasMainRoute
+                          ? 'bg-[#FFB800] text-[#111]'
+                          : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+                      }`}
+                    >
+                      <span
+                        className={`flex-shrink-0 ${isTareasMainRoute ? 'text-[#111]' : 'text-[#666]'}`}
+                      >
+                        {TASKS_ICON}
+                      </span>
+                      <span className="flex-1">Gestión de Tareas</span>
+                    </Link>
+                  )}
 
-          {/* Chequeo — sub-link indentado bajo Gestión de Tareas, debajo de Tareas Fijas */}
-          {canR('tareas') && canR('tareas.chequeo') && (
-            <Link
-              to="/tareas/chequeo"
-              className={`flex items-center gap-2.5 w-full ml-3 pl-3 px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all ${
-                isChequeoRoute
-                  ? 'bg-[#FFB800] text-[#111]'
-                  : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
-              }`}
-            >
-              <span className={`flex-shrink-0 ${isChequeoRoute ? 'text-[#111]' : 'text-[#666]'}`}>
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                >
-                  <circle cx="8" cy="8" r="6.2" />
-                  <path d="M8 4.6v3.6l2.4 1.4" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </span>
-              <span className="flex-1">Chequeo</span>
-            </Link>
+                  {/* CNP */}
+                  {canR('cnp') && (
+                    <Link
+                      to="/cnp"
+                      className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all ${
+                        isCnpRoute
+                          ? 'bg-[#FFB800] text-[#111]'
+                          : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+                      }`}
+                    >
+                      <span
+                        className={`flex-shrink-0 ${isCnpRoute ? 'text-[#111]' : 'text-[#666]'}`}
+                      >
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 16 16"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.7"
+                        >
+                          <path
+                            d="M9 1.5H4a1.5 1.5 0 0 0-1.5 1.5v10A1.5 1.5 0 0 0 4 14.5h8a1.5 1.5 0 0 0 1.5-1.5V5.5L9 1.5Z"
+                            strokeLinejoin="round"
+                          />
+                          <path
+                            d="M9 1.5V5a1 1 0 0 0 1 1h3.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                          <path d="M5 9.5h6M5 12h4" strokeLinecap="round" />
+                        </svg>
+                      </span>
+                      <span className="flex-1">CNP</span>
+                    </Link>
+                  )}
+
+                  {/* Tareas Fijas */}
+                  {canR('tareas') && canR('tareas.fijas') && (
+                    <Link
+                      to="/tareas/fijas"
+                      className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all ${
+                        isTareasFijasRoute
+                          ? 'bg-[#FFB800] text-[#111]'
+                          : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+                      }`}
+                    >
+                      <span
+                        className={`flex-shrink-0 ${isTareasFijasRoute ? 'text-[#111]' : 'text-[#666]'}`}
+                      >
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 16 16"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.7"
+                        >
+                          <rect x="2" y="2" width="12" height="12" rx="1.5" />
+                          <path d="M5 8l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </span>
+                      <span className="flex-1">Tareas Fijas</span>
+                    </Link>
+                  )}
+
+                  {/* Pautas */}
+                  {canR('tareas') && canR('tareas.pautas') && (
+                    <Link
+                      to="/tareas/pautas"
+                      className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all ${
+                        isPautasRoute
+                          ? 'bg-[#FFB800] text-[#111]'
+                          : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+                      }`}
+                    >
+                      <span
+                        className={`flex-shrink-0 ${isPautasRoute ? 'text-[#111]' : 'text-[#666]'}`}
+                      >
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 16 16"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.7"
+                        >
+                          <rect x="2" y="3" width="12" height="11" rx="1.5" />
+                          <path d="M2 6.5h12M5.5 2v2.4M10.5 2v2.4" strokeLinecap="round" />
+                        </svg>
+                      </span>
+                      <span className="flex-1">Pautas</span>
+                    </Link>
+                  )}
+
+                  {/* Chequeo */}
+                  {canR('tareas') && canR('tareas.chequeo') && (
+                    <Link
+                      to="/tareas/chequeo"
+                      className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all ${
+                        isChequeoRoute
+                          ? 'bg-[#FFB800] text-[#111]'
+                          : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+                      }`}
+                    >
+                      <span
+                        className={`flex-shrink-0 ${isChequeoRoute ? 'text-[#111]' : 'text-[#666]'}`}
+                      >
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 16 16"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.7"
+                        >
+                          <circle cx="8" cy="8" r="6.2" />
+                          <path
+                            d="M8 4.6v3.6l2.4 1.4"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </span>
+                      <span className="flex-1">Chequeo</span>
+                    </Link>
+                  )}
+                </div>
+              )}
+            </>
           )}
 
           {/* Campañas — botón directo */}

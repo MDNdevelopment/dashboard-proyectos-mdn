@@ -183,16 +183,21 @@ solicitudes_score = solicitudes == 0 ? 0 : (editadas / solicitudes) * 10
 ```
 
 Campos: `data.solicitudes.solicitudes` (cantidad pedida), `data.solicitudes.editadas`
-(cantidad entregada).
+(cantidad entregada) — siguen existiendo como la suma de las dos fuentes de abajo, para
+que reportes/queries antiguas sigan funcionando igual.
 
-**Doble fuente de verdad (deuda conocida del sistema):** tanto **Productividad**
-(`data.productividad.tareas[]`) como **Solicitudes** se capturan **manualmente** en la
-UI, aunque la tabla `tasks` (filtrable por `team_id` = línea y `closed_date` = mes) ya
-contiene datos reales que podrían derivar estos indicadores automáticamente. No están
-conectados — son dos números independientes. Si un análisis nota que el conteo de
-tareas cerradas en `tasks` no coincide con `data.productividad`/`data.solicitudes` de
-esa línea/mes, **no es un bug de datos**: es la desconexión documentada del sistema,
-no algo que la consulta SQL deba "corregir".
+**Desde `SOLICITUDES_MODULE_START` (septiembre 2026) el indicador se deriva
+automáticamente de dos tablas, 5 pts cada una:** `cnp_requests` (módulo CNP,
+"Contenido No Planificado") y `tasks` (Gestión de Tareas). El desglose vive en
+`data.solicitudes.cnp` y `data.solicitudes.tareas`, cada uno `{solicitudes, entregados}`
+— "solicitudes" = filas creadas ese mes en esa línea, "entregados" = de esas, las que
+llegaron a `status = 'Terminado'`. Si una fuente no tuvo solicitudes ese mes, sus 5 pts
+se redistribuyen a la otra en vez de perderse (ver `calcSolicitudes` en
+`src/utils/metricsScore.js`). Reportes sin ese desglose (meses anteriores a la era, o
+capturados a mano) siguen usando la fórmula original de arriba sobre los dos campos
+planos — **Productividad** (`data.productividad.tareas[]`) sigue siendo la única
+excepción manual entre los 6 indicadores, salvo para los meses previos a
+`TAREAS_FIJAS_MODULE_START`.
 
 ### Detalle: Pautas
 
@@ -408,6 +413,13 @@ crecimiento as (
   from base b, jsonb_array_elements(b.data->'crecimiento'->'items') it
   group by b.line_id
 ),
+-- CAVEAT desde SOLICITUDES_MODULE_START (sept. 2026): esta fórmula (editadas/solicitudes*10
+-- sobre los campos planos) es una APROXIMACIÓN cuando existe desglose cnp/tareas — solo
+-- coincide exacto con el score real si ambas fuentes tienen la misma proporción
+-- entregados/solicitudes. El cálculo exacto pondera 5+5 pts por fuente por separado
+-- (ver calcSolicitudes en src/utils/metricsScore.js); para reproducirlo en SQL, sumar
+-- (data->'solicitudes'->'cnp'->>'entregados')::numeric / NULLIF((...->>'solicitudes')::numeric,0) * 5
+-- + lo mismo para 'tareas', con redistribución de los 5 pts si una fuente está en 0.
 solicitudes as (
   select line_id,
     case when coalesce((data->'solicitudes'->>'solicitudes')::numeric,0) = 0 then 0
