@@ -80,25 +80,24 @@ export default function EventTypeIcon({ type, size = 11, className = '' }) {
         </svg>
       )
     case 'client_mdn_anniversary':
-      // Apretón de manos (cliente MDN desde)
+      // Medalla con cinta (antigüedad del cliente con MDN)
       return (
         <svg {...props}>
-          <path d="M1.5 6.5 4 4.5c.5-.4 1.2-.4 1.6.1L7 6" />
-          <path d="M12.5 6.5 10 4.5c-.5-.4-1.2-.4-1.6.1L7 6" />
-          <path d="M4 6.5l2 2c.5.5 1.3.5 1.8 0l.2-.2c.4-.4.4-1 0-1.4L7 6" />
-          <path d="M10 6.5 8.5 8c-.5.5-.5 1.3 0 1.8" />
-          <path d="M2.5 5.5 1 7l2.5 2.5 1.3-1.2" />
-          <path d="M11.5 5.5 13 7l-2.5 2.5-1.2-1.1" />
+          <circle cx="7" cy="5.5" r="3.5" />
+          <path d="M5 8.5 4 12.5l3-1.5 3 1.5-1-4" />
+          <path d="M5.7 5.5 6.6 6.6l1.7-2.2" />
         </svg>
       )
     case 'client_contact_birthday':
-      // Pastel con una vela (cumpleaños de contacto, distinto del de empleado)
+      // Pastel con 3 velas (mismo dibujo que 'birthday', color propio vía iconColor)
       return (
         <svg {...props}>
           <path d="M1.5 8.5h11v4h-11z" />
           <path d="M1.5 8.5c1.5-1.2 3-1.2 4.5 0s3 1.2 4.5 0 1.5-1.2 2-1.2" />
-          <line x1="7" y1="5" x2="7" y2="7.5" />
-          <path d="M7 2.2c-.7.7-.7 1.6 0 2.3" />
+          <line x1="4" y1="5.5" x2="4" y2="8" />
+          <line x1="7" y1="5.5" x2="7" y2="8" />
+          <line x1="10" y1="5.5" x2="10" y2="8" />
+          <path d="M4 2.5c-.6.6-.6 1.4 0 2M7 2.5c-.6.6-.6 1.4 0 2M10 2.5c-.6.6-.6 1.4 0 2" />
         </svg>
       )
     default:
