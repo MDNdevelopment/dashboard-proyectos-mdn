@@ -11,6 +11,12 @@ const json = (statusCode, body) => ({
 
 const MAX_MESSAGE_LENGTH = 2000
 const MAX_TOOL_ITERATIONS = 5
+// Netlify mata la función alrededor de los 30s (visto en logs: "Sandbox.Timedout"); con
+// varias llamadas seriales a OpenRouter esto se podía alcanzar, y la plataforma corta la
+// respuesta a mitad de camino en vez de devolver JSON. Cortamos el loop antes de ese límite
+// para siempre devolver una respuesta válida.
+const TOTAL_TIME_BUDGET_MS = 24000
+const PER_CALL_TIMEOUT_MS = 12000
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions'
 // "openrouter/auto" deja que OpenRouter elija el modelo subyacente según el prompt
 // (NotDiamond router) en vez de fijar uno nosotros.
@@ -97,31 +103,39 @@ function buildMessages(messages) {
   ]
 }
 
-async function callOpenRouter(apiKey, messages, toolChoice) {
-  const res = await fetch(OPENROUTER_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-      'X-Title': 'MDN Publicidad - MAPPI',
-    },
-    body: JSON.stringify({
-      model: OPENROUTER_MODEL,
-      messages,
-      max_tokens: 1500,
-      temperature: 0.4,
-      tools: OPENROUTER_TOOLS,
-      tool_choice: toolChoice,
-    }),
-  })
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(`OpenRouter ${res.status}: ${text.slice(0, 300)}`)
+async function callOpenRouter(apiKey, messages, toolChoice, timeoutMs) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const res = await fetch(OPENROUTER_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+        'X-Title': 'MDN Publicidad - MAPPI',
+      },
+      body: JSON.stringify({
+        model: OPENROUTER_MODEL,
+        messages,
+        max_tokens: 1500,
+        temperature: 0.4,
+        tools: OPENROUTER_TOOLS,
+        tool_choice: toolChoice,
+      }),
+      signal: controller.signal,
+    })
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      throw new Error(`OpenRouter ${res.status}: ${text.slice(0, 300)}`)
+    }
+    return res.json()
+  } finally {
+    clearTimeout(timer)
   }
-  return res.json()
 }
 
 export const handler = async (event) => {
+  const startedAt = Date.now()
   if (event.httpMethod !== 'POST') return json(405, { error: 'Method Not Allowed' })
   if (!process.env.OPENROUTER_API_KEY) return json(500, { error: 'IA no configurada' })
 
@@ -172,10 +186,23 @@ export const handler = async (event) => {
 
   try {
     for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
+      const elapsed = Date.now() - startedAt
+      if (elapsed > TOTAL_TIME_BUDGET_MS) {
+        return json(200, {
+          reply: 'Esto está tardando más de lo normal. Intenta de nuevo o reformula la pregunta.',
+          toolsUsed,
+        })
+      }
+
       const isLastIteration = i === MAX_TOOL_ITERATIONS - 1
       // En la última vuelta se prohíben más tool calls para forzar una respuesta en
       // texto (si no, el modelo puede seguir pidiendo tools y el loop termina sin reply).
-      const data = await callOpenRouter(apiKey, chatMessages, isLastIteration ? 'none' : 'auto')
+      const data = await callOpenRouter(
+        apiKey,
+        chatMessages,
+        isLastIteration ? 'none' : 'auto',
+        Math.min(PER_CALL_TIMEOUT_MS, TOTAL_TIME_BUDGET_MS - elapsed),
+      )
 
       const choice = data.choices?.[0]
       const message = choice?.message

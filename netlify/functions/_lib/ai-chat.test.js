@@ -188,4 +188,27 @@ describe('ai-chat.js handler', () => {
     const res = await handler(makeEvent({ messages: [{ role: 'user', text: 'hola' }] }))
     expect(res.statusCode).toBe(500)
   })
+
+  it('corta el loop con un mensaje amigable si se excede el presupuesto de tiempo total', async () => {
+    let now = 0
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const assistantMessage = {
+      role: 'assistant',
+      tool_calls: [
+        { id: 'call-1', type: 'function', function: { name: 'listar_lineas', arguments: '{}' } },
+      ],
+    }
+    // Cada llamada a OpenRouter "tarda" 25s (más que el presupuesto de 24s), simulando
+    // un caso donde varias vueltas del loop terminarían chocando con el timeout de Netlify.
+    fetchMock.mockImplementation(async () => {
+      now += 25000
+      return okResponse({ choices: [{ message: assistantMessage }] })
+    })
+
+    const res = await handler(makeEvent({ messages: [{ role: 'user', text: 'hola' }] }))
+    expect(res.statusCode).toBe(200)
+    const payload = JSON.parse(res.body)
+    expect(payload.reply).toMatch(/tardando más de lo normal/)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
 })

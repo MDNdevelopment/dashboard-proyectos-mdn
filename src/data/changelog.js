@@ -43,6 +43,7 @@ export const CHANGELOG = [
       'En Tareas Fijas (vista "Todas"), se quitó el renglón que repetía el nombre de la línea entre grupos de cuentas.',
       'El apartado "2. Productividad – Tareas Fijas" del reporte operativo empieza a llenarse solo desde el reporte de septiembre; los reportes de agosto hacia atrás se pueden seguir editando a mano como antes.',
       'Corregido: en el chat de MAPPI en el celular, el botón de enviar se achicaba en vez de mantenerse cuadrado. Además, cuando el servidor tarda demasiado en responder ahora se avisa con un mensaje más claro en vez de "respuesta inválida del servidor".',
+      'Corregido: MAPPI podía quedarse sin responder ("respuesta inválida del servidor") en preguntas que necesitaban varias consultas seguidas, si tardaban demasiado. Ahora corta a tiempo y avisa que la pregunta tardó más de lo normal, en vez de fallar sin explicación.',
       'El recuadro de "Análisis IA" en Inicio se ocultó temporalmente hasta nuevo aviso.',
       'Nueva sección "Audiovisual" dentro de Tareas Fijas: calendario de pautas de grabación, flujo de solicitud → agenda → realizada, generador de agenda para WhatsApp y seguimiento de piezas grabadas/editadas por línea y por persona.',
       'El apartado "6. Nº Piezas vs Piezas editadas" del reporte operativo empezará a llenarse solo desde el reporte de septiembre, tomando las pautas marcadas como realizadas en Audiovisual; los reportes de agosto hacia atrás se pueden seguir editando a mano.',

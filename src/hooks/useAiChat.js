@@ -46,10 +46,19 @@ export function useAiChat() {
         return
       }
 
+      const resForDebug = typeof res.clone === 'function' ? res.clone() : null
       let payload
       try {
         payload = await res.json()
       } catch {
+        if (resForDebug) {
+          const bodyPreview = await resForDebug.text().catch(() => '(no se pudo leer el body)')
+          console.error('[MAPPI] Respuesta no-JSON del servidor', {
+            status: res.status,
+            statusText: res.statusText,
+            bodyPreview: bodyPreview.slice(0, 500),
+          })
+        }
         const isTimeout = [502, 503, 504, 408].includes(res.status)
         setError(
           isTimeout
