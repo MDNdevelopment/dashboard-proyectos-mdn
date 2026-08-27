@@ -65,8 +65,12 @@ export const handler = async (event) => {
   }
 
   // 1. Crear cuenta auth via invitación — el empleado recibirá un email para fijar su contraseña
-  const { data: inviteData, error: inviteErr } =
-    await supabase.auth.admin.inviteUserByEmail(cleanEmail)
+  //    redirectTo explícito: sin esto, Supabase usa el "Site URL" configurado en el panel
+  //    (Authentication > URL Configuration), que puede quedar desactualizado si cambia el dominio.
+  const { data: inviteData, error: inviteErr } = await supabase.auth.admin.inviteUserByEmail(
+    cleanEmail,
+    { redirectTo: 'https://gestion.mdnpublicidad.com/reset-password' },
+  )
 
   if (inviteErr) return json(400, { error: inviteErr.message })
 

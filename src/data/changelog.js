@@ -127,6 +127,7 @@ export const CHANGELOG = [
       'Nuevo botón "Solo vacaciones" en el calendario de Empresa → Empleados: oculta cumpleaños, aniversarios y fin de período de prueba para ver de un vistazo solo quién inicia o regresa de vacaciones ese mes.',
       'En Empresa → Empleados se quitó la franja que repetía el nombre de cada persona sobre todos los días que abarcaba su vacación (hacía ver el calendario muy cargado). En su lugar, arriba del calendario ahora hay dos recuadros siempre visibles: "De vacaciones ahora" y "En período de prueba", con quién está en cada situación en este momento, sin depender del mes que estés viendo.',
       'En el recuadro "En período de prueba" de Empresa → Empleados, junto al cargo de cada persona ahora también se muestra su team.',
+      'Corregido: el correo de invitación que reciben los empleados nuevos podía llevarlos a una pantalla vieja en vez de al dashboard actual.',
     ],
   },
   {
