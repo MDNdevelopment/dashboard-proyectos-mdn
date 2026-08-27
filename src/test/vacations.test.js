@@ -24,14 +24,12 @@ describe('fetchVacationsInRange', () => {
     expect(query.not).not.toHaveBeenCalled()
   })
 
-  it('excluye por negación pending/rejected, en vez de listar los status confirmados', async () => {
-    // Bug real: la tabla `vacations` usa 'programmed'/'fulfilled' para lo confirmado
-    // (import previo), no 'approved'/'completed' como escribe VacationsDialog.jsx.
-    // Filtrar con `.in('status', ['approved', 'completed'])` excluía TODA la data real
-    // (verificado con una consulta directa: los status distintos en producción son
-    // 'pending', 'programmed', 'fulfilled'). La negación cubre ambos vocabularios.
+  it('excluye por negación solo rejected, para traer también las tentativas', async () => {
+    // El calendario ahora muestra tanto vacaciones confirmadas como tentativas
+    // (distinguidas visualmente) — solo se excluyen las rechazadas. El vocabulario de
+    // exclusión vive en resolveVacationStatus (utils/employeeCalendar.js).
     await fetchVacationsInRange(['u1'], '2026-08-01', '2026-08-31')
-    expect(query.not).toHaveBeenCalledWith('status', 'in', '(pending,rejected)')
+    expect(query.not).toHaveBeenCalledWith('status', 'in', '(rejected)')
   })
 
   it('devuelve las filas del rango', async () => {

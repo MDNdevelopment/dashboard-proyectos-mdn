@@ -186,10 +186,7 @@ describe('buildEmployeeCalendarEvents — vacaciones', () => {
     expect(end.dateKey).toBe('2026-04-01')
   })
 
-  it('el filtro de status (approved/completed) es responsabilidad del caller, no de este módulo', () => {
-    // lib/vacations.js filtra por status al consultar Supabase; este módulo puro no vuelve
-    // a filtrar, así que cualquier fila que llegue produce evento (se verifica que no hay
-    // un filtro oculto por status aquí, para no duplicar la regla en dos lugares).
+  it('marca tentative las vacaciones sin confirmar y excluye las rechazadas', () => {
     const events = buildEmployeeCalendarEvents({
       employees: [emp()],
       vacations: [
@@ -198,7 +195,7 @@ describe('buildEmployeeCalendarEvents — vacaciones', () => {
           user_id: 'u1',
           start_date: '2026-03-10',
           end_date: '2026-03-12',
-          status: 'pending',
+          status: 'tentative',
         },
         {
           id: 'v2',
@@ -211,7 +208,9 @@ describe('buildEmployeeCalendarEvents — vacaciones', () => {
       year: 2026,
       month: 3,
     })
-    expect(events.filter((e) => e.type === 'vacation_start')).toHaveLength(2)
+    const starts = events.filter((e) => e.type === 'vacation_start')
+    expect(starts).toHaveLength(1)
+    expect(starts[0].tentative).toBe(true)
   })
 
   it('ignora vacaciones de empleados que no están en la lista activa', () => {

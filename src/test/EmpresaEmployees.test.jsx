@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { vi } from 'vitest'
+import { format, addDays } from 'date-fns'
 import { createSupabaseMock, makeQuery } from './helpers/supabaseMock'
 
 // ── Mock supabase ─────────────────────────────────────────────────────────────
@@ -12,6 +13,7 @@ vi.mock('../supabase', () => ({
       departments: () => makeQuery(MOCK_DEPARTMENTS),
       positions: () => makeQuery(MOCK_POSITIONS),
       vacations: () => makeQuery(MOCK_VACATIONS),
+      metric_lines: () => makeQuery(MOCK_LINES),
     },
     auth: {
       getSession: vi.fn().mockResolvedValue({ data: { session: { access_token: 'test-token' } } }),
@@ -119,7 +121,16 @@ const MOCK_VACATIONS = [
     user_id: 'u10',
     start_date: '2026-07-01',
     end_date: '2026-07-15',
-    status: 'pending',
+    status: 'tentative',
+  },
+]
+const MOCK_LINES = [
+  {
+    id: 'line1',
+    name: 'Team Sabrina',
+    company_id: 'co-1',
+    is_general: false,
+    members: [{ user_id: 'u9', is_lead: false }],
   },
 ]
 
@@ -473,7 +484,7 @@ describe('EmployeesView', () => {
     await user.click(within(anaRow).getByRole('button', { name: 'Vacaciones' }))
 
     await waitFor(() => {
-      expect(screen.getByText('Pendiente')).toBeInTheDocument()
+      expect(screen.getByText('Fecha tentativa')).toBeInTheDocument()
     })
     // Fecha formateada como dd/MM/yyyy
     expect(screen.getByText('01/07/2026 – 15/07/2026')).toBeInTheDocument()
@@ -725,7 +736,9 @@ describe('EmployeesView — período de prueba', () => {
   it('muestra el chip "Prueba", el contador y el botón de filtro', async () => {
     renderAsAdmin()
     await waitFor(() => {
-      expect(screen.getByText('Luisa Ramírez')).toBeInTheDocument()
+      // Luisa aparece dos veces: en su card de empleado y en la tarjeta fija
+      // "En período de prueba" (TeamStatusCards).
+      expect(screen.getAllByText('Luisa Ramírez').length).toBeGreaterThanOrEqual(1)
     })
     // Chip en la tarjeta del empleado en prueba (u9 Luisa)
     expect(screen.getByText('Prueba')).toBeInTheDocument()
@@ -739,13 +752,13 @@ describe('EmployeesView — período de prueba', () => {
     const user = userEvent.setup()
     renderAsAdmin()
     await waitFor(() => {
-      expect(screen.getByText('Luisa Ramírez')).toBeInTheDocument()
+      expect(screen.getAllByText('Luisa Ramírez').length).toBeGreaterThanOrEqual(1)
     })
     expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /Solo en prueba/ }))
 
-    expect(screen.getByText('Luisa Ramírez')).toBeInTheDocument()
+    expect(screen.getAllByText('Luisa Ramírez').length).toBeGreaterThanOrEqual(1)
     expect(screen.queryByText('Ana Pérez')).not.toBeInTheDocument()
   })
 })
@@ -772,5 +785,119 @@ describe('EmployeesView — calendario de fechas del equipo', () => {
     await user.click(screen.getByRole('button', { name: /ver eliminados/i }))
 
     expect(screen.queryByText('Fechas del equipo')).not.toBeInTheDocument()
+  })
+})
+
+describe('EmployeesView — tarjetas fijas "De vacaciones ahora" / "En período de prueba"', () => {
+  const yesterdayKey = format(addDays(new Date(), -1), 'yyyy-MM-dd')
+  const tomorrowKey = format(addDays(new Date(), 1), 'yyyy-MM-dd')
+  const originalVacations = [...MOCK_VACATIONS]
+
+  afterEach(() => {
+    MOCK_VACATIONS.length = 0
+    MOCK_VACATIONS.push(...originalVacations)
+  })
+
+  it('una vacación confirmada que abarca hoy aparece en "De vacaciones ahora"', async () => {
+    MOCK_VACATIONS.length = 0
+    MOCK_VACATIONS.push({
+      id: 'v-confirmed',
+      user_id: 'u10',
+      start_date: yesterdayKey,
+      end_date: tomorrowKey,
+      status: 'confirmed',
+    })
+    renderAsAdmin()
+    await waitFor(() => {
+      expect(screen.getByText('De vacaciones ahora')).toBeInTheDocument()
+    })
+    const card = screen.getByText('De vacaciones ahora').closest('div').parentElement
+    expect(await within(card).findByText('Ana Pérez')).toBeInTheDocument()
+    expect(within(card).queryByText('tentativa')).not.toBeInTheDocument()
+  })
+
+  it('una vacación tentativa que abarca hoy aparece marcada "tentativa"', async () => {
+    MOCK_VACATIONS.length = 0
+    MOCK_VACATIONS.push({
+      id: 'v-tentative',
+      user_id: 'u10',
+      start_date: yesterdayKey,
+      end_date: tomorrowKey,
+      status: 'tentative',
+    })
+    renderAsAdmin()
+    await waitFor(() => {
+      expect(screen.getByText('De vacaciones ahora')).toBeInTheDocument()
+    })
+    const card = screen.getByText('De vacaciones ahora').closest('div').parentElement
+    expect(await within(card).findByText('Ana Pérez')).toBeInTheDocument()
+    expect(within(card).getByText('tentativa')).toBeInTheDocument()
+  })
+
+  it('una vacación rechazada que abarca hoy no aparece', async () => {
+    MOCK_VACATIONS.length = 0
+    MOCK_VACATIONS.push({
+      id: 'v-rejected',
+      user_id: 'u10',
+      start_date: yesterdayKey,
+      end_date: tomorrowKey,
+      status: 'rejected',
+    })
+    renderAsAdmin()
+    await waitFor(() => {
+      expect(screen.getByText('De vacaciones ahora')).toBeInTheDocument()
+    })
+    expect(screen.getByText('Nadie está de vacaciones hoy.')).toBeInTheDocument()
+  })
+
+  it('una vacación que no abarca hoy no aparece', async () => {
+    MOCK_VACATIONS.length = 0
+    MOCK_VACATIONS.push({
+      id: 'v-past',
+      user_id: 'u10',
+      start_date: format(addDays(new Date(), -10), 'yyyy-MM-dd'),
+      end_date: format(addDays(new Date(), -5), 'yyyy-MM-dd'),
+      status: 'confirmed',
+    })
+    renderAsAdmin()
+    await waitFor(() => {
+      expect(screen.getByText('De vacaciones ahora')).toBeInTheDocument()
+    })
+    expect(screen.getByText('Nadie está de vacaciones hoy.')).toBeInTheDocument()
+  })
+
+  it('un empleado en período de prueba aparece en "En período de prueba"', async () => {
+    MOCK_VACATIONS.length = 0
+    renderAsAdmin()
+    await waitFor(() => {
+      expect(screen.getByText('En período de prueba')).toBeInTheDocument()
+    })
+    // Luisa Ramírez (u9, on_probation: true en MOCK_USERS) aparece en la tarjeta fija,
+    // además de en su card de la lista de empleados.
+    expect(screen.getAllByText('Luisa Ramírez').length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('en "En período de prueba", el subtítulo muestra el cargo y el team separados por un punto', async () => {
+    MOCK_VACATIONS.length = 0
+    renderAsAdmin()
+    await waitFor(() => {
+      expect(screen.getByText('En período de prueba')).toBeInTheDocument()
+    })
+    // Luisa Ramírez (u9): cargo "Diseñador Gráfico" + team "Team Sabrina" (MOCK_LINES).
+    expect(screen.getByText('Diseñador Gráfico · Team Sabrina')).toBeInTheDocument()
+  })
+
+  it('con "Ver eliminados" activo, ninguna de las dos tarjetas se renderiza', async () => {
+    const user = userEvent.setup()
+    MOCK_VACATIONS.length = 0
+    renderAsAdmin()
+    await waitFor(() => {
+      expect(screen.getByText('De vacaciones ahora')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: /ver eliminados/i }))
+
+    expect(screen.queryByText('De vacaciones ahora')).not.toBeInTheDocument()
+    expect(screen.queryByText('En período de prueba')).not.toBeInTheDocument()
   })
 })

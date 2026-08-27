@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   startOfMonth,
   endOfMonth,
@@ -16,6 +17,7 @@ import EventTypeIcon from './EventTypeIcon'
 
 const WEEKDAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 const MAX_PILLS = 2
+const VACATION_TYPES = ['vacation_start', 'vacation_end']
 
 /**
  * Calendario mensual compacto con las fechas importantes del equipo (cumpleaños,
@@ -25,17 +27,26 @@ const MAX_PILLS = 2
  * calculado por buildEmployeeCalendarEvents (utils/employeeCalendar.js) — este componente
  * es puramente de presentación, sin llamadas a Supabase.
  *
+ * Quién está de vacaciones o en período de prueba "ahora mismo" se ve en `TeamStatusCards`
+ * (arriba de este calendario, en EmployeesView.jsx) — este componente solo pinta el mes
+ * navegado, no repite esa información día a día (la vieja "estela" de vacaciones que
+ * pintaba una pastilla por día se quitó por sobrecargar la grilla).
+ *
  * En móvil (< sm) se muestran puntos de color en vez de pills, por falta de espacio para
  * texto legible en 7 columnas (mismo criterio que CalendarView/AvCalendar); el clic en un
  * día con eventos, o en una de sus pills, abre `onDayClick` con el detalle de solo lectura
  * de ese día (`EmployeeDayEventsModal`) — nunca la ficha del empleado.
  */
 export default function EmployeeDatesCalendar({ year, month, events, onMonthChange, onDayClick }) {
+  const [onlyVacations, setOnlyVacations] = useState(false)
   const anchor = new Date(year, month - 1, 1)
   const gridStart = startOfWeek(startOfMonth(anchor), { weekStartsOn: 1 })
   const gridEnd = endOfWeek(endOfMonth(anchor), { weekStartsOn: 1 })
   const days = eachDayOfInterval({ start: gridStart, end: gridEnd })
-  const byDay = groupEventsByDay(events)
+  const shownEvents = onlyVacations
+    ? events.filter((ev) => VACATION_TYPES.includes(ev.type))
+    : events
+  const byDay = groupEventsByDay(shownEvents)
 
   function goPrev() {
     const d = subMonths(anchor, 1)
@@ -52,7 +63,7 @@ export default function EmployeeDatesCalendar({ year, month, events, onMonthChan
 
   return (
     <div className="bg-white border border-[#e0ddd4] rounded-2xl overflow-hidden mb-4">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[#ece9df]">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[#ece9df] gap-2">
         <div>
           <h2 className="text-[15px] font-bold text-[#111]">Fechas del equipo</h2>
           <p className="text-[12px] text-[#999] first-letter:capitalize">
@@ -61,6 +72,18 @@ export default function EmployeeDatesCalendar({ year, month, events, onMonthChan
           </p>
         </div>
         <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setOnlyVacations((v) => !v)}
+            aria-pressed={onlyVacations}
+            className={`px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-colors ${
+              onlyVacations
+                ? 'bg-[#FFB800] text-[#111]'
+                : 'text-[#666] hover:bg-[#f5f3eb] border border-[#e0ddd4]'
+            }`}
+          >
+            Solo vacaciones
+          </button>
           <button
             onClick={goPrev}
             className="w-8 h-8 flex items-center justify-center rounded-lg text-[#666] hover:bg-[#f5f3eb] transition-colors"
@@ -183,10 +206,15 @@ function EventPill({ event }) {
   return (
     <div
       title={event.label}
-      className={`flex items-center gap-1 rounded px-1.5 py-1 border text-[10.5px] font-medium truncate transition-colors ${meta.pill}`}
+      className={`flex items-center gap-1 rounded px-1.5 py-1 border text-[10.5px] font-medium truncate transition-colors ${meta.pill} ${
+        event.tentative ? 'border-dashed' : ''
+      }`}
     >
       <EventTypeIcon type={event.type} className={meta.iconColor} />
-      <span className="truncate">{event.employeeName}</span>
+      <span className="truncate">
+        {event.employeeName}
+        {event.tentative ? ' (tentativa)' : ''}
+      </span>
     </div>
   )
 }

@@ -4,12 +4,18 @@ import { supabase } from '../../supabase'
 import ConfirmDeleteDialog from '../common/ConfirmDeleteDialog'
 import DateInput from '../common/DateInput'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
+import { resolveVacationStatus } from '../../utils/employeeCalendar'
 
+/**
+ * Sin flujo de aprobación: una vacación se crea con fecha tentativa ('tentative') y se
+ * pasa a 'confirmed' cuando la fecha queda cerrada — nunca 'pending'/'approved'/'rejected'.
+ * 'completed' no se guarda: `resolveVacationStatus` la deriva de `end_date` vs hoy, así
+ * que la etiqueta se recalcula sola sin tocar la fila cuando la vacación ya pasó.
+ */
 const STATUS_MAP = {
-  pending: { label: 'Pendiente', cls: 'bg-yellow-100 text-yellow-800' },
-  approved: { label: 'Aprobado', cls: 'bg-green-100 text-green-800' },
-  rejected: { label: 'Rechazado', cls: 'bg-red-100 text-red-800' },
-  completed: { label: 'Completado', cls: 'bg-[#f0ede3] text-[#666]' },
+  tentative: { label: 'Fecha tentativa', cls: 'bg-amber-100 text-amber-800' },
+  confirmed: { label: 'Confirmada', cls: 'bg-green-100 text-green-800' },
+  completed: { label: 'Completada', cls: 'bg-[#f0ede3] text-[#666]' },
 }
 
 function fmtDate(dateStr) {
@@ -40,6 +46,12 @@ export default function VacationsDialog({ employee, onClose }) {
 
   // Status en proceso
   const [updatingId, setUpdatingId] = useState(null)
+
+  // Confirmar fecha: al confirmar se puede ajustar la fecha tentativa, así que en vez de
+  // un botón directo se abre un mini-form inline con las fechas actuales precargadas.
+  const [confirmingId, setConfirmingId] = useState(null)
+  const [confirmDates, setConfirmDates] = useState({ start_date: '', end_date: '' })
+  const [confirmError, setConfirmError] = useState(null)
 
   const initialVac = useRef(newVac)
   const { requestClose } = useUnsavedChanges({
@@ -91,7 +103,7 @@ export default function VacationsDialog({ employee, onClose }) {
         user_id: employee.user_id,
         start_date: newVac.start_date,
         end_date: newVac.end_date,
-        status: 'pending',
+        status: 'tentative',
       })
       .select()
       .single()
@@ -106,12 +118,12 @@ export default function VacationsDialog({ employee, onClose }) {
     setSavingNew(false)
   }
 
-  // ── Cambiar status ──────────────────────────────────────────────────────────
-  async function handleStatusChange(vacId, newStatus) {
+  // ── Volver a tentativa (revertir una vacación confirmada) ────────────────────
+  async function handleRevertToTentative(vacId) {
     setUpdatingId(vacId)
     const { data, error } = await supabase
       .from('vacations')
-      .update({ status: newStatus })
+      .update({ status: 'tentative' })
       .eq('id', vacId)
       .select()
       .single()
@@ -119,6 +131,47 @@ export default function VacationsDialog({ employee, onClose }) {
       setVacations((prev) => prev.map((v) => (v.id === vacId ? data : v)))
     }
     setUpdatingId(null)
+  }
+
+  // ── Confirmar fecha: abre el mini-form con las fechas tentativas precargadas ─
+  function openConfirm(v) {
+    setConfirmingId(v.id)
+    setConfirmDates({ start_date: v.start_date, end_date: v.end_date })
+    setConfirmError(null)
+  }
+  function closeConfirm() {
+    setConfirmingId(null)
+    setConfirmError(null)
+  }
+  async function handleConfirm(e) {
+    e.preventDefault()
+    if (!confirmDates.start_date || !confirmDates.end_date) {
+      setConfirmError('Ambas fechas son obligatorias')
+      return
+    }
+    if (confirmDates.end_date < confirmDates.start_date) {
+      setConfirmError('La fecha de fin debe ser igual o posterior a la de inicio')
+      return
+    }
+    setUpdatingId(confirmingId)
+    const { data, error } = await supabase
+      .from('vacations')
+      .update({
+        status: 'confirmed',
+        start_date: confirmDates.start_date,
+        end_date: confirmDates.end_date,
+      })
+      .eq('id', confirmingId)
+      .select()
+      .single()
+    if (error) {
+      setConfirmError(error.message)
+      setUpdatingId(null)
+      return
+    }
+    setVacations((prev) => prev.map((v) => (v.id === data.id ? data : v)))
+    setUpdatingId(null)
+    closeConfirm()
   }
 
   // ── Eliminar vacación ───────────────────────────────────────────────────────
@@ -243,11 +296,13 @@ export default function VacationsDialog({ employee, onClose }) {
             ) : (
               <div className="space-y-2">
                 {vacations.map((v) => {
-                  const st = STATUS_MAP[v.status] ?? {
+                  const displayStatus = resolveVacationStatus(v.status, v.end_date)
+                  const st = STATUS_MAP[displayStatus] ?? {
                     label: v.status,
                     cls: 'bg-gray-100 text-gray-600',
                   }
                   const isUpdating = updatingId === v.id
+                  const isConfirming = confirmingId === v.id
                   return (
                     <div
                       key={v.id}
@@ -267,54 +322,24 @@ export default function VacationsDialog({ employee, onClose }) {
 
                         {/* Acciones de status + eliminar */}
                         <div className="flex items-center gap-1 flex-shrink-0">
-                          {v.status === 'pending' && (
-                            <>
-                              <button
-                                type="button"
-                                disabled={isUpdating}
-                                onClick={() => handleStatusChange(v.id, 'approved')}
-                                className="px-2 py-1 rounded-lg text-[13px] font-semibold bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-50 transition-colors"
-                              >
-                                Aprobar
-                              </button>
-                              <button
-                                type="button"
-                                disabled={isUpdating}
-                                onClick={() => handleStatusChange(v.id, 'rejected')}
-                                className="px-2 py-1 rounded-lg text-[13px] font-semibold bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50 transition-colors"
-                              >
-                                Rechazar
-                              </button>
-                            </>
-                          )}
-                          {v.status === 'approved' && (
-                            <>
-                              <button
-                                type="button"
-                                disabled={isUpdating}
-                                onClick={() => handleStatusChange(v.id, 'completed')}
-                                className="px-2 py-1 rounded-lg text-[13px] font-semibold bg-[#f5f3eb] text-[#555] hover:bg-[#ece9df] disabled:opacity-50 transition-colors"
-                              >
-                                Completar
-                              </button>
-                              <button
-                                type="button"
-                                disabled={isUpdating}
-                                onClick={() => handleStatusChange(v.id, 'rejected')}
-                                className="px-2 py-1 rounded-lg text-[13px] font-semibold bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50 transition-colors"
-                              >
-                                Rechazar
-                              </button>
-                            </>
-                          )}
-                          {v.status === 'rejected' && (
+                          {displayStatus === 'tentative' && !isConfirming && (
                             <button
                               type="button"
                               disabled={isUpdating}
-                              onClick={() => handleStatusChange(v.id, 'approved')}
+                              onClick={() => openConfirm(v)}
                               className="px-2 py-1 rounded-lg text-[13px] font-semibold bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-50 transition-colors"
                             >
-                              Aprobar
+                              Confirmar fecha
+                            </button>
+                          )}
+                          {displayStatus === 'confirmed' && (
+                            <button
+                              type="button"
+                              disabled={isUpdating}
+                              onClick={() => handleRevertToTentative(v.id)}
+                              className="px-2 py-1 rounded-lg text-[13px] font-semibold bg-amber-100 text-amber-700 hover:bg-amber-200 disabled:opacity-50 transition-colors"
+                            >
+                              Volver a tentativa
                             </button>
                           )}
                           <button
@@ -336,6 +361,62 @@ export default function VacationsDialog({ employee, onClose }) {
                           </button>
                         </div>
                       </div>
+
+                      {/* Mini-form de confirmación: permite ajustar la fecha tentativa
+                          al mismo tiempo que se confirma. */}
+                      {isConfirming && (
+                        <form
+                          onSubmit={handleConfirm}
+                          className="mt-3 bg-[#f5f3eb] rounded-lg p-3 space-y-2"
+                        >
+                          {confirmError && (
+                            <p className="text-[13px] text-red-600">{confirmError}</p>
+                          )}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-[12px] font-mono font-bold tracking-[0.1em] uppercase text-[#888] mb-1">
+                                Inicio *
+                              </label>
+                              <DateInput
+                                value={confirmDates.start_date}
+                                onChange={(val) =>
+                                  setConfirmDates((d) => ({ ...d, start_date: val }))
+                                }
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[12px] font-mono font-bold tracking-[0.1em] uppercase text-[#888] mb-1">
+                                Fin *
+                              </label>
+                              <DateInput
+                                value={confirmDates.end_date}
+                                min={confirmDates.start_date}
+                                onChange={(val) =>
+                                  setConfirmDates((d) => ({ ...d, end_date: val }))
+                                }
+                                required
+                              />
+                            </div>
+                          </div>
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={closeConfirm}
+                              className="px-2 py-1 rounded-lg text-[13px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-white transition-colors"
+                            >
+                              Cancelar
+                            </button>
+                            <button
+                              type="submit"
+                              disabled={isUpdating}
+                              className="px-2 py-1 rounded-lg text-[13px] font-bold bg-[#111] text-white hover:bg-[#222] disabled:opacity-50 transition-colors"
+                            >
+                              {isUpdating ? 'Confirmando…' : 'Confirmar'}
+                            </button>
+                          </div>
+                        </form>
+                      )}
                     </div>
                   )
                 })}

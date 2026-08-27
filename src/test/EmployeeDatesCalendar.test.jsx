@@ -109,6 +109,25 @@ describe('EmployeeDatesCalendar', () => {
     expect(onMonthChange).toHaveBeenCalledTimes(3)
   })
 
+  it('la leyenda ya no incluye las entradas de la estela de vacaciones (removida)', () => {
+    renderCalendar()
+    expect(screen.queryByText('Vacaciones confirmadas')).toBeNull()
+    expect(screen.queryByText('Vacaciones tentativas')).toBeNull()
+  })
+
+  it('"Solo vacaciones" filtra las pills a solo inicio/regreso de vacaciones', () => {
+    renderCalendar({
+      events: [
+        ev({ id: 'e1', type: 'birthday', employeeName: 'Cumpleañera' }),
+        ev({ id: 'e2', type: 'vacation_start', employeeName: 'Vacacionista' }),
+      ],
+    })
+    expect(screen.getByText('Cumpleañera')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('Solo vacaciones'))
+    expect(screen.queryByText('Cumpleañera')).toBeNull()
+    expect(screen.getByText('Vacacionista')).toBeInTheDocument()
+  })
+
   it('renderiza tanto los puntos (rama móvil) como las pills (rama desktop) — el CSS decide cuál se ve', () => {
     // No hay JS de por medio (a diferencia de CalendarView, que sí usa matchMedia para
     // decidir el click): ambas ramas se montan siempre y Tailwind alterna con

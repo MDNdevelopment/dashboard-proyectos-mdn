@@ -109,6 +109,34 @@ function fullName(employee) {
 }
 
 /**
+ * Vocabulario de `vacations.status`. Flujo actual (VacationsDialog.jsx): se crea en
+ * 'tentative' (fecha probable, sin aprobar/rechazar) y se pasa a 'confirmed' cuando la
+ * fecha queda cerrada — no hay paso de aprobación. 'completed' NO se guarda: se calcula
+ * solo a partir de `end_date` vs hoy. Datos históricos usan otros valores ('pending' del
+ * viejo flujo de aprobación, 'programmed'/'fulfilled' de una importación previa); por eso
+ * `resolveVacationStatus` no exige un vocabulario cerrado y cae a "confirmada" por
+ * default en vez de listar cada valor legado.
+ */
+export const TENTATIVE_STATUSES = ['tentative', 'pending']
+export const EXCLUDED_VACATION_STATUSES = ['rejected']
+
+/**
+ * Resuelve el status "de exhibición" de una vacación: 'tentative' | 'confirmed' |
+ * 'completed' | null (se excluye del calendario y de la estela; hoy solo 'rejected',
+ * remanente del viejo flujo de aprobación). 'completed' es 'confirmed' cuya `endDateKey`
+ * ya pasó — no es un valor guardado en la fila.
+ */
+export function resolveVacationStatus(
+  rawStatus,
+  endDateKey,
+  todayKey = format(new Date(), 'yyyy-MM-dd'),
+) {
+  if (EXCLUDED_VACATION_STATUSES.includes(rawStatus)) return null
+  if (TENTATIVE_STATUSES.includes(rawStatus)) return 'tentative'
+  return endDateKey < todayKey ? 'completed' : 'confirmed'
+}
+
+/**
  * Construye los eventos del calendario para el mes visible.
  * `employees`: filas de `users` ya filtradas a activos (ver activeEmployees en lib/employees.js).
  * `vacations`: filas de `vacations` ya filtradas a status approved/completed (ver lib/vacations.js).
@@ -181,9 +209,13 @@ export function buildEmployeeCalendarEvents({ employees = [], vacations = [], ye
   }
 
   // Vacaciones: solo inicio y regreso (día siguiente al último día libre), no el rango completo.
+  const todayKey = format(new Date(), 'yyyy-MM-dd')
   for (const vac of vacations) {
     const emp = employeesById.get(vac.user_id)
     if (!emp || !vac.start_date || !vac.end_date) continue
+    const displayStatus = resolveVacationStatus(vac.status, vac.end_date, todayKey)
+    if (!displayStatus) continue // 'rejected': no se muestra
+    const tentative = displayStatus === 'tentative'
     const name = fullName(emp)
 
     if (vac.start_date >= startKey && vac.start_date <= endKey) {
@@ -194,8 +226,11 @@ export function buildEmployeeCalendarEvents({ employees = [], vacations = [], ye
         employeeId: emp.user_id,
         employeeName: name,
         avatarUrl: emp.avatar_url ?? null,
-        label: `${name} inicia vacaciones (hasta ${format(parseDateKey(vac.end_date), 'dd/MM')})`,
-        detail: null,
+        tentative,
+        label: tentative
+          ? `${name} tiene tentativas vacaciones (hasta ${format(parseDateKey(vac.end_date), 'dd/MM')})`
+          : `${name} inicia vacaciones (hasta ${format(parseDateKey(vac.end_date), 'dd/MM')})`,
+        detail: tentative ? 'Fecha por confirmar' : null,
       })
     }
 
@@ -208,8 +243,9 @@ export function buildEmployeeCalendarEvents({ employees = [], vacations = [], ye
         employeeId: emp.user_id,
         employeeName: name,
         avatarUrl: emp.avatar_url ?? null,
-        label: `${name} regresa a la oficina`,
-        detail: null,
+        tentative,
+        label: tentative ? `${name} regresaría a la oficina` : `${name} regresa a la oficina`,
+        detail: tentative ? 'Fecha por confirmar' : null,
       })
     }
   }

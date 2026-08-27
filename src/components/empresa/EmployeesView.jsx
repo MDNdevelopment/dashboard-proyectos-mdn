@@ -11,9 +11,16 @@ import ConfirmDeleteDialog from '../common/ConfirmDeleteDialog'
 import ExternalResourcesView from './ExternalResourcesView'
 import EmployeeDatesCalendar from './EmployeeDatesCalendar'
 import EmployeeDayEventsModal from './EmployeeDayEventsModal'
+import TeamStatusCards from './TeamStatusCards'
 import { activeEmployees as activeEmployeesList } from '../../lib/employees'
 import { fetchVacationsInRange } from '../../lib/vacations'
-import { monthGridRange, buildEmployeeCalendarEvents } from '../../utils/employeeCalendar'
+import { loadLines } from '../metricas/metricsApi'
+import { lineOfMember } from '../../utils/lineMembers'
+import {
+  monthGridRange,
+  buildEmployeeCalendarEvents,
+  resolveVacationStatus,
+} from '../../utils/employeeCalendar'
 
 const VIEW_STORAGE_KEY = 'empresa.empleados.view'
 const LEVELS = [1, 2, 3, 4]
@@ -378,12 +385,18 @@ export default function EmployeesView({ companyId }) {
   })
   const [calVacations, setCalVacations] = useState([])
   const [calDay, setCalDay] = useState(null) // Date | null — día con el modal de detalle abierto
+  // Vacaciones que abarcan HOY, independiente del mes navegado en el calendario — alimenta
+  // la tarjeta fija "De vacaciones ahora" (TeamStatusCards), que no depende de `calMonth`.
+  const [todayVacations, setTodayVacations] = useState([])
+  // Líneas/equipos (metric_lines), para mostrar el team de cada empleado en "En período
+  // de prueba" (TeamStatusCards) — mismo dato que ya usa Métricas/Líneas.
+  const [lines, setLines] = useState([])
 
   // ── Carga de datos ──────────────────────────────────────────────────────────
   const loadAll = useCallback(async () => {
     if (!companyId) return
     setLoading(true)
-    const [usersRes, deptsRes, posRes] = await Promise.all([
+    const [usersRes, deptsRes, posRes, linesRes] = await Promise.all([
       supabase
         .from('users')
         .select(
@@ -393,10 +406,12 @@ export default function EmployeesView({ companyId }) {
         .order('first_name'),
       supabase.from('departments').select('*').eq('company_id', companyId).order('department_name'),
       supabase.from('positions').select('*').eq('company_id', companyId).order('position_name'),
+      loadLines(companyId),
     ])
     setEmployees(usersRes.data ?? [])
     setDepartments(deptsRes.data ?? [])
     setPositions(posRes.data ?? [])
+    setLines(linesRes.data ?? [])
     setLoading(false)
   }, [companyId])
 
@@ -425,20 +440,36 @@ export default function EmployeesView({ companyId }) {
     loadVacations()
   }, [loadVacations])
 
+  // ── "De vacaciones ahora": vacaciones que abarcan hoy, sin depender de `calMonth` ──
+  const loadTodayVacations = useCallback(async () => {
+    const userIds = activeIdsKey ? activeIdsKey.split(',') : []
+    if (userIds.length === 0) {
+      setTodayVacations([])
+      return
+    }
+    const todayKey = format(new Date(), 'yyyy-MM-dd')
+    setTodayVacations(await fetchVacationsInRange(userIds, todayKey, todayKey))
+  }, [activeIdsKey])
+
+  useEffect(() => {
+    loadTodayVacations()
+  }, [loadTodayVacations])
+
   // ── Realtime ────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!companyId) return
     const channel = supabase
       .channel('empresa-empleados-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, () => loadAll())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'vacations' }, () =>
-        loadVacations(),
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'vacations' }, () => {
+        loadVacations()
+        loadTodayVacations()
+      })
       .subscribe()
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [companyId, loadAll, loadVacations])
+  }, [companyId, loadAll, loadVacations, loadTodayVacations])
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   function handleEmployeeSaved(saved) {
@@ -508,6 +539,40 @@ export default function EmployeesView({ companyId }) {
   const activeEmployees = employees.filter((e) => !e.deleted_at)
   const archivedEmployees = employees.filter((e) => !!e.deleted_at)
   const probationCount = activeEmployees.filter((e) => e.on_probation).length
+
+  // ── Tarjetas fijas de estado del equipo (TeamStatusCards) ───────────────────
+  const todayKey = format(new Date(), 'yyyy-MM-dd')
+  const activeById = new Map(activeEmployeesList(employees).map((e) => [e.user_id, e]))
+  const onVacationItems = todayVacations
+    .filter((v) => v.start_date <= todayKey && v.end_date >= todayKey) // defensivo
+    .map((v) => ({
+      v,
+      emp: activeById.get(v.user_id),
+      st: resolveVacationStatus(v.status, v.end_date, todayKey),
+    }))
+    .filter(({ emp, st }) => emp && (st === 'confirmed' || st === 'tentative'))
+    .map(({ v, emp, st }) => ({
+      id: v.id,
+      user: emp,
+      name: `${emp.first_name} ${emp.last_name}`,
+      subtitle: `Hasta el ${v.end_date.slice(8, 10)}/${v.end_date.slice(5, 7)}`,
+      badge: st === 'tentative' ? { text: 'tentativa', cls: 'bg-amber-100 text-amber-800' } : null,
+      dashed: st === 'tentative',
+    }))
+  const probationItems = activeEmployees
+    .filter((e) => e.on_probation)
+    .map((e) => {
+      const position = e.position?.position_name ?? '—'
+      const team = lineOfMember(lines, e.user_id)?.name
+      return {
+        id: e.user_id,
+        user: e,
+        name: `${e.first_name} ${e.last_name}`,
+        subtitle: team ? `${position} · ${team}` : position,
+        badge: null,
+        dashed: false,
+      }
+    })
   // "Solo en prueba" se aplica sobre el pool visible (activos o archivados):
   // combinado con "Ver eliminados" muestra a los que no pasaron la prueba.
   const visibleEmployees = (showArchived ? archivedEmployees : activeEmployees).filter(
@@ -605,6 +670,11 @@ export default function EmployeesView({ companyId }) {
         <div className="mb-4 bg-red-50 border border-red-300 rounded-xl px-4 py-3 text-[14px] text-red-700 font-medium">
           {error}
         </div>
+      )}
+
+      {/* Tarjetas fijas: quién está de vacaciones / en período de prueba ahora mismo */}
+      {!showArchived && (
+        <TeamStatusCards onVacationItems={onVacationItems} probationItems={probationItems} />
       )}
 
       {/* Calendario de fechas del equipo */}
