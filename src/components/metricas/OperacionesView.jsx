@@ -209,7 +209,7 @@ export default function OperacionesView({ line, companyId, year, month, closed =
     if (isChequeoEra && !closed) {
       synced.productividad.tareas = [
         ...synced.productividad.tareas.filter((t) => t.nombre !== 'Actualización de Plataformas'),
-        computePlataformasProductividad(checksRes.data ?? [], activeLineClients, weeks),
+        computePlataformasProductividad(checksRes.data ?? [], activeLineClients),
       ]
     }
 

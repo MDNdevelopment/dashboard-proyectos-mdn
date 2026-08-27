@@ -4,10 +4,10 @@
  * concepto de semana que Tareas Fijas, ver utils/fixedTasks.js → buildFixedWeeks). Todas
  * las funciones son puras y testeables: no tocan Supabase ni el DOM.
  *
- * Cada celda guarda una fecha por semana ("¿publicó algo en esta semana?"), sobrescribible
- * mientras la semana esté en curso. El semáforo es el cumplimiento de esa semana concreta
- * (ver `weekCheckStatus`), no un conteo de días desde hoy — así una semana pasada queda
- * "congelada" con su resultado y no cambia con el paso del tiempo al navegar el histórico.
+ * Cada celda guarda una fecha libre (puede ser de otra semana o de otro mes — es un
+ * registro histórico de "cuándo se publicó", no una validación de "esta semana"). El
+ * semáforo (`recentCheckStatus`) es siempre días transcurridos desde esa fecha hasta hoy,
+ * el mismo criterio en la grilla semanal y en la vista "Más reciente".
  */
 
 /** Los 3 tipos de contenido que se registran por cada red social del cliente. */
@@ -31,39 +31,11 @@ export function contentTypeApplies(network, contentType) {
 /**
  * Redes con cadencia mensual (no semanal): YouTube (horizontal) publica con una
  * frecuencia mucho más baja que el resto, y Mailchimp registra envíos de correo, no
- * posts — ninguna de las dos tiene sentido evaluada semana a semana. Nunca se marcan en
- * rojo por semana vacía (ver `weekCheckStatus`); en Productividad su meta es 1/mes en vez
- * de 1/semana (ver `computePlataformasProductividad`). YouTube Shorts NO entra en esta
- * excepción: se evalúa como el resto.
+ * posts — ninguna de las dos tiene sentido evaluada semana a semana. En Productividad su
+ * meta es 1/mes en vez de 4/mes (ver `computePlataformasProductividad`). YouTube Shorts
+ * NO entra en esta excepción: se evalúa como el resto.
  */
 export const WEEKLY_EXEMPT_NETWORKS = ['YouTube', 'Mailchimp']
-
-/**
- * Estado de cumplimiento de una celda EN UNA SEMANA concreta:
- * - 'cumplido'   → hay fecha registrada esa semana.
- * - 'pendiente'  → sin fecha, pero la semana todavía no cerró (hoy <= domingo de la
- *                  semana), o la red es de cadencia mensual (`WEEKLY_EXEMPT_NETWORKS`).
- * - 'incumplido' → sin fecha, la semana ya cerró y la red no está exenta.
- * @param {string|null} dateISO  last_published_at de la celda en esa semana (o null)
- * @param {{dom: Date}} week     entrada de buildFixedWeeks (usa week.dom, domingo de cierre)
- * @param {string} network
- * @param {Date} [today]
- * @returns {'cumplido'|'pendiente'|'incumplido'}
- */
-export function weekCheckStatus(dateISO, week, network, today = new Date()) {
-  if (dateISO) return 'cumplido'
-  if (WEEKLY_EXEMPT_NETWORKS.includes(network)) return 'pendiente'
-  const endOfDom = new Date(
-    week.dom.getFullYear(),
-    week.dom.getMonth(),
-    week.dom.getDate(),
-    23,
-    59,
-    59,
-    999,
-  )
-  return today > endOfDom ? 'incumplido' : 'pendiente'
-}
 
 /**
  * Nº de la semana (de `weeks`, ver buildFixedWeeks) que contiene `today`, comparando por
@@ -119,14 +91,13 @@ export function daysSince(dateISO, today = new Date()) {
 const YOUTUBE_STALE_DAYS = 30
 
 /**
- * Estado de alerta de la vista "Más reciente" (`ChequeoGrid viewMode='recent'`): a
- * diferencia de `weekCheckStatus` (cumplimiento de una semana concreta, sin relación con
- * hoy), esta es la alerta ORIGINAL del módulo — días transcurridos desde la fecha más
- * reciente hasta hoy: 0-5 días 'normal', 6-11 'naranja', 12+ 'rojo'. Sin fecha → 'vacio'.
- * Solo tiene sentido en esta vista puntual (resumen "cuán al día está la cuenta ahora
- * mismo"); la grilla semanal no la usa porque romper el histórico por semana congelada
- * era justamente el problema que resolvió `weekCheckStatus` (ver cabecera del archivo).
+ * Semáforo único del módulo (grilla semanal y vista "Más reciente" — ver ChequeoGrid.jsx):
+ * días transcurridos desde la fecha registrada hasta hoy — 0-5 días 'normal', 6-11
+ * 'naranja', 12+ 'rojo'. Sin fecha → 'vacio'. Como la fecha de cada celda es libre (puede
+ * ser de otra semana o de otro mes), "cumplimiento de esta semana concreta" dejó de tener
+ * sentido como criterio de color — lo único verificable es cuán reciente es el registro.
  *
+
  * Reglas por red que se apartan del default, igual que la alerta original:
  * - Mailchimp: la fecha es decorativa (no hay forma de saber "cuándo caduca" un envío de
  *   correo como sí con un post) — con fecha registrada siempre es 'normal'.
@@ -160,6 +131,15 @@ export function formatCheckDate(dateISO) {
 // Plataformas", derivada de Chequeo) ────────────────────────────────────────────────
 
 /**
+ * Meta mensual de una celda aplicable de red "normal" (no exenta): 4 registros al mes,
+ * fija, sin importar si el mes tiene 4 o 5 semanas (5 miércoles) — con meta variable un
+ * mes de 5 semanas exigía un 25% más de trabajo real sin que la carga del equipo hubiera
+ * cambiado. `Math.min` en `computePlataformasProductividad` topa el real en este número
+ * aunque se registren las 5 semanas.
+ */
+export const MONTHLY_TARGET_PER_NETWORK = 4
+
+/**
  * Calcula la fila «Actualización de Plataformas» del indicador «2. Productividad –
  * Tareas Fijas» del reporte mensual, a partir de las celdas de Chequeo del mes
  * (`publication_checks`, ya acotadas al período y a la línea por el caller). Reemplaza a
@@ -169,18 +149,21 @@ export function formatCheckDate(dateISO) {
  * eventos huérfanos que una corrección deje inflando el número).
  *
  * Meta de cada celda aplicable (cuenta × red × tipo, según `contentTypeApplies`):
- * - Redes normales: 1 por semana del mes (`weeks.length`) — cadencia semanal.
+ * - Redes normales: `MONTHLY_TARGET_PER_NETWORK` (4) por mes — cadencia semanal, pero fija
+ *   para no penalizar los meses de 5 semanas.
  * - Redes de `WEEKLY_EXEMPT_NETWORKS`: 1 por mes — cadencia mensual, no semanal.
- * Real = nº de semanas con fecha registrada (redes exentas: 1 si hubo al menos una).
+ * Real = nº de semanas (casillas) con fecha registrada, topado en la meta (redes exentas:
+ * 1 si hubo al menos una). La fecha de cada casilla es libre — puede no caer dentro de esa
+ * semana calendario — así que lo que se cuenta es "cuántas casillas del mes tienen algo
+ * anotado", no si la fecha en sí cayó en esa semana.
  * Respeta el opt-out por cliente (`client.fixed_tasks.plataformas === false`), mismo
  * criterio que usaba la columna vieja.
  *
  * @param {Array} checks   publication_checks del mes (line_id ya filtrado)
  * @param {Array} clients  cuentas de la línea (con social_links, fixed_tasks)
- * @param {Array} weeks    buildFixedWeeks(year, month)
  * @returns {{nombre:string, realizado:number, meta:number}}
  */
-export function computePlataformasProductividad(checks, clients, weeks) {
+export function computePlataformasProductividad(checks, clients) {
   let meta = 0
   let realizado = 0
   clients.forEach((client) => {
@@ -200,11 +183,11 @@ export function computePlataformasProductividad(checks, clients, weeks) {
           realizado += cellChecks.some((c) => c.last_published_at) ? 1 : 0
           return
         }
-        meta += weeks.length
+        meta += MONTHLY_TARGET_PER_NETWORK
         const weeksWithDate = new Set(
           cellChecks.filter((c) => c.last_published_at).map((c) => c.period_week),
         )
-        realizado += Math.min(weeks.length, weeksWithDate.size)
+        realizado += Math.min(MONTHLY_TARGET_PER_NETWORK, weeksWithDate.size)
       })
     })
   })

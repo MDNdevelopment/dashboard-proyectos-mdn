@@ -349,8 +349,8 @@ describe('OperacionesView — "Productividad – Tareas Fijas" antes del lanzami
     const data = makeReportData()
     mockLoadReport.mockResolvedValue({ data: { data }, error: null })
     // c-1 tiene Instagram (social_links) → 3 celdas aplicables (publicaciones/reels/highlights)
-    // × 5 semanas de septiembre 2026 (buildFixedWeeks) = meta 15. Una celda con fecha en
-    // una semana → real 1.
+    // × MONTHLY_TARGET_PER_NETWORK (4, fijo sin importar las semanas del mes) = meta 12.
+    // Una celda con fecha en una semana → real 1.
     mockLoadClients.mockResolvedValue({
       data: [
         { ...MOCK_CLIENTS[0], social_links: [{ red: 'Instagram', link: '' }] },
@@ -381,7 +381,7 @@ describe('OperacionesView — "Productividad – Tareas Fijas" antes del lanzami
     // "Real" y "Meta" de esa fila son los últimos inputs de la sección.
     const numberInputs = within(section).getAllByRole('spinbutton')
     expect(numberInputs.at(-2).value).toBe('1') // real
-    expect(numberInputs.at(-1).value).toBe('15') // meta
+    expect(numberInputs.at(-1).value).toBe('12') // meta
   })
 })
 

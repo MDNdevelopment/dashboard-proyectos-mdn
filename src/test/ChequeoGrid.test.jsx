@@ -30,8 +30,7 @@ const LINES = [
 ]
 
 // Agosto 2026: 4 semanas (miércoles 4/11/18/25). Todos los tests fijan la semana activa
-// en S3 (16-22 ago), con isPastWeek=false (semana en curso) salvo que se pruebe
-// explícitamente lo contrario.
+// en S3 (16-22 ago) salvo que se pruebe explícitamente lo contrario.
 const WEEKS = buildFixedWeeks(2026, 8)
 const WEEK_N = 3
 
@@ -69,7 +68,6 @@ function renderGrid(props = {}) {
       checks={[]}
       weeks={WEEKS}
       weekN={WEEK_N}
-      isPastWeek={false}
       companyId="co-1"
       canManage={true}
       userId="u1"
@@ -114,45 +112,27 @@ describe('ChequeoGrid', () => {
     buttons.forEach((btn) => expect(btn).toBeDisabled())
   })
 
-  it('en una semana cerrada (isPastWeek=true), la celda sigue siendo clickeable', () => {
-    renderGrid({ checks: [check()], isPastWeek: true })
+  it('en cualquier semana (histórico incluido), la celda sigue siendo clickeable', () => {
+    renderGrid({ checks: [check()] })
     const buttons = screen.getAllByRole('button')
     buttons.forEach((btn) => expect(btn).not.toBeDisabled())
-    expect(screen.getByText('Clic en una fecha para registrarla')).toBeInTheDocument()
+    expect(screen.getByText(/Clic en una fecha para registrarla/)).toBeInTheDocument()
   })
 
-  it('en una semana cerrada, un clic muestra un aviso antes de abrir el editor', () => {
-    renderGrid({ checks: [check()], isPastWeek: true })
-    fireEvent.click(screen.getAllByRole('button')[0])
-    expect(screen.getByText(/ya cerró/i)).toBeInTheDocument()
-    expect(screen.queryByDisplayValue('2026-08-19')).not.toBeInTheDocument()
-  })
-
-  it('en el aviso de semana cerrada, "Cancelar" no abre el editor ni guarda', () => {
-    const onCheckChanged = vi.fn()
-    renderGrid({ checks: [check()], isPastWeek: true, onCheckChanged })
-    fireEvent.click(screen.getAllByRole('button')[0])
-    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
-    expect(screen.queryByText(/ya cerró/i)).not.toBeInTheDocument()
-    expect(screen.queryByDisplayValue('2026-08-19')).not.toBeInTheDocument()
-    expect(onCheckChanged).not.toHaveBeenCalled()
-  })
-
-  it('en el aviso de semana cerrada, "Continuar" abre el editor y guarda con el period_week visible', async () => {
-    const onCheckChanged = vi.fn()
-    renderGrid({ checks: [check()], isPastWeek: true, onCheckChanged })
-    fireEvent.click(screen.getAllByRole('button')[0])
-    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }))
-    const input = screen.getByDisplayValue('2026-08-19')
-    fireEvent.change(input, { target: { value: '2026-08-18' } })
-    await waitFor(() => expect(onCheckChanged).toHaveBeenCalledWith(UPDATED_CHECK))
-  })
-
-  it('en la semana en curso (isPastWeek=false), un clic abre el editor directo, sin aviso', () => {
+  it('un clic abre el editor directo, sin ningún aviso de confirmación', () => {
     renderGrid({ checks: [check()] })
     fireEvent.click(screen.getAllByRole('button')[0])
     expect(screen.queryByText(/ya cerró/i)).not.toBeInTheDocument()
     expect(screen.getByDisplayValue('2026-08-19')).toBeInTheDocument()
+  })
+
+  it('guardar una fecha cambia directo, sin pedir confirmación', async () => {
+    const onCheckChanged = vi.fn()
+    renderGrid({ checks: [check()], onCheckChanged })
+    fireEvent.click(screen.getAllByRole('button')[0])
+    const input = screen.getByDisplayValue('2026-08-19')
+    fireEvent.change(input, { target: { value: '2026-08-18' } })
+    await waitFor(() => expect(onCheckChanged).toHaveBeenCalledWith(UPDATED_CHECK))
   })
 
   it('con canManage y semana en curso, un clic en una celda la vuelve editable y elegir la fecha la guarda de inmediato', async () => {
@@ -170,16 +150,13 @@ describe('ChequeoGrid', () => {
     await waitFor(() => expect(onCheckChanged).toHaveBeenCalledWith(UPDATED_CHECK))
   })
 
-  it('el input de fecha queda acotado al rango de la semana activa (min/max)', () => {
+  it('el input de fecha es libre: no tiene min/max de la semana activa', () => {
     renderGrid()
     const buttons = screen.getAllByRole('button')
     fireEvent.click(buttons[0])
     const input = screen.getByDisplayValue('')
-    const week = WEEKS.find((w) => w.n === WEEK_N)
-    const iso = (d) =>
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-    expect(input).toHaveAttribute('min', iso(week.monIni))
-    expect(input).toHaveAttribute('max', iso(week.dom))
+    expect(input).not.toHaveAttribute('min')
+    expect(input).not.toHaveAttribute('max')
   })
 
   it('muestra el logo del cliente cuando tiene logo_url, o una inicial si no', () => {
@@ -228,11 +205,10 @@ describe('ChequeoGrid', () => {
     expect(cells[1].querySelector('button')).toBeInTheDocument()
   })
 
-  it('YouTube sin registro en una semana cerrada no sale rojo (cadencia mensual, no semanal)', () => {
+  it('YouTube sin registro no sale rojo (cadencia mensual, cae en "Sin registrar")', () => {
     renderGrid({
       clients: [client({ social_links: [{ red: 'YouTube', link: 'https://youtube.com/x' }] })],
       checks: [],
-      isPastWeek: true,
     })
     const btn = screen.getAllByRole('button')[0]
     expect(btn.className).not.toContain('bg-[#fdecec]') // no rojo
@@ -275,14 +251,13 @@ describe('ChequeoGrid', () => {
     await waitFor(() => expect(onCheckChanged).toHaveBeenCalled())
   })
 
-  it('Mailchimp: la celda nunca se pone roja aunque la semana haya cerrado sin registro', () => {
+  it('Mailchimp: la celda nunca se pone roja aunque no tenga registro', () => {
     renderGrid({
       clients: [client({ social_links: [{ red: 'Mailchimp', link: 'https://mailchi.mp/x' }] })],
       checks: [],
-      isPastWeek: true,
     })
     const btn = screen.getAllByRole('button')[0]
-    expect(btn.className).not.toContain('bg-[#fdecec]') // no rojo, aunque la semana cerró
+    expect(btn.className).not.toContain('bg-[#fdecec]') // no rojo
   })
 
   describe('viewMode="recent"', () => {

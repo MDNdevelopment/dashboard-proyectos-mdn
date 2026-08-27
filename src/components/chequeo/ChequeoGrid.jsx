@@ -4,36 +4,17 @@ import NetworkIcon from '../common/NetworkIcon'
 import {
   CONTENT_TYPES,
   CONTENT_LABELS,
-  weekCheckStatus,
   mostRecentCheck,
   recentCheckStatus,
   formatCheckDate,
   contentTypeApplies,
 } from '../../utils/chequeo'
 
-const STATUS_META = {
-  pendiente: {
-    label: 'Sin registrar',
-    dot: '#d8d4c8',
-    cls: 'bg-white border-[#e6e2d8] text-[#9a9488]',
-  },
-  cumplido: {
-    label: 'Publicó esta semana',
-    dot: '#1f8a43',
-    cls: 'bg-[#e9f7ec] border-[#bfe6c8] text-[#1f8a43]',
-  },
-  incumplido: {
-    label: 'Semana cerrada sin publicar',
-    dot: '#c0392b',
-    cls: 'bg-[#fdecec] border-[#f4c9c9] text-[#c0392b]',
-  },
-}
-
 /**
- * Semáforo de la vista "Más reciente" (`viewMode='recent'`): a diferencia de la vista
- * semanal (verde/gris/rojo según cumplimiento de una semana concreta), esta usa la
- * alerta original del módulo — días transcurridos desde la fecha más reciente hasta hoy
- * (ver `recentCheckStatus` en utils/chequeo.js).
+ * Semáforo de ambas vistas: días transcurridos desde la fecha registrada hasta hoy (ver
+ * `recentCheckStatus` en utils/chequeo.js). La fecha de cada celda es libre (puede ser de
+ * otra semana o de otro mes — es un registro histórico, no una validación), así que el
+ * color nunca depende de en qué casilla quedó guardada, solo de cuántos días pasaron.
  */
 const RECENT_STATUS_META = {
   vacio: {
@@ -58,11 +39,6 @@ const RECENT_STATUS_META = {
   },
 }
 
-/** 'YYYY-MM-DD' local de una fecha, para acotar el <input type="date"> a la semana. */
-function isoDate(d) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
 /**
  * Redes sociales de un cliente con su URL (metric_clients.social_links: [{red, link}]),
  * tolerante a datos faltantes o mal formados. Conserva el `link` para que el nombre de
@@ -80,7 +56,7 @@ function clientSocialLinks(client) {
  * WEEKLY_EXEMPT_NETWORKS en utils/chequeo.js) y el comentario es el dato útil, así que
  * no hay nada que guardar hasta tener ambos.
  */
-function MailchimpEditor({ defaultDate, defaultComment, min, max, disabled, onSave, onCancel }) {
+function MailchimpEditor({ defaultDate, defaultComment, disabled, onSave, onCancel }) {
   const [date, setDate] = useState(defaultDate)
   const [comment, setComment] = useState(defaultComment)
   const canSave = Boolean(date) && comment.trim().length > 0
@@ -91,8 +67,6 @@ function MailchimpEditor({ defaultDate, defaultComment, min, max, disabled, onSa
         type="date"
         autoFocus
         value={date}
-        min={min}
-        max={max}
         disabled={disabled}
         onChange={(e) => setDate(e.target.value)}
         className="input-base text-[12px] py-1 px-1.5 w-full"
@@ -134,18 +108,18 @@ function MailchimpEditor({ defaultDate, defaultComment, min, max, disabled, onSa
 /**
  * Grilla `cliente/red × tipo de contenido` de la semana activa (módulo Chequeo,
  * periodizado por mes y semana fija — mismo concepto de semana que Tareas Fijas). Cada
- * celda es una fecha de esa semana (no un estado cíclico): un clic la vuelve editable
- * (`<input type="date">`, acotado a los días de la semana), y el color es el
- * cumplimiento de esa semana (ver `weekCheckStatus`). Cualquier semana es editable
- * (histórico incluido), pero al editar una semana ya cerrada se pide confirmación
- * primero — corregir el pasado es una acción deliberada, no un clic accidental.
+ * celda es una fecha (no un estado cíclico): un clic la vuelve editable
+ * (`<input type="date">`, sin acotar — la fecha es libre, puede ser de otra semana o de
+ * otro mes, es un registro histórico de cuándo se publicó, no una validación de "esta
+ * semana"), y el color es días transcurridos hasta hoy (`recentCheckStatus`, misma
+ * lógica que la vista "Más reciente"). Cualquier semana es editable, histórico incluido,
+ * sin paso de confirmación extra.
  *
  * Props:
  *   lines, clients — roster ya acotado al alcance activo
  *   checks         — publication_checks del mes activo (ya filtradas por línea en la página)
  *   weeks          — buildFixedWeeks(year, month)
  *   weekN          — semana activa (1-indexado)
- *   isPastWeek     — si `weekN` ya cerró (pide confirmación antes de editar)
  *   viewMode       — 'week' (default, editable) | 'recent' (solo lectura, ver abajo)
  *   canManage      — si el usuario puede editar (capability chequeo.manage)
  *   onCheckChanged(check) — { ...row } al crear/actualizar
@@ -155,8 +129,7 @@ function MailchimpEditor({ defaultDate, defaultComment, min, max, disabled, onSa
  * celda muestra la fecha más reciente registrada en cualquier semana del mes activo
  * (`mostRecentCheck`, ignora `period_week`) en vez de la semana seleccionada — útil para
  * ver de un vistazo "cuándo publicó por última vez esta cuenta" sin tener que recorrer
- * S1…Sn una por una. No tiene semáforo (no hay una semana concreta contra la cual medir
- * cumplimiento) ni edición: es puramente informativa.
+ * S1…Sn una por una. Sin edición: es puramente informativa.
  */
 export default function ChequeoGrid({
   lines,
@@ -164,7 +137,6 @@ export default function ChequeoGrid({
   checks,
   weeks,
   weekN,
-  isPastWeek,
   viewMode = 'week',
   companyId,
   canManage,
@@ -173,7 +145,6 @@ export default function ChequeoGrid({
   groupByLine,
 }) {
   const [editingKey, setEditingKey] = useState(null)
-  const [confirmKey, setConfirmKey] = useState(null)
   const [savingKey, setSavingKey] = useState(null)
   const [error, setError] = useState(null)
 
@@ -218,8 +189,6 @@ export default function ChequeoGrid({
 
   const groups = groupByLine ? lines : [{ id: '__single__', name: null }]
   const colCount = 1 + CONTENT_TYPES.length
-  const minDate = week ? isoDate(week.monIni) : undefined
-  const maxDate = week ? isoDate(week.dom) : undefined
 
   return (
     <div className="bg-white border border-[#e0ddd4] rounded-xl overflow-hidden mb-4">
@@ -330,18 +299,12 @@ export default function ChequeoGrid({
                                   )
                                 }
                                 const check = findCheck(client.id, network, contentType)
-                                const meta = isRecentView
-                                  ? RECENT_STATUS_META[
-                                      recentCheckStatus(check?.last_published_at, network)
-                                    ]
-                                  : STATUS_META[
-                                      week
-                                        ? weekCheckStatus(check?.last_published_at, week, network)
-                                        : 'pendiente'
-                                    ]
+                                const meta =
+                                  RECENT_STATUS_META[
+                                    recentCheckStatus(check?.last_published_at, network)
+                                  ]
                                 const key = `${client.id}:${network}:${contentType}`
                                 const isEditing = !isRecentView && editingKey === key
-                                const isConfirming = !isRecentView && confirmKey === key
                                 const isMailchimp = network === 'Mailchimp'
                                 const title = check?.comment
                                   ? `${meta.label} · ${check.comment}`
@@ -357,38 +320,11 @@ export default function ChequeoGrid({
                                     key={contentType}
                                     className="px-1.5 sm:px-2 py-2 text-center align-top"
                                   >
-                                    {isConfirming ? (
-                                      <div className="flex flex-col gap-1 text-left">
-                                        <p className="text-[11.5px] leading-tight text-[#b3690f]">
-                                          La semana {weekN} ya cerró. ¿Corregir igual?
-                                        </p>
-                                        <div className="flex gap-1">
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              setConfirmKey(null)
-                                              setEditingKey(key)
-                                            }}
-                                            className="flex-1 h-[24px] rounded-md bg-[#111] text-white text-[11px] font-semibold"
-                                          >
-                                            Continuar
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => setConfirmKey(null)}
-                                            className="flex-1 h-[24px] rounded-md border border-[#e0ddd4] text-[#666] text-[11px] font-semibold"
-                                          >
-                                            Cancelar
-                                          </button>
-                                        </div>
-                                      </div>
-                                    ) : isEditing ? (
+                                    {isEditing ? (
                                       isMailchimp ? (
                                         <MailchimpEditor
                                           defaultDate={check?.last_published_at ?? ''}
                                           defaultComment={check?.comment ?? ''}
-                                          min={minDate}
-                                          max={maxDate}
                                           disabled={savingKey === key}
                                           onSave={(date, comment) =>
                                             saveDate(client, network, contentType, date, comment)
@@ -400,8 +336,6 @@ export default function ChequeoGrid({
                                           type="date"
                                           autoFocus
                                           defaultValue={check?.last_published_at ?? ''}
-                                          min={minDate}
-                                          max={maxDate}
                                           disabled={savingKey === key}
                                           onChange={(e) =>
                                             saveDate(client, network, contentType, e.target.value)
@@ -416,10 +350,7 @@ export default function ChequeoGrid({
                                       <button
                                         type="button"
                                         disabled={!canEditNow || savingKey === key}
-                                        onClick={() =>
-                                          canEditNow &&
-                                          (isPastWeek ? setConfirmKey(key) : setEditingKey(key))
-                                        }
+                                        onClick={() => canEditNow && setEditingKey(key)}
                                         title={title}
                                         className={`w-full h-[34px] rounded-lg border flex items-center justify-center gap-1.5 text-[13px] font-semibold transition-all ${meta.cls} ${
                                           canEditNow
@@ -450,41 +381,25 @@ export default function ChequeoGrid({
         </table>
       </div>
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3 border-t border-[#eee9dd] text-[12.5px] text-[#777]">
-        {isRecentView ? (
-          <>
-            <span className="font-mono uppercase tracking-wide text-[#a29b8c] text-[11px]">
-              Solo lectura · días desde la última publicación
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-[7px] h-[7px] rounded-full bg-[#1f8a43]" /> Al día (0-5 días)
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-[7px] h-[7px] rounded-full bg-[#e08a1e]" /> 6-11 días sin publicar
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-[7px] h-[7px] rounded-full bg-[#c0392b]" /> 12+ días sin publicar
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-[7px] h-[7px] rounded-full bg-[#d8d4c8]" /> Sin registrar este mes
-            </span>
-          </>
-        ) : (
-          <>
-            <span className="font-mono uppercase tracking-wide text-[#a29b8c] text-[11px]">
-              {canEditNow ? 'Clic en una fecha para registrarla' : 'Solo lectura'}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-[7px] h-[7px] rounded-full bg-[#1f8a43]" /> Publicó esta semana
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-[7px] h-[7px] rounded-full bg-[#c0392b]" /> Semana cerrada sin
-              publicar
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-[7px] h-[7px] rounded-full bg-[#d8d4c8]" /> Sin registrar
-            </span>
-          </>
-        )}
+        <span className="font-mono uppercase tracking-wide text-[#a29b8c] text-[11px]">
+          {isRecentView
+            ? 'Solo lectura · días desde la última publicación'
+            : canEditNow
+              ? 'Clic en una fecha para registrarla · color por días desde hoy'
+              : 'Solo lectura · color por días desde hoy'}
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-[7px] h-[7px] rounded-full bg-[#1f8a43]" /> Al día (0-5 días)
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-[7px] h-[7px] rounded-full bg-[#e08a1e]" /> 6-11 días sin publicar
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-[7px] h-[7px] rounded-full bg-[#c0392b]" /> 12+ días sin publicar
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-[7px] h-[7px] rounded-full bg-[#d8d4c8]" /> Sin registrar
+        </span>
       </div>
     </div>
   )

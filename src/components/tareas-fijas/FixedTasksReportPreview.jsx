@@ -32,7 +32,7 @@ export default function FixedTasksReportPreview({
     const lineChecks = (checks ?? []).filter((c) => c.line_id === line.id)
     return [
       ...computeProductividad(lineMarks, lineClients, weeks),
-      computePlataformasProductividad(lineChecks, lineClients, weeks),
+      computePlataformasProductividad(lineChecks, lineClients),
     ]
   }
 

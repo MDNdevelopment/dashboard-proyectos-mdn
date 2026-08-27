@@ -129,6 +129,7 @@ export const CHANGELOG = [
       'En el recuadro "En período de prueba" de Empresa → Empleados, junto al cargo de cada persona ahora también se muestra su team.',
       'Corregido: el correo de invitación que reciben los empleados nuevos podía llevarlos a una pantalla vieja en vez de al dashboard actual.',
       'El correo de invitación a empleados nuevos ahora tiene el diseño de MDN, igual que el de recuperar contraseña. Además, el empleado nuevo ya no entra directo al dashboard sin contraseña: primero debe crear su contraseña y recién ahí puede usar el sistema (si cierra el correo o la pestaña antes de crearla, al volver a entrar se le vuelve a pedir).',
+      'En Chequeo, cada casilla ya acepta cualquier fecha (incluso de otra semana o de otro mes), para dejar un registro fiel de cómo se fueron actualizando las plataformas. Ya no pide confirmación para corregir semanas anteriores. El color de cada casilla ahora se calcula igual que en "Ver fecha más reciente": según cuántos días pasaron desde esa fecha hasta hoy, sin importar la semana en la que quedó guardada. En el reporte mensual, cada red ahora debe actualizarse 4 veces al mes (antes variaba según el mes); Mailchimp y YouTube (horizontal) siguen en 1 vez al mes.',
     ],
   },
   {

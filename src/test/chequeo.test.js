@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import {
-  weekCheckStatus,
   currentFixedWeekN,
   mostRecentCheck,
   daysSince,
@@ -11,35 +10,13 @@ import {
   contentTypeApplies,
   WEEKLY_EXEMPT_NETWORKS,
   computePlataformasProductividad,
+  MONTHLY_TARGET_PER_NETWORK,
 } from '../utils/chequeo'
 import { buildFixedWeeks } from '../utils/fixedTasks'
 
 // Agosto 2026: miércoles 4, 11, 18, 25 → 4 semanas. S3 = monIni 16 ago, dom 22 ago.
 const WEEKS = buildFixedWeeks(2026, 8)
 const S3 = WEEKS.find((w) => w.n === 3)
-
-describe('weekCheckStatus', () => {
-  it('con fecha registrada → cumplido, sin importar si la semana cerró', () => {
-    expect(weekCheckStatus('2026-08-20', S3, 'Instagram', new Date('2026-08-30'))).toBe('cumplido')
-  })
-
-  it('sin fecha y la semana no cerró (hoy cae dentro de ella) → pendiente', () => {
-    expect(weekCheckStatus(null, S3, 'Instagram', new Date(2026, 7, 20))).toBe('pendiente')
-  })
-
-  it('sin fecha y la semana ya cerró (hoy > domingo de esa semana) → incumplido', () => {
-    expect(weekCheckStatus(null, S3, 'Instagram', new Date('2026-08-25'))).toBe('incumplido')
-  })
-
-  it('YouTube y Mailchimp nunca incumplen, aunque la semana ya haya cerrado', () => {
-    expect(weekCheckStatus(null, S3, 'YouTube', new Date('2026-08-25'))).toBe('pendiente')
-    expect(weekCheckStatus(null, S3, 'Mailchimp', new Date('2026-08-25'))).toBe('pendiente')
-  })
-
-  it('YouTube Shorts no está exento: usa el default como cualquier otra red', () => {
-    expect(weekCheckStatus(null, S3, 'YouTube Shorts', new Date('2026-08-25'))).toBe('incumplido')
-  })
-})
 
 describe('currentFixedWeekN', () => {
   it('devuelve la semana cuyo rango [monIni, dom] contiene la fecha', () => {
@@ -198,17 +175,18 @@ function check(overrides = {}) {
 }
 
 describe('computePlataformasProductividad', () => {
-  it('meta = celdas aplicables × nº de semanas del mes', () => {
+  it('meta = celdas aplicables × MONTHLY_TARGET_PER_NETWORK (4), fija sin importar las semanas del mes', () => {
     // Instagram: publicaciones + reels + highlights aplican (3 celdas); Facebook: solo
-    // publicaciones (1 celda) → 4 celdas × 4 semanas = 16.
+    // publicaciones (1 celda) → 4 celdas × 4 = 16.
     const clients = [clientNets(['Instagram', 'Facebook'])]
-    const row = computePlataformasProductividad([], clients, WEEKS)
+    const row = computePlataformasProductividad([], clients)
     expect(row.nombre).toBe('Actualización de Plataformas')
+    expect(MONTHLY_TARGET_PER_NETWORK).toBe(4)
     expect(row.meta).toBe(16)
     expect(row.realizado).toBe(0)
   })
 
-  it('real cuenta las semanas distintas con fecha registrada por celda, topado en el nº de semanas', () => {
+  it('real cuenta las semanas (casillas) distintas con fecha registrada por celda, topado en 4', () => {
     const clients = [clientNets(['Instagram'])]
     const checks = [
       check({ period_week: 1 }),
@@ -216,51 +194,60 @@ describe('computePlataformasProductividad', () => {
       check({ period_week: 3 }),
       check({ period_week: 4 }),
     ]
-    const row = computePlataformasProductividad(checks, clients, WEEKS)
-    // 3 celdas de Instagram (publicaciones/reels/highlights) × 4 semanas = 12 de meta.
-    // Solo la celda "publicaciones" tiene registros: las 4 semanas del mes.
+    const row = computePlataformasProductividad(checks, clients)
+    // 3 celdas de Instagram (publicaciones/reels/highlights) × 4 = 12 de meta.
+    // Solo la celda "publicaciones" tiene registros: las 4 casillas del mes.
     expect(row.meta).toBe(12)
+    expect(row.realizado).toBe(4)
+  })
+
+  it('en un mes de 5 semanas, 5 casillas registradas topan el real en 4 (no pasa del 100%)', () => {
+    // Agosto 2026 solo tiene 4 miércoles; se simula un mes de 5 semanas con checks en
+    // period_week 1-5 para una sola celda (Instagram/publicaciones).
+    const clients = [clientNets(['Instagram'])]
+    const checks = [1, 2, 3, 4, 5].map((week) => check({ period_week: week }))
+    const row = computePlataformasProductividad(checks, clients)
     expect(row.realizado).toBe(4)
   })
 
   it('no cuenta registros de otra celda (network/content_type distintos)', () => {
     const clients = [clientNets(['Instagram'])]
     const checks = [check({ content_type: 'reels' }), check({ network: 'Facebook' })]
-    const row = computePlataformasProductividad(checks, clients, WEEKS)
+    const row = computePlataformasProductividad(checks, clients)
     // El registro de reels sí cuenta (Instagram aplica a reels); el de Facebook no
     // (Facebook no está en las redes del cliente).
     expect(row.realizado).toBe(1)
   })
 
   it('cliente sin redes aporta 0 a la meta', () => {
-    const row = computePlataformasProductividad([], [clientNets([])], WEEKS)
+    const row = computePlataformasProductividad([], [clientNets([])])
     expect(row.meta).toBe(0)
     expect(row.realizado).toBe(0)
   })
 
   it('social_links ausente se trata como sin redes', () => {
-    const row = computePlataformasProductividad([], [client({ social_links: undefined })], WEEKS)
+    const row = computePlataformasProductividad([], [client({ social_links: undefined })])
     expect(row.meta).toBe(0)
   })
 
   it('fixed_tasks.plataformas=false excluye la cuenta y todas sus redes', () => {
     const clients = [clientNets(['Instagram'], { fixed_tasks: { plataformas: false } })]
     const checks = [check()]
-    const row = computePlataformasProductividad(checks, clients, WEEKS)
+    const row = computePlataformasProductividad(checks, clients)
     expect(row.meta).toBe(0)
     expect(row.realizado).toBe(0)
   })
 
-  it('redes exentas (YouTube/Mailchimp) tienen meta 1/mes, no 1/semana', () => {
+  it('redes exentas (YouTube/Mailchimp) tienen meta 1/mes, no 4/mes', () => {
     const clients = [clientNets(['YouTube'])]
-    const row = computePlataformasProductividad([], clients, WEEKS)
+    const row = computePlataformasProductividad([], clients)
     expect(row.meta).toBe(1)
   })
 
   it('redes exentas: basta un registro en cualquier semana del mes para cumplir', () => {
     const clients = [clientNets(['YouTube'])]
     const checks = [check({ network: 'YouTube', period_week: 2 })]
-    const row = computePlataformasProductividad(checks, clients, WEEKS)
+    const row = computePlataformasProductividad(checks, clients)
     expect(row.meta).toBe(1)
     expect(row.realizado).toBe(1)
   })

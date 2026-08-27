@@ -24,7 +24,7 @@ export async function loadChecks(companyId, year, month) {
  * Crea o actualiza la fecha de publicación de una celda (cliente × red × tipo de
  * contenido) EN UNA SEMANA concreta. Upsert por la unique key de la tabla (incluye
  * período), mismo patrón que FixedTasksGrid.cycleStatus. `comment` solo lo usa Mailchimp
- * (única red que exige fecha + comentario, ver weekCheckStatus en utils/chequeo.js) — el
+ * (única red que exige fecha + comentario, ver MailchimpEditor en ChequeoGrid.jsx) — el
  * resto de las redes lo deja en null.
  */
 export async function upsertCheck({

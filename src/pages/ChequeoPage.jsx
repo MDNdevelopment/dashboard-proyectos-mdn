@@ -36,21 +36,6 @@ export default function ChequeoPage() {
 
   const weeks = buildFixedWeeks(year, month)
   const todayWeekN = currentFixedWeekN(weeks)
-  const activeWeek = weeks.find((w) => w.n === weekN)
-  // Semana "cerrada" = su domingo ya pasó — no solo "no es la semana en curso": una
-  // semana futura del mes actual (ej. S4 mientras hoy va por S2) tampoco está cerrada.
-  const isPastWeek =
-    Boolean(activeWeek) &&
-    new Date() >
-      new Date(
-        activeWeek.dom.getFullYear(),
-        activeWeek.dom.getMonth(),
-        activeWeek.dom.getDate(),
-        23,
-        59,
-        59,
-        999,
-      )
 
   // Reinicia la semana activa si el mes cambia y esa semana ya no existe (meses de 4/5 semanas).
   useEffect(() => {
@@ -263,7 +248,6 @@ export default function ChequeoPage() {
               checks={checks}
               weeks={weeks}
               weekN={weekN}
-              isPastWeek={isPastWeek}
               viewMode={viewMode}
               companyId={userProfile?.company_id}
               canManage={canManage}
