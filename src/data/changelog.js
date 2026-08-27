@@ -42,6 +42,7 @@ export const CHANGELOG = [
       'Mejorado el diseño móvil de Tareas Fijas: la columna de la cuenta ocupa menos espacio, dejando más pantalla disponible para las tareas y reduciendo cuánto hay que deslizar la tabla hacia los lados.',
       'En Tareas Fijas (vista "Todas"), se quitó el renglón que repetía el nombre de la línea entre grupos de cuentas.',
       'El apartado "2. Productividad – Tareas Fijas" del reporte operativo empieza a llenarse solo desde el reporte de septiembre; los reportes de agosto hacia atrás se pueden seguir editando a mano como antes.',
+      'Corregido: en Campañas → Ads, las tarjetas de resumen (Total Ads, Invertido, En Curso, Completados, Avance Global) mostraban los datos de todas las líneas aunque estuvieras viendo una línea en particular. Ahora cambian según la línea elegida o "Todos", incluyendo el listado que se abre al hacer click en "Invertido".',
       'Corregido: en el chat de MAPPI en el celular, el botón de enviar se achicaba en vez de mantenerse cuadrado. Además, cuando el servidor tarda demasiado en responder ahora se avisa con un mensaje más claro en vez de "respuesta inválida del servidor".',
       'Corregido: MAPPI podía quedarse sin responder ("respuesta inválida del servidor") en preguntas que necesitaban varias consultas seguidas, si tardaban demasiado. Ahora corta a tiempo y avisa que la pregunta tardó más de lo normal, en vez de fallar sin explicación.',
       'El recuadro de "Análisis IA" en Inicio se ocultó temporalmente hasta nuevo aviso.',

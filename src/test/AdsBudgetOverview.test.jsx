@@ -40,7 +40,7 @@ function renderOverview(props = {}) {
       clients={MOCK_CLIENTS}
       onClose={() => {}}
       {...props}
-    />
+    />,
   )
 }
 
@@ -52,16 +52,20 @@ describe('AdsBudgetOverview', () => {
 
   it('lista los clientes ordenados alfabéticamente', async () => {
     renderOverview()
-    await waitFor(() => { expect(screen.getByText('Banco Exterior')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Banco Exterior')).toBeInTheDocument()
+    })
 
     const cells = screen.getAllByText(/Banco Exterior|Pepsi/)
-    const names = cells.map(el => el.textContent)
+    const names = cells.map((el) => el.textContent)
     expect(names.indexOf('Banco Exterior')).toBeLessThan(names.indexOf('Pepsi'))
   })
 
   it('calcula el invertido del periodo y el disponible restante', async () => {
     renderOverview()
-    await waitFor(() => { expect(screen.getByText('Banco Exterior')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Banco Exterior')).toBeInTheDocument()
+    })
 
     // Banco Exterior: presupuesto 100, invertido en julio = 80 (se excluye el de junio), disponible = 20
     const row = screen.getByText('Banco Exterior').closest('tr')
@@ -72,7 +76,9 @@ describe('AdsBudgetOverview', () => {
 
   it('muestra "—" para clientes sin presupuesto', async () => {
     renderOverview()
-    await waitFor(() => { expect(screen.getByText('Pepsi')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Pepsi')).toBeInTheDocument()
+    })
 
     const row = screen.getByText('Pepsi').closest('tr')
     expect(row).toHaveTextContent('—')
@@ -82,11 +88,23 @@ describe('AdsBudgetOverview', () => {
   it('el filtro por línea reduce la lista a los clientes de esa línea', async () => {
     const user = userEvent.setup()
     renderOverview()
-    await waitFor(() => { expect(screen.getByText('Banco Exterior')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Banco Exterior')).toBeInTheDocument()
+    })
 
     await user.selectOptions(screen.getByDisplayValue('Todas las líneas'), 'l-2')
 
     expect(screen.getByText('Banco Exterior')).toBeInTheDocument()
     expect(screen.queryByText('Pepsi')).not.toBeInTheDocument()
+  })
+
+  it('initialLineScope abre el modal ya filtrado a esa línea', async () => {
+    renderOverview({ initialLineScope: 'l-2' })
+
+    await waitFor(() => {
+      expect(screen.getByText('Banco Exterior')).toBeInTheDocument()
+    })
+    expect(screen.queryByText('Pepsi')).not.toBeInTheDocument()
+    expect(screen.getByDisplayValue('Línea Bancos')).toBeInTheDocument()
   })
 })

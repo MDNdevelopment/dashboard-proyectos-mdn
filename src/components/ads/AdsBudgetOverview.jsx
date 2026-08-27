@@ -14,9 +14,16 @@ import ClientCell from './ClientCell'
  * `ads` y `clients` llegan ya cargados desde AdsSpendView (no se re-consultan);
  * las líneas (equipos) sí se cargan aquí, ya que AdsSpendView no las necesita.
  */
-export default function AdsBudgetOverview({ companyId, periodo, ads, clients, onClose }) {
+export default function AdsBudgetOverview({
+  companyId,
+  periodo,
+  ads,
+  clients,
+  onClose,
+  initialLineScope = null,
+}) {
   const [lines, setLines] = useState([])
-  const [lineFilter, setLineFilter] = useState('all')
+  const [lineFilter, setLineFilter] = useState(initialLineScope ?? 'all')
 
   useEffect(() => {
     if (!companyId) return
@@ -24,9 +31,10 @@ export default function AdsBudgetOverview({ companyId, periodo, ads, clients, on
   }, [companyId])
 
   const rows = useMemo(() => {
-    const filtered = lineFilter === 'all' ? clients : clients.filter(c => c.line_id === lineFilter)
+    const filtered =
+      lineFilter === 'all' ? clients : clients.filter((c) => c.line_id === lineFilter)
     return filtered
-      .map(client => {
+      .map((client) => {
         const spent = spentByClientInPeriod(ads, client.id, periodo)
         const budget = client.campaign_budget != null ? Number(client.campaign_budget) : null
         const remaining = budget != null ? budget - spent : null
@@ -42,7 +50,7 @@ export default function AdsBudgetOverview({ companyId, periodo, ads, clients, on
         spent: acc.spent + r.spent,
         remaining: acc.remaining + (r.remaining ?? 0),
       }),
-      { budget: 0, spent: 0, remaining: 0 }
+      { budget: 0, spent: 0, remaining: 0 },
     )
   }, [rows])
 
@@ -57,7 +65,14 @@ export default function AdsBudgetOverview({ companyId, periodo, ads, clients, on
             <p className="text-[13px] text-[#888] mt-0.5">Periodo: {periodLabel}</p>
           </div>
           <button onClick={onClose} className="text-[#999] hover:text-[#111] transition-colors p-1">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
               <path d="M2 2l12 12M14 2L2 14" strokeLinecap="round" />
             </svg>
           </button>
@@ -66,12 +81,14 @@ export default function AdsBudgetOverview({ companyId, periodo, ads, clients, on
         <div className="flex-shrink-0 px-6 pt-4">
           <select
             value={lineFilter}
-            onChange={e => setLineFilter(e.target.value)}
+            onChange={(e) => setLineFilter(e.target.value)}
             className="input-base text-[14px] py-1.5"
           >
             <option value="all">Todas las líneas</option>
-            {lines.map(l => (
-              <option key={l.id} value={l.id}>{l.name}</option>
+            {lines.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name}
+              </option>
             ))}
           </select>
         </div>
@@ -79,15 +96,20 @@ export default function AdsBudgetOverview({ companyId, periodo, ads, clients, on
         <div className="px-6 py-4 overflow-y-auto flex-1">
           {rows.length === 0 ? (
             <div className="text-center py-16">
-              <p className="text-[16px] font-medium text-[#888]">No hay clientes para este filtro.</p>
+              <p className="text-[16px] font-medium text-[#888]">
+                No hay clientes para este filtro.
+              </p>
             </div>
           ) : (
             <div className="bg-white border border-[#e0ddd4] rounded-2xl overflow-hidden overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
                   <tr className="border-b border-[#ece9df] bg-[#fafaf7]">
-                    {['Cliente', 'Presupuesto', 'Invertido', 'Disponible'].map(h => (
-                      <th key={h} className="px-3 py-2.5 text-[12px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] whitespace-nowrap">
+                    {['Cliente', 'Presupuesto', 'Invertido', 'Disponible'].map((h) => (
+                      <th
+                        key={h}
+                        className="px-3 py-2.5 text-[12px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] whitespace-nowrap"
+                      >
                         {h}
                       </th>
                     ))}
@@ -105,9 +127,15 @@ export default function AdsBudgetOverview({ companyId, periodo, ads, clients, on
                       <td className="px-3 py-2.5 text-[14px] font-semibold text-[#111] whitespace-nowrap">
                         {fmtUSD(spent)}
                       </td>
-                      <td className={`px-3 py-2.5 text-[14px] font-semibold whitespace-nowrap ${
-                        remaining == null ? 'text-[#111]' : remaining < 0 ? 'text-red-600' : 'text-green-600'
-                      }`}>
+                      <td
+                        className={`px-3 py-2.5 text-[14px] font-semibold whitespace-nowrap ${
+                          remaining == null
+                            ? 'text-[#111]'
+                            : remaining < 0
+                              ? 'text-red-600'
+                              : 'text-green-600'
+                        }`}
+                      >
                         {remaining != null ? fmtUSD(remaining) : '—'}
                       </td>
                     </tr>
@@ -115,16 +143,20 @@ export default function AdsBudgetOverview({ companyId, periodo, ads, clients, on
                 </tbody>
                 <tfoot>
                   <tr className="bg-[#fafaf7] border-t border-[#ece9df]">
-                    <td className="px-3 py-2.5 text-[13px] font-mono font-bold uppercase text-[#888]">Total</td>
+                    <td className="px-3 py-2.5 text-[13px] font-mono font-bold uppercase text-[#888]">
+                      Total
+                    </td>
                     <td className="px-3 py-2.5 text-[14px] font-semibold text-[#555] whitespace-nowrap">
                       {fmtUSD(totals.budget)}
                     </td>
                     <td className="px-3 py-2.5 text-[14px] font-semibold text-[#111] whitespace-nowrap">
                       {fmtUSD(totals.spent)}
                     </td>
-                    <td className={`px-3 py-2.5 text-[14px] font-semibold whitespace-nowrap ${
-                      totals.remaining < 0 ? 'text-red-600' : 'text-green-600'
-                    }`}>
+                    <td
+                      className={`px-3 py-2.5 text-[14px] font-semibold whitespace-nowrap ${
+                        totals.remaining < 0 ? 'text-red-600' : 'text-green-600'
+                      }`}
+                    >
                       {fmtUSD(totals.remaining)}
                     </td>
                   </tr>

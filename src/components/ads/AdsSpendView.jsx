@@ -135,11 +135,15 @@ const AdsSpendView = forwardRef(function AdsSpendView(
   // Ads del periodo — pool base para las cards de resumen (igual que Tácticas).
   const periodAds = ads.filter((a) => inPeriod(a.start_date, periodo))
 
-  const filtered = periodAds.filter((a) => {
+  // Ámbito de línea (pills en AdsPage) aplicado al pool del periodo — mismo criterio
+  // que las cards de la tab Tácticas: reflejan la línea activa pero no el resto de
+  // los filtros de la toolbar (cliente/estado/búsqueda).
+  const scopedAds = periodAds.filter(
+    (a) => lineScope === null || clientsById.get(a.client_id)?.line_id === lineScope,
+  )
+
+  const filtered = scopedAds.filter((a) => {
     if (clientFilter !== 'all' && a.client_id !== clientFilter) return false
-    // Ámbito de línea (pills en AdsPage). La línea se deriva del cliente
-    // (paid_campaigns no guarda line_id): client_id → metric_clients.line_id.
-    if (lineScope !== null && clientsById.get(a.client_id)?.line_id !== lineScope) return false
     if (statusFilter !== 'all' && a.status !== statusFilter) return false
     if (search) {
       const q = search.toLowerCase()
@@ -192,7 +196,7 @@ const AdsSpendView = forwardRef(function AdsSpendView(
   return (
     <div>
       <AdsSpendStats
-        ads={periodAds}
+        ads={scopedAds}
         onResetFilters={clearFilters}
         onOpenBudget={() => setShowBudgetOverview(true)}
         onFilterStatus={(status) => setStatusFilter(status)}
@@ -279,7 +283,7 @@ const AdsSpendView = forwardRef(function AdsSpendView(
       {/* Count */}
       <p className="text-[13px] font-mono text-[#888] mb-2">
         {filtered.length} {filtered.length === 1 ? 'resultado' : 'resultados'}
-        {filtered.length !== periodAds.length && ` de ${periodAds.length}`}
+        {filtered.length !== scopedAds.length && ` de ${scopedAds.length}`}
       </p>
 
       {/* Tracking de inversión vs. presupuesto — solo con un cliente seleccionado */}
@@ -318,7 +322,7 @@ const AdsSpendView = forwardRef(function AdsSpendView(
       {filtered.length === 0 ? (
         <div className="text-center py-16">
           <p className="text-[16px] font-medium text-[#888]">
-            {periodAds.length === 0
+            {scopedAds.length === 0
               ? 'No hay ads en este periodo'
               : 'Sin resultados para los filtros aplicados'}
           </p>
@@ -562,6 +566,7 @@ const AdsSpendView = forwardRef(function AdsSpendView(
           periodo={periodo}
           ads={ads}
           clients={clients}
+          initialLineScope={lineScope}
           onClose={() => setShowBudgetOverview(false)}
         />
       )}

@@ -175,6 +175,28 @@ describe('AdsSpendView', () => {
     expect(screen.getByText('Ad Julio')).toBeInTheDocument()
   })
 
+  it('la prop lineScope acota también las cards de resumen (Total Ads, Invertido)', async () => {
+    // Ad Julio ($80, c-1/line-1) + Ad Pepsi ($30, c-2/line-2) están ambos en julio 2026.
+    // Con lineScope="line-1" las cards deben reflejar solo Ad Julio.
+    render(
+      <AdsSpendView
+        companyId="co-1"
+        canManage={true}
+        lineScope="line-1"
+        periodo={{ month: 7, year: 2026 }}
+      />,
+    )
+    await waitFor(() => {
+      expect(screen.getByText('Ad Julio')).toBeInTheDocument()
+    })
+
+    const totalCard = screen.getByText('Total Ads').closest('div')
+    expect(totalCard).toHaveTextContent('1')
+    const investedCard = screen.getByText('Invertido').closest('div')
+    expect(investedCard).toHaveTextContent('$80.00')
+    expect(screen.queryByText('$110.00')).not.toBeInTheDocument()
+  })
+
   it('muestra el tracking de invertido vs. presupuesto al seleccionar un cliente', async () => {
     const user = userEvent.setup()
     renderView({ month: 7, year: 2026 })
