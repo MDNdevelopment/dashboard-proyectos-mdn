@@ -128,6 +128,7 @@ export const CHANGELOG = [
       'En Empresa → Empleados se quitó la franja que repetía el nombre de cada persona sobre todos los días que abarcaba su vacación (hacía ver el calendario muy cargado). En su lugar, arriba del calendario ahora hay dos recuadros siempre visibles: "De vacaciones ahora" y "En período de prueba", con quién está en cada situación en este momento, sin depender del mes que estés viendo.',
       'En el recuadro "En período de prueba" de Empresa → Empleados, junto al cargo de cada persona ahora también se muestra su team.',
       'Corregido: el correo de invitación que reciben los empleados nuevos podía llevarlos a una pantalla vieja en vez de al dashboard actual.',
+      'El correo de invitación a empleados nuevos ahora tiene el diseño de MDN, igual que el de recuperar contraseña. Además, el empleado nuevo ya no entra directo al dashboard sin contraseña: primero debe crear su contraseña y recién ahí puede usar el sistema (si cierra el correo o la pestaña antes de crearla, al volver a entrar se le vuelve a pedir).',
     ],
   },
   {

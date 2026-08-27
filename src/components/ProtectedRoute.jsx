@@ -1,5 +1,6 @@
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { needsPasswordSetup } from '../utils/needsPasswordSetup'
 
 export default function ProtectedRoute({ children }) {
   const { session, loading } = useAuth()
@@ -14,6 +15,11 @@ export default function ProtectedRoute({ children }) {
 
   if (!session) {
     return <Navigate to="/login" replace />
+  }
+
+  // Empleado invitado que aún no fijó su contraseña: no puede usar el dashboard.
+  if (needsPasswordSetup(session)) {
+    return <Navigate to="/reset-password" replace />
   }
 
   return children

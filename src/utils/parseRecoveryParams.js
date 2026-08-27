@@ -7,7 +7,7 @@
  *   ?error=access_denied&error_code=otp_expired
  *
  * @param {string} url - Full URL (window.location.href) or hash/query string.
- * @returns {{ hasToken: boolean, error: string|null, errorCode: string|null }}
+ * @returns {{ hasToken: boolean, hasAccessToken: boolean, type: string|null, error: string|null, errorCode: string|null }}
  */
 export function parseRecoveryParams(url) {
   let hashParams = new URLSearchParams()
@@ -30,5 +30,5 @@ export function parseRecoveryParams(url) {
 
   const hasToken = type === 'recovery' && Boolean(accessToken)
 
-  return { hasToken, error, errorCode }
+  return { hasToken, hasAccessToken: Boolean(accessToken), type, error, errorCode }
 }

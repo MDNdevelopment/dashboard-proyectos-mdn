@@ -10,7 +10,11 @@ vi.mock('../context/AuthContext', () => ({
 import { useAuth } from '../context/AuthContext'
 
 function renderRoute(children) {
-  return render(<MemoryRouter><ProtectedRoute>{children}</ProtectedRoute></MemoryRouter>)
+  return render(
+    <MemoryRouter>
+      <ProtectedRoute>{children}</ProtectedRoute>
+    </MemoryRouter>,
+  )
 }
 
 describe('ProtectedRoute', () => {
@@ -31,5 +35,14 @@ describe('ProtectedRoute', () => {
     useAuth.mockReturnValue({ session: { user: { id: '1' } }, loading: false })
     renderRoute(<div>Contenido protegido</div>)
     expect(screen.getByText('Contenido protegido')).toBeInTheDocument()
+  })
+
+  it('redirige a /reset-password si el invitado aún no fijó su contraseña', () => {
+    useAuth.mockReturnValue({
+      session: { user: { id: '1', user_metadata: { must_set_password: true } } },
+      loading: false,
+    })
+    renderRoute(<div>Contenido protegido</div>)
+    expect(screen.queryByText('Contenido protegido')).not.toBeInTheDocument()
   })
 })

@@ -36,7 +36,11 @@ vi.mock('../supabase', () => ({
 import ResetPasswordPage from '../pages/ResetPasswordPage'
 
 function renderPage() {
-  render(<MemoryRouter><ResetPasswordPage /></MemoryRouter>)
+  render(
+    <MemoryRouter>
+      <ResetPasswordPage />
+    </MemoryRouter>,
+  )
 }
 
 // Helper: fire PASSWORD_RECOVERY event immediately on subscription
@@ -52,12 +56,22 @@ function withSessionReady() {
   mockGetSession.mockResolvedValue({ data: { session: { user: { id: '1' } } } })
 }
 
+// Helper: simulate getSession returning an active invite session (empleado nuevo,
+// aún sin contraseña — must_set_password: true en user_metadata)
+function withInviteSessionReady() {
+  mockGetSession.mockResolvedValue({
+    data: { session: { user: { id: '1', user_metadata: { must_set_password: true } } } },
+  })
+}
+
 describe('ResetPasswordPage', () => {
   beforeEach(() => {
     mockNavigate.mockReset()
     mockUpdateUser.mockReset()
-    mockSignOut.mockResolvedValue({})
-    mockOnAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } })
+    mockSignOut.mockReset().mockResolvedValue({})
+    mockOnAuthStateChange
+      .mockReset()
+      .mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } })
     // Default: no active session (waits for PASSWORD_RECOVERY event)
     mockGetSession.mockResolvedValue({ data: { session: null } })
   })
@@ -120,7 +134,9 @@ describe('ResetPasswordPage', () => {
     await userEvent.type(screen.getByPlaceholderText('Confirmar contraseña'), 'newpass123')
     await userEvent.click(screen.getByRole('button', { name: 'Guardar contraseña' }))
     await waitFor(() => {
-      expect(screen.getByText('No se pudo actualizar la contraseña. Intenta de nuevo.')).toBeInTheDocument()
+      expect(
+        screen.getByText('No se pudo actualizar la contraseña. Intenta de nuevo.'),
+      ).toBeInTheDocument()
     })
   })
 
@@ -134,7 +150,9 @@ describe('ResetPasswordPage', () => {
     await userEvent.type(screen.getByPlaceholderText('Confirmar contraseña'), 'newpass123')
     await userEvent.click(screen.getByRole('button', { name: 'Guardar contraseña' }))
     await waitFor(() => {
-      expect(screen.getByText('¡Contraseña actualizada! Redirigiendo al inicio de sesión...')).toBeInTheDocument()
+      expect(
+        screen.getByText('¡Contraseña actualizada! Redirigiendo al inicio de sesión...'),
+      ).toBeInTheDocument()
     })
     expect(screen.queryByPlaceholderText('Nueva contraseña')).not.toBeInTheDocument()
   })
@@ -152,13 +170,53 @@ describe('ResetPasswordPage', () => {
     })
   })
 
+  // ── Modo invitación (empleado nuevo) ─────────────────────────────────────
+  it('muestra copy de bienvenida cuando la sesión trae must_set_password', async () => {
+    withInviteSessionReady()
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByText('Te damos la bienvenida')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Crear contraseña' })).toBeInTheDocument()
+    })
+  })
+
+  it('en modo invitación, guarda sin signOut y navega directo al dashboard', async () => {
+    withInviteSessionReady()
+    mockUpdateUser.mockResolvedValue({ error: null })
+    renderPage()
+    await waitFor(() => screen.getByPlaceholderText('Nueva contraseña'))
+    await userEvent.type(screen.getByPlaceholderText('Nueva contraseña'), 'newpass123')
+    await userEvent.type(screen.getByPlaceholderText('Confirmar contraseña'), 'newpass123')
+    await userEvent.click(screen.getByRole('button', { name: 'Crear contraseña' }))
+    await waitFor(() => {
+      expect(mockUpdateUser).toHaveBeenCalledWith({
+        password: 'newpass123',
+        data: { must_set_password: false },
+      })
+    })
+    expect(mockSignOut).not.toHaveBeenCalled()
+    expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true })
+  })
+
+  // ── Enlace muerto (sin sesión ni token) ──────────────────────────────────
+  it('muestra enlace inválido si no hay sesión ni token en la URL', async () => {
+    // beforeEach ya deja getSession → session null y onAuthStateChange sin disparar
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByText('Enlace inválido')).toBeInTheDocument()
+    })
+  })
+
   // ── Enlace expirado ─────────────────────────────────────────────────────
   it('muestra estado de enlace expirado cuando la URL tiene error otp_expired', () => {
     // Temporarily override window.location.href to simulate an expired link URL
     const original = window.location.href
     Object.defineProperty(window, 'location', {
       configurable: true,
-      value: { ...window.location, href: 'http://localhost:3000/reset-password?error=access_denied&error_code=otp_expired' },
+      value: {
+        ...window.location,
+        href: 'http://localhost:3000/reset-password?error=access_denied&error_code=otp_expired',
+      },
     })
 
     renderPage()

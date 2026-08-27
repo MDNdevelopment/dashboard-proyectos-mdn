@@ -67,9 +67,14 @@ export const handler = async (event) => {
   // 1. Crear cuenta auth via invitación — el empleado recibirá un email para fijar su contraseña
   //    redirectTo explícito: sin esto, Supabase usa el "Site URL" configurado en el panel
   //    (Authentication > URL Configuration), que puede quedar desactualizado si cambia el dominio.
+  //    data.must_set_password: bandera en user_metadata que ProtectedRoute usa para bloquear
+  //    el acceso al dashboard hasta que el invitado fije su contraseña (ver ResetPasswordPage).
   const { data: inviteData, error: inviteErr } = await supabase.auth.admin.inviteUserByEmail(
     cleanEmail,
-    { redirectTo: 'https://gestion.mdnpublicidad.com/reset-password' },
+    {
+      redirectTo: 'https://gestion.mdnpublicidad.com/reset-password',
+      data: { must_set_password: true },
+    },
   )
 
   if (inviteErr) return json(400, { error: inviteErr.message })
