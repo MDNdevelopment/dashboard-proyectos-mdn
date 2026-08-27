@@ -1,6 +1,6 @@
 import { fmtMonth, lightOf, isClosed, ESTADOS, COL_META } from '../tareas/constants'
 import KpiCard from '../tareas/KpiCard'
-import { cnpMonthStats } from './constants'
+import { cnpMonthStats, cnpPieceCount, cnpPiecesDelivered } from './constants'
 
 /**
  * Dashboard de CNP para la línea/mes activos, calcado del TeamView de Gestión de
@@ -14,7 +14,8 @@ export default function CnpDashboardView({
   teamName,
   onNavigateToBase,
 }) {
-  const { total, closed, pct, blocked, late, printPending, inMonth } = cnpMonthStats(cnps, monthIdx)
+  const { total, closed, pct, blocked, late, printPending, piezas, piezasEntregadas, inMonth } =
+    cnpMonthStats(cnps, monthIdx)
 
   const counts = ESTADOS.map((e) => ({ e, n: cnps.filter((c) => c.status === e).length }))
   const tot = cnps.length
@@ -22,9 +23,11 @@ export default function CnpDashboardView({
   const byClient = new Map()
   for (const c of inMonth) {
     const id = c.client_id ?? null
-    const entry = byClient.get(id) ?? { total: 0, closed: 0 }
+    const entry = byClient.get(id) ?? { total: 0, closed: 0, piezas: 0, piezasEntregadas: 0 }
     entry.total += 1
     if (isClosed(c)) entry.closed += 1
+    entry.piezas += cnpPieceCount(c)
+    entry.piezasEntregadas += cnpPiecesDelivered(c)
     byClient.set(id, entry)
   }
 
@@ -35,11 +38,17 @@ export default function CnpDashboardView({
         <p className="text-[14.5px] text-[#888]">{fmtMonth(monthIdx)}</p>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         <KpiCard
           label="Solicitados"
           value={total}
           sub={fmtMonth(monthIdx)}
+          onClick={() => onNavigateToBase(null)}
+        />
+        <KpiCard
+          label="Piezas"
+          value={piezas}
+          sub={`${piezasEntregadas} entregadas`}
           onClick={() => onNavigateToBase(null)}
         />
         <KpiCard
@@ -146,6 +155,9 @@ export default function CnpDashboardView({
                   <th className="px-4 py-3 text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">
                     Entregados
                   </th>
+                  <th className="px-4 py-3 text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">
+                    Piezas
+                  </th>
                   <th className="px-4 py-3 text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] min-w-[160px]">
                     Cumplimiento
                   </th>
@@ -186,6 +198,9 @@ export default function CnpDashboardView({
                         </td>
                         <td className="px-4 py-3 text-[#666] font-mono">{entry.total}</td>
                         <td className="px-4 py-3 text-[#666] font-mono">{entry.closed}</td>
+                        <td className="px-4 py-3 text-[#666] font-mono">
+                          {entry.piezasEntregadas}/{entry.piezas}
+                        </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             <span className="font-bold text-[#111]">{pp}%</span>

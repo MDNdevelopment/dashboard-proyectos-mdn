@@ -155,6 +155,7 @@ describe('CnpPage', () => {
     await user.click(screen.getByRole('button', { name: /nuevo cnp/i }))
     expect(screen.getByRole('heading', { name: 'Nuevo CNP' })).toBeInTheDocument()
 
+    await user.selectOptions(screen.getByRole('combobox', { name: /línea/i }), 'line-1')
     await user.selectOptions(screen.getByRole('combobox', { name: /cliente/i }), 'client-1')
     await user.type(
       screen.getByPlaceholderText(/creatina con sello de calidad/i),
@@ -178,6 +179,38 @@ describe('CnpPage', () => {
       is_print: false,
       status: 'Pendiente',
       created_by: 'u1',
+    })
+  })
+
+  it('admin/nivel 4 puede crear un CNP eligiendo la línea aunque esté en "Todos"', async () => {
+    const user = userEvent.setup()
+    renderPage(null, { access_level: 4 })
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Todos' })).toBeInTheDocument()
+    })
+    // Nivel 4 arranca en "Todos" por defecto (canViewAll) — el botón "Nuevo CNP" debe
+    // seguir disponible ahí, sin exigir seleccionar antes una línea específica.
+    await user.click(screen.getByRole('button', { name: /nuevo cnp/i }))
+    expect(screen.getByRole('heading', { name: 'Nuevo CNP' })).toBeInTheDocument()
+
+    await user.selectOptions(screen.getByRole('combobox', { name: /línea/i }), 'line-1')
+    await user.selectOptions(screen.getByRole('combobox', { name: /cliente/i }), 'client-1')
+    await user.type(
+      screen.getByPlaceholderText(/creatina con sello de calidad/i),
+      'CNP creado por admin',
+    )
+    await user.click(screen.getByRole('button', { name: /asignar diseñador/i }))
+    await user.click(await screen.findByText('Jesús García'))
+
+    await user.click(screen.getByRole('button', { name: 'Crear CNP' }))
+
+    await waitFor(() => {
+      expect(insertPayloadHolder.current).not.toBeNull()
+    })
+    expect(insertPayloadHolder.current).toMatchObject({
+      line_id: 'line-1',
+      client_id: 'client-1',
+      title: 'CNP creado por admin',
     })
   })
 

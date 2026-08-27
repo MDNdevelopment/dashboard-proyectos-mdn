@@ -222,7 +222,7 @@ export default function CnpPage() {
                 Contenido No Planificado — solicitudes de clientes
               </p>
             </div>
-            {canManage && !isAll && (
+            {canManage && (
               <div className="flex items-center gap-2 w-full sm:w-auto">
                 <button
                   onClick={openNewCnp}
@@ -367,7 +367,8 @@ export default function CnpPage() {
       {cnpModal !== null && (
         <CnpModal
           cnp={cnpModal === undefined ? null : cnpModal}
-          team={cnpModal === undefined ? activeTeam : teams.find((t) => t.id === cnpModal.line_id)}
+          teams={teams}
+          defaultTeamId={isAll ? null : activeTeamId}
           clients={clients}
           users={allUsers}
           onClose={closeCnpModal}

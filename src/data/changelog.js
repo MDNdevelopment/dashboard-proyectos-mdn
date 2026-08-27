@@ -120,6 +120,9 @@ export const CHANGELOG = [
       'Corregido: dar acceso completo a Chequeo a alguien sin subirle el nivel no funcionaba — no veía ninguna línea, o veía pero no podía registrar fechas fuera de la suya. Ya se puede otorgar de verdad.',
       'En Reportes, el selector de mes ahora abre por defecto en el mes actual (antes abría en el mes anterior) y siempre deja elegir también el mes siguiente, aunque todavía no haya empezado.',
       'El campo "Realizadas" del punto 5 (Nº Pautas) del reporte de Operaciones ahora se llena solo, contando las pautas marcadas como realizadas en Audiovisual por cada marca, desde el reporte de septiembre. La meta de cada marca la sigues poniendo tú.',
+      'En CNP ahora puedes indicar cuántas piezas salen de un mismo requerimiento: se genera una lista con el nombre de cada pieza (editable) y la vas tildando a medida que las entregas. El dashboard y el reporte mensual ya cuentan piezas, no solo CNP.',
+      'Ahora los administradores y usuarios de nivel 4 pueden crear un CNP también desde la vista "Todos", eligiendo la línea directamente dentro del formulario.',
+      'Cuando un CNP tiene varias piezas, ahora cada una tiene su propio campo de copy/contenido (antes había uno solo para todo el CNP). También se quitó el texto de ejemplo del campo Notas.',
     ],
   },
   {

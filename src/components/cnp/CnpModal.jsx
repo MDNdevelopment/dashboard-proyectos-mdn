@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
-import { ESTADOS } from './constants'
+import { ESTADOS, resizePieces, relabelAutoPieces, autoPieceLabel } from './constants'
 import {
   createCnp,
   updateCnp,
@@ -15,6 +15,7 @@ import { teamMemberUsers } from '../../utils/lineFilters'
 import DateInput from '../common/DateInput'
 
 const EMPTY = {
+  line_id: '',
   client_id: '',
   title: '',
   content: '',
@@ -24,6 +25,7 @@ const EMPTY = {
   due_date: '',
   is_print: false,
   status: 'Pendiente',
+  pieces: [],
 }
 
 function newRef() {
@@ -32,7 +34,8 @@ function newRef() {
 
 export default function CnpModal({
   cnp = null,
-  team = null,
+  teams = [],
+  defaultTeamId = null,
   clients = [],
   users = [],
   onClose,
@@ -46,6 +49,7 @@ export default function CnpModal({
   const [form, setForm] = useState(() => {
     if (isEdit) {
       return {
+        line_id: cnp.line_id ?? '',
         client_id: cnp.client_id ?? '',
         title: cnp.title ?? '',
         content: cnp.content ?? '',
@@ -55,9 +59,10 @@ export default function CnpModal({
         due_date: cnp.due_date ?? '',
         is_print: cnp.is_print ?? false,
         status: cnp.status ?? 'Pendiente',
+        pieces: cnp.pieces ?? [],
       }
     }
-    return { ...EMPTY }
+    return { ...EMPTY, line_id: defaultTeamId ?? teams[0]?.id ?? '' }
   })
   const initialForm = useRef(form)
   const { requestClose } = useUnsavedChanges({
@@ -86,14 +91,59 @@ export default function CnpModal({
     setForm((f) => ({ ...f, [field]: value }))
   }
 
-  const teamMembers = teamMemberUsers(users, team)
+  // Cantidad de piezas mostrada en el input: al menos 1 (pieces vacío = 1 pieza, ver
+  // cnpPieceCount en ./constants).
+  const pieceQty = form.pieces.length || 1
 
-  const lineClients = team?.is_general ? clients : clients.filter((c) => c.line_id === team?.id)
+  function setPieceQty(n) {
+    set('pieces', resizePieces(form.pieces, n, form.title))
+  }
+  function setTitle(title) {
+    setForm((f) => ({
+      ...f,
+      title,
+      pieces: f.pieces.length ? relabelAutoPieces(f.pieces, title) : f.pieces,
+    }))
+  }
+  function togglePieceDone(id, done) {
+    set(
+      'pieces',
+      form.pieces.map((p) => (p.id === id ? { ...p, done } : p)),
+    )
+  }
+  function updatePieceLabel(id, label) {
+    set(
+      'pieces',
+      form.pieces.map((p) => (p.id === id ? { ...p, label, custom: true } : p)),
+    )
+  }
+  function updatePieceContent(id, content) {
+    set(
+      'pieces',
+      form.pieces.map((p) => (p.id === id ? { ...p, content } : p)),
+    )
+  }
+  function removePiece(id) {
+    const rest = form.pieces.filter((p) => p.id !== id)
+    // Con 1 o menos piezas restantes, vuelve a la convención "sin lista = 1 pieza".
+    set('pieces', rest.length <= 1 ? [] : rest)
+  }
+
+  const selectedTeam = teams.find((t) => t.id === form.line_id)
+  const teamMembers = teamMemberUsers(users, selectedTeam)
+
+  const lineClients = selectedTeam?.is_general
+    ? clients
+    : clients.filter((c) => c.line_id === form.line_id)
 
   const blockedReason = isEdit ? closeBlockedReason({ ...liveCnp, ...form }) : null
 
   async function handleSubmit(e) {
     e.preventDefault()
+    if (!form.line_id) {
+      setError('Selecciona una línea')
+      return
+    }
     if (!form.client_id) {
       setError('Selecciona un cliente')
       return
@@ -115,7 +165,7 @@ export default function CnpModal({
 
     const payload = {
       company_id: userProfile?.company_id ?? '',
-      line_id: team?.id ?? null,
+      line_id: form.line_id || null,
       client_id: form.client_id,
       title: form.title.trim(),
       content: form.content || null,
@@ -125,6 +175,13 @@ export default function CnpModal({
       due_date: form.due_date || null,
       is_print: form.is_print,
       status: form.status,
+      // Si algún label quedó vacío (ej. el usuario lo borró a mano), rellenar con el
+      // default en vez de guardar una pieza sin nombre.
+      pieces: (form.pieces ?? []).map((p, i) => ({
+        ...p,
+        label: p.label?.trim() || autoPieceLabel(form.title, i),
+        content: p.content?.trim() || null,
+      })),
       created_by: isEdit ? cnp.created_by : (userProfile?.user_id ?? null),
     }
 
@@ -243,6 +300,40 @@ export default function CnpModal({
 
             <div>
               <label
+                htmlFor="cnp-line"
+                className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5"
+              >
+                Línea *
+              </label>
+              <select
+                id="cnp-line"
+                className="input-base"
+                value={form.line_id}
+                onChange={(e) => {
+                  const lineId = e.target.value
+                  const newMembers = teams.find((t) => t.id === lineId)?.member_user_ids ?? []
+                  // Al cambiar de línea, resetear cliente y responsable (puede no
+                  // pertenecer a la nueva línea) — mismo patrón que TaskModal.
+                  setForm((f) => ({
+                    ...f,
+                    line_id: lineId,
+                    client_id: '',
+                    assignee_id: newMembers.includes(f.assignee_id) ? f.assignee_id : null,
+                  }))
+                }}
+                required
+              >
+                <option value="">Seleccionar línea...</option>
+                {teams.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label
                 htmlFor="cnp-client"
                 className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5"
               >
@@ -276,7 +367,7 @@ export default function CnpModal({
               <input
                 className="input-base"
                 value={form.title}
-                onChange={(e) => set('title', e.target.value)}
+                onChange={(e) => setTitle(e.target.value)}
                 placeholder="Ej. Creatina con sello de calidad"
                 required
               />
@@ -284,17 +375,88 @@ export default function CnpModal({
 
             <div>
               <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
-                Contenido / copy
-                <span className="ml-1 font-normal normal-case text-[#bbb]">(opcional)</span>
+                Cantidad de piezas
               </label>
-              <textarea
+              <input
+                type="number"
+                min={1}
                 className="input-base"
-                rows={4}
-                value={form.content}
-                onChange={(e) => set('content', e.target.value)}
-                placeholder="Pega aquí el copy tal cual llega por WhatsApp..."
+                value={pieceQty}
+                onChange={(e) => setPieceQty(Number(e.target.value))}
               />
+              <p className="text-[12.5px] text-[#bbb] mt-1">
+                Si este requerimiento produce varias piezas, indícalo aquí en vez de crear otro CNP.
+              </p>
+              {form.pieces.length > 0 && (
+                <div className="mt-2 space-y-2">
+                  <p className="text-[12.5px] font-semibold text-[#888]">
+                    {form.pieces.filter((p) => p.done).length}/{form.pieces.length} entregadas
+                  </p>
+                  {form.pieces.map((p) => (
+                    <div key={p.id} className="space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(p.done)}
+                          onChange={(e) => togglePieceDone(p.id, e.target.checked)}
+                          className="w-4 h-4 rounded accent-[#111] cursor-pointer flex-shrink-0"
+                          aria-label={`Pieza entregada: ${p.label}`}
+                        />
+                        <input
+                          className="input-base flex-1"
+                          value={p.label}
+                          onChange={(e) => updatePieceLabel(p.id, e.target.value)}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removePiece(p.id)}
+                          className="text-[#ccc] hover:text-red-400 transition-colors flex-shrink-0"
+                          aria-label="Quitar pieza"
+                        >
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2.5"
+                          >
+                            <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
+                          </svg>
+                        </button>
+                      </div>
+                      <textarea
+                        className="input-base"
+                        rows={2}
+                        value={p.content ?? ''}
+                        onChange={(e) => updatePieceContent(p.id, e.target.value)}
+                        placeholder="Contenido..."
+                        aria-label={`Contenido de ${p.label}`}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
+
+            {/* Con varias piezas, cada una tiene su propio copy (más arriba) — este campo
+                general solo aplica al caso de 1 pieza para no dejar ambiguo cuál es el copy
+                real cuando hay varias. */}
+            {form.pieces.length === 0 && (
+              <div>
+                <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+                  Contenido / copy
+                  <span className="ml-1 font-normal normal-case text-[#bbb]">(opcional)</span>
+                </label>
+                <textarea
+                  className="input-base"
+                  rows={4}
+                  value={form.content}
+                  onChange={(e) => set('content', e.target.value)}
+                  placeholder="Pega aquí el copy tal cual llega por WhatsApp..."
+                />
+              </div>
+            )}
 
             <div>
               <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
@@ -383,7 +545,6 @@ export default function CnpModal({
                 rows={2}
                 value={form.notes}
                 onChange={(e) => set('notes', e.target.value)}
-                placeholder="Ej. Válido del 14/08 al 17/08, solo en divisas, 2 por persona..."
               />
             </div>
 

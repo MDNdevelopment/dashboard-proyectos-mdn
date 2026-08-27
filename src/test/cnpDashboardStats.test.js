@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { cnpInMonth, cnpMonthStats } from '../components/cnp/constants'
+import {
+  cnpInMonth,
+  cnpMonthStats,
+  cnpPieceCount,
+  cnpPiecesDelivered,
+} from '../components/cnp/constants'
 import { currentMonthIndex } from '../components/tareas/constants'
 
 const THIS_MONTH = currentMonthIndex()
@@ -84,5 +89,70 @@ describe('cnpMonthStats', () => {
     ]
     const stats = cnpMonthStats(cnps, THIS_MONTH)
     expect(stats.printPending).toBe(1)
+  })
+
+  it('counts piezas/piezasEntregadas scoped to the active month', () => {
+    const cnps = [
+      // sin pieces -> 1 pieza, no entregada (no cerrado)
+      makeCnp({ id: 'single' }),
+      // 3 piezas, 1 entregada
+      makeCnp({
+        id: 'multi',
+        pieces: [
+          { id: 'p1', label: 'p1', done: true },
+          { id: 'p2', label: 'p2', done: false },
+          { id: 'p3', label: 'p3', done: false },
+        ],
+      }),
+      // fuera del mes activo: no debe contar
+      makeCnp({
+        id: 'old',
+        pieces: [{ id: 'p1', label: 'p1', done: false }],
+        created_at: new Date(2000, 0, 1).toISOString(),
+      }),
+    ]
+    const stats = cnpMonthStats(cnps, THIS_MONTH)
+    expect(stats.piezas).toBe(4)
+    expect(stats.piezasEntregadas).toBe(1)
+  })
+})
+
+describe('cnpPieceCount', () => {
+  it('returns 1 when pieces is missing or empty', () => {
+    expect(cnpPieceCount({})).toBe(1)
+    expect(cnpPieceCount({ pieces: [] })).toBe(1)
+  })
+
+  it('returns the list length when pieces has items', () => {
+    expect(cnpPieceCount({ pieces: [{ id: '1' }, { id: '2' }] })).toBe(2)
+  })
+})
+
+describe('cnpPiecesDelivered', () => {
+  it('counts only the checked pieces while the CNP is open', () => {
+    const cnp = {
+      status: 'En proceso',
+      pieces: [
+        { id: '1', done: true },
+        { id: '2', done: false },
+      ],
+    }
+    expect(cnpPiecesDelivered(cnp)).toBe(1)
+  })
+
+  it('returns 0 for a single-piece CNP that is still open', () => {
+    expect(cnpPiecesDelivered({ status: 'Pendiente' })).toBe(0)
+  })
+
+  it('counts every piece as delivered once the CNP is Terminado, even unchecked ones', () => {
+    const cnp = {
+      status: 'Terminado',
+      pieces: [
+        { id: '1', done: false },
+        { id: '2', done: false },
+        { id: '3', done: false },
+      ],
+    }
+    expect(cnpPiecesDelivered(cnp)).toBe(3)
   })
 })

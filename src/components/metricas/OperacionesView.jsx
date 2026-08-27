@@ -953,7 +953,7 @@ export default function OperacionesView({ line, companyId, year, month, closed =
               </thead>
               <tbody>
                 <tr className="border-t border-[#ece9df]">
-                  <td className="py-1.5 text-[#333]">CNP</td>
+                  <td className="py-1.5 text-[#333]">CNP (piezas)</td>
                   <td className="py-1.5 text-right font-mono text-[#555]">
                     {report.solicitudes.cnp?.entregados ?? 0} /{' '}
                     {report.solicitudes.cnp?.solicitudes ?? 0}

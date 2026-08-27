@@ -4,6 +4,7 @@
  * 20260901000000_create_cnp.sql).
  */
 import { supabase } from '../../supabase'
+import { cnpPieceCount, cnpPiecesDelivered } from './constants'
 
 /**
  * Carga los CNP de una empresa, opcionalmente acotados a una línea.
@@ -84,10 +85,12 @@ export function closeBlockedReason(cnp) {
 }
 
 /**
- * Cuenta solicitudes vs entregadas de CNP para una línea en un mes dado — usado por
- * el indicador "Solicitudes vs Entregados" de Reportes → Operaciones
+ * Cuenta piezas solicitadas vs entregadas de CNP para una línea en un mes dado — usado
+ * por el indicador "Solicitudes vs Entregados" de Reportes → Operaciones
  * (ver src/components/metricas/OperacionesView.jsx y SOLICITUDES_MODULE_START).
- * "Entregado" = status Terminado, dentro del mismo conjunto de solicitudes del mes.
+ * La unidad del lado CNP es la PIEZA, no el requerimiento: un CNP con `pieces` (varias
+ * piezas de un mismo requerimiento) cuenta cada pieza, no 1 (ver cnpPieceCount). Un CNP
+ * "Terminado" cuenta todas sus piezas como entregadas (cnpPiecesDelivered).
  */
 export async function countCnpSolicitudesForLine(companyId, lineId, { month, year }) {
   const monthStart = new Date(year, month - 1, 1)
@@ -96,7 +99,7 @@ export async function countCnpSolicitudesForLine(companyId, lineId, { month, yea
 
   const { data, error } = await supabase
     .from('cnp_requests')
-    .select('status')
+    .select('status, pieces')
     .eq('company_id', companyId)
     .eq('line_id', lineId)
     .is('deleted_at', null)
@@ -106,8 +109,8 @@ export async function countCnpSolicitudesForLine(companyId, lineId, { month, yea
   if (error) return { solicitudes: 0, entregados: 0, error }
   const rows = data ?? []
   return {
-    solicitudes: rows.length,
-    entregados: rows.filter((r) => r.status === 'Terminado').length,
+    solicitudes: rows.reduce((sum, r) => sum + cnpPieceCount(r), 0),
+    entregados: rows.reduce((sum, r) => sum + cnpPiecesDelivered(r), 0),
     error: null,
   }
 }

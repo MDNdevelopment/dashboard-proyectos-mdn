@@ -108,7 +108,7 @@ export default function AiChatPanel({ messages, sending, error, send, clear, onC
           onKeyDown={handleKeyDown}
           placeholder="Escribe tu pregunta…"
           rows={1}
-          className="input-base flex-1 min-w-0 resize-none max-h-24"
+          className="input-base input-compact flex-1 min-w-0 resize-none max-h-24"
           disabled={sending}
         />
         <button

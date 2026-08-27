@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ESTADOS, COL_META } from './constants'
+import { ESTADOS, COL_META, cnpPieceCount, cnpPiecesDelivered } from './constants'
 import { fmtShort, isLate } from '../tareas/constants'
 import { Avatar } from '../tareas/UserPickerSingle'
 
@@ -163,6 +163,7 @@ export default function CnpBaseView({
                 <tr className="border-b border-[#ece9df] text-left bg-[#faf9f5] text-[12.5px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">
                   <th className="px-4 py-2.5">Cliente</th>
                   <th className="px-4 py-2.5">Título</th>
+                  <th className="px-4 py-2.5">Piezas</th>
                   <th className="px-4 py-2.5">Responsable</th>
                   <th className="px-4 py-2.5">Impreso</th>
                   <th className="px-4 py-2.5">Solicitado</th>
@@ -211,6 +212,9 @@ export default function CnpBaseView({
                             atrasado
                           </span>
                         )}
+                      </td>
+                      <td className="px-4 py-2.5 text-[#666] font-mono">
+                        {cnpPiecesDelivered(c)}/{cnpPieceCount(c)}
                       </td>
                       <td className="px-4 py-2.5">
                         {assignee ? (
