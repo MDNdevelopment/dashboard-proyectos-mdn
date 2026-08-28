@@ -37,7 +37,7 @@ function permRowChain(result) {
 
 // Builder para el UPDATE: refleja el payload recibido para poder verificar
 // que el clamp de admin/access_level/monthly_salary realmente lo afectó.
-function updateChain() {
+function updateChain(result) {
   const builder = {
     update: (payload) => {
       builder._payload = payload
@@ -45,10 +45,11 @@ function updateChain() {
     },
     eq: () => builder,
     select: () => builder,
-    single: async () => ({
-      data: { user_id: 'u1', ...builder._payload },
-      error: null,
-    }),
+    maybeSingle: async () =>
+      result ?? {
+        data: { user_id: 'u1', ...builder._payload },
+        error: null,
+      },
   }
   return builder
 }
@@ -86,12 +87,19 @@ describe('update-employee.js handler — anti-escalada', () => {
     expect(res.statusCode).toBe(403)
   })
 
-  it('un caller no-admin (empresa.empleados.manage, nivel 2) no puede otorgar admin, subir nivel por encima de 3, ni escribir sueldo', async () => {
+  it('un caller no-admin (empresa.empleados.manage, nivel 2) no puede otorgar admin ni cambiar el nivel del empleado (se conserva), ni escribir sueldo', async () => {
     requireCapabilityMock.mockResolvedValue({
       caller: { user_id: 'rrhh-1', admin: false, access_level: 2, company_id: 'c1' },
     })
     fromMock
-      .mockReturnValueOnce(targetChain({ data: { user_id: 'u1', company_id: 'c1' }, error: null }))
+      .mockReturnValueOnce(
+        // El empleado editado ya es admin de nivel 4 antes de este UPDATE — el caller
+        // no-admin NO debe poder degradarlo ni tumbar el UPDATE completo por eso.
+        targetChain({
+          data: { user_id: 'u1', company_id: 'c1', admin: true, access_level: 4 },
+          error: null,
+        }),
+      )
       .mockReturnValueOnce(
         // empresa.empleados.sensible configurada en prod como min_level 4 (+ excepción
         // individual): un nivel 2 sin esa capability no puede ver/escribir el sueldo.
@@ -108,8 +116,9 @@ describe('update-employee.js handler — anti-escalada', () => {
 
     expect(res.statusCode).toBe(200)
     const updated = JSON.parse(res.body)
-    expect(updated.admin).toBe(false)
-    expect(updated.access_level).toBe(3) // clamp: min(4, 3)
+    // Se conserva el admin/nivel actual del empleado, no se degrada ni se otorga.
+    expect(updated.admin).toBe(true)
+    expect(updated.access_level).toBe(4)
     expect(updated).not.toHaveProperty('monthly_salary')
   })
 
@@ -118,7 +127,12 @@ describe('update-employee.js handler — anti-escalada', () => {
       caller: { user_id: 'admin-1', admin: true, access_level: 4, company_id: 'c1' },
     })
     fromMock
-      .mockReturnValueOnce(targetChain({ data: { user_id: 'u1', company_id: 'c1' }, error: null }))
+      .mockReturnValueOnce(
+        targetChain({
+          data: { user_id: 'u1', company_id: 'c1', admin: false, access_level: 1 },
+          error: null,
+        }),
+      )
       .mockReturnValueOnce(updateChain())
 
     const res = await handler(makeEvent(BODY))
@@ -128,5 +142,51 @@ describe('update-employee.js handler — anti-escalada', () => {
     expect(updated.admin).toBe(true)
     expect(updated.access_level).toBe(4)
     expect(updated.monthly_salary).toBe(5000)
+  })
+
+  it('si el UPDATE no devuelve fila (ej. bloqueado por un trigger), responde 500 en español, no el error crudo de PostgREST', async () => {
+    requireCapabilityMock.mockResolvedValue({
+      caller: { user_id: 'admin-1', admin: true, access_level: 4, company_id: 'c1' },
+    })
+    fromMock
+      .mockReturnValueOnce(
+        targetChain({
+          data: { user_id: 'u1', company_id: 'c1', admin: false, access_level: 1 },
+          error: null,
+        }),
+      )
+      .mockReturnValueOnce(updateChain({ data: null, error: null }))
+
+    const res = await handler(makeEvent(BODY))
+
+    expect(res.statusCode).toBe(500)
+    const body = JSON.parse(res.body)
+    expect(body.error).not.toMatch(/JSON object requested/i)
+    expect(body.error).not.toMatch(/multiple.*no.*rows/i)
+  })
+
+  it('si el UPDATE falla con error de Postgres, responde 500 en español, no el mensaje crudo', async () => {
+    requireCapabilityMock.mockResolvedValue({
+      caller: { user_id: 'admin-1', admin: true, access_level: 4, company_id: 'c1' },
+    })
+    fromMock
+      .mockReturnValueOnce(
+        targetChain({
+          data: { user_id: 'u1', company_id: 'c1', admin: false, access_level: 1 },
+          error: null,
+        }),
+      )
+      .mockReturnValueOnce(
+        updateChain({
+          data: null,
+          error: { message: 'No autorizado para modificar campos protegidos de users' },
+        }),
+      )
+
+    const res = await handler(makeEvent(BODY))
+
+    expect(res.statusCode).toBe(500)
+    const body = JSON.parse(res.body)
+    expect(body.error).toBe('No se pudo guardar el empleado')
   })
 })

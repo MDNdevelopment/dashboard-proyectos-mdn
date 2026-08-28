@@ -127,8 +127,15 @@ se aplicaron en producción** — ver auditoría de permisos en `plan.md`, Bloqu
   (`prevent_users_privilege_escalation`) que bloquea que un no-admin cambie
   `access_level`/`admin`/`monthly_salary`/`deleted_at`/`company_id` aunque esté editando su propia
   fila. La edición de empleados desde la UI (`EmployeeModal.jsx`) pasa por la Netlify function
-  `update-employee.js` (`requireCapability('empresa.empleados.manage')` + mismo clamp anti-escalada
-  que `create-employee.js`), no por un `update` directo del cliente.
+  `update-employee.js` (`requireCapability('empresa.empleados.manage')`), no por un `update` directo
+  del cliente. El trigger exime a `service_role` (`20260908000000_service_role_bypass_users_trigger.sql`):
+  como `auth.uid()` es NULL en peticiones del backend, `is_company_admin()` siempre daba `false` ahí y
+  el trigger abortaba cualquier UPDATE de las Netlify functions que tocara esos campos (rompía
+  `archive-employee.js`, que siempre escribe `deleted_at`, y guardar sueldo/nivel desde
+  `update-employee.js`) — la anti-escalada real para RRHH no-admin vive en el propio
+  `update-employee.js`, que **conserva** el `admin`/`access_level` actual del empleado si el caller
+  no es admin (antes los degradaba con `Math.min(nivel, 3)`, causando el mismo abort del trigger al
+  intentar bajarle el nivel a alguien con nivel ≥ 4).
 - `evaluation_sessions`/`evaluation_responses`/`evaluation_comments`
   (`20260828160200_fix_evaluations_rls.sql`): SELECT/INSERT limitados a evaluado, evaluador
   (`manager_id`) o `user_can('evaluaciones.empleados')`. La Netlify function

@@ -46,7 +46,7 @@ export const handler = async (event) => {
   // (el service-role bypassa RLS, así que esta comprobación es obligatoria).
   const { data: target, error: targetErr } = await supabase
     .from('users')
-    .select('user_id, company_id')
+    .select('user_id, company_id, admin, access_level')
     .eq('user_id', user_id)
     .single()
 
@@ -54,13 +54,12 @@ export const handler = async (event) => {
   if (target.company_id !== caller.company_id) return json(403, { error: 'Forbidden' })
 
   // Anti-escalada: quien edita sin ser admin (p.ej. RRHH con
-  // 'empresa.empleados.manage') no puede otorgar admin ni subir el nivel de
-  // acceso del empleado por encima de su propio techo operativo, aunque el
-  // body los incluya (mismo criterio que create-employee.js).
-  const safeAdmin = caller.admin ? !!admin : false
-  const safeAccessLevel = caller.admin
-    ? Number(access_level) || 1
-    : Math.min(Number(access_level) || 1, 3)
+  // 'empresa.empleados.manage') no puede otorgar admin ni cambiar el nivel de
+  // acceso del empleado, aunque el body los incluya — se conserva el valor
+  // actual del empleado en vez de degradarlo (mismo criterio que
+  // create-employee.js, que no permite asignar estos campos sin ser admin).
+  const safeAdmin = caller.admin ? !!admin : target.admin
+  const safeAccessLevel = caller.admin ? Number(access_level) || 1 : target.access_level
 
   const updatePayload = {
     first_name: first_name.trim(),
@@ -101,9 +100,17 @@ export const handler = async (event) => {
     .update(updatePayload)
     .eq('user_id', user_id)
     .select('*, department:departments(department_name), position:positions(position_name)')
-    .single()
+    .maybeSingle()
 
-  if (updateErr) return json(500, { error: updateErr.message })
+  if (updateErr) {
+    console.error('update-employee: error al actualizar', updateErr)
+    return json(500, { error: 'No se pudo guardar el empleado' })
+  }
+  if (!employee) {
+    return json(500, {
+      error: 'No se pudo guardar el empleado: la base de datos rechazó el cambio',
+    })
+  }
 
   return json(200, employee)
 }

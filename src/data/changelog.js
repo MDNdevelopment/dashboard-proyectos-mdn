@@ -141,6 +141,8 @@ export const CHANGELOG = [
       'Solo nivel 3 en adelante puede crear o editar Campañas/Ads (antes cualquier nivel podía).',
       'Vacaciones (recuadro "De vacaciones ahora", botón por empleado y panel "Vacaciones del año" en Empresa → Empleados) ahora solo lo ve Recursos Humanos, nivel 4 o administración — antes cualquiera que entrara a Empleados podía ver quién estaba de vacaciones.',
       'Corregido: al abrir Empresa → Empleados, el sueldo de todo el equipo viajaba a tu navegador aunque no se mostrara en pantalla. Ahora solo se envía a quien tiene permiso de verlo.',
+      'Corregido: al guardar cambios en la ficha de un empleado (por ejemplo su foto) podía aparecer un error técnico y no guardarse nada.',
+      'Corregido: archivar o restaurar un empleado, y guardarle el sueldo o el nivel de acceso, podían fallar con un error técnico.',
     ],
   },
   {

@@ -58,9 +58,17 @@ export const handler = async (event) => {
     .update({ deleted_at: action === 'archive' ? new Date().toISOString() : null })
     .eq('user_id', user_id)
     .select('*, department:departments(department_name), position:positions(position_name)')
-    .single()
+    .maybeSingle()
 
-  if (updateErr) return json(500, { error: updateErr.message })
+  if (updateErr) {
+    console.error('archive-employee: error al actualizar', updateErr)
+    return json(500, { error: 'No se pudo archivar/restaurar el empleado' })
+  }
+  if (!employee) {
+    return json(500, {
+      error: 'No se pudo archivar/restaurar el empleado: la base de datos rechazó el cambio',
+    })
+  }
 
   return json(200, employee)
 }
