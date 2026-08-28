@@ -1,6 +1,7 @@
 import { GoogleGenAI } from '@google/genai'
 import { supabase } from './_lib/supabase.js'
 import { requireUser } from './_lib/requireUser.js'
+import { canAccessModule } from '../../src/lib/permissions.js'
 
 const json = (statusCode, body) => ({
   statusCode,
@@ -49,10 +50,53 @@ export const handler = async (event) => {
   if (empErr || !employee) return json(404, { error: 'Empleado no encontrado' })
   if (employee.company_id !== caller.company_id) return json(403, { error: 'Forbidden' })
 
+  // Autorización: el propio empleado, su evaluador (manager_id en alguna
+  // sesión), o quien tenga la capability 'evaluaciones.empleados' (admin
+  // incluido). El service-role bypassa RLS, así que esta comprobación es
+  // obligatoria (ver hallazgo 1.9 de plan.md).
+  const isSelf = employeeId === caller.user_id
+
+  let isManager = false
+  if (!isSelf) {
+    const { data: managed } = await supabase
+      .from('evaluation_sessions')
+      .select('id')
+      .eq('employee_id', employeeId)
+      .eq('manager_id', caller.user_id)
+      .limit(1)
+    isManager = Boolean(managed?.length)
+  }
+
+  if (!isSelf && !isManager) {
+    const { data: fullCaller, error: callerErr } = await supabase
+      .from('users')
+      .select('user_id, admin, access_level, department_id, position_id, company_id')
+      .eq('user_id', caller.user_id)
+      .single()
+    if (callerErr || !fullCaller) return json(401, { error: 'Unauthorized' })
+
+    if (!fullCaller.admin) {
+      const { data: permRow, error: permErr } = await supabase
+        .from('module_permissions')
+        .select('rules')
+        .eq('company_id', fullCaller.company_id)
+        .eq('module_key', 'evaluaciones.empleados')
+        .maybeSingle()
+      if (permErr) return json(500, { error: 'Error verificando permisos' })
+
+      const configByModule = { 'evaluaciones.empleados': permRow?.rules ?? null }
+      if (!canAccessModule('evaluaciones.empleados', fullCaller, configByModule)) {
+        return json(403, { error: 'Forbidden' })
+      }
+    }
+  }
+
   // Cargar historial completo de evaluaciones con texto de preguntas
   const { data: sessions, error: sessErr } = await supabase
     .from('evaluation_sessions')
-    .select('period, total_score, evaluation_responses(response, questions(text)), evaluation_comments(comment)')
+    .select(
+      'period, total_score, evaluation_responses(response, questions(text)), evaluation_comments(comment)',
+    )
     .eq('employee_id', employeeId)
     .order('period', { ascending: false })
 
@@ -67,15 +111,14 @@ export const handler = async (event) => {
     period: session.period,
     totalScore: session.total_score,
     questions: (session.evaluation_responses ?? [])
-      .filter(r => r.questions?.text)
-      .map(r => ({
+      .filter((r) => r.questions?.text)
+      .map((r) => ({
         text: r.questions.text,
         response: r.response,
       })),
     // Solo incluir comentarios del período más reciente
-    comments: index === 0
-      ? (session.evaluation_comments ?? []).map(c => c.comment).filter(Boolean)
-      : [],
+    comments:
+      index === 0 ? (session.evaluation_comments ?? []).map((c) => c.comment).filter(Boolean) : [],
   }))
 
   // Llamar a Gemini
@@ -83,7 +126,9 @@ export const handler = async (event) => {
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: 'I need you to give me an analysis on the employee performance based on his evaluations ' + JSON.stringify(evaluations),
+      contents:
+        'I need you to give me an analysis on the employee performance based on his evaluations ' +
+        JSON.stringify(evaluations),
       config: {
         maxOutputTokens: 5000,
         temperature: 1,

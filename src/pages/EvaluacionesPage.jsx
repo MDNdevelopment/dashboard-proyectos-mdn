@@ -1,53 +1,65 @@
-import { useEffect } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
-import EmployeeEvalList from "../components/evaluaciones/EmployeeEvalList";
-import EmployeeProfileView from "../components/evaluaciones/EmployeeProfileView";
-import SummaryView from "../components/evaluaciones/SummaryView";
-import MiPerfilView from "../components/evaluaciones/MiPerfilView";
-import MiPerfilV2View from "../components/evaluaciones/MiPerfilV2View";
+import { useEffect } from 'react'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
+import EmployeeEvalList from '../components/evaluaciones/EmployeeEvalList'
+import EmployeeProfileView from '../components/evaluaciones/EmployeeProfileView'
+import SummaryView from '../components/evaluaciones/SummaryView'
+import MiPerfilView from '../components/evaluaciones/MiPerfilView'
+import MiPerfilV2View from '../components/evaluaciones/MiPerfilV2View'
 
 const ALL_TABS = [
-  { key: "empleados",  label: "Empleados",    path: "/evaluaciones" },
-  { key: "resumen",    label: "Resumen",       path: "/evaluaciones/resumen" },
-  { key: "perfil",     label: "Mi Perfil",     path: "/evaluaciones/perfil" },
-  { key: "perfil-v2",  label: "Mi Perfil v2",  path: "/evaluaciones/perfil-v2" },
-];
+  { key: 'empleados', label: 'Empleados', path: '/evaluaciones' },
+  { key: 'resumen', label: 'Resumen', path: '/evaluaciones/resumen' },
+  { key: 'perfil', label: 'Mi Perfil', path: '/evaluaciones/perfil' },
+  { key: 'perfil-v2', label: 'Mi Perfil v2', path: '/evaluaciones/perfil-v2' },
+]
 
 function pathToKey(pathname) {
-  if (pathname.startsWith("/evaluaciones/resumen"))   return "resumen";
+  if (pathname.startsWith('/evaluaciones/resumen')) return 'resumen'
   // perfil-v2 debe verificarse ANTES que perfil para evitar falso match
-  if (pathname.startsWith("/evaluaciones/perfil-v2")) return "perfil-v2";
-  if (pathname.startsWith("/evaluaciones/perfil"))    return "perfil";
-  return "empleados";
+  if (pathname.startsWith('/evaluaciones/perfil-v2')) return 'perfil-v2'
+  if (pathname.startsWith('/evaluaciones/perfil')) return 'perfil'
+  return 'empleados'
 }
 
 export default function EvaluacionesPage() {
-  const { userProfile, can = () => true } = useAuth();
-  const location = useLocation();
-  const navigate = useNavigate();
-  const { id: employeeId } = useParams();
+  const { userProfile, can = () => true } = useAuth()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const { id: employeeId } = useParams()
 
-  const activeKey = pathToKey(location.pathname);
-  const isProfileView = location.pathname.startsWith("/evaluaciones/empleado/");
+  const activeKey = pathToKey(location.pathname)
+  const isProfileView = location.pathname.startsWith('/evaluaciones/empleado/')
   // Nota: isPerfilView captura tanto /perfil como /perfil-v2 (startsWith).
   // Esto está bien: el redirect de no-managers lleva a /evaluaciones/perfil,
   // que coincide con ambas rutas y permite acceder a v2 sin ser expulsado.
-  const isPerfilView  = location.pathname.startsWith("/evaluaciones/perfil");
-  const isPerfilV2View = location.pathname.startsWith("/evaluaciones/perfil-v2");
+  const isPerfilView = location.pathname.startsWith('/evaluaciones/perfil')
+  const isPerfilV2View = location.pathname.startsWith('/evaluaciones/perfil-v2')
 
   // Visibilidad config-driven de tabs y acciones
-  const canManage = can("evaluaciones.manage");
+  const canManage = can('evaluaciones.manage')
   // Tabs visibles según las capacidades configuradas
-  const visibleTabs = ALL_TABS.filter(t => can(`evaluaciones.${t.key}`));
+  const visibleTabs = ALL_TABS.filter((t) => can(`evaluaciones.${t.key}`))
 
   // Si el usuario no puede ver el tab activo, redirigir a su perfil
   useEffect(() => {
-    if (userProfile == null || isPerfilView || isProfileView) return;
+    if (userProfile == null || isPerfilView || isProfileView) return
     if (!can(`evaluaciones.${activeKey}`)) {
-      navigate("/evaluaciones/perfil", { replace: true });
+      navigate('/evaluaciones/perfil', { replace: true })
     }
-  }, [can, navigate, userProfile, activeKey, isPerfilView, isProfileView]);
+  }, [can, navigate, userProfile, activeKey, isPerfilView, isProfileView])
+
+  // El perfil de OTRO empleado (/evaluaciones/empleado/:id) quedaba fuera del
+  // guard de arriba: cualquiera con acceso al módulo abría el historial
+  // completo de un compañero. Solo puede verlo el propio empleado o quien
+  // tenga la capability 'evaluaciones.empleados' (ver hallazgo 1.9).
+  useEffect(() => {
+    if (userProfile == null || !isProfileView) return
+    if (employeeId === userProfile.user_id) return
+    if (!can('evaluaciones.empleados')) {
+      navigate('/evaluaciones/perfil', { replace: true })
+    }
+  }, [can, navigate, userProfile, isProfileView, employeeId])
 
   if (!userProfile) {
     return (
@@ -56,7 +68,7 @@ export default function EvaluacionesPage() {
           <div className="w-6 h-6 border-2 border-[#FFB800] border-t-transparent rounded-full animate-spin" />
         </div>
       </main>
-    );
+    )
   }
 
   return (
@@ -65,12 +77,8 @@ export default function EvaluacionesPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-[26px] font-bold text-[#111] leading-tight">
-              Evaluaciones
-            </h1>
-            <p className="text-[15px] text-[#888] mt-0.5">
-              Desempeño · Historial · Resumen
-            </p>
+            <h1 className="text-[26px] font-bold text-[#111] leading-tight">Evaluaciones</h1>
+            <p className="text-[15px] text-[#888] mt-0.5">Desempeño · Historial · Resumen</p>
           </div>
         </div>
 
@@ -83,8 +91,8 @@ export default function EvaluacionesPage() {
                 onClick={() => navigate(tab.path)}
                 className={`px-4 py-1.5 rounded-lg text-[14.5px] font-semibold transition-all ${
                   activeKey === tab.key
-                    ? "bg-[#111] text-white"
-                    : "text-[#666] hover:text-[#111] hover:bg-[#f5f3eb]"
+                    ? 'bg-[#111] text-white'
+                    : 'text-[#666] hover:text-[#111] hover:bg-[#f5f3eb]'
                 }`}
               >
                 {tab.label}
@@ -111,7 +119,7 @@ export default function EvaluacionesPage() {
             departmentId={userProfile.department_id}
             userProfile={userProfile}
           />
-        ) : activeKey === "empleados" ? (
+        ) : activeKey === 'empleados' ? (
           <EmployeeEvalList
             companyId={userProfile.company_id}
             currentUserId={userProfile.user_id}
@@ -121,5 +129,5 @@ export default function EvaluacionesPage() {
         )}
       </div>
     </main>
-  );
+  )
 }

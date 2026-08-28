@@ -137,6 +137,10 @@ export const CHANGELOG = [
       'Corregido: al crear una pauta audiovisual, el enlace de la grilla o la descripción de piezas a veces no se guardaban y aparecía un error técnico en rojo sobre la tabla de Solicitudes.',
       'Al agregar una pauta ya no se crea una fila vacía de una vez: ahora se completa como borrador y se confirma con el botón "Guardar solicitud", igual para jefas de línea y para la coordinadora.',
       'Ahora se pueden dar permisos de Recursos Humanos (crear/editar/archivar empleados, gestionar vacaciones, ver sueldos y niveles de acceso, y ver el calendario completo de la empresa) sin necesidad de hacer a la persona administradora.',
+      'Reforzada la seguridad interna de datos sensibles (sueldos, evaluaciones de desempeño, niveles de acceso): antes, con las herramientas técnicas adecuadas, alguien podía llegar a ver o modificar información que no le correspondía. Ahora cada dato solo lo puede ver y editar quien tiene el permiso correcto, igual que ya se veía reflejado en la pantalla.',
+      'Solo nivel 3 en adelante puede crear o editar Campañas/Ads (antes cualquier nivel podía).',
+      'Vacaciones (recuadro "De vacaciones ahora", botón por empleado y panel "Vacaciones del año" en Empresa → Empleados) ahora solo lo ve Recursos Humanos, nivel 4 o administración — antes cualquiera que entrara a Empleados podía ver quién estaba de vacaciones.',
+      'Corregido: al abrir Empresa → Empleados, el sueldo de todo el equipo viajaba a tu navegador aunque no se mostrara en pantalla. Ahora solo se envía a quien tiene permiso de verlo.',
     ],
   },
   {

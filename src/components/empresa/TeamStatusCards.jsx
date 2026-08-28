@@ -10,16 +10,21 @@ import EventTypeIcon from './EventTypeIcon'
  *
  * Puramente presentacional: no hace fetch, no tiene `onClick` (es un resumen, no navegación).
  * `EmployeesView.jsx` arma `onVacationItems`/`probationItems` a partir de sus propios estados.
+ * `showVacations` (default true) oculta la tarjeta de vacaciones para quien no tenga la
+ * capacidad `empresa.vacaciones.manage` — la lectura de la tabla `vacations` está restringida
+ * por RLS a RRHH/nivel 4/admin, así que para el resto `onVacationItems` siempre llega vacío.
  */
-export default function TeamStatusCards({ onVacationItems, probationItems }) {
+export default function TeamStatusCards({ onVacationItems, probationItems, showVacations = true }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-      <TeamStatusCard
-        iconType="vacation_start"
-        title="De vacaciones ahora"
-        items={onVacationItems}
-        emptyText="Nadie está de vacaciones hoy."
-      />
+    <div className={`grid grid-cols-1 ${showVacations ? 'sm:grid-cols-2' : ''} gap-3 mb-4`}>
+      {showVacations && (
+        <TeamStatusCard
+          iconType="vacation_start"
+          title="De vacaciones ahora"
+          items={onVacationItems}
+          emptyText="Nadie está de vacaciones hoy."
+        />
+      )}
       <TeamStatusCard
         iconType="probation_end"
         title="En período de prueba"

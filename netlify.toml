@@ -48,6 +48,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/employees/update"
+  to = "/.netlify/functions/update-employee"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/mcp"
   to = "/.netlify/functions/mcp"
   status = 200

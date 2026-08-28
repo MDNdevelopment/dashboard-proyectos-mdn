@@ -83,6 +83,7 @@ export default function EmployeeModal({ employee, departments, positions, onClos
     setError(null)
 
     const updatePayload = {
+      user_id: employee.user_id,
       first_name: form.first_name.trim(),
       last_name: form.last_name.trim(),
       phone_number: form.phone_number.trim() || null,
@@ -95,23 +96,39 @@ export default function EmployeeModal({ employee, departments, positions, onClos
       on_probation: form.on_probation,
       avatar_url: form.avatar_url || null,
     }
-    // Sueldo: solo lo escribe quien tiene permisos financieros
+    // Sueldo: solo lo escribe quien tiene permisos financieros (el servidor
+    // vuelve a validar esto — ver update-employee.js)
     if (privileged) {
       updatePayload.monthly_salary = form.monthly_salary !== '' ? Number(form.monthly_salary) : null
     }
 
-    const { data, error: err } = await supabase
-      .from('users')
-      .update(updatePayload)
-      .eq('user_id', employee.user_id)
-      .select('*, department:departments(department_name), position:positions(position_name)')
-      .single()
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
 
-    if (err) {
-      setError(err.message)
+    let res
+    try {
+      res = await fetch('/api/employees/update', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(updatePayload),
+      })
+    } catch {
+      setError('No se pudo conectar con el servidor')
       setSaving(false)
       return
     }
+
+    const data = await res.json().catch(() => null)
+    if (!res.ok) {
+      setError(data?.error ?? 'No se pudo guardar el empleado')
+      setSaving(false)
+      return
+    }
+
     onSaved(data)
     onClose()
   }

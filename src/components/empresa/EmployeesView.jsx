@@ -129,6 +129,7 @@ function EmployeeCard({
   onRestore,
   canDelete,
   canManage,
+  canVacations,
   showLevel,
 }) {
   const fullName = `${emp.first_name} ${emp.last_name}`
@@ -182,30 +183,32 @@ function EmployeeCard({
           )
         ) : (
           <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                onVacations(emp)
-              }}
-              aria-label={`Vacaciones de ${fullName}`}
-              title="Vacaciones"
-              className="p-1 rounded text-[#999] hover:text-[#555] hover:bg-[#f5f3eb] transition-colors"
-            >
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 14 14"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.4"
+            {canVacations && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onVacations(emp)
+                }}
+                aria-label={`Vacaciones de ${fullName}`}
+                title="Vacaciones"
+                className="p-1 rounded text-[#999] hover:text-[#555] hover:bg-[#f5f3eb] transition-colors"
               >
-                <rect x="1.5" y="2.5" width="11" height="10" rx="1.5" />
-                <line x1="1.5" y1="5.5" x2="12.5" y2="5.5" />
-                <line x1="4" y1="1" x2="4" y2="3.5" strokeLinecap="round" />
-                <line x1="10" y1="1" x2="10" y2="3.5" strokeLinecap="round" />
-              </svg>
-            </button>
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 14 14"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                >
+                  <rect x="1.5" y="2.5" width="11" height="10" rx="1.5" />
+                  <line x1="1.5" y1="5.5" x2="12.5" y2="5.5" />
+                  <line x1="4" y1="1" x2="4" y2="3.5" strokeLinecap="round" />
+                  <line x1="10" y1="1" x2="10" y2="3.5" strokeLinecap="round" />
+                </svg>
+              </button>
+            )}
             {canManage && (
               <button
                 type="button"
@@ -309,13 +312,15 @@ function EmployeeCard({
           </button>
         ) : (
           <>
-            <button
-              type="button"
-              onClick={() => onVacations(emp)}
-              className="px-3 py-1.5 rounded-lg text-[14px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
-            >
-              Vacaciones
-            </button>
+            {canVacations && (
+              <button
+                type="button"
+                onClick={() => onVacations(emp)}
+                className="px-3 py-1.5 rounded-lg text-[14px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
+              >
+                Vacaciones
+              </button>
+            )}
             <button
               type="button"
               onClick={() => onEdit(emp)}
@@ -422,7 +427,9 @@ export default function EmployeesView({ companyId }) {
       supabase
         .from('users')
         .select(
-          '*, department:departments(department_name), position:positions(position_name, position_description, position_functions)',
+          `user_id, first_name, last_name, email, admin, access_level, department_id, position_id, deleted_at, on_probation, hire_date, birth_date, phone_number, avatar_url${
+            canSeeLevels ? ', monthly_salary' : ''
+          }, department:departments(department_name), position:positions(position_name, position_description, position_functions)`,
         )
         .eq('company_id', companyId)
         .order('first_name'),
@@ -435,7 +442,7 @@ export default function EmployeesView({ companyId }) {
     setPositions(posRes.data ?? [])
     setLines(linesRes.data ?? [])
     setLoading(false)
-  }, [companyId])
+  }, [companyId, canSeeLevels])
 
   useEffect(() => {
     loadAll()
@@ -449,14 +456,14 @@ export default function EmployeesView({ companyId }) {
     .join(',')
   const loadVacations = useCallback(async () => {
     const userIds = activeIdsKey ? activeIdsKey.split(',') : []
-    if (userIds.length === 0) {
+    if (userIds.length === 0 || !canManageVacations) {
       setCalVacations([])
       return
     }
     const { fetchStartKey, endKey } = monthGridRange(calMonth.year, calMonth.month)
     const data = await fetchVacationsInRange(userIds, fetchStartKey, endKey)
     setCalVacations(data)
-  }, [activeIdsKey, calMonth.year, calMonth.month])
+  }, [activeIdsKey, calMonth.year, calMonth.month, canManageVacations])
 
   useEffect(() => {
     loadVacations()
@@ -465,13 +472,13 @@ export default function EmployeesView({ companyId }) {
   // ── "De vacaciones ahora": vacaciones que abarcan hoy, sin depender de `calMonth` ──
   const loadTodayVacations = useCallback(async () => {
     const userIds = activeIdsKey ? activeIdsKey.split(',') : []
-    if (userIds.length === 0) {
+    if (userIds.length === 0 || !canManageVacations) {
       setTodayVacations([])
       return
     }
     const todayKey = format(new Date(), 'yyyy-MM-dd')
     setTodayVacations(await fetchVacationsInRange(userIds, todayKey, todayKey))
-  }, [activeIdsKey])
+  }, [activeIdsKey, canManageVacations])
 
   useEffect(() => {
     loadTodayVacations()
@@ -480,12 +487,12 @@ export default function EmployeesView({ companyId }) {
   // ── Panel "Vacaciones del año": vacaciones del año seleccionado ──────────────
   const loadPanelVacations = useCallback(async () => {
     const userIds = activeIdsKey ? activeIdsKey.split(',') : []
-    if (userIds.length === 0) {
+    if (userIds.length === 0 || !canManageVacations) {
       setPanelVacations([])
       return
     }
     setPanelVacations(await fetchVacationsByYear(userIds, panelYear))
-  }, [activeIdsKey, panelYear])
+  }, [activeIdsKey, panelYear, canManageVacations])
 
   useEffect(() => {
     loadPanelVacations()
@@ -711,12 +718,17 @@ export default function EmployeesView({ companyId }) {
 
       {/* Tarjetas fijas: quién está de vacaciones / en período de prueba ahora mismo */}
       {!showArchived && (
-        <TeamStatusCards onVacationItems={onVacationItems} probationItems={probationItems} />
+        <TeamStatusCards
+          onVacationItems={onVacationItems}
+          probationItems={probationItems}
+          showVacations={canManageVacations}
+        />
       )}
 
       {/* Panel global: todas las vacaciones de la empresa para un año, sin abrir empleado
-          por empleado */}
-      {!showArchived && (
+          por empleado. Solo quien puede leer `vacations` (RRHH/nivel 4/admin) — ver RLS de
+          20260907000000_rrhh_capabilities.sql */}
+      {!showArchived && canManageVacations && (
         <VacationsPanel
           year={panelYear}
           onYearChange={setPanelYear}
@@ -771,6 +783,7 @@ export default function EmployeesView({ companyId }) {
               onRestore={handleRestore}
               canDelete={canManageEmployees && emp.user_id !== userProfile?.user_id}
               canManage={canManageEmployees}
+              canVacations={canManageVacations}
               showLevel={canSeeLevels}
             />
           ))}
@@ -801,6 +814,7 @@ export default function EmployeesView({ companyId }) {
                       onRestore={handleRestore}
                       canDelete={canManageEmployees && emp.user_id !== userProfile?.user_id}
                       canManage={canManageEmployees}
+                      canVacations={canManageVacations}
                       showLevel={canSeeLevels}
                     />
                   ))}
@@ -829,6 +843,7 @@ export default function EmployeesView({ companyId }) {
                     onRestore={handleRestore}
                     canDelete={canManageEmployees && emp.user_id !== userProfile?.user_id}
                     canManage={canManageEmployees}
+                    canVacations={canManageVacations}
                     showLevel={canSeeLevels}
                   />
                 ))}

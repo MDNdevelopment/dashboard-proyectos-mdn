@@ -2,23 +2,28 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
 
-// Captura del payload de update para verificar que on_probation viaja.
+// Captura del body enviado a /api/employees/update para verificar que
+// on_probation viaja. La edición de empleados pasa por esta Netlify function
+// (no por un update directo del cliente) desde el fix de Bloque 1.10.
 const updateSpy = vi.fn()
+
+vi.stubGlobal(
+  'fetch',
+  vi.fn((url, options) => {
+    const payload = JSON.parse(options.body)
+    updateSpy(payload)
+    return Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ user_id: 'u1', ...payload }),
+    })
+  }),
+)
 
 vi.mock('../supabase', () => ({
   supabase: {
-    from: vi.fn(() => ({
-      update: (payload) => {
-        updateSpy(payload)
-        return {
-          eq: () => ({
-            select: () => ({
-              single: () => Promise.resolve({ data: { user_id: 'u1', ...payload }, error: null }),
-            }),
-          }),
-        }
-      },
-    })),
+    auth: {
+      getSession: () => Promise.resolve({ data: { session: { access_token: 'test-token' } } }),
+    },
   },
 }))
 
