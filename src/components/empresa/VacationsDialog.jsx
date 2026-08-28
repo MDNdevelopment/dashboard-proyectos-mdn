@@ -25,9 +25,11 @@ const fmtDate = isoToDdmmyyyy
  * Diálogo de gestión de vacaciones de un empleado.
  * Props: employee (objeto con user_id, first_name, last_name), onClose,
  * onChange (opcional — se llama tras cada mutación exitosa, para que el padre refresque
- * el calendario y los paneles sin depender solo del canal realtime).
+ * el calendario y los paneles sin depender solo del canal realtime), canManage (si es
+ * false, el diálogo queda en solo lectura: sin crear/confirmar/revertir/eliminar — la
+ * capacidad 'empresa.vacaciones.manage' la controla).
  */
-export default function VacationsDialog({ employee, onClose, onChange }) {
+export default function VacationsDialog({ employee, onClose, onChange, canManage = true }) {
   const [vacations, setVacations] = useState([])
   const [loadingVac, setLoadingVac] = useState(true)
 
@@ -262,54 +264,56 @@ export default function VacationsDialog({ employee, onClose, onChange }) {
             </span>
           </div>
 
-          {/* Acciones de status + eliminar */}
-          <div className="flex items-center gap-1 flex-shrink-0">
-            {displayStatus === 'tentative' && !isConfirming && (
+          {/* Acciones de status + eliminar — ocultas en modo solo lectura */}
+          {canManage && (
+            <div className="flex items-center gap-1 flex-shrink-0">
+              {displayStatus === 'tentative' && !isConfirming && (
+                <button
+                  type="button"
+                  disabled={isUpdating}
+                  onClick={() => openConfirm(v)}
+                  className="px-2 py-1 rounded-lg text-[13px] font-semibold bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-50 transition-colors"
+                >
+                  Confirmar fecha
+                </button>
+              )}
+              {displayStatus === 'confirmed' && (
+                <button
+                  type="button"
+                  disabled={isUpdating}
+                  onClick={() => handleRevertToTentative(v.id)}
+                  className="px-2 py-1 rounded-lg text-[13px] font-semibold bg-amber-100 text-amber-700 hover:bg-amber-200 disabled:opacity-50 transition-colors"
+                >
+                  Volver a tentativa
+                </button>
+              )}
               <button
                 type="button"
-                disabled={isUpdating}
-                onClick={() => openConfirm(v)}
-                className="px-2 py-1 rounded-lg text-[13px] font-semibold bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-50 transition-colors"
+                onClick={() => {
+                  setDeleteDialog(v)
+                  setDeleteError(null)
+                }}
+                className="w-6 h-6 flex items-center justify-center rounded text-[#bbb] hover:text-red-500 hover:bg-red-50 transition-colors"
+                aria-label={`Eliminar vacación ${v.start_date}`}
               >
-                Confirmar fecha
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                >
+                  <path d="M3 4h10M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M13 4l-1 9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1L3 4" />
+                </svg>
               </button>
-            )}
-            {displayStatus === 'confirmed' && (
-              <button
-                type="button"
-                disabled={isUpdating}
-                onClick={() => handleRevertToTentative(v.id)}
-                className="px-2 py-1 rounded-lg text-[13px] font-semibold bg-amber-100 text-amber-700 hover:bg-amber-200 disabled:opacity-50 transition-colors"
-              >
-                Volver a tentativa
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => {
-                setDeleteDialog(v)
-                setDeleteError(null)
-              }}
-              className="w-6 h-6 flex items-center justify-center rounded text-[#bbb] hover:text-red-500 hover:bg-red-50 transition-colors"
-              aria-label={`Eliminar vacación ${v.start_date}`}
-            >
-              <svg
-                width="11"
-                height="11"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.7"
-              >
-                <path d="M3 4h10M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M13 4l-1 9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1L3 4" />
-              </svg>
-            </button>
-          </div>
+            </div>
+          )}
         </div>
 
         {/* Mini-form de confirmación: permite ajustar la fecha tentativa
             al mismo tiempo que se confirma. */}
-        {isConfirming && (
+        {canManage && isConfirming && (
           <form onSubmit={handleConfirm} className="mt-3 bg-[#f5f3eb] rounded-lg p-3 space-y-2">
             {confirmError && <p className="text-[13px] text-red-600">{confirmError}</p>}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -370,16 +374,18 @@ export default function VacationsDialog({ employee, onClose, onChange }) {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowForm(true)
-                  setFormError(null)
-                }}
-                className="px-3 py-1.5 rounded-lg text-[14px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors"
-              >
-                + Nueva
-              </button>
+              {canManage && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowForm(true)
+                    setFormError(null)
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-[14px] font-bold bg-[#111] text-white hover:bg-[#222] transition-colors"
+                >
+                  + Nueva
+                </button>
+              )}
               <button
                 type="button"
                 onClick={requestClose}
@@ -403,7 +409,7 @@ export default function VacationsDialog({ employee, onClose, onChange }) {
           {/* Body */}
           <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
             {/* Formulario nueva vacación */}
-            {showForm && (
+            {canManage && showForm && (
               <form onSubmit={handleCreate} className="bg-[#f5f3eb] rounded-xl p-4 space-y-3">
                 <p className="text-[14px] font-semibold text-[#555]">Nueva vacación</p>
                 {formError && <p className="text-[14px] text-red-600">{formError}</p>}

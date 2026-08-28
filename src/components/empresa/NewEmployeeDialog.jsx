@@ -13,8 +13,11 @@ import DateInput from '../common/DateInput'
  * inserta el perfil en la tabla users. El component solo necesita el session token.
  */
 export default function NewEmployeeDialog({ departments, positions, onClose, onCreated }) {
-  const { userProfile } = useAuth()
-  const privileged = isFinancePrivileged(userProfile)
+  const { userProfile, can } = useAuth()
+  const privileged = isFinancePrivileged(userProfile, can('empresa.empleados.sensible'))
+  // Otorgar admin / niveles altos al crear queda reservado a admin — igual que en
+  // EmployeeModal. El servidor (create-employee.js) también los clampa por si acaso.
+  const canAssignPrivileges = userProfile?.admin === true
 
   const [form, setForm] = useState({
     email: '',
@@ -291,22 +294,24 @@ export default function NewEmployeeDialog({ departments, positions, onClose, onC
             </div>
           </div>
 
-          {/* Nivel de acceso */}
-          <div>
-            <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
-              Nivel de acceso
-            </label>
-            <select
-              className="input-base"
-              value={form.access_level}
-              onChange={(e) => set('access_level', Number(e.target.value))}
-            >
-              <option value={1}>Nivel 1</option>
-              <option value={2}>Nivel 2</option>
-              <option value={3}>Nivel 3</option>
-              <option value={4}>Nivel 4</option>
-            </select>
-          </div>
+          {/* Nivel de acceso — asignarlo es admin-only */}
+          {canAssignPrivileges && (
+            <div>
+              <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+                Nivel de acceso
+              </label>
+              <select
+                className="input-base"
+                value={form.access_level}
+                onChange={(e) => set('access_level', Number(e.target.value))}
+              >
+                <option value={1}>Nivel 1</option>
+                <option value={2}>Nivel 2</option>
+                <option value={3}>Nivel 3</option>
+                <option value={4}>Nivel 4</option>
+              </select>
+            </div>
+          )}
 
           {/* Sueldo mensual — solo nivel 4 / admin */}
           {privileged && (
@@ -326,25 +331,27 @@ export default function NewEmployeeDialog({ departments, positions, onClose, onC
             </div>
           )}
 
-          {/* Toggle admin */}
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              role="switch"
-              aria-checked={form.admin}
-              onClick={() => set('admin', !form.admin)}
-              className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${
-                form.admin ? 'bg-[#FFB800]' : 'bg-[#d8d4c8]'
-              }`}
-            >
-              <span
-                className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                  form.admin ? 'translate-x-4' : ''
+          {/* Toggle admin — otorgar admin es admin-only */}
+          {canAssignPrivileges && (
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={form.admin}
+                onClick={() => set('admin', !form.admin)}
+                className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${
+                  form.admin ? 'bg-[#FFB800]' : 'bg-[#d8d4c8]'
                 }`}
-              />
-            </button>
-            <span className="text-[15px] text-[#555]">Administrador</span>
-          </div>
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                    form.admin ? 'translate-x-4' : ''
+                  }`}
+                />
+              </button>
+              <span className="text-[15px] text-[#555]">Administrador</span>
+            </div>
+          )}
 
           {/* Toggle período de prueba */}
           <div className="flex items-center gap-3">

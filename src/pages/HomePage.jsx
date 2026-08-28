@@ -463,6 +463,7 @@ export default function HomePage() {
     userProfile,
     year: calMonth.year,
     month: calMonth.month,
+    canSeeAllClients: can('empresa.calendario.ver_todo'),
   })
   const homeCalDayEvents = calDay
     ? homeCalEvents.filter((ev) => ev.dateKey === format(calDay, 'yyyy-MM-dd'))

@@ -11,8 +11,12 @@ import DateInput from '../common/DateInput'
  * Props: employee (objeto), departments, positions, onClose, onSaved(data)
  */
 export default function EmployeeModal({ employee, departments, positions, onClose, onSaved }) {
-  const { userProfile } = useAuth()
-  const privileged = isFinancePrivileged(userProfile)
+  const { userProfile, can } = useAuth()
+  const privileged = isFinancePrivileged(userProfile, can('empresa.empleados.sensible'))
+  // Asignar nivel de acceso / admin queda reservado a admin: alguien con solo
+  // 'empresa.empleados.manage' (p.ej. RRHH) puede crear/editar/archivar, pero no
+  // otorgarse ni otorgar privilegios de administrador o niveles altos.
+  const canAssignPrivileges = userProfile?.admin === true
 
   const [form, setForm] = useState(() => ({
     first_name: employee?.first_name ?? '',
@@ -258,22 +262,35 @@ export default function EmployeeModal({ employee, departments, positions, onClos
             </div>
           </div>
 
-          {/* Nivel de acceso */}
-          <div>
-            <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
-              Nivel de acceso
-            </label>
-            <select
-              className="input-base"
-              value={form.access_level}
-              onChange={(e) => set('access_level', Number(e.target.value))}
-            >
-              <option value={1}>Nivel 1</option>
-              <option value={2}>Nivel 2</option>
-              <option value={3}>Nivel 3</option>
-              <option value={4}>Nivel 4</option>
-            </select>
-          </div>
+          {/* Nivel de acceso — asignarlo es admin-only; RRHH con solo
+              'empresa.empleados.manage' lo ve pero no lo edita (si además tiene
+              'empresa.empleados.sensible'; si no, el campo se oculta). */}
+          {canAssignPrivileges ? (
+            <div>
+              <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+                Nivel de acceso
+              </label>
+              <select
+                className="input-base"
+                value={form.access_level}
+                onChange={(e) => set('access_level', Number(e.target.value))}
+              >
+                <option value={1}>Nivel 1</option>
+                <option value={2}>Nivel 2</option>
+                <option value={3}>Nivel 3</option>
+                <option value={4}>Nivel 4</option>
+              </select>
+            </div>
+          ) : (
+            privileged && (
+              <div>
+                <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+                  Nivel de acceso
+                </label>
+                <p className="text-[15px] text-[#555]">Nivel {form.access_level}</p>
+              </div>
+            )
+          )}
 
           {/* Sueldo mensual — solo nivel 4 / admin */}
           {privileged && (
@@ -293,25 +310,27 @@ export default function EmployeeModal({ employee, departments, positions, onClos
             </div>
           )}
 
-          {/* Toggle admin */}
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              role="switch"
-              aria-checked={form.admin}
-              onClick={() => set('admin', !form.admin)}
-              className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${
-                form.admin ? 'bg-[#FFB800]' : 'bg-[#d8d4c8]'
-              }`}
-            >
-              <span
-                className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                  form.admin ? 'translate-x-4' : ''
+          {/* Toggle admin — otorgar admin es admin-only */}
+          {canAssignPrivileges && (
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={form.admin}
+                onClick={() => set('admin', !form.admin)}
+                className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${
+                  form.admin ? 'bg-[#FFB800]' : 'bg-[#d8d4c8]'
                 }`}
-              />
-            </button>
-            <span className="text-[15px] text-[#555]">Administrador</span>
-          </div>
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                    form.admin ? 'translate-x-4' : ''
+                  }`}
+                />
+              </button>
+              <span className="text-[15px] text-[#555]">Administrador</span>
+            </div>
+          )}
 
           {/* Toggle período de prueba */}
           <div className="flex items-center gap-3">

@@ -55,13 +55,16 @@ export const EVENT_TYPES = {
 
 /**
  * Un usuario puede ver los eventos de un cliente si es miembro de su línea, o si tiene
- * acceso a toda la empresa (nivel 4+ / admin). Replica el criterio SQL de
+ * acceso a toda la empresa (nivel 4+ / admin / capacidad 'empresa.calendario.ver_todo' —
+ * caso RRHH: ver el calendario completo sin ser admin/nivel 4). Replica el criterio SQL de
  * `notif_client_recipients()` (supabase/migrations/20260901000000_fix_notif_date_cron_hardening.sql):
  * ojo, `tasks_view_all` NO forma parte de ese criterio, así que tampoco se usa aquí.
+ *
+ * @param {boolean} [hasCapability] — resultado de can('empresa.calendario.ver_todo')
  */
-export function canSeeClientDates(client, lines, userProfile) {
+export function canSeeClientDates(client, lines, userProfile, hasCapability = false) {
   if (!userProfile) return false
-  if (userProfile.access_level >= 4 || userProfile.admin === true) return true
+  if (userProfile.access_level >= 4 || userProfile.admin === true || hasCapability) return true
   if (!client.line_id) return false
   const line = lines.find((l) => l.id === client.line_id)
   return (line?.member_user_ids ?? []).includes(userProfile.user_id)
@@ -81,6 +84,7 @@ export function buildHomeCalendarEvents({
   userProfile,
   year,
   month,
+  canSeeAllClients = false,
 }) {
   const { startKey, endKey } = monthGridRange(year, month)
 
@@ -102,7 +106,7 @@ export function buildHomeCalendarEvents({
   const clientEvents = []
   for (const client of clients) {
     if (client.deleted_at) continue
-    if (!canSeeClientDates(client, lines, userProfile)) continue
+    if (!canSeeClientDates(client, lines, userProfile, canSeeAllClients)) continue
 
     if (client.anniversary_date) {
       const sourceYear = Number(client.anniversary_date.slice(0, 4))

@@ -145,6 +145,21 @@ describe('VacationsDialog — bloqueo de solapamiento al crear', () => {
   })
 })
 
+describe('VacationsDialog — modo solo lectura (canManage=false)', () => {
+  beforeEach(() => {
+    vacationsData = [UPCOMING]
+  })
+
+  it('oculta "+ Nueva" y las acciones de status/eliminar de cada fila', async () => {
+    renderDialog({ canManage: false })
+    await waitFor(() => expect(screen.getByText('Próximas y en curso')).toBeInTheDocument())
+
+    expect(screen.queryByRole('button', { name: '+ Nueva' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Confirmar fecha' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Eliminar vacación/ })).not.toBeInTheDocument()
+  })
+})
+
 describe('VacationsDialog — borrado con fecha legible y aviso de año', () => {
   beforeEach(() => {
     vacationsData = [PAST_2025]

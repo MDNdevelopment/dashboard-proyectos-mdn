@@ -128,6 +128,7 @@ function EmployeeCard({
   onDelete,
   onRestore,
   canDelete,
+  canManage,
   showLevel,
 }) {
   const fullName = `${emp.first_name} ${emp.last_name}`
@@ -166,17 +167,19 @@ function EmployeeCard({
           </div>
         </button>
         {deleted ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              onRestore(emp)
-            }}
-            className="flex-shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-semibold text-[#666] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
-          >
-            <RestoreIcon size={11} />
-            Restaurar
-          </button>
+          canManage && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onRestore(emp)
+              }}
+              className="flex-shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-semibold text-[#666] border border-[#e0ddd4] hover:bg-[#f5f3eb] transition-colors"
+            >
+              <RestoreIcon size={11} />
+              Restaurar
+            </button>
+          )
         ) : (
           <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity">
             <button
@@ -203,31 +206,33 @@ function EmployeeCard({
                 <line x1="10" y1="1" x2="10" y2="3.5" strokeLinecap="round" />
               </svg>
             </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                onEdit(emp)
-              }}
-              aria-label={`Editar ${fullName}`}
-              title="Editar"
-              className="p-1 rounded text-[#999] hover:text-[#555] hover:bg-[#f5f3eb] transition-colors"
-            >
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 14 14"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.4"
+            {canManage && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onEdit(emp)
+                }}
+                aria-label={`Editar ${fullName}`}
+                title="Editar"
+                className="p-1 rounded text-[#999] hover:text-[#555] hover:bg-[#f5f3eb] transition-colors"
               >
-                <path
-                  d="M9.5 1.8l2.7 2.7L4.6 12.1l-3.2.6.6-3.2z"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 14 14"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                >
+                  <path
+                    d="M9.5 1.8l2.7 2.7L4.6 12.1l-3.2.6.6-3.2z"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            )}
             {canDelete && (
               <button
                 type="button"
@@ -337,10 +342,19 @@ function EmployeeCard({
 }
 
 export default function EmployeesView({ companyId }) {
-  const { userProfile } = useAuth()
+  const { userProfile, can } = useAuth()
   // Nivel 1 y 2 no deben ver el nivel de acceso de los demás empleados (ni la vista por
-  // columnas, que lo deja intuir por agrupación). Mismo criterio que isFinancePrivileged.
-  const canSeeLevels = userProfile?.admin === true || (userProfile?.access_level ?? 1) >= 3
+  // columnas, que lo deja intuir por agrupación). Mismo criterio que isFinancePrivileged,
+  // ahora también otorgable sin ser admin/nivel 3 vía la capacidad 'empresa.empleados.sensible'
+  // (caso RRHH: Sofía Lauretta).
+  const canSeeLevels =
+    userProfile?.admin === true ||
+    (userProfile?.access_level ?? 1) >= 3 ||
+    can('empresa.empleados.sensible')
+  // Crear / editar / archivar empleados — capacidad 'empresa.empleados.manage'.
+  const canManageEmployees = can('empresa.empleados.manage')
+  // Asignar / confirmar / eliminar vacaciones — capacidad 'empresa.vacaciones.manage'.
+  const canManageVacations = can('empresa.vacaciones.manage')
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
   const [positions, setPositions] = useState([])
@@ -677,7 +691,7 @@ export default function EmployeesView({ companyId }) {
         </button>
         <div className="flex items-center gap-3 sm:ml-auto">
           {canSeeLevels && <ViewToggle view={view} onChange={setView} />}
-          {!showArchived && (
+          {!showArchived && canManageEmployees && (
             <button
               type="button"
               onClick={() => setCreateOpen(true)}
@@ -755,7 +769,8 @@ export default function EmployeesView({ companyId }) {
               onOpen={setInfoEmployee}
               onDelete={setConfirmArchive}
               onRestore={handleRestore}
-              canDelete={emp.user_id !== userProfile?.user_id}
+              canDelete={canManageEmployees && emp.user_id !== userProfile?.user_id}
+              canManage={canManageEmployees}
               showLevel={canSeeLevels}
             />
           ))}
@@ -784,7 +799,8 @@ export default function EmployeesView({ companyId }) {
                       onOpen={setInfoEmployee}
                       onDelete={setConfirmArchive}
                       onRestore={handleRestore}
-                      canDelete={emp.user_id !== userProfile?.user_id}
+                      canDelete={canManageEmployees && emp.user_id !== userProfile?.user_id}
+                      canManage={canManageEmployees}
                       showLevel={canSeeLevels}
                     />
                   ))}
@@ -811,7 +827,8 @@ export default function EmployeesView({ companyId }) {
                     onOpen={setInfoEmployee}
                     onDelete={setConfirmArchive}
                     onRestore={handleRestore}
-                    canDelete={emp.user_id !== userProfile?.user_id}
+                    canDelete={canManageEmployees && emp.user_id !== userProfile?.user_id}
+                    canManage={canManageEmployees}
                     showLevel={canSeeLevels}
                   />
                 ))}
@@ -842,6 +859,7 @@ export default function EmployeesView({ companyId }) {
             loadTodayVacations()
             loadPanelVacations()
           }}
+          canManage={canManageVacations}
         />
       )}
 

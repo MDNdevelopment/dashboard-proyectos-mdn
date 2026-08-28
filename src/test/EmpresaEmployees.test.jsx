@@ -148,6 +148,7 @@ function renderAsAdmin(path = '/empresa/empleados') {
       first_name: 'Admin',
       last_name: 'User',
     },
+    can: () => true,
   })
   return render(
     <MemoryRouter initialEntries={[path]}>
@@ -178,7 +179,9 @@ function renderAsLevel(access_level) {
       first_name: 'Regular',
       last_name: 'User',
     },
-    can: () => true,
+    // 'empresa.empleados.sensible' se deja fuera del blanket true: solo controla si
+    // niveles bajos ven el badge/columna de nivel, que es justo lo que este helper prueba.
+    can: (key) => key !== 'empresa.empleados.sensible',
   })
   return render(
     <MemoryRouter initialEntries={['/empresa/empleados']}>
@@ -649,6 +652,7 @@ describe('EmployeesView', () => {
           first_name: 'Ana',
           last_name: 'Pérez',
         },
+        can: () => true,
       })
       render(
         <MemoryRouter initialEntries={['/empresa/empleados']}>

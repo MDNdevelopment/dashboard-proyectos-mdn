@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { canAccessModule, can } from './permissions'
+import { canAccessModule, can, isFinancePrivileged } from './permissions'
 
 const BASE_USER = {
   user_id: 'user-1',
@@ -581,5 +581,27 @@ describe('exclusiones (deny)', () => {
     it('config undefined sigue siendo acceso libre', () => {
       expect(canAccessModule('ads', BASE_USER, undefined)).toBe(true)
     })
+  })
+})
+
+// ──────────────────────────────────────────────
+// isFinancePrivileged — sueldos/niveles, ahora también otorgable vía capacidad
+// ──────────────────────────────────────────────
+describe('isFinancePrivileged', () => {
+  it('admin es privilegiado sin necesidad de la capacidad', () => {
+    expect(isFinancePrivileged(ADMIN_USER)).toBe(true)
+  })
+
+  it('nivel 3+ es privilegiado sin necesidad de la capacidad', () => {
+    expect(isFinancePrivileged(LEVEL3_USER)).toBe(true)
+  })
+
+  it('nivel 1 sin la capacidad no es privilegiado', () => {
+    expect(isFinancePrivileged(BASE_USER)).toBe(false)
+    expect(isFinancePrivileged(BASE_USER, false)).toBe(false)
+  })
+
+  it('nivel 1 con la capacidad (empresa.empleados.sensible) sí es privilegiado', () => {
+    expect(isFinancePrivileged(BASE_USER, true)).toBe(true)
   })
 })

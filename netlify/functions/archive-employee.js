@@ -1,5 +1,5 @@
 import { supabase } from './_lib/supabase.js'
-import { requireAdmin } from './_lib/requireAdmin.js'
+import { requireCapability } from './_lib/requireCapability.js'
 
 const json = (statusCode, body) => ({
   statusCode,
@@ -15,8 +15,8 @@ const BAN_NONE = 'none'
 export const handler = async (event) => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Method Not Allowed' })
 
-  // Verificar JWT + admin
-  const { error: authError, caller } = await requireAdmin(event)
+  // Verificar JWT + capacidad de RRHH (admin siempre pasa)
+  const { error: authError, caller } = await requireCapability(event, 'empresa.empleados.manage')
   if (authError) return authError
 
   let body

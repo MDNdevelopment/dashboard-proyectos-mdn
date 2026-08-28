@@ -25,6 +25,7 @@ vi.mock('../supabase', () => ({
 vi.mock('../context/AuthContext', () => ({
   useAuth: () => ({
     userProfile: { user_id: 'u-admin', company_id: 'co-1', access_level: 4, admin: true },
+    can: () => true,
   }),
 }))
 

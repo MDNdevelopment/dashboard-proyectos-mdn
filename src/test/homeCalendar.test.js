@@ -81,6 +81,23 @@ describe('canSeeClientDates', () => {
       canSeeClientDates(client({ line_id: null }), [], { user_id: 'x', access_level: 3 }),
     ).toBe(false)
   })
+
+  it('con hasCapability=true (empresa.calendario.ver_todo) ve cualquier cliente sin ser admin/nivel 4', () => {
+    expect(
+      canSeeClientDates(
+        client({ line_id: 'other' }),
+        [],
+        { user_id: 'x', access_level: 1, admin: false },
+        true,
+      ),
+    ).toBe(true)
+  })
+
+  it('sin hasCapability (default false) mantiene el criterio de línea', () => {
+    expect(
+      canSeeClientDates(client({ line_id: 'other' }), [], { user_id: 'x', access_level: 1 }),
+    ).toBe(false)
+  })
 })
 
 describe('buildHomeCalendarEvents — equipo', () => {

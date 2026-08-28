@@ -1,5 +1,5 @@
 import { supabase } from './_lib/supabase.js'
-import { requireAdmin } from './_lib/requireAdmin.js'
+import { requireCapability } from './_lib/requireCapability.js'
 import { classifyEmployeeCreation } from '../../src/lib/employees.js'
 
 const json = (statusCode, body) => ({
@@ -11,8 +11,8 @@ const json = (statusCode, body) => ({
 export const handler = async (event) => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Method Not Allowed' })
 
-  // Verificar JWT + admin
-  const { error: authError, caller } = await requireAdmin(event)
+  // Verificar JWT + capacidad de RRHH (admin siempre pasa)
+  const { error: authError, caller } = await requireCapability(event, 'empresa.empleados.manage')
   if (authError) return authError
 
   // Parsear body
@@ -43,6 +43,14 @@ export const handler = async (event) => {
   if (!last_name?.trim()) return json(400, { error: 'El apellido es obligatorio' })
 
   const cleanEmail = email.trim().toLowerCase()
+
+  // Anti-escalada: quien crea el empleado sin ser admin (p.ej. RRHH con
+  // 'empresa.empleados.manage') no puede otorgar admin ni niveles por encima del propio
+  // techo operativo, aunque el body los incluya.
+  const safeAdmin = caller.admin ? !!admin : false
+  const safeAccessLevel = caller.admin
+    ? Number(access_level) || 1
+    : Math.min(Number(access_level) || 1, 3)
 
   // 0. Si ya existe un perfil con este email (activo o archivado), no reintentar la
   //    invitación/insert: inviteUserByEmail reutiliza la cuenta auth existente y el
@@ -93,8 +101,8 @@ export const handler = async (event) => {
       hire_date: hire_date || null,
       department_id: department_id || null,
       position_id: position_id || null,
-      access_level: Number(access_level) || 1,
-      admin: !!admin,
+      access_level: safeAccessLevel,
+      admin: safeAdmin,
       on_probation: !!on_probation,
       company_id: caller.company_id,
     })

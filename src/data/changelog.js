@@ -136,6 +136,7 @@ export const CHANGELOG = [
       'Corregido: al confirmar la fecha de una vacación (o crearla/eliminarla/volverla a tentativa), el cambio no se veía reflejado en el calendario ni en los recuadros de "De vacaciones ahora" hasta recargar la página.',
       'Corregido: al crear una pauta audiovisual, el enlace de la grilla o la descripción de piezas a veces no se guardaban y aparecía un error técnico en rojo sobre la tabla de Solicitudes.',
       'Al agregar una pauta ya no se crea una fila vacía de una vez: ahora se completa como borrador y se confirma con el botón "Guardar solicitud", igual para jefas de línea y para la coordinadora.',
+      'Ahora se pueden dar permisos de Recursos Humanos (crear/editar/archivar empleados, gestionar vacaciones, ver sueldos y niveles de acceso, y ver el calendario completo de la empresa) sin necesidad de hacer a la persona administradora.',
     ],
   },
   {

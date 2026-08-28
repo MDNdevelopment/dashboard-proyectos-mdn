@@ -99,6 +99,16 @@ export const MODULES = [
     manageActions: [
       { key: 'empresa.clientes.manage', label: 'Modificar clientes' },
       { key: 'empresa.lineas.manage', label: 'Modificar líneas' },
+      { key: 'empresa.empleados.manage', label: 'Crear / editar / archivar empleados' },
+      { key: 'empresa.vacaciones.manage', label: 'Asignar / confirmar / eliminar vacaciones' },
+      {
+        key: 'empresa.empleados.sensible',
+        label: 'Ver sueldos y niveles de acceso de empleados',
+      },
+      {
+        key: 'empresa.calendario.ver_todo',
+        label: 'Ver el calendario de toda la empresa (Inicio)',
+      },
     ],
   },
   {
