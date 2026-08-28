@@ -133,6 +133,7 @@ export const CHANGELOG = [
       'En Vacaciones (dentro de cada empleado) ahora se separan las próximas de las de años anteriores, y el historial se agrupa por año con el total de períodos y días — antes todo salía mezclado en una sola lista y era fácil confundir historial con vacaciones planificadas. Cada vacación muestra cuántos días abarca, y ya no se pueden cargar dos vacaciones que se solapen en fechas. Al eliminar una vacación, ahora se pide la fecha en formato dd/mm/aaaa (igual que en la lista) y se avisa el año y si ya pasó, para no borrar historial por error.',
       'Nuevo recuadro "Vacaciones del año" en Empresa → Empleados: muestra de un vistazo todas las vacaciones de la empresa para el año que elijas, filtrable por equipo y por estado, sin tener que entrar empleado por empleado. Avisa cuando dos personas del mismo equipo tienen vacaciones que se cruzan en fechas.',
       'Corregido: en Chequeo, la casilla de Mailchimp se quedaba siempre en verde sin importar cuán vieja fuera la fecha registrada. Ahora, igual que YouTube (horizontal), pasa a rojo cuando lleva más de un mes sin actualizarse.',
+      'Corregido: al confirmar la fecha de una vacación (o crearla/eliminarla/volverla a tentativa), el cambio no se veía reflejado en el calendario ni en los recuadros de "De vacaciones ahora" hasta recargar la página.',
     ],
   },
   {

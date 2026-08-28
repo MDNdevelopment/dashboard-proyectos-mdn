@@ -834,7 +834,15 @@ export default function EmployeesView({ companyId }) {
 
       {/* Diálogo de vacaciones */}
       {vacEmployee !== null && (
-        <VacationsDialog employee={vacEmployee} onClose={() => setVacEmployee(null)} />
+        <VacationsDialog
+          employee={vacEmployee}
+          onClose={() => setVacEmployee(null)}
+          onChange={() => {
+            loadVacations()
+            loadTodayVacations()
+            loadPanelVacations()
+          }}
+        />
       )}
 
       {/* Ficha de detalle (solo lectura) */}

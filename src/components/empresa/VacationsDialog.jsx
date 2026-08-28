@@ -23,9 +23,11 @@ const fmtDate = isoToDdmmyyyy
 
 /**
  * Diálogo de gestión de vacaciones de un empleado.
- * Props: employee (objeto con user_id, first_name, last_name), onClose
+ * Props: employee (objeto con user_id, first_name, last_name), onClose,
+ * onChange (opcional — se llama tras cada mutación exitosa, para que el padre refresque
+ * el calendario y los paneles sin depender solo del canal realtime).
  */
-export default function VacationsDialog({ employee, onClose }) {
+export default function VacationsDialog({ employee, onClose, onChange }) {
   const [vacations, setVacations] = useState([])
   const [loadingVac, setLoadingVac] = useState(true)
 
@@ -124,6 +126,7 @@ export default function VacationsDialog({ employee, onClose }) {
     setNewVac({ start_date: '', end_date: '' })
     setShowForm(false)
     setSavingNew(false)
+    onChange?.()
   }
 
   // ── Volver a tentativa (revertir una vacación confirmada) ────────────────────
@@ -137,6 +140,7 @@ export default function VacationsDialog({ employee, onClose }) {
       .single()
     if (!error && data) {
       setVacations((prev) => prev.map((v) => (v.id === vacId ? data : v)))
+      onChange?.()
     }
     setUpdatingId(null)
   }
@@ -180,6 +184,7 @@ export default function VacationsDialog({ employee, onClose }) {
     setVacations((prev) => prev.map((v) => (v.id === data.id ? data : v)))
     setUpdatingId(null)
     closeConfirm()
+    onChange?.()
   }
 
   // ── Eliminar vacación ───────────────────────────────────────────────────────
@@ -195,6 +200,7 @@ export default function VacationsDialog({ employee, onClose }) {
     setVacations((prev) => prev.filter((v) => v.id !== deleteDialog.id))
     setDeleteDialog(null)
     setDeleteError(null)
+    onChange?.()
   }
 
   function toggleYear(year) {

@@ -42,8 +42,8 @@ const UPCOMING = {
   status: 'tentative',
 }
 
-function renderDialog() {
-  return render(<VacationsDialog employee={EMPLOYEE} onClose={vi.fn()} />)
+function renderDialog(props = {}) {
+  return render(<VacationsDialog employee={EMPLOYEE} onClose={vi.fn()} {...props} />)
 }
 
 describe('VacationsDialog — próximas vs. historial por año', () => {
@@ -83,6 +83,43 @@ describe('VacationsDialog — próximas vs. historial por año', () => {
       expect(screen.getByText(/06\/01\/2027 – 26\/01\/2027/)).toBeInTheDocument()
     })
     expect(screen.getByText(/21 días/)).toBeInTheDocument() // 6 al 26 de enero, inclusive
+  })
+})
+
+describe('VacationsDialog — onChange avisa al padre tras cada mutación', () => {
+  beforeEach(() => {
+    vacationsData = [UPCOMING]
+  })
+
+  it('confirmar una fecha tentativa llama a onChange (para refrescar calendario/paneles sin recargar)', async () => {
+    const user = userEvent.setup()
+    const onChange = vi.fn()
+    renderDialog({ onChange })
+    await waitFor(() => expect(screen.getByText('Próximas y en curso')).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: 'Confirmar fecha' }))
+    await user.click(screen.getByRole('button', { name: 'Confirmar' }))
+
+    await waitFor(() => {
+      expect(onChange).toHaveBeenCalled()
+    })
+  })
+
+  it('crear una vacación nueva llama a onChange', async () => {
+    const user = userEvent.setup()
+    const onChange = vi.fn()
+    renderDialog({ onChange })
+    await waitFor(() => expect(screen.getByText('Próximas y en curso')).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: '+ Nueva' }))
+    const [startInput, endInput] = screen.getAllByPlaceholderText('dd/mm/aaaa')
+    await user.type(startInput, '01/03/2027')
+    await user.type(endInput, '05/03/2027')
+    await user.click(screen.getByRole('button', { name: 'Crear vacación' }))
+
+    await waitFor(() => {
+      expect(onChange).toHaveBeenCalled()
+    })
   })
 })
 
