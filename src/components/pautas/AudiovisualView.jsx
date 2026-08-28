@@ -213,11 +213,13 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
 
   // Handler compartido con AvPhaseTable.handleFields (mismo patrón), pero vive acá porque
   // el modal de detalle es hermano de la tabla, no hijo — ambos actualizan la misma pauta
-  // vía updatePauta y reconcilian con handleChanged.
+  // vía updatePauta y reconcilian con handleChanged. Devuelve `{ error }` (antes lo tragaba
+  // en silencio) para que PautaDetailModal pueda mostrarlo en su propio banner.
   async function handlePautaFields(pauta, fields) {
     const { data, error: err } = await updatePauta(pauta.id, fields)
-    if (err) return
+    if (err) return { error: err }
     handleChanged(data)
+    return { error: null }
   }
 
   const scopedPautas = pautasInScope(pautas, scopeLine)

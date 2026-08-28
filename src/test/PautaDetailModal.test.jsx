@@ -212,4 +212,31 @@ describe('PautaDetailModal', () => {
     fireEvent.click(screen.getByText('Lizdania Andrade'))
     expect(await screen.findByText(/No se pudo asignar el editor/)).toBeInTheDocument()
   })
+
+  it('si onFields (piezas totales) devuelve error, lo muestra traducido en vez de fallar en silencio', async () => {
+    const onFields = vi
+      .fn()
+      .mockResolvedValue({
+        error: { code: '42883', message: 'operator does not exist: uuid = text' },
+      })
+    render(
+      <PautaDetailModal
+        {...baseProps({
+          pauta: pauta({ status: 'realizada', piezas_totales: 1 }),
+          piezas: [],
+          onFields,
+        })}
+      />,
+    )
+    const input = document.querySelector('input[type="number"]')
+    fireEvent.change(input, { target: { value: '5' } })
+    fireEvent.blur(input)
+
+    expect(onFields).toHaveBeenCalled()
+    expect(
+      await screen.findByText(
+        'No se pudo guardar el cambio. Vuelve a intentarlo; si sigue pasando, avisa a soporte.',
+      ),
+    ).toBeInTheDocument()
+  })
 })

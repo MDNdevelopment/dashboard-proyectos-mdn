@@ -485,6 +485,21 @@ export function briefComplete(pauta) {
 }
 
 /**
+ * Traduce el error crudo de Supabase/Postgres de una operación sobre `av_pautas` a un
+ * mensaje en español apto para mostrar en la tabla — sin jerga técnica ni el texto del
+ * motor (ver AvPhaseTable.jsx/PautaDetailModal.jsx, banners que antes mostraban
+ * `err.message` tal cual, p. ej. "operator does not exist: uuid = text").
+ */
+export function pautaErrorMessage(err) {
+  if (!err) return null
+  const raw = err.message || ''
+  if (err.code === '42501' || /row-level security/i.test(raw)) {
+    return 'No tienes permiso para editar esta pauta.'
+  }
+  return 'No se pudo guardar el cambio. Vuelve a intentarlo; si sigue pasando, avisa a soporte.'
+}
+
+/**
  * Solicitudes visibles en la pestaña «Solicitudes»: la coordinadora solo ve las
  * ya enviadas (`submitted`); quien solicita ve las suyas en cualquier estado de
  * borrador/enviado (el alcance por línea ya viene acotado en `pautas`).

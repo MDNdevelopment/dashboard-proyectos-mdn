@@ -15,6 +15,7 @@ import {
   sortAgenda,
   avEditMode,
   briefComplete,
+  pautaErrorMessage,
   visibleSolicitudes,
   aggregatePiezasByLine,
   aggregateByResource,
@@ -325,6 +326,32 @@ describe('briefComplete', () => {
     expect(briefComplete(pauta({ client_id: 'c1', link: '', piezas_desc: '' }))).toBe(false)
     expect(briefComplete(pauta({ client_id: 'c1', link: 'https://drive.google.com/x' }))).toBe(true)
     expect(briefComplete(pauta({ client_id: 'c1', piezas_desc: '3 reels' }))).toBe(true)
+  })
+})
+
+describe('pautaErrorMessage', () => {
+  it('devuelve null si no hay error', () => {
+    expect(pautaErrorMessage(null)).toBeNull()
+  })
+
+  it('traduce errores de RLS a un mensaje de permisos', () => {
+    expect(
+      pautaErrorMessage({ code: '42501', message: 'new row violates row-level security policy' }),
+    ).toBe('No tienes permiso para editar esta pauta.')
+    expect(pautaErrorMessage({ message: 'permission denied for row-level security' })).toBe(
+      'No tienes permiso para editar esta pauta.',
+    )
+  })
+
+  it('nunca muestra el texto crudo del motor (p. ej. "operator does not exist: uuid = text")', () => {
+    const msg = pautaErrorMessage({
+      code: '42883',
+      message: 'operator does not exist: uuid = text',
+    })
+    expect(msg).not.toMatch(/operator does not exist/i)
+    expect(msg).toBe(
+      'No se pudo guardar el cambio. Vuelve a intentarlo; si sigue pasando, avisa a soporte.',
+    )
   })
 })
 

@@ -134,6 +134,8 @@ export const CHANGELOG = [
       'Nuevo recuadro "Vacaciones del año" en Empresa → Empleados: muestra de un vistazo todas las vacaciones de la empresa para el año que elijas, filtrable por equipo y por estado, sin tener que entrar empleado por empleado. Avisa cuando dos personas del mismo equipo tienen vacaciones que se cruzan en fechas.',
       'Corregido: en Chequeo, la casilla de Mailchimp se quedaba siempre en verde sin importar cuán vieja fuera la fecha registrada. Ahora, igual que YouTube (horizontal), pasa a rojo cuando lleva más de un mes sin actualizarse.',
       'Corregido: al confirmar la fecha de una vacación (o crearla/eliminarla/volverla a tentativa), el cambio no se veía reflejado en el calendario ni en los recuadros de "De vacaciones ahora" hasta recargar la página.',
+      'Corregido: al crear una pauta audiovisual, el enlace de la grilla o la descripción de piezas a veces no se guardaban y aparecía un error técnico en rojo sobre la tabla de Solicitudes.',
+      'Al agregar una pauta ya no se crea una fila vacía de una vez: ahora se completa como borrador y se confirma con el botón "Guardar solicitud", igual para jefas de línea y para la coordinadora.',
     ],
   },
   {

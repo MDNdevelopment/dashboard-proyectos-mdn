@@ -12,6 +12,7 @@ import {
   piezasProgress,
   piezasByEditor,
   defaultPiezaName,
+  pautaErrorMessage,
 } from '../../utils/audiovisual'
 import { createPiezas, deletePiezas, updatePieza } from './avPautasApi'
 import Avatar from '../Avatar'
@@ -199,7 +200,7 @@ function PiezasSection({
       )
       const failed = results.find((r) => r.error)
       if (failed) {
-        setError(`No se pudo actualizar la pieza: ${failed.error.message}`)
+        setError(`No se pudo actualizar la pieza. ${pautaErrorMessage(failed.error)}`)
         return
       }
       results.forEach((r) => r.data && onPiezaChanged(r.data))
@@ -224,7 +225,7 @@ function PiezasSection({
       )
       const failed = results.find((r) => r.error)
       if (failed) {
-        setError(`No se pudo asignar el editor: ${failed.error.message}`)
+        setError(`No se pudo asignar el editor. ${pautaErrorMessage(failed.error)}`)
         return
       }
       results.forEach((r) => (r.data ?? []).forEach((pz) => onPiezaChanged(pz)))
@@ -246,7 +247,7 @@ function PiezasSection({
         startIndex,
       )
       if (err) {
-        setError(`No se pudieron crear las piezas: ${err.message}`)
+        setError(`No se pudieron crear las piezas. ${pautaErrorMessage(err)}`)
         return
       }
       ;(data ?? []).forEach((pz) => onPiezaChanged(pz))
@@ -264,7 +265,7 @@ function PiezasSection({
       const ids = toRemove.map((pz) => pz.id)
       const { error: err } = await deletePiezas(ids)
       if (err) {
-        setError(`No se pudieron quitar las piezas: ${err.message}`)
+        setError(`No se pudieron quitar las piezas. ${pautaErrorMessage(err)}`)
         return
       }
       ids.forEach((id) => onPiezaDeleted(id))
@@ -294,7 +295,12 @@ function PiezasSection({
             className="input-base input-compact text-center"
             style={{ width: '5rem' }}
             defaultValue={totales}
-            onBlur={(e) => onFields(pauta, { piezas_totales: Number(e.target.value) || 0 })}
+            onBlur={async (e) => {
+              setError(null)
+              const { error: err } =
+                (await onFields(pauta, { piezas_totales: Number(e.target.value) || 0 })) ?? {}
+              if (err) setError(pautaErrorMessage(err))
+            }}
           />
         ) : (
           <span className="font-mono text-[14px] font-semibold">{totales}</span>
@@ -417,7 +423,7 @@ function PiezaRow({ pieza, canCoordinate, onChanged, onDeleted, onError }) {
     onError?.(null)
     const { data, error: err } = await updatePieza(pieza.id, { status: next })
     if (err) {
-      onError?.(`No se pudo cambiar el estado: ${err.message}`)
+      onError?.(`No se pudo cambiar el estado. ${pautaErrorMessage(err)}`)
       return
     }
     if (data) onChanged(data)
@@ -427,7 +433,7 @@ function PiezaRow({ pieza, canCoordinate, onChanged, onDeleted, onError }) {
     onError?.(null)
     const { error: err } = await deletePiezas([pieza.id])
     if (err) {
-      onError?.(`No se pudo quitar la pieza: ${err.message}`)
+      onError?.(`No se pudo quitar la pieza. ${pautaErrorMessage(err)}`)
       return
     }
     onDeleted(pieza.id)
@@ -446,7 +452,7 @@ function PiezaRow({ pieza, canCoordinate, onChanged, onDeleted, onError }) {
             onError?.(null)
             const { data, error: err } = await updatePieza(pieza.id, { nombre })
             if (err) {
-              onError?.(`No se pudo guardar el nombre: ${err.message}`)
+              onError?.(`No se pudo guardar el nombre. ${pautaErrorMessage(err)}`)
               return
             }
             if (data) onChanged(data)

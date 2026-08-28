@@ -1,8 +1,9 @@
 /**
- * Tests de AvPhaseTable — flujo de "Solicitar pauta" como borrador 100% local (rol jefe).
- * La fila nueva no debe tocar la base de datos hasta el guardado final; "Cancelar" descarta
- * sin llamar a la API; el rol coordinadora ("+ Agregar pauta") sigue creando de inmediato,
- * sin cambios (regresión).
+ * Tests de AvPhaseTable — flujo de "Solicitar pauta"/"Agregar pauta" como borrador 100% local,
+ * para ambos roles (jefe de línea y coordinadora). La fila nueva no debe tocar la base de datos
+ * hasta el guardado final ("Guardar solicitud"); "Cancelar" descarta sin llamar a la API. Antes
+ * la coordinadora insertaba de inmediato una fila vacía en la base al pulsar el botón, lo que
+ * dejaba pautas fantasma sin cliente/tema — ver 20260904 en changelog.js.
  */
 import { useState } from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
@@ -158,21 +159,84 @@ describe('AvPhaseTable — borrador local de "Solicitar pauta" (rol solicita)', 
     expect(screen.getByText('Georgina Ríos')).toBeInTheDocument()
   })
 
-  it('rol coordinadora: "+ Agregar pauta" sigue creando de inmediato en la base de datos (sin cambios)', async () => {
-    mockCreatePauta.mockResolvedValue({ data: { id: 'p1', status: 'solicitada' }, error: null })
+  it('rol coordinadora: "+ Agregar pauta" ya no crea de inmediato en la base — agrega un borrador', async () => {
     renderTable({ editMode: 'coordina' })
 
     expect(screen.getByText('+ Agregar pauta')).toBeInTheDocument()
     fireEvent.click(screen.getByText('+ Agregar pauta'))
 
+    expect(mockCreatePauta).not.toHaveBeenCalled()
+    expect(screen.getByText('Sin guardar')).toBeInTheDocument()
+  })
+
+  it('rol coordinadora: "Guardar solicitud" recién ahí crea la pauta, ya enviada', async () => {
+    mockCreatePauta.mockResolvedValue({
+      data: { id: 'p1', status: 'solicitada', submitted: true },
+      error: null,
+    })
+    renderTable({ editMode: 'coordina' })
+
+    fireEvent.click(screen.getByText('+ Agregar pauta'))
+    fireEvent.change(document.querySelector('select'), { target: { value: 'c1' } })
+    fireEvent.change(screen.getByPlaceholderText('Enlace de la grilla (Drive)'), {
+      target: { value: 'https://drive.example/grilla' },
+    })
+
+    fireEvent.click(screen.getByText('Guardar solicitud'))
+
     await waitFor(() => expect(mockCreatePauta).toHaveBeenCalledTimes(1))
     expect(mockCreatePauta).toHaveBeenCalledWith(
       'co-1',
-      { status: 'solicitada', submitted: true },
+      expect.objectContaining({
+        client_id: 'c1',
+        link: 'https://drive.example/grilla',
+        status: 'solicitada',
+        submitted: true,
+      }),
       'u1',
       'line-1',
     )
-    expect(screen.queryByText('Sin guardar')).not.toBeInTheDocument()
+  })
+})
+
+describe('AvPhaseTable — errores de guardado se traducen y revierten el input (fix uuid=text)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('si updatePauta falla, el banner muestra el mensaje traducido (no el texto crudo de Postgres)', async () => {
+    mockUpdatePauta.mockResolvedValue({
+      data: null,
+      error: { code: '42883', message: 'operator does not exist: uuid = text' },
+    })
+    const pauta = {
+      id: 'p1',
+      client_id: 'c1',
+      client_name: 'Cliente A',
+      tema: 'Original',
+      status: 'solicitada',
+      submitted: true,
+      formats: [],
+    }
+    renderTable({ editMode: 'coordina', pautas: [pauta] })
+
+    const temaInput = screen.getByPlaceholderText('Tema / concepto')
+    fireEvent.change(temaInput, { target: { value: 'Nuevo tema' } })
+    fireEvent.blur(temaInput)
+
+    // El banner principal muestra el mensaje traducido; el texto crudo de Postgres solo
+    // aparece como detalle técnico chico (mismo patrón que setErrorFromErr), nunca como el
+    // mensaje protagonista.
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          'No se pudo guardar el cambio. Vuelve a intentarlo; si sigue pasando, avisa a soporte.',
+        ),
+      ).toBeInTheDocument(),
+    )
+
+    // El input se remonta y vuelve a mostrar el valor persistido, no el que no se guardó.
+    expect(screen.getByPlaceholderText('Tema / concepto').value).toBe('Original')
   })
 })
 

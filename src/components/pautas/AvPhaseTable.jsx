@@ -30,6 +30,7 @@ import {
   sortAgenda,
   isOutOfMonth,
   monthLabel,
+  pautaErrorMessage,
 } from '../../utils/audiovisual'
 
 /** Campos que, al cambiar, pueden crear un conflicto de disponibilidad de recursos. */
@@ -70,7 +71,13 @@ export default function AvPhaseTable({
   onDeleted,
   onPautaClick,
 }) {
+  // `{ message, detail }` — `message` es el texto en español para el banner; `detail` es el
+  // mensaje crudo del motor (Supabase/Postgres), mostrado más chico para poder diagnosticar
+  // sin depender de un screenshot. Ver utils/audiovisual.js → pautaErrorMessage.
   const [error, setError] = useState(null)
+  function setErrorFromErr(err) {
+    setError(err ? { message: pautaErrorMessage(err), detail: err.message } : null)
+  }
   const [confirmingId, setConfirmingId] = useState(null)
   // Pauta pendiente de borrado DEFINITIVO (irreversible) — distinto de `confirmingId`, que es
   // el doble-clic del soft delete normal. Solo se llega acá desde la Papelera.
@@ -160,7 +167,12 @@ export default function AvPhaseTable({
     setError(null)
     const { data, error: err } = await updatePauta(pauta.id, fields)
     if (err) {
-      setError(err.message)
+      setErrorFromErr(err)
+      // El guardado no ocurrió, pero los inputs de texto no son controlados (defaultValue) y
+      // siguen mostrando lo que el usuario tecleó — forzar su remonte para que vuelvan a
+      // reflejar el valor realmente persistido (mismo mecanismo que el conflicto de recursos
+      // de abajo).
+      setRevertTick((n) => n + 1)
       return
     }
     onChanged(data)
@@ -199,7 +211,7 @@ export default function AvPhaseTable({
       pauta.id,
     )
     if (fetchErr) {
-      setError(fetchErr.message)
+      setErrorFromErr(fetchErr)
       return
     }
 
@@ -248,34 +260,17 @@ export default function AvPhaseTable({
     await commitFields(pauta, fields)
   }
 
-  // "+ Solicitar pauta" (rol solicita) agrega un borrador solo en memoria; "+ Agregar pauta"
-  // (coordina) sigue creando de inmediato en la base de datos, sin cambios.
+  // "+ Solicitar pauta" (rol solicita) y "+ Agregar pauta" (coordina) agregan por igual un
+  // borrador solo en memoria — antes la coordinadora insertaba de inmediato una fila vacía en
+  // la base (handleCreateImmediate), lo que dejaba pautas fantasma sin cliente/tema cada vez
+  // que se pulsaba el botón sin completar el brief. "Guardar solicitud" (handleSaveDraft) es
+  // ahora el único punto de contacto con la base para ambos roles.
   function handleCreate() {
     // jsdom (tests) no implementa scrollIntoView — solo el navegador real lo tiene.
     if (typeof cardRef.current?.scrollIntoView === 'function') {
       cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
-    if (editMode === 'solicita') {
-      setDrafts((prev) => [...prev, makeDraft()])
-      onPhaseChange('solicitudes')
-      return
-    }
-    handleCreateImmediate()
-  }
-
-  async function handleCreateImmediate() {
-    setError(null)
-    const { data, error: err } = await createPauta(
-      companyId,
-      { status: 'solicitada', submitted: canCoordinate },
-      userId,
-      defaultLineId,
-    )
-    if (err) {
-      setError(err.message)
-      return
-    }
-    onChanged(data)
+    setDrafts((prev) => [...prev, makeDraft()])
     onPhaseChange('solicitudes')
   }
 
@@ -303,7 +298,7 @@ export default function AvPhaseTable({
     )
     setSavingDraftId(null)
     if (err) {
-      setError(err.message)
+      setErrorFromErr(err)
       return
     }
     setDrafts((prev) => prev.filter((d) => d._draftId !== _draftId))
@@ -322,7 +317,7 @@ export default function AvPhaseTable({
     setError(null)
     const { data, error: err } = await deletePauta(id)
     if (err) {
-      setError(err.message)
+      setErrorFromErr(err)
       return
     }
     onChanged(data)
@@ -333,7 +328,7 @@ export default function AvPhaseTable({
     setError(null)
     const { data, error: err } = await restorePauta(id)
     if (err) {
-      setError(err.message)
+      setErrorFromErr(err)
       return
     }
     onChanged(data)
@@ -348,7 +343,7 @@ export default function AvPhaseTable({
     const { error: err } = await permanentlyDeletePauta(permanentDeleteTarget.id)
     setPermanentDeleting(false)
     if (err) {
-      setError(err.message)
+      setErrorFromErr(err)
       setPermanentDeleteTarget(null)
       return
     }
@@ -372,7 +367,10 @@ export default function AvPhaseTable({
       <div className="overflow-hidden rounded-t-xl">
         {error && (
           <div className="bg-red-50 border-b border-red-200 text-red-700 text-[13px] px-4 py-2.5">
-            {error}
+            {error.message}
+            {error.detail && (
+              <div className="text-[11px] text-red-400 mt-0.5 font-mono">{error.detail}</div>
+            )}
           </div>
         )}
 
@@ -678,6 +676,7 @@ function SolicitudRow({
       <td className="px-2 py-1.5 min-w-[150px]">
         {editableBrief ? (
           <input
+            key={`tema-${revertTick}`}
             className="input-base input-compact"
             defaultValue={p.tema ?? ''}
             onBlur={(e) => onFields(p, { tema: e.target.value.trim() })}
@@ -719,12 +718,14 @@ function SolicitudRow({
         {editableBrief ? (
           <>
             <input
+              key={`requirements-${revertTick}`}
               className="input-base input-compact"
               defaultValue={p.requirements ?? ''}
               onBlur={(e) => onFields(p, { requirements: e.target.value.trim() })}
               placeholder="Requerimientos: herramientas, ropa…"
             />
             <input
+              key={`link-${revertTick}`}
               className="input-base input-compact mt-1"
               defaultValue={p.link ?? ''}
               onBlur={(e) => onFields(p, { link: e.target.value.trim() })}
@@ -734,6 +735,7 @@ function SolicitudRow({
               — o describe las piezas —
             </div>
             <textarea
+              key={`piezas_desc-${revertTick}`}
               className="input-base input-compact"
               rows={2}
               defaultValue={p.piezas_desc ?? ''}
