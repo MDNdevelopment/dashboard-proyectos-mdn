@@ -901,3 +901,59 @@ describe('EmployeesView — tarjetas fijas "De vacaciones ahora" / "En período 
     expect(screen.queryByText('En período de prueba')).not.toBeInTheDocument()
   })
 })
+
+describe('EmployeesView — panel global "Vacaciones del año"', () => {
+  const originalVacations = [...MOCK_VACATIONS]
+
+  afterEach(() => {
+    MOCK_VACATIONS.length = 0
+    MOCK_VACATIONS.push(...originalVacations)
+  })
+
+  it('está colapsado por defecto y se expande al hacer click', async () => {
+    const user = userEvent.setup()
+    renderAsAdmin()
+    await waitFor(() => {
+      expect(screen.getByText('Vacaciones del año')).toBeInTheDocument()
+    })
+    expect(screen.queryByLabelText('Año')).not.toBeInTheDocument()
+
+    await user.click(screen.getByText('Vacaciones del año'))
+    expect(await screen.findByLabelText('Año')).toBeInTheDocument()
+  })
+
+  it('lista las vacaciones del año seleccionado, con equipo y días', async () => {
+    const user = userEvent.setup()
+    MOCK_VACATIONS.length = 0
+    MOCK_VACATIONS.push({
+      id: 'v-panel',
+      user_id: 'u10', // Ana Pérez
+      start_date: '2026-07-01',
+      end_date: '2026-07-15',
+      status: 'confirmed',
+    })
+    renderAsAdmin()
+    await waitFor(() => {
+      expect(screen.getByText('Vacaciones del año')).toBeInTheDocument()
+    })
+    await user.click(screen.getByText('Vacaciones del año'))
+
+    expect(await screen.findByText(/01\/07\/2026 – 15\/07\/2026/)).toBeInTheDocument()
+    expect(screen.getByText(/15 días/)).toBeInTheDocument()
+  })
+
+  it('el selector de año permite elegir otro año (el corte real de fechas está probado en fetchVacationsByYear)', async () => {
+    const user = userEvent.setup()
+    MOCK_VACATIONS.length = 0
+    renderAsAdmin()
+    await waitFor(() => {
+      expect(screen.getByText('Vacaciones del año')).toBeInTheDocument()
+    })
+    await user.click(screen.getByText('Vacaciones del año'))
+
+    const yearSelect = await screen.findByLabelText('Año')
+    const targetYear = String(new Date().getFullYear() - 1)
+    await user.selectOptions(yearSelect, targetYear)
+    expect(yearSelect).toHaveValue(targetYear)
+  })
+})

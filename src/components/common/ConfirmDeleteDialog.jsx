@@ -13,6 +13,8 @@ import { useState, useEffect } from 'react'
  *   confirming — bool; muestra "Eliminando…" y deshabilita botones mientras se procesa
  *   children   — contenido opcional que se renderiza en el body, sobre el input de confirmación
  *                (p.ej. opciones extra específicas del elemento a eliminar)
+ *   fieldLabel — texto del label sobre el input (default "Nombre del {itemLabel}"); útil cuando
+ *                lo que se teclea no es un nombre sino, p.ej., una fecha ("Fecha de inicio").
  */
 export default function ConfirmDeleteDialog({
   itemName,
@@ -22,6 +24,7 @@ export default function ConfirmDeleteDialog({
   onCancel,
   confirming = false,
   children,
+  fieldLabel,
 }) {
   const [typed, setTyped] = useState('')
   const normalize = (s) =>
@@ -78,7 +81,7 @@ export default function ConfirmDeleteDialog({
 
           <div>
             <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
-              Nombre del {itemLabel}
+              {fieldLabel ?? `Nombre del ${itemLabel}`}
             </label>
             <input
               type="text"

@@ -112,13 +112,28 @@ function fullName(employee) {
  * Vocabulario de `vacations.status`. Flujo actual (VacationsDialog.jsx): se crea en
  * 'tentative' (fecha probable, sin aprobar/rechazar) y se pasa a 'confirmed' cuando la
  * fecha queda cerrada — no hay paso de aprobación. 'completed' NO se guarda: se calcula
- * solo a partir de `end_date` vs hoy. Datos históricos usan otros valores ('pending' del
- * viejo flujo de aprobación, 'programmed'/'fulfilled' de una importación previa); por eso
- * `resolveVacationStatus` no exige un vocabulario cerrado y cae a "confirmada" por
- * default en vez de listar cada valor legado.
+ * solo a partir de `end_date` vs hoy. Desde la migración `20260827000000_vacations_normalize`
+ * la tabla tiene un CHECK que cierra el vocabulario a 'tentative' | 'confirmed' | 'rejected'
+ * (los valores legado 'pending'/'programmed'/'approved'/'fulfilled'/'completed' se
+ * normalizaron ahí). `TENTATIVE_STATUSES` conserva 'pending' por tolerancia a datos que
+ * pudieran colarse fuera de la app (import directo, etc.), no porque siga en uso normal.
  */
 export const TENTATIVE_STATUSES = ['tentative', 'pending']
 export const EXCLUDED_VACATION_STATUSES = ['rejected']
+
+/**
+ * Días inclusivos entre `startKey` y `endKey` ('yyyy-MM-dd'), contando el día de inicio
+ * y el de fin (una vacación que empieza y termina el mismo día cuenta como 1 día). Se
+ * apoya en `parseDateKey` (fechas locales, sin desfase UTC) en vez de restar los strings
+ * directamente, porque la resta de días calendario debe pasar por milisegundos reales.
+ */
+export function vacationDays(startKey, endKey) {
+  if (!startKey || !endKey) return 0
+  const start = parseDateKey(startKey)
+  const end = parseDateKey(endKey)
+  const diffMs = end.getTime() - start.getTime()
+  return Math.round(diffMs / 86400000) + 1
+}
 
 /**
  * Resuelve el status "de exhibición" de una vacación: 'tentative' | 'confirmed' |

@@ -56,6 +56,10 @@ const mockCountMeetingsHeldForLine = vi.fn()
 const mockLoadHeldClientIdsForLine = vi.fn()
 const mockLoadFixedTaskMarks = vi.fn()
 const mockLoadChecks = vi.fn()
+const mockCountPiezasForLine = vi.fn()
+const mockCountPautasRealizadasByClient = vi.fn()
+const mockCountCnpSolicitudesForLine = vi.fn()
+const mockCountTareasSolicitudesForLine = vi.fn()
 
 vi.mock('../components/metricas/metricsApi', () => ({
   loadReport: (...a) => mockLoadReport(...a),
@@ -68,6 +72,19 @@ vi.mock('../components/metricas/metricsApi', () => ({
 
 vi.mock('../components/chequeo/chequeoApi', () => ({
   loadChecks: (...a) => mockLoadChecks(...a),
+}))
+
+vi.mock('../components/pautas/avPautasApi', () => ({
+  countPiezasForLine: (...a) => mockCountPiezasForLine(...a),
+  countPautasRealizadasByClient: (...a) => mockCountPautasRealizadasByClient(...a),
+}))
+
+vi.mock('../components/cnp/cnpApi', () => ({
+  countCnpSolicitudesForLine: (...a) => mockCountCnpSolicitudesForLine(...a),
+}))
+
+vi.mock('../components/tareas/tareasMetricsApi', () => ({
+  countTareasSolicitudesForLine: (...a) => mockCountTareasSolicitudesForLine(...a),
 }))
 
 vi.mock('../components/ads/campaignSpendApi', async () => {
@@ -112,6 +129,14 @@ describe('OperacionesView — columna Inversión Ads (Crecimiento de seguidores)
     mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: [], error: null })
     mockLoadFixedTaskMarks.mockResolvedValue({ data: [], error: null })
     mockLoadAds.mockResolvedValue({ data: [], error: null })
+    mockCountPiezasForLine.mockResolvedValue({ piezas: 0, editadas: 0, error: null })
+    mockCountPautasRealizadasByClient.mockResolvedValue({ byClient: {}, error: null })
+    mockCountCnpSolicitudesForLine.mockResolvedValue({ solicitudes: 0, entregados: 0, error: null })
+    mockCountTareasSolicitudesForLine.mockResolvedValue({
+      solicitudes: 0,
+      entregados: 0,
+      error: null,
+    })
   })
 
   it('muestra la suma de campañas del cliente cuyo start_date cae en el mes del reporte', async () => {

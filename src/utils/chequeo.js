@@ -87,8 +87,8 @@ export function daysSince(dateISO, today = new Date()) {
   return Math.round((startOfDay(today) - startOfDay(date)) / msPerDay)
 }
 
-/** Umbral de "un mes sin publicar" para YouTube (horizontal) — ver `recentCheckStatus`. */
-const YOUTUBE_STALE_DAYS = 30
+/** Umbral de "un mes sin publicar" para Mailchimp y YouTube (horizontal) — ver `recentCheckStatus`. */
+const MONTHLY_STALE_DAYS = 30
 
 /**
  * Semáforo único del módulo (grilla semanal y vista "Más reciente" — ver ChequeoGrid.jsx):
@@ -99,10 +99,9 @@ const YOUTUBE_STALE_DAYS = 30
  *
 
  * Reglas por red que se apartan del default, igual que la alerta original:
- * - Mailchimp: la fecha es decorativa (no hay forma de saber "cuándo caduca" un envío de
- *   correo como sí con un post) — con fecha registrada siempre es 'normal'.
- * - YouTube (horizontal): cadencia mucho más baja, solo se marca 'rojo' al mes sin
- *   publicar (~30 días) y nunca pasa por 'naranja'. YouTube Shorts usa el default.
+ * - Mailchimp y YouTube (horizontal): cadencia mensual, no semanal — se quedan en
+ *   'normal' hasta el mes sin publicar (~30 días) y ahí pasan directo a 'rojo', sin pasar
+ *   por 'naranja'. YouTube Shorts usa el default.
  * @param {string|null} dateISO  last_published_at más reciente de la celda (o null)
  * @param {string} network
  * @param {Date} [today]
@@ -110,10 +109,11 @@ const YOUTUBE_STALE_DAYS = 30
  */
 export function recentCheckStatus(dateISO, network, today = new Date()) {
   if (!dateISO) return 'vacio'
-  if (network === 'Mailchimp') return 'normal'
   const days = daysSince(dateISO, today)
   if (days == null) return 'vacio'
-  if (network === 'YouTube') return days >= YOUTUBE_STALE_DAYS ? 'rojo' : 'normal'
+  if (network === 'Mailchimp' || network === 'YouTube') {
+    return days >= MONTHLY_STALE_DAYS ? 'rojo' : 'normal'
+  }
   if (days >= 12) return 'rojo'
   if (days >= 6) return 'naranja'
   return 'normal'

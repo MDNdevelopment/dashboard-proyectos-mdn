@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from 'react'
-import { format, parseISO } from 'date-fns'
+import { useState, useEffect, useRef, useMemo } from 'react'
+import { format } from 'date-fns'
 import { supabase } from '../../supabase'
 import ConfirmDeleteDialog from '../common/ConfirmDeleteDialog'
 import DateInput from '../common/DateInput'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
-import { resolveVacationStatus } from '../../utils/employeeCalendar'
+import { resolveVacationStatus, vacationDays } from '../../utils/employeeCalendar'
+import { isoToDdmmyyyy } from '../../utils/formatDate'
 
 /**
  * Sin flujo de aprobación: una vacación se crea con fecha tentativa ('tentative') y se
@@ -18,13 +19,7 @@ const STATUS_MAP = {
   completed: { label: 'Completada', cls: 'bg-[#f0ede3] text-[#666]' },
 }
 
-function fmtDate(dateStr) {
-  try {
-    return format(parseISO(dateStr), 'dd/MM/yyyy')
-  } catch {
-    return dateStr
-  }
-}
+const fmtDate = isoToDdmmyyyy
 
 /**
  * Diálogo de gestión de vacaciones de un empleado.
@@ -43,6 +38,10 @@ export default function VacationsDialog({ employee, onClose }) {
   // Confirm delete
   const [deleteDialog, setDeleteDialog] = useState(null) // null | vacation
   const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState(null)
+
+  // Historial agrupado por año: colapsado por defecto, salvo el año en curso (se abre solo).
+  const [openYears, setOpenYears] = useState(() => new Set([new Date().getFullYear()]))
 
   // Status en proceso
   const [updatingId, setUpdatingId] = useState(null)
@@ -93,6 +92,15 @@ export default function VacationsDialog({ employee, onClose }) {
     }
     if (newVac.end_date < newVac.start_date) {
       setFormError('La fecha de fin debe ser igual o posterior a la de inicio')
+      return
+    }
+    const overlap = vacations.find(
+      (v) => newVac.start_date <= v.end_date && newVac.end_date >= v.start_date,
+    )
+    if (overlap) {
+      setFormError(
+        `Ya hay una vacación registrada del ${fmtDate(overlap.start_date)} al ${fmtDate(overlap.end_date)}`,
+      )
       return
     }
     setSavingNew(true)
@@ -178,10 +186,169 @@ export default function VacationsDialog({ employee, onClose }) {
   async function handleDeleteVacation() {
     if (!deleteDialog) return
     setDeleting(true)
-    await supabase.from('vacations').delete().eq('id', deleteDialog.id)
-    setVacations((prev) => prev.filter((v) => v.id !== deleteDialog.id))
+    const { error } = await supabase.from('vacations').delete().eq('id', deleteDialog.id)
     setDeleting(false)
+    if (error) {
+      setDeleteError(error.message)
+      return
+    }
+    setVacations((prev) => prev.filter((v) => v.id !== deleteDialog.id))
     setDeleteDialog(null)
+    setDeleteError(null)
+  }
+
+  function toggleYear(year) {
+    setOpenYears((prev) => {
+      const next = new Set(prev)
+      if (next.has(year)) next.delete(year)
+      else next.add(year)
+      return next
+    })
+  }
+
+  // ── Próximas/en curso vs. historial agrupado por año ─────────────────────────
+  // 'end_date >= hoy' es próxima o en curso; el resto es historial. Separar por bloque
+  // (en vez de solo mostrar el año en cada fila) es lo que evita confundir vacaciones
+  // planificadas con historial de años anteriores.
+  const todayKey = format(new Date(), 'yyyy-MM-dd')
+  const { upcoming, historyByYear } = useMemo(() => {
+    const upcomingList = vacations
+      .filter((v) => v.end_date >= todayKey)
+      .sort((a, b) => (a.start_date < b.start_date ? -1 : a.start_date > b.start_date ? 1 : 0))
+    const pastList = vacations
+      .filter((v) => v.end_date < todayKey)
+      .sort((a, b) => (a.start_date < b.start_date ? 1 : a.start_date > b.start_date ? -1 : 0))
+    const byYear = new Map()
+    for (const v of pastList) {
+      const year = Number(v.start_date.slice(0, 4))
+      if (!byYear.has(year)) byYear.set(year, [])
+      byYear.get(year).push(v)
+    }
+    const years = [...byYear.keys()].sort((a, b) => b - a)
+    return { upcoming: upcomingList, historyByYear: years.map((year) => [year, byYear.get(year)]) }
+  }, [vacations, todayKey])
+
+  // ── Render de una fila de vacación (reusado por "próximas" e "historial") ────
+  function renderVacationRow(v) {
+    const displayStatus = resolveVacationStatus(v.status, v.end_date, todayKey)
+    const st = STATUS_MAP[displayStatus] ?? {
+      label: v.status,
+      cls: 'bg-gray-100 text-gray-600',
+    }
+    const isUpdating = updatingId === v.id
+    const isConfirming = confirmingId === v.id
+    const days = vacationDays(v.start_date, v.end_date)
+    return (
+      <div key={v.id} className="bg-white border border-[#e0ddd4] rounded-xl px-4 py-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[15px] font-semibold text-[#111]">
+              {fmtDate(v.start_date)} – {fmtDate(v.end_date)}
+              <span className="text-[13px] font-normal text-[#999]">
+                {' '}
+                · {days} día{days === 1 ? '' : 's'}
+              </span>
+            </p>
+            <span
+              className={`inline-block mt-1 text-[13px] font-semibold px-2 py-0.5 rounded-full ${st.cls}`}
+            >
+              {st.label}
+            </span>
+          </div>
+
+          {/* Acciones de status + eliminar */}
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {displayStatus === 'tentative' && !isConfirming && (
+              <button
+                type="button"
+                disabled={isUpdating}
+                onClick={() => openConfirm(v)}
+                className="px-2 py-1 rounded-lg text-[13px] font-semibold bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-50 transition-colors"
+              >
+                Confirmar fecha
+              </button>
+            )}
+            {displayStatus === 'confirmed' && (
+              <button
+                type="button"
+                disabled={isUpdating}
+                onClick={() => handleRevertToTentative(v.id)}
+                className="px-2 py-1 rounded-lg text-[13px] font-semibold bg-amber-100 text-amber-700 hover:bg-amber-200 disabled:opacity-50 transition-colors"
+              >
+                Volver a tentativa
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setDeleteDialog(v)
+                setDeleteError(null)
+              }}
+              className="w-6 h-6 flex items-center justify-center rounded text-[#bbb] hover:text-red-500 hover:bg-red-50 transition-colors"
+              aria-label={`Eliminar vacación ${v.start_date}`}
+            >
+              <svg
+                width="11"
+                height="11"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+              >
+                <path d="M3 4h10M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M13 4l-1 9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1L3 4" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Mini-form de confirmación: permite ajustar la fecha tentativa
+            al mismo tiempo que se confirma. */}
+        {isConfirming && (
+          <form onSubmit={handleConfirm} className="mt-3 bg-[#f5f3eb] rounded-lg p-3 space-y-2">
+            {confirmError && <p className="text-[13px] text-red-600">{confirmError}</p>}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[12px] font-mono font-bold tracking-[0.1em] uppercase text-[#888] mb-1">
+                  Inicio *
+                </label>
+                <DateInput
+                  value={confirmDates.start_date}
+                  onChange={(val) => setConfirmDates((d) => ({ ...d, start_date: val }))}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-[12px] font-mono font-bold tracking-[0.1em] uppercase text-[#888] mb-1">
+                  Fin *
+                </label>
+                <DateInput
+                  value={confirmDates.end_date}
+                  min={confirmDates.start_date}
+                  onChange={(val) => setConfirmDates((d) => ({ ...d, end_date: val }))}
+                  required
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeConfirm}
+                className="px-2 py-1 rounded-lg text-[13px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-white transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={isUpdating}
+                className="px-2 py-1 rounded-lg text-[13px] font-bold bg-[#111] text-white hover:bg-[#222] disabled:opacity-50 transition-colors"
+              >
+                {isUpdating ? 'Confirmando…' : 'Confirmar'}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    )
   }
 
   return (
@@ -294,133 +461,73 @@ export default function VacationsDialog({ employee, onClose }) {
                 </p>
               </div>
             ) : (
-              <div className="space-y-2">
-                {vacations.map((v) => {
-                  const displayStatus = resolveVacationStatus(v.status, v.end_date)
-                  const st = STATUS_MAP[displayStatus] ?? {
-                    label: v.status,
-                    cls: 'bg-gray-100 text-gray-600',
-                  }
-                  const isUpdating = updatingId === v.id
-                  const isConfirming = confirmingId === v.id
-                  return (
-                    <div
-                      key={v.id}
-                      className="bg-white border border-[#e0ddd4] rounded-xl px-4 py-3"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-[15px] font-semibold text-[#111]">
-                            {fmtDate(v.start_date)} – {fmtDate(v.end_date)}
-                          </p>
-                          <span
-                            className={`inline-block mt-1 text-[13px] font-semibold px-2 py-0.5 rounded-full ${st.cls}`}
-                          >
-                            {st.label}
-                          </span>
-                        </div>
+              <>
+                {upcoming.length > 0 && (
+                  <div className="space-y-2 mb-4">
+                    <p className="text-[13px] font-mono font-bold tracking-[0.1em] uppercase text-[#888]">
+                      Próximas y en curso
+                    </p>
+                    {upcoming.map((v) => renderVacationRow(v))}
+                  </div>
+                )}
 
-                        {/* Acciones de status + eliminar */}
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          {displayStatus === 'tentative' && !isConfirming && (
-                            <button
-                              type="button"
-                              disabled={isUpdating}
-                              onClick={() => openConfirm(v)}
-                              className="px-2 py-1 rounded-lg text-[13px] font-semibold bg-green-100 text-green-700 hover:bg-green-200 disabled:opacity-50 transition-colors"
-                            >
-                              Confirmar fecha
-                            </button>
-                          )}
-                          {displayStatus === 'confirmed' && (
-                            <button
-                              type="button"
-                              disabled={isUpdating}
-                              onClick={() => handleRevertToTentative(v.id)}
-                              className="px-2 py-1 rounded-lg text-[13px] font-semibold bg-amber-100 text-amber-700 hover:bg-amber-200 disabled:opacity-50 transition-colors"
-                            >
-                              Volver a tentativa
-                            </button>
-                          )}
+                {historyByYear.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[13px] font-mono font-bold tracking-[0.1em] uppercase text-[#888]">
+                      Historial
+                    </p>
+                    {historyByYear.map(([year, yearVacs]) => {
+                      const isOpen = openYears.has(year)
+                      const totalDays = yearVacs.reduce(
+                        (sum, v) => sum + vacationDays(v.start_date, v.end_date),
+                        0,
+                      )
+                      return (
+                        <div key={year} className="border border-[#e0ddd4] rounded-xl">
                           <button
                             type="button"
-                            onClick={() => setDeleteDialog(v)}
-                            className="w-6 h-6 flex items-center justify-center rounded text-[#bbb] hover:text-red-500 hover:bg-red-50 transition-colors"
-                            aria-label={`Eliminar vacación ${v.start_date}`}
+                            onClick={() => toggleYear(year)}
+                            className="w-full flex items-center justify-between px-4 py-2.5 text-left"
                           >
-                            <svg
-                              width="11"
-                              height="11"
-                              viewBox="0 0 16 16"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="1.7"
-                            >
-                              <path d="M3 4h10M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M13 4l-1 9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1L3 4" />
-                            </svg>
+                            <span className="text-[14px] font-bold text-[#111]">{year}</span>
+                            <span className="text-[13px] text-[#888]">
+                              {yearVacs.length} período{yearVacs.length === 1 ? '' : 's'} ·{' '}
+                              {totalDays} día{totalDays === 1 ? '' : 's'}
+                              <svg
+                                className={`inline-block ml-2 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                                width="10"
+                                height="10"
+                                viewBox="0 0 10 10"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.6"
+                              >
+                                <path d="M2 3.5L5 6.5L8 3.5" strokeLinecap="round" />
+                              </svg>
+                            </span>
                           </button>
-                        </div>
-                      </div>
-
-                      {/* Mini-form de confirmación: permite ajustar la fecha tentativa
-                          al mismo tiempo que se confirma. */}
-                      {isConfirming && (
-                        <form
-                          onSubmit={handleConfirm}
-                          className="mt-3 bg-[#f5f3eb] rounded-lg p-3 space-y-2"
-                        >
-                          {confirmError && (
-                            <p className="text-[13px] text-red-600">{confirmError}</p>
+                          {isOpen && (
+                            <div className="px-3 pb-3 space-y-2">
+                              {yearVacs.map((v) => renderVacationRow(v))}
+                            </div>
                           )}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            <div>
-                              <label className="block text-[12px] font-mono font-bold tracking-[0.1em] uppercase text-[#888] mb-1">
-                                Inicio *
-                              </label>
-                              <DateInput
-                                value={confirmDates.start_date}
-                                onChange={(val) =>
-                                  setConfirmDates((d) => ({ ...d, start_date: val }))
-                                }
-                                required
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-[12px] font-mono font-bold tracking-[0.1em] uppercase text-[#888] mb-1">
-                                Fin *
-                              </label>
-                              <DateInput
-                                value={confirmDates.end_date}
-                                min={confirmDates.start_date}
-                                onChange={(val) =>
-                                  setConfirmDates((d) => ({ ...d, end_date: val }))
-                                }
-                                required
-                              />
-                            </div>
-                          </div>
-                          <div className="flex justify-end gap-2">
-                            <button
-                              type="button"
-                              onClick={closeConfirm}
-                              className="px-2 py-1 rounded-lg text-[13px] font-semibold text-[#555] border border-[#e0ddd4] hover:bg-white transition-colors"
-                            >
-                              Cancelar
-                            </button>
-                            <button
-                              type="submit"
-                              disabled={isUpdating}
-                              className="px-2 py-1 rounded-lg text-[13px] font-bold bg-[#111] text-white hover:bg-[#222] disabled:opacity-50 transition-colors"
-                            >
-                              {isUpdating ? 'Confirmando…' : 'Confirmar'}
-                            </button>
-                          </div>
-                        </form>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {upcoming.length === 0 && historyByYear.length === 0 && (
+                  <div className="text-center py-8">
+                    <p className="text-[16px] font-semibold text-[#888] mb-1">
+                      Sin vacaciones registradas
+                    </p>
+                    <p className="text-[14px] text-[#bbb]">
+                      Usa &ldquo;+ Nueva&rdquo; para agregar una.
+                    </p>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -429,13 +536,36 @@ export default function VacationsDialog({ employee, onClose }) {
       {/* Confirm delete (z-[60] para que quede sobre el diálogo de vacaciones) */}
       {deleteDialog !== null && (
         <ConfirmDeleteDialog
-          itemName={deleteDialog.start_date}
+          itemName={fmtDate(deleteDialog.start_date)}
           itemLabel="vacación"
-          message={`Esta acción no se puede deshacer. Para confirmar, escribe la fecha de inicio de la vacación (${deleteDialog.start_date}).`}
+          fieldLabel="Fecha de inicio"
+          message={
+            <>
+              Esta acción <strong>no se puede deshacer</strong>. Vas a eliminar la vacación del{' '}
+              <strong>{fmtDate(deleteDialog.start_date)}</strong> al{' '}
+              <strong>{fmtDate(deleteDialog.end_date)}</strong> (
+              {vacationDays(deleteDialog.start_date, deleteDialog.end_date)} días), del año{' '}
+              <strong>{deleteDialog.start_date.slice(0, 4)}</strong>.
+              {deleteDialog.end_date < todayKey && (
+                <>
+                  {' '}
+                  Es una vacación <strong>ya pasada</strong> — estás borrando historial, no una
+                  vacación planificada.
+                </>
+              )}{' '}
+              Para confirmar, escribe la fecha de inicio ({fmtDate(deleteDialog.start_date)}) a
+              continuación.
+            </>
+          }
           onConfirm={handleDeleteVacation}
-          onCancel={() => setDeleteDialog(null)}
+          onCancel={() => {
+            setDeleteDialog(null)
+            setDeleteError(null)
+          }}
           confirming={deleting}
-        />
+        >
+          {deleteError && <p className="text-[14px] text-red-600">{deleteError}</p>}
+        </ConfirmDeleteDialog>
       )}
     </>
   )

@@ -98,8 +98,10 @@ describe('recentCheckStatus', () => {
     expect(recentCheckStatus('2026-08-01', 'Instagram', today)).toBe('rojo') // 19 días
   })
 
-  it('Mailchimp con fecha siempre es normal, sin importar cuán vieja', () => {
-    expect(recentCheckStatus('2020-01-01', 'Mailchimp', new Date(2026, 7, 20))).toBe('normal')
+  it('Mailchimp solo pasa a rojo a los 30 días, nunca naranja', () => {
+    const today = new Date(2026, 7, 20)
+    expect(recentCheckStatus('2026-08-12', 'Mailchimp', today)).toBe('normal') // 8 días, no naranja
+    expect(recentCheckStatus('2020-01-01', 'Mailchimp', today)).toBe('rojo') // hace años
   })
 
   it('YouTube (horizontal) solo pasa a rojo a los 30 días, nunca naranja', () => {

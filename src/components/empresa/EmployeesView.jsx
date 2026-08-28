@@ -12,8 +12,9 @@ import ExternalResourcesView from './ExternalResourcesView'
 import EmployeeDatesCalendar from './EmployeeDatesCalendar'
 import EmployeeDayEventsModal from './EmployeeDayEventsModal'
 import TeamStatusCards from './TeamStatusCards'
+import VacationsPanel from './VacationsPanel'
 import { activeEmployees as activeEmployeesList } from '../../lib/employees'
-import { fetchVacationsInRange } from '../../lib/vacations'
+import { fetchVacationsInRange, fetchVacationsByYear } from '../../lib/vacations'
 import { loadLines } from '../metricas/metricsApi'
 import { lineOfMember } from '../../utils/lineMembers'
 import {
@@ -392,6 +393,13 @@ export default function EmployeesView({ companyId }) {
   // de prueba" (TeamStatusCards) — mismo dato que ya usa Métricas/Líneas.
   const [lines, setLines] = useState([])
 
+  // Panel global "Vacaciones del año" (VacationsPanel): año seleccionado + sus vacaciones.
+  // El selector de años es un rango fijo (sin query aparte para "qué años tienen datos") —
+  // suficiente para el uso real de RRHH: historial reciente + año en curso + el próximo.
+  const [panelYear, setPanelYear] = useState(() => new Date().getFullYear())
+  const [panelVacations, setPanelVacations] = useState([])
+  const panelAvailableYears = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 3 + i)
+
   // ── Carga de datos ──────────────────────────────────────────────────────────
   const loadAll = useCallback(async () => {
     if (!companyId) return
@@ -455,6 +463,20 @@ export default function EmployeesView({ companyId }) {
     loadTodayVacations()
   }, [loadTodayVacations])
 
+  // ── Panel "Vacaciones del año": vacaciones del año seleccionado ──────────────
+  const loadPanelVacations = useCallback(async () => {
+    const userIds = activeIdsKey ? activeIdsKey.split(',') : []
+    if (userIds.length === 0) {
+      setPanelVacations([])
+      return
+    }
+    setPanelVacations(await fetchVacationsByYear(userIds, panelYear))
+  }, [activeIdsKey, panelYear])
+
+  useEffect(() => {
+    loadPanelVacations()
+  }, [loadPanelVacations])
+
   // ── Realtime ────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!companyId) return
@@ -464,12 +486,13 @@ export default function EmployeesView({ companyId }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'vacations' }, () => {
         loadVacations()
         loadTodayVacations()
+        loadPanelVacations()
       })
       .subscribe()
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [companyId, loadAll, loadVacations, loadTodayVacations])
+  }, [companyId, loadAll, loadVacations, loadTodayVacations, loadPanelVacations])
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   function handleEmployeeSaved(saved) {
@@ -675,6 +698,20 @@ export default function EmployeesView({ companyId }) {
       {/* Tarjetas fijas: quién está de vacaciones / en período de prueba ahora mismo */}
       {!showArchived && (
         <TeamStatusCards onVacationItems={onVacationItems} probationItems={probationItems} />
+      )}
+
+      {/* Panel global: todas las vacaciones de la empresa para un año, sin abrir empleado
+          por empleado */}
+      {!showArchived && (
+        <VacationsPanel
+          year={panelYear}
+          onYearChange={setPanelYear}
+          availableYears={panelAvailableYears}
+          vacations={panelVacations}
+          employees={activeEmployeesList(employees)}
+          lines={lines}
+          onOpenEmployee={setVacEmployee}
+        />
       )}
 
       {/* Calendario de fechas del equipo */}

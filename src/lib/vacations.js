@@ -22,3 +22,22 @@ export async function fetchVacationsInRange(userIds, fetchStartKey, endKey) {
   if (error) throw error
   return data ?? []
 }
+
+/**
+ * Trae las vacaciones no rechazadas de un conjunto de empleados que se solapan con el año
+ * `year` (para el panel global "Vacaciones del año" en Empresa → Empleados). Mismo patrón
+ * de scoping por `userIds` y corte por strings 'yyyy-MM-dd' que `fetchVacationsInRange`.
+ */
+export async function fetchVacationsByYear(userIds, year) {
+  if (!userIds || userIds.length === 0) return []
+  const { data, error } = await supabase
+    .from('vacations')
+    .select('id, user_id, start_date, end_date, status')
+    .in('user_id', userIds)
+    .not('status', 'in', `(${EXCLUDED_VACATION_STATUSES.join(',')})`)
+    .lte('start_date', `${year}-12-31`)
+    .gte('end_date', `${year}-01-01`)
+    .order('start_date')
+  if (error) throw error
+  return data ?? []
+}

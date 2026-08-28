@@ -27,3 +27,6 @@ coverage/
 # Mutation testing (Stryker)
 reports/
 .stryker-tmp/
+
+# Supabase CLI local state
+supabase/.temp/

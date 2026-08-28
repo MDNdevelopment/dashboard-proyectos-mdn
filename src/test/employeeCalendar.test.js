@@ -5,6 +5,7 @@ import {
   groupEventsByDay,
   EVENT_TYPES,
   PROBATION_DAYS,
+  vacationDays,
 } from '../utils/employeeCalendar'
 
 function emp(overrides = {}) {
@@ -296,5 +297,28 @@ describe('EVENT_TYPES', () => {
       expect(EVENT_TYPES[k]).toHaveProperty('pill')
       expect(typeof EVENT_TYPES[k].order).toBe('number')
     })
+  })
+})
+
+describe('vacationDays', () => {
+  it('cuenta 1 día cuando inicio y fin son el mismo día', () => {
+    expect(vacationDays('2026-03-10', '2026-03-10')).toBe(1)
+  })
+
+  it('cuenta inclusivo dentro del mismo mes', () => {
+    expect(vacationDays('2026-03-10', '2026-03-20')).toBe(11)
+  })
+
+  it('cuenta correcto cruzando meses', () => {
+    expect(vacationDays('2026-03-25', '2026-04-05')).toBe(12)
+  })
+
+  it('cuenta correcto cruzando años', () => {
+    expect(vacationDays('2025-12-28', '2026-01-05')).toBe(9)
+  })
+
+  it('devuelve 0 si falta alguna fecha', () => {
+    expect(vacationDays('', '2026-01-05')).toBe(0)
+    expect(vacationDays('2026-01-05', '')).toBe(0)
   })
 })

@@ -36,6 +36,9 @@ const mockLoadHeldClientIdsForLine = vi.fn()
 const mockLoadFixedTaskMarks = vi.fn()
 const mockCountPiezasForLine = vi.fn()
 const mockCountPautasRealizadasByClient = vi.fn()
+const mockLoadChecks = vi.fn()
+const mockCountCnpSolicitudesForLine = vi.fn()
+const mockCountTareasSolicitudesForLine = vi.fn()
 
 vi.mock('../components/metricas/metricsApi', () => ({
   loadReport: (...a) => mockLoadReport(...a),
@@ -44,6 +47,18 @@ vi.mock('../components/metricas/metricsApi', () => ({
   loadCompanyEmployees: (...a) => mockLoadCompanyEmployees(...a),
   upsertReport: (...a) => mockUpsertReport(...a),
   loadFixedTaskMarks: (...a) => mockLoadFixedTaskMarks(...a),
+}))
+
+vi.mock('../components/chequeo/chequeoApi', () => ({
+  loadChecks: (...a) => mockLoadChecks(...a),
+}))
+
+vi.mock('../components/cnp/cnpApi', () => ({
+  countCnpSolicitudesForLine: (...a) => mockCountCnpSolicitudesForLine(...a),
+}))
+
+vi.mock('../components/tareas/tareasMetricsApi', () => ({
+  countTareasSolicitudesForLine: (...a) => mockCountTareasSolicitudesForLine(...a),
 }))
 
 vi.mock('../components/ads/campaignSpendApi', async () => {
@@ -88,6 +103,13 @@ describe('OperacionesView — "5. Nº Pautas" (Realizadas)', () => {
     mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: [], error: null })
     mockLoadFixedTaskMarks.mockResolvedValue({ data: [], error: null })
     mockCountPiezasForLine.mockResolvedValue({ piezas: 0, editadas: 0, error: null })
+    mockLoadChecks.mockResolvedValue({ data: [], error: null })
+    mockCountCnpSolicitudesForLine.mockResolvedValue({ solicitudes: 0, entregados: 0, error: null })
+    mockCountTareasSolicitudesForLine.mockResolvedValue({
+      solicitudes: 0,
+      entregados: 0,
+      error: null,
+    })
   })
 
   it('agosto 2026 (previo a septiembre): Realizadas y Meta se pueden editar a mano', async () => {
