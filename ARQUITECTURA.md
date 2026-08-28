@@ -11,16 +11,16 @@ Autenticación.
 
 ## 1. Visión general
 
-| Capa                  | Tecnología                                                                                                                                                               |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Frontend              | React 18 + Vite, React Router v6 (`BrowserRouter`)                                                                                                                       |
-| Estilos               | Tailwind CSS 3 · DM Sans / DM Mono · colores hex hardcoded                                                                                                               |
-| Backend               | Supabase (PostgreSQL, Auth, Realtime, Edge Functions)                                                                                                                    |
-| Deploy                | Netlify (SPA redirect, `netlify.toml`)                                                                                                                                   |
-| Imágenes              | **Cloudinary** (`src/utils/uploadToCloudinary.js`) — no Supabase Storage                                                                                                 |
-| IA                    | Gemini (Evaluaciones vía Netlify fn `evaluation-analysis.js`; resumen ejecutivo del Home vía Netlify fn `ceo-analysis.js`, §2.2)                                         |
-| Notificaciones email  | Resend (Edge fn `notify-campaign-assignee`) + Edge fn `express` (tickets) + Edge fn `notify-dispatch` (asignaciones de tarea/proyecto/reunión, recordatorios de reunión) |
-| Notificaciones in-app | Tabla `notifications` con campanita realtime en toda la app (`NotificationBell.jsx`)                                                                                     |
+| Capa                  | Tecnología                                                                                                                                                                                                                                      |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontend              | React 18 + Vite, React Router v6 (`BrowserRouter`)                                                                                                                                                                                              |
+| Estilos               | Tailwind CSS 3 · DM Sans / DM Mono · colores hex hardcoded                                                                                                                                                                                      |
+| Backend               | Supabase (PostgreSQL, Auth, Realtime, Edge Functions)                                                                                                                                                                                           |
+| Deploy                | Netlify (SPA redirect, `netlify.toml`)                                                                                                                                                                                                          |
+| Imágenes              | **Cloudinary** (`src/utils/uploadToCloudinary.js`: `uploadToCloudinary`/`deleteFromCloudinary`) — no Supabase Storage. Edge fn `express` firma tanto la subida como el borrado (`action: 'destroy'`) con el API secret; el cliente nunca lo ve. |
+| IA                    | Gemini (Evaluaciones vía Netlify fn `evaluation-analysis.js`; resumen ejecutivo del Home vía Netlify fn `ceo-analysis.js`, §2.2)                                                                                                                |
+| Notificaciones email  | Resend (Edge fn `notify-campaign-assignee`) + Edge fn `express` (tickets) + Edge fn `notify-dispatch` (asignaciones de tarea/proyecto/reunión, recordatorios de reunión)                                                                        |
+| Notificaciones in-app | Tabla `notifications` con campanita realtime en toda la app (`NotificationBell.jsx`)                                                                                                                                                            |
 
 ### Punto de entrada y routing
 

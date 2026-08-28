@@ -45,7 +45,7 @@ export function cropToBlob(image, completedCrop) {
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(
-      blob => {
+      (blob) => {
         if (blob) resolve(blob)
         else reject(new Error('No se pudo generar el blob de la imagen'))
       },
@@ -84,11 +84,43 @@ export async function uploadToCloudinary(blob, publicId, uploadPreset) {
   fd.append('public_id', pid)
   fd.append('api_key', apiKey)
 
-  const res = await fetch(
-    `https://api.cloudinary.com/v1_1/${cloud}/image/upload`,
-    { method: 'POST', body: fd },
-  )
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${cloud}/image/upload`, {
+    method: 'POST',
+    body: fd,
+  })
   if (!res.ok) throw new Error('Error al subir la imagen a Cloudinary')
   const { secure_url } = await res.json()
   return secure_url
+}
+
+/**
+ * Elimina un asset de Cloudinary por su public_id (mismo Edge Function "express"
+ * firma el borrado; el API secret nunca sale del servidor).
+ * @param {string} publicId
+ * @returns {Promise<void>}
+ */
+export async function deleteFromCloudinary(publicId) {
+  const cloud = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME
+  const apiKey = import.meta.env.VITE_CLOUDINARY_API_KEY
+
+  const { data, error } = await supabase.functions.invoke('express', {
+    body: { publicId, action: 'destroy' },
+  })
+  if (error || !data) throw new Error('Error al obtener la firma de Cloudinary')
+
+  const fd = new FormData()
+  fd.append('public_id', publicId)
+  fd.append('signature', data.signature)
+  fd.append('timestamp', data.timestamp)
+  fd.append('api_key', apiKey)
+
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${cloud}/image/destroy`, {
+    method: 'POST',
+    body: fd,
+  })
+  if (!res.ok) throw new Error('Error al eliminar la imagen de Cloudinary')
+  const { result } = await res.json()
+  if (result !== 'ok' && result !== 'not found') {
+    throw new Error('Error al eliminar la imagen de Cloudinary')
+  }
 }

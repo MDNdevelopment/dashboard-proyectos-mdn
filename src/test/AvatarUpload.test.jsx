@@ -42,6 +42,7 @@ vi.mock('../utils/uploadToCloudinary', () => ({
   uploadToCloudinary: vi
     .fn()
     .mockResolvedValue('https://res.cloudinary.com/mdnclientes/image/upload/v1/avatar.webp'),
+  deleteFromCloudinary: vi.fn().mockResolvedValue(undefined),
 }))
 
 // react-image-crop: devuelve un área completada cuando se hace click
@@ -63,9 +64,14 @@ vi.mock('react-image-crop', () => ({
 }))
 
 // ─── Importaciones del código bajo prueba ─────────────────────────────────────
-import { uploadToCloudinary } from '../utils/uploadToCloudinary'
+import { uploadToCloudinary, deleteFromCloudinary } from '../utils/uploadToCloudinary'
 import { supabase } from '../supabase'
 import AvatarUpload from '../components/empresa/AvatarUpload'
+
+const MOCK_USER_WITH_PHOTO = {
+  ...MOCK_USER,
+  avatar_url: 'https://res.cloudinary.com/mdnclientes/image/upload/v1/avatar.webp',
+}
 
 // ─── Helpers de test ──────────────────────────────────────────────────────────
 /**
@@ -231,6 +237,73 @@ describe('uploadToCloudinary (helper real)', () => {
   })
 })
 
+describe('deleteFromCloudinary (helper real)', () => {
+  beforeEach(() => {
+    vi.stubEnv('VITE_CLOUDINARY_CLOUD_NAME', CLOUD)
+    vi.stubEnv('VITE_CLOUDINARY_API_KEY', API_KEY)
+
+    supabase.functions.invoke.mockResolvedValue({
+      data: { signature: 'sig123', timestamp: 1700000000 },
+      error: null,
+    })
+  })
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
+  it('pide la firma con action=destroy y hace POST a /image/destroy', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ result: 'ok' }) }),
+    )
+
+    const { deleteFromCloudinary: realDelete } =
+      await import('../utils/uploadToCloudinary?real2').catch(
+        () => import('../utils/uploadToCloudinary'),
+      )
+
+    await realDelete('user-123')
+
+    expect(supabase.functions.invoke).toHaveBeenCalledWith(
+      'express',
+      expect.objectContaining({ body: { publicId: 'user-123', action: 'destroy' } }),
+    )
+    expect(fetch).toHaveBeenCalledWith(
+      `https://api.cloudinary.com/v1_1/${CLOUD}/image/destroy`,
+      expect.objectContaining({ method: 'POST' }),
+    )
+    const [, callOpts] = fetch.mock.calls[0]
+    expect(callOpts.body.get('public_id')).toBe('user-123')
+    expect(callOpts.body.get('signature')).toBe('sig123')
+    expect(callOpts.body.get('api_key')).toBe(API_KEY)
+  })
+
+  it('no lanza error si Cloudinary responde "not found" (asset ya no existía)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ result: 'not found' }) }),
+    )
+    const { deleteFromCloudinary: realDelete } =
+      await import('../utils/uploadToCloudinary?real2').catch(
+        () => import('../utils/uploadToCloudinary'),
+      )
+    await expect(realDelete('user-123')).resolves.toBeUndefined()
+  })
+
+  it('lanza un error cuando la respuesta no es ok', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) }))
+    const { deleteFromCloudinary: realDelete } =
+      await import('../utils/uploadToCloudinary?real2').catch(
+        () => import('../utils/uploadToCloudinary'),
+      )
+    await expect(realDelete('user-123')).rejects.toThrow(
+      'Error al eliminar la imagen de Cloudinary',
+    )
+  })
+})
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // 2. Componente AvatarUpload
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -238,6 +311,7 @@ describe('AvatarUpload', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.clearAllMocks()
+    vi.restoreAllMocks()
   })
 
   it('muestra las iniciales del usuario cuando no hay avatar_url', () => {
@@ -339,5 +413,79 @@ describe('AvatarUpload', () => {
     await waitFor(() => {
       expect(screen.queryByText('Recortar foto')).not.toBeInTheDocument()
     })
+  })
+
+  it('no muestra "Quitar foto" cuando el usuario no tiene avatar_url', () => {
+    render(<AvatarUpload user={MOCK_USER} onUploaded={vi.fn()} size={72} label="Cambiar foto" />)
+    expect(screen.queryByText('Quitar foto')).not.toBeInTheDocument()
+  })
+
+  it('muestra "Quitar foto" cuando el usuario tiene avatar_url', () => {
+    render(
+      <AvatarUpload
+        user={MOCK_USER_WITH_PHOTO}
+        onUploaded={vi.fn()}
+        size={72}
+        label="Cambiar foto"
+      />,
+    )
+    expect(screen.getByText('Quitar foto')).toBeInTheDocument()
+  })
+
+  it('pide confirmación y no elimina nada si el usuario cancela', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const onUploaded = vi.fn()
+    render(
+      <AvatarUpload
+        user={MOCK_USER_WITH_PHOTO}
+        onUploaded={onUploaded}
+        size={72}
+        label="Cambiar foto"
+      />,
+    )
+    await userEvent.click(screen.getByText('Quitar foto'))
+    expect(deleteFromCloudinary).not.toHaveBeenCalled()
+    expect(onUploaded).not.toHaveBeenCalled()
+  })
+
+  it('al confirmar, borra el asset de Cloudinary y llama a onUploaded(null)', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const onUploaded = vi.fn()
+    render(
+      <AvatarUpload
+        user={MOCK_USER_WITH_PHOTO}
+        onUploaded={onUploaded}
+        size={72}
+        label="Cambiar foto"
+      />,
+    )
+    await userEvent.click(screen.getByText('Quitar foto'))
+
+    await waitFor(() => {
+      expect(deleteFromCloudinary).toHaveBeenCalledWith(MOCK_USER_WITH_PHOTO.user_id)
+      expect(onUploaded).toHaveBeenCalledWith(null)
+    })
+  })
+
+  it('muestra un error si falla el borrado en Cloudinary', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    deleteFromCloudinary.mockRejectedValueOnce(
+      new Error('Error al eliminar la imagen de Cloudinary'),
+    )
+    const onUploaded = vi.fn()
+    render(
+      <AvatarUpload
+        user={MOCK_USER_WITH_PHOTO}
+        onUploaded={onUploaded}
+        size={72}
+        label="Cambiar foto"
+      />,
+    )
+    await userEvent.click(screen.getByText('Quitar foto'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Error al eliminar la imagen de Cloudinary')).toBeInTheDocument()
+    })
+    expect(onUploaded).not.toHaveBeenCalled()
   })
 })
