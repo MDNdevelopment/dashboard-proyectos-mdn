@@ -181,14 +181,26 @@ export async function loadPiezas(companyId) {
     .order('position', { ascending: true })
 }
 
-/** Inserta un lote de piezas nuevas para un editor, continuando `position` desde `startPosition`. */
-export async function createPiezas(companyId, pautaId, editorUserId, nombres, startPosition = 0) {
+/**
+ * Inserta un lote de piezas nuevas para un editor, continuando `position` desde
+ * `startPosition`. `formato` (V/R/F) es opcional: se pasa cuando la pauta tiene un único
+ * formato marcado, para no obligar a elegirlo pieza por pieza en el caso común.
+ */
+export async function createPiezas(
+  companyId,
+  pautaId,
+  editorUserId,
+  nombres,
+  startPosition = 0,
+  formato = null,
+) {
   const rows = nombres.map((nombre, i) => ({
     company_id: companyId,
     pauta_id: pautaId,
     editor_user_id: editorUserId,
     nombre,
     position: startPosition + i,
+    formato,
   }))
   return supabase.from('av_pauta_piezas').insert(rows).select()
 }
@@ -204,7 +216,7 @@ export async function deletePiezas(ids) {
 }
 
 function sanitizePiezaFields(fields) {
-  const allowed = ['editor_user_id', 'nombre', 'status', 'position']
+  const allowed = ['editor_user_id', 'nombre', 'status', 'position', 'formato']
   const out = {}
   for (const key of allowed) {
     if (key in fields) out[key] = fields[key] === '' ? null : fields[key]
@@ -241,6 +253,7 @@ function sanitizeFields(fields) {
     'submitted',
     'piezas_totales',
     'piezas_editadas',
+    'piezas_por_formato',
   ]
   const out = {}
   for (const key of allowed) {
@@ -254,5 +267,6 @@ function sanitizeFields(fields) {
   if ('recurso_ids' in fields) out.recurso_ids = fields.recurso_ids ?? []
   if ('piezas_totales' in fields) out.piezas_totales = Number(fields.piezas_totales) || 0
   if ('piezas_editadas' in fields) out.piezas_editadas = Number(fields.piezas_editadas) || 0
+  if ('piezas_por_formato' in fields) out.piezas_por_formato = fields.piezas_por_formato ?? {}
   return out
 }

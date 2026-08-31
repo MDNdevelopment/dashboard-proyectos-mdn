@@ -26,6 +26,7 @@ import {
   visibleSolicitudes,
   grillaStatus,
   piezasProgress,
+  formatoBreakdownLabel,
   resourceConflicts,
   sortAgenda,
   isOutOfMonth,
@@ -1083,7 +1084,7 @@ function AgendaRow({
               type="date"
               className="input-base input-compact"
               defaultValue={p.pauta_date ?? ''}
-              onBlur={(e) => onFields(p, { pauta_date: e.target.value || null })}
+              onChange={(e) => onFields(p, { pauta_date: e.target.value || null })}
             />
           ) : (
             <span className="text-[13px]">
@@ -1305,6 +1306,11 @@ function RealizadasTable({
                   <span className="text-[#bbb] text-[12px]">
                     {p.piezas_totales ? `0/${p.piezas_totales}` : 'sin piezas'}
                   </span>
+                )}
+                {formatoBreakdownLabel(p) && (
+                  <div className="text-[11px] text-[#a29b8c] mt-0.5">
+                    {formatoBreakdownLabel(p)}
+                  </div>
                 )}
               </td>
               <td className="px-2 py-1.5">

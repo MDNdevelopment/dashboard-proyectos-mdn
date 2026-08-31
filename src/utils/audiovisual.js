@@ -638,6 +638,66 @@ export function defaultPiezaName(index) {
   return `Video #${index + 1}`
 }
 
+// ─── Piezas por formato (Video/Reel/Foto) de una pauta 'realizada' ─────────
+
+/**
+ * Desglose de piezas por formato de una pauta, acotado a los formatos marcados en
+ * `pauta.formats` (en el orden fijo V/R/F) — si un formato marcado todavía no tiene
+ * conteo se completa con ceros, y los formatos no marcados no aparecen aunque quedara
+ * basura de un desmarcado anterior en la columna.
+ * @param {{formats?: string[], piezas_por_formato?: object}} pauta
+ * @returns {Record<'V'|'R'|'F', {salieron:number, editadas:number}>}
+ */
+export function piezasPorFormato(pauta) {
+  const formats = pauta.formats ?? []
+  const raw = pauta.piezas_por_formato ?? {}
+  const out = {}
+  FORMAT_KEYS.filter((code) => formats.includes(code)).forEach((code) => {
+    const entry = raw[code] ?? {}
+    out[code] = {
+      salieron: Math.max(0, Number(entry.salieron) || 0),
+      editadas: Math.max(0, Number(entry.editadas) || 0),
+    }
+  })
+  return out
+}
+
+/**
+ * Siguiente valor de `piezas_por_formato` tras editar un campo de un formato — listo
+ * para mandar a `onFields(pauta, { piezas_por_formato: ... })`. Poda a los formatos
+ * actualmente marcados en la pauta (si se desmarca un formato, su conteo desaparece) y
+ * clampea el valor editado a un entero >= 0.
+ * @param {object} pauta
+ * @param {'V'|'R'|'F'} code
+ * @param {'salieron'|'editadas'} key
+ * @param {number|string} value
+ */
+export function setPiezaFormatoCount(pauta, code, key, value) {
+  const next = piezasPorFormato(pauta)
+  const current = next[code] ?? { salieron: 0, editadas: 0 }
+  next[code] = { ...current, [key]: Math.max(0, Math.round(Number(value)) || 0) }
+  return next
+}
+
+/** Suma `salieron`/`editadas` de un objeto `piezas_por_formato` (ya acotado o crudo). */
+export function sumPiezasPorFormato(obj) {
+  return Object.values(obj ?? {}).reduce(
+    (acc, entry) => ({
+      salieron: acc.salieron + (Number(entry?.salieron) || 0),
+      editadas: acc.editadas + (Number(entry?.editadas) || 0),
+    }),
+    { salieron: 0, editadas: 0 },
+  )
+}
+
+/** 'Reel 3/2 · Foto 5/5' (salieron/editadas) — '' si la pauta no usa el desglose por formato. */
+export function formatoBreakdownLabel(pauta) {
+  const breakdown = piezasPorFormato(pauta)
+  return FORMAT_KEYS.filter((code) => code in breakdown)
+    .map((code) => `${FORMAT_LABELS[code]} ${breakdown[code].salieron}/${breakdown[code].editadas}`)
+    .join(' · ')
+}
+
 // ─── Generador de agenda para WhatsApp ─────────────────────────────────────
 
 /** 'YYYY-MM-DD' local, mismo formato que `pauta_date` — comparable lexicográficamente. */

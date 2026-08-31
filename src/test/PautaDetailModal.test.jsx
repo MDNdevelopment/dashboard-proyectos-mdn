@@ -10,10 +10,11 @@ import { vi } from 'vitest'
 import PautaDetailModal from '../components/pautas/PautaDetailModal'
 
 const mockCreatePiezas = vi.fn().mockResolvedValue({ data: [], error: null })
+const mockUpdatePieza = vi.fn().mockResolvedValue({ data: null, error: null })
 
 vi.mock('../components/pautas/avPautasApi', () => ({
   createPiezas: (...a) => mockCreatePiezas(...a),
-  updatePieza: vi.fn().mockResolvedValue({ data: null, error: null }),
+  updatePieza: (...a) => mockUpdatePieza(...a),
   deletePiezas: vi.fn().mockResolvedValue({ data: null, error: null }),
 }))
 
@@ -193,7 +194,9 @@ describe('PautaDetailModal', () => {
       target: { value: 'Lizdania' },
     })
     fireEvent.click(screen.getByText('Lizdania Andrade'))
-    expect(mockCreatePiezas).toHaveBeenCalledWith('c1', 'p1', 'u1', ['Video #1'], 0)
+    // La pauta base tiene un único formato marcado ('V'), así que se autoasigna sin
+    // pedirlo pieza por pieza.
+    expect(mockCreatePiezas).toHaveBeenCalledWith('c1', 'p1', 'u1', ['Video #1'], 0, 'V')
   })
 
   it('si el insert falla (ej. la tabla av_pauta_piezas no existe todavía), muestra el error en vez de fallar en silencio', async () => {
@@ -214,11 +217,9 @@ describe('PautaDetailModal', () => {
   })
 
   it('si onFields (piezas totales) devuelve error, lo muestra traducido en vez de fallar en silencio', async () => {
-    const onFields = vi
-      .fn()
-      .mockResolvedValue({
-        error: { code: '42883', message: 'operator does not exist: uuid = text' },
-      })
+    const onFields = vi.fn().mockResolvedValue({
+      error: { code: '42883', message: 'operator does not exist: uuid = text' },
+    })
     render(
       <PautaDetailModal
         {...baseProps({
@@ -238,5 +239,180 @@ describe('PautaDetailModal', () => {
         'No se pudo guardar el cambio. Vuelve a intentarlo; si sigue pasando, avisa a soporte.',
       ),
     ).toBeInTheDocument()
+  })
+
+  describe('piezas por formato', () => {
+    it('pauta con Reel y Foto marcados: pide "Salieron" de cada uno y ninguno de Video; "Editadas" es solo lectura', () => {
+      render(
+        <PautaDetailModal
+          {...baseProps({ pauta: pauta({ status: 'realizada', formats: ['R', 'F'] }) })}
+        />,
+      )
+      expect(screen.getByText('Reel')).toBeInTheDocument()
+      expect(screen.getByText('Foto')).toBeInTheDocument()
+      expect(screen.queryByText('Video de marca')).not.toBeInTheDocument()
+      // Un input "Salieron" por formato (2); "Editadas" ya no es un input — lo deriva
+      // el checklist de piezas por formato.
+      expect(document.querySelectorAll('input[type="number"]').length).toBe(2)
+    })
+
+    it('escribir en "Salieron" de Foto llama a onFields con el piezas_por_formato correcto', () => {
+      const onFields = vi.fn().mockResolvedValue({ error: null })
+      render(
+        <PautaDetailModal
+          {...baseProps({
+            pauta: pauta({
+              status: 'realizada',
+              formats: ['R', 'F'],
+              piezas_por_formato: { R: { salieron: 3, editadas: 2 } },
+            }),
+            onFields,
+          })}
+        />,
+      )
+      const salieronInputs = document.querySelectorAll('input[type="number"]')
+      // Orden fijo V/R/F: con formats=['R','F'] el primer input es "Salieron" de Reel,
+      // el segundo es "Salieron" de Foto.
+      fireEvent.blur(salieronInputs[1], { target: { value: '5' } })
+      expect(onFields).toHaveBeenCalledWith(expect.objectContaining({ id: 'p1' }), {
+        piezas_por_formato: { R: { salieron: 3, editadas: 2 }, F: { salieron: 5, editadas: 0 } },
+      })
+    })
+
+    it('"Editadas" se muestra de solo lectura, tomada de piezas_por_formato (la deriva el checklist)', () => {
+      render(
+        <PautaDetailModal
+          {...baseProps({
+            pauta: pauta({
+              status: 'realizada',
+              formats: ['F'],
+              piezas_por_formato: { F: { salieron: 5, editadas: 3 } },
+            }),
+          })}
+        />,
+      )
+      expect(screen.getByText('3')).toBeInTheDocument()
+      // No hay ningún input para "Editadas": solo el de "Salieron".
+      expect(document.querySelectorAll('input[type="number"]').length).toBe(1)
+    })
+
+    it('muestra el total ya sincronizado por el trigger de BD, no una suma recalculada en cliente', () => {
+      render(
+        <PautaDetailModal
+          {...baseProps({
+            pauta: pauta({
+              status: 'realizada',
+              formats: ['R', 'F'],
+              piezas_por_formato: {
+                R: { salieron: 3, editadas: 2 },
+                F: { salieron: 5, editadas: 5 },
+              },
+              piezas_totales: 8,
+              piezas_editadas: 7,
+            }),
+          })}
+        />,
+      )
+      expect(screen.getByText('8/7')).toBeInTheDocument()
+    })
+
+    it('pauta sin formatos marcados conserva el input único "Piezas totales" (camino legacy)', () => {
+      render(
+        <PautaDetailModal
+          {...baseProps({ pauta: pauta({ status: 'realizada', formats: [], piezas_totales: 4 }) })}
+        />,
+      )
+      expect(screen.getByText('Piezas totales')).toBeInTheDocument()
+      expect(screen.queryByText('Piezas por formato')).not.toBeInTheDocument()
+      expect(document.querySelectorAll('input[type="number"]').length).toBe(1)
+    })
+  })
+
+  describe('checklist de piezas ligado a formato', () => {
+    it('con un único formato marcado, la pieza se etiqueta sola sin mostrar selector', () => {
+      const piezas = [
+        {
+          id: 'pz1',
+          pauta_id: 'p1',
+          editor_user_id: 'u1',
+          nombre: 'Video #1',
+          status: 'listo',
+          formato: 'V',
+          position: 0,
+        },
+      ]
+      render(
+        <PautaDetailModal
+          {...baseProps({
+            pauta: pauta({ status: 'realizada', formats: ['V'], piezas_totales: 1 }),
+            piezas,
+          })}
+        />,
+      )
+      expect(document.querySelector('select[aria-label="Formato de Video #1"]')).toBeNull()
+    })
+
+    it('con varios formatos marcados, elegir el formato de una pieza llama a updatePieza', async () => {
+      mockUpdatePieza.mockResolvedValueOnce({
+        data: {
+          id: 'pz1',
+          pauta_id: 'p1',
+          editor_user_id: 'u1',
+          nombre: 'Video #1',
+          status: 'listo',
+          formato: 'F',
+        },
+        error: null,
+      })
+      const piezas = [
+        {
+          id: 'pz1',
+          pauta_id: 'p1',
+          editor_user_id: 'u1',
+          nombre: 'Video #1',
+          status: 'listo',
+          formato: null,
+          position: 0,
+        },
+      ]
+      render(
+        <PautaDetailModal
+          {...baseProps({
+            pauta: pauta({ status: 'realizada', formats: ['R', 'F'], piezas_totales: 1 }),
+            piezas,
+          })}
+        />,
+      )
+      const select = screen.getByLabelText('Formato de Video #1')
+      fireEvent.change(select, { target: { value: 'F' } })
+      expect(mockUpdatePieza).toHaveBeenCalledWith('pz1', { formato: 'F' })
+    })
+
+    it('sin canCoordinate, el formato de la pieza se muestra como texto, no como selector', () => {
+      const piezas = [
+        {
+          id: 'pz1',
+          pauta_id: 'p1',
+          editor_user_id: 'u1',
+          nombre: 'Video #1',
+          status: 'listo',
+          formato: 'R',
+          position: 0,
+        },
+      ]
+      render(
+        <PautaDetailModal
+          {...baseProps({
+            pauta: pauta({ status: 'realizada', formats: ['R', 'F'], piezas_totales: 1 }),
+            piezas,
+            canCoordinate: false,
+          })}
+        />,
+      )
+      expect(screen.queryByLabelText('Formato de Video #1')).not.toBeInTheDocument()
+      // "Reel" aparece también en el bloque "Piezas por formato" — basta con confirmar
+      // que la etiqueta de la pieza (no un <select>) está presente.
+      expect(screen.getAllByText('Reel').length).toBeGreaterThan(0)
+    })
   })
 })

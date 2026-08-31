@@ -26,6 +26,10 @@ import {
   piezasByEditor,
   editorNames,
   defaultPiezaName,
+  piezasPorFormato,
+  setPiezaFormatoCount,
+  sumPiezasPorFormato,
+  formatoBreakdownLabel,
   isExternalId,
   externalAsUser,
   externalUsersForRole,
@@ -566,6 +570,87 @@ describe('defaultPiezaName', () => {
   it('genera nombres "Video #N" 1-indexados', () => {
     expect(defaultPiezaName(0)).toBe('Video #1')
     expect(defaultPiezaName(4)).toBe('Video #5')
+  })
+})
+
+describe('piezasPorFormato', () => {
+  it('objeto vacío si la pauta no tiene formatos marcados', () => {
+    expect(piezasPorFormato(pauta({ formats: [] }))).toEqual({})
+  })
+
+  it('acota al orden fijo V/R/F, completando con ceros los formatos sin conteo', () => {
+    const p = pauta({ formats: ['R', 'F'] })
+    expect(piezasPorFormato(p)).toEqual({
+      R: { salieron: 0, editadas: 0 },
+      F: { salieron: 0, editadas: 0 },
+    })
+  })
+
+  it('ignora en el resultado un formato con conteo pero ya desmarcado en la pauta', () => {
+    const p = pauta({
+      formats: ['R'],
+      piezas_por_formato: { R: { salieron: 3, editadas: 2 }, F: { salieron: 5, editadas: 5 } },
+    })
+    expect(piezasPorFormato(p)).toEqual({ R: { salieron: 3, editadas: 2 } })
+  })
+
+  it('respeta el orden V/R/F sin importar el orden de formats', () => {
+    const p = pauta({
+      formats: ['F', 'V'],
+      piezas_por_formato: { F: { salieron: 1, editadas: 1 }, V: { salieron: 2, editadas: 0 } },
+    })
+    expect(Object.keys(piezasPorFormato(p))).toEqual(['V', 'F'])
+  })
+})
+
+describe('setPiezaFormatoCount', () => {
+  it('actualiza solo el campo editado, preservando el resto del formato', () => {
+    const p = pauta({ formats: ['R'], piezas_por_formato: { R: { salieron: 3, editadas: 2 } } })
+    expect(setPiezaFormatoCount(p, 'R', 'editadas', 3)).toEqual({ R: { salieron: 3, editadas: 3 } })
+  })
+
+  it('clampea valores negativos o no numéricos a 0', () => {
+    const p = pauta({ formats: ['F'] })
+    expect(setPiezaFormatoCount(p, 'F', 'salieron', -5)).toEqual({
+      F: { salieron: 0, editadas: 0 },
+    })
+    expect(setPiezaFormatoCount(p, 'F', 'salieron', 'abc')).toEqual({
+      F: { salieron: 0, editadas: 0 },
+    })
+  })
+
+  it('poda formatos desmarcados: el conteo de un formato quitado de la pauta no sobrevive', () => {
+    const p = pauta({
+      formats: ['R'],
+      piezas_por_formato: { R: { salieron: 1, editadas: 0 }, F: { salieron: 5, editadas: 5 } },
+    })
+    expect(setPiezaFormatoCount(p, 'R', 'salieron', 2)).toEqual({ R: { salieron: 2, editadas: 0 } })
+  })
+})
+
+describe('sumPiezasPorFormato', () => {
+  it('suma salieron/editadas de todos los formatos', () => {
+    expect(
+      sumPiezasPorFormato({ R: { salieron: 3, editadas: 2 }, F: { salieron: 5, editadas: 5 } }),
+    ).toEqual({ salieron: 8, editadas: 7 })
+  })
+
+  it('objeto vacío → 0/0', () => {
+    expect(sumPiezasPorFormato({})).toEqual({ salieron: 0, editadas: 0 })
+  })
+})
+
+describe('formatoBreakdownLabel', () => {
+  it('formatea "Formato salieron/editadas" separado por ·, en orden V/R/F', () => {
+    const p = pauta({
+      formats: ['F', 'R'],
+      piezas_por_formato: { R: { salieron: 3, editadas: 2 }, F: { salieron: 5, editadas: 5 } },
+    })
+    expect(formatoBreakdownLabel(p)).toBe('Reel 3/2 · Foto 5/5')
+  })
+
+  it('pauta sin desglose por formato → cadena vacía', () => {
+    expect(formatoBreakdownLabel(pauta({ formats: [] }))).toBe('')
   })
 })
 

@@ -4,6 +4,8 @@ import {
   GRILLA_STATUS_LABELS,
   PIEZA_STATUS_META,
   PIEZA_STATUS_ORDER,
+  FORMAT_KEYS,
+  FORMAT_LABELS,
   formatCodes,
   formatTime12,
   formatDayShort,
@@ -11,6 +13,8 @@ import {
   grillaStatus,
   piezasProgress,
   piezasByEditor,
+  piezasPorFormato,
+  setPiezaFormatoCount,
   defaultPiezaName,
   pautaErrorMessage,
 } from '../../utils/audiovisual'
@@ -34,10 +38,20 @@ const STATUS_BADGE = {
  * header/footer fijos y body scrolleable, ver src/test/modalLayout.test.jsx).
  *
  * Cuando la pauta está 'realizada', además de la info de siempre se muestra la sección de
- * edición: piezas totales (número manual), editores asignados (AttendeePicker, igual que
+ * edición: piezas totales, editores asignados (AttendeePicker, igual que
  * recursos/asistentes en AvPhaseTable) y, debajo de cada uno, su checklist de piezas —
- * nombre editable + selector de estado (StatusPill). `piezas_editadas` NO se edita acá: la
- * deriva un trigger en BD a partir de cuántas piezas quedan en 'listo'.
+ * nombre editable + selector de estado (StatusPill).
+ *
+ * Piezas totales/editadas tiene dos caminos según si la pauta marcó formatos (V/R/F):
+ * - Con formatos: "salieron" por formato es manual (input); "editadas" por formato es
+ *   SOLO LECTURA — la deriva un trigger en BD contando, por cada pieza del checklist de
+ *   abajo, las que están en 'listo' de ese mismo formato (`av_pauta_piezas.formato`),
+ *   clampeada a "salieron" para que nunca la supere. `piezas_totales`/`piezas_editadas`
+ *   de la pauta se recalculan sumando ese desglose — ver PiezasSection.
+ * - Sin formatos (o pautas anteriores a esta función, con piezas_por_formato vacío):
+ *   camino legacy — piezas_totales es un input manual y piezas_editadas la deriva otro
+ *   trigger a partir de cuántas piezas del checklist de abajo quedan en 'listo', sin
+ *   distinguir formato.
  */
 export default function PautaDetailModal({
   pauta,
@@ -186,8 +200,28 @@ function PiezasSection({
   const editorIds = [...grouped.keys()].filter(Boolean)
   const sinAsignar = grouped.get(null) ?? []
   const asignadas = piezas.length
+  // Formatos marcados en la pauta -> se captura el desglose por formato; si no hay
+  // formatos (pautas anteriores a FormatToggle) se conserva el input único de siempre.
+  const activeFormats = FORMAT_KEYS.filter((code) => (pauta.formats ?? []).includes(code))
+  const usaFormatos = activeFormats.length > 0
+  // Con un solo formato marcado no hace falta elegirlo pieza por pieza: toda pieza nueva
+  // se etiqueta con ese formato automáticamente.
+  const singleFormat = activeFormats.length === 1 ? activeFormats[0] : null
+  const breakdown = piezasPorFormato(pauta)
+  // El total SIEMPRE se lee de las columnas ya sincronizadas por el trigger de BD (en
+  // vez de sumar `breakdown` en cliente): así una pauta que ya tenía piezas_totales
+  // cargado antes de este desglose no "pierde" su número mientras el desglose siga
+  // vacío — solo cambia cuando el coordinador realmente carga los conteos por formato.
   const totales = Number(pauta.piezas_totales) || 0
+  const totalEditadas = Number(pauta.piezas_editadas) || 0
   const desalineado = asignadas !== totales
+
+  async function handleSalieronChange(code, value) {
+    setError(null)
+    const next = setPiezaFormatoCount(pauta, code, 'salieron', value)
+    const { error: err } = (await onFields(pauta, { piezas_por_formato: next })) ?? {}
+    if (err) setError(pautaErrorMessage(err))
+  }
 
   async function handleEditorsChange(nextIds) {
     setError(null)
@@ -220,6 +254,7 @@ function PiezasSection({
             editorId,
             [defaultPiezaName(startIndex + i)],
             startIndex + i,
+            singleFormat,
           ),
         ),
       )
@@ -245,6 +280,7 @@ function PiezasSection({
         editorId,
         nombres,
         startIndex,
+        singleFormat,
       )
       if (err) {
         setError(`No se pudieron crear las piezas. ${pautaErrorMessage(err)}`)
@@ -284,28 +320,74 @@ function PiezasSection({
         </div>
       )}
 
-      <div className="mb-3">
-        <label className="block text-[11.5px] font-mono uppercase tracking-wide text-[#999] mb-1">
-          Piezas totales
-        </label>
-        {canCoordinate ? (
-          <input
-            type="number"
-            min="0"
-            className="input-base input-compact text-center"
-            style={{ width: '5rem' }}
-            defaultValue={totales}
-            onBlur={async (e) => {
-              setError(null)
-              const { error: err } =
-                (await onFields(pauta, { piezas_totales: Number(e.target.value) || 0 })) ?? {}
-              if (err) setError(pautaErrorMessage(err))
-            }}
-          />
-        ) : (
-          <span className="font-mono text-[14px] font-semibold">{totales}</span>
-        )}
-      </div>
+      {usaFormatos ? (
+        <div className="mb-3">
+          <p className="text-[11.5px] font-mono uppercase tracking-wide text-[#999] mb-1.5">
+            Piezas por formato
+          </p>
+          <div className="space-y-2">
+            {activeFormats.map((code) => (
+              <div key={code} className="flex items-center gap-3">
+                <span className="text-[13px] text-[#333] flex-1">{FORMAT_LABELS[code]}</span>
+                {canCoordinate ? (
+                  <label className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-[#999]">Salieron</span>
+                    <input
+                      type="number"
+                      min="0"
+                      className="input-base input-compact text-center"
+                      style={{ width: '4rem' }}
+                      defaultValue={breakdown[code].salieron}
+                      onBlur={(e) => handleSalieronChange(code, e.target.value)}
+                    />
+                  </label>
+                ) : (
+                  <span className="text-[12px] text-[#999]">
+                    Salieron <strong className="text-[#333]">{breakdown[code].salieron}</strong>
+                  </span>
+                )}
+                {/* Editadas es de solo lectura: la deriva el checklist de abajo (piezas de
+                    este formato en 'Listo'), clampeada a "Salieron" por el trigger de BD. */}
+                <span
+                  className="text-[12px] text-[#999]"
+                  title="Se calcula solo — piezas de este formato marcadas 'Listo' en el checklist"
+                >
+                  Editadas <strong className="text-[#333]">{breakdown[code].editadas}</strong>
+                </span>
+              </div>
+            ))}
+            <div className="flex items-center gap-2 pt-1 border-t border-[#eeebe0]">
+              <span className="text-[12px] font-semibold text-[#666] flex-1">Total</span>
+              <span className="font-mono text-[13px] font-semibold">
+                {totales}/{totalEditadas}
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="mb-3">
+          <label className="block text-[11.5px] font-mono uppercase tracking-wide text-[#999] mb-1">
+            Piezas totales
+          </label>
+          {canCoordinate ? (
+            <input
+              type="number"
+              min="0"
+              className="input-base input-compact text-center"
+              style={{ width: '5rem' }}
+              defaultValue={totales}
+              onBlur={async (e) => {
+                setError(null)
+                const { error: err } =
+                  (await onFields(pauta, { piezas_totales: Number(e.target.value) || 0 })) ?? {}
+                if (err) setError(pautaErrorMessage(err))
+              }}
+            />
+          ) : (
+            <span className="font-mono text-[14px] font-semibold">{totales}</span>
+          )}
+        </div>
+      )}
 
       {desalineado && (
         <div className="mb-3 px-3 py-2 rounded-lg bg-[#fdf4de] text-[12.5px] text-[#9a7400] font-medium">
@@ -338,6 +420,7 @@ function PiezasSection({
             editor={usersById.get(editorId)}
             piezas={grouped.get(editorId) ?? []}
             canCoordinate={canCoordinate}
+            formatOptions={activeFormats}
             onAssignedChange={(n) => handleAssignedChange(editorId, n)}
             onPiezaChanged={onPiezaChanged}
             onPiezaDeleted={onPiezaDeleted}
@@ -349,6 +432,7 @@ function PiezasSection({
             editor={null}
             piezas={sinAsignar}
             canCoordinate={canCoordinate}
+            formatOptions={activeFormats}
             onPiezaChanged={onPiezaChanged}
             onPiezaDeleted={onPiezaDeleted}
             onError={setError}
@@ -363,6 +447,7 @@ function EditorChecklist({
   editor,
   piezas,
   canCoordinate,
+  formatOptions,
   onAssignedChange,
   onPiezaChanged,
   onPiezaDeleted,
@@ -407,6 +492,7 @@ function EditorChecklist({
               key={pz.id}
               pieza={pz}
               canCoordinate={canCoordinate}
+              formatOptions={formatOptions}
               onChanged={onPiezaChanged}
               onDeleted={onPiezaDeleted}
               onError={onError}
@@ -418,12 +504,22 @@ function EditorChecklist({
   )
 }
 
-function PiezaRow({ pieza, canCoordinate, onChanged, onDeleted, onError }) {
+function PiezaRow({ pieza, canCoordinate, formatOptions, onChanged, onDeleted, onError }) {
   async function handleStatusChange(next) {
     onError?.(null)
     const { data, error: err } = await updatePieza(pieza.id, { status: next })
     if (err) {
       onError?.(`No se pudo cambiar el estado. ${pautaErrorMessage(err)}`)
+      return
+    }
+    if (data) onChanged(data)
+  }
+
+  async function handleFormatoChange(e) {
+    onError?.(null)
+    const { data, error: err } = await updatePieza(pieza.id, { formato: e.target.value || null })
+    if (err) {
+      onError?.(`No se pudo guardar el formato. ${pautaErrorMessage(err)}`)
       return
     }
     if (data) onChanged(data)
@@ -461,6 +557,27 @@ function PiezaRow({ pieza, canCoordinate, onChanged, onDeleted, onError }) {
       ) : (
         <span className="text-[13px] text-[#333] flex-1">{pieza.nombre}</span>
       )}
+      {formatOptions?.length > 1 &&
+        (canCoordinate ? (
+          <select
+            aria-label={`Formato de ${pieza.nombre}`}
+            className="input-base input-compact text-[12px] flex-shrink-0"
+            style={{ width: '5.5rem' }}
+            value={pieza.formato ?? ''}
+            onChange={handleFormatoChange}
+          >
+            <option value="">Sin formato</option>
+            {formatOptions.map((code) => (
+              <option key={code} value={code}>
+                {FORMAT_LABELS[code]}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span className="text-[11px] text-[#999] flex-shrink-0">
+            {pieza.formato ? FORMAT_LABELS[pieza.formato] : 'Sin formato'}
+          </span>
+        ))}
       <StatusPill
         value={pieza.status}
         meta={PIEZA_STATUS_META}
