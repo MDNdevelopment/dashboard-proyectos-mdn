@@ -134,7 +134,27 @@ describe('AiChatWidget', () => {
     await userEvent.type(screen.getByPlaceholderText('Escribe tu pregunta…'), 'hola')
     fireEvent.click(screen.getByRole('button', { name: /enviar/i }))
 
-    await waitFor(() => expect(screen.getByText(/error de red/i)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText(/no pudimos conectar/i)).toBeInTheDocument())
+  })
+
+  it('el botón reintentar reenvía el último mensaje y limpia el error si funciona', async () => {
+    mockAuth(true)
+    global.fetch.mockRejectedValueOnce(new Error('network down')).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ reply: 'Ahora sí.', toolsUsed: [] }),
+    })
+
+    render(<AiChatWidget />)
+    fireEvent.click(screen.getByRole('button', { name: /abrir asistente ia/i }))
+    await userEvent.type(screen.getByPlaceholderText('Escribe tu pregunta…'), 'hola')
+    fireEvent.click(screen.getByRole('button', { name: /enviar/i }))
+    await waitFor(() => expect(screen.getByText(/no pudimos conectar/i)).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /reintentar/i }))
+
+    await waitFor(() => expect(screen.getByText('Ahora sí.')).toBeInTheDocument())
+    expect(screen.queryByText(/no pudimos conectar/i)).not.toBeInTheDocument()
+    expect(global.fetch).toHaveBeenCalledTimes(2)
   })
 
   it('el historial vive solo en memoria: se pierde al desmontar y remontar', async () => {

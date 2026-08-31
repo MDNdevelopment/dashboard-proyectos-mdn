@@ -4,7 +4,7 @@ import AiChatMessage from './AiChatMessage'
 import TypingDots from './TypingDots'
 import { SUGERENCIAS } from './suggestions'
 
-export default function AiChatPanel({ messages, sending, error, send, clear, onClose }) {
+export default function AiChatPanel({ messages, sending, error, send, retry, clear, onClose }) {
   const [input, setInput] = useState('')
   const listRef = useRef(null)
 
@@ -96,8 +96,21 @@ export default function AiChatPanel({ messages, sending, error, send, clear, onC
       </div>
 
       {error && (
-        <div className="mx-4 mb-2 px-3 py-2 rounded-xl bg-red-50 border border-red-200 text-red-700 text-[13px]">
-          {error}
+        <div className="mx-4 mb-2 px-3.5 py-3 rounded-xl bg-red-50 border border-red-200 flex items-start gap-2.5">
+          <span className="text-[16px] leading-none flex-shrink-0" aria-hidden="true">
+            ⚠️
+          </span>
+          <div className="flex-1 min-w-0">
+            <p className="text-[13px] text-red-700">{error}</p>
+            <button
+              type="button"
+              onClick={retry}
+              disabled={sending}
+              className="mt-1.5 text-[12.5px] font-semibold text-red-700 hover:text-red-900 disabled:opacity-50 underline underline-offset-2"
+            >
+              Reintentar
+            </button>
+          </div>
         </div>
       )}
 
