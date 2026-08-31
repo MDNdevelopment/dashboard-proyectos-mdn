@@ -57,6 +57,12 @@ function parseDateKey(value) {
   return new Date(y, m - 1, d)
 }
 
+/** Fecha ('yyyy-MM-dd') en que termina el período de prueba: `hire_date` + `PROBATION_DAYS`. */
+export function probationEndKey(hireDate) {
+  if (!hireDate) return null
+  return format(addDays(parseDateKey(hireDate), PROBATION_DAYS), 'yyyy-MM-dd')
+}
+
 const pad = (n) => String(n).padStart(2, '0')
 
 /** Compone 'yyyy-MM-dd' a partir de componentes numéricos (nunca vía `new Date` + toISOString). */
@@ -205,13 +211,12 @@ export function buildEmployeeCalendarEvents({ employees = [], vacations = [], ye
 
     // Fin de período de prueba: derivado de hire_date + PROBATION_DAYS, solo si sigue activo.
     if (emp.on_probation && emp.hire_date) {
-      const hireDate = parseDateKey(emp.hire_date)
-      const probationEndKey = format(addDays(hireDate, PROBATION_DAYS), 'yyyy-MM-dd')
-      if (probationEndKey >= startKey && probationEndKey <= endKey) {
-        const overdue = probationEndKey < format(new Date(), 'yyyy-MM-dd')
+      const endKeyForEmp = probationEndKey(emp.hire_date)
+      if (endKeyForEmp >= startKey && endKeyForEmp <= endKey) {
+        const overdue = endKeyForEmp < format(new Date(), 'yyyy-MM-dd')
         events.push({
-          id: `probation_end:${emp.user_id}:${probationEndKey}`,
-          dateKey: probationEndKey,
+          id: `probation_end:${emp.user_id}:${endKeyForEmp}`,
+          dateKey: endKeyForEmp,
           type: 'probation_end',
           employeeId: emp.user_id,
           employeeName: name,

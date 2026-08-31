@@ -21,6 +21,7 @@ import {
   monthGridRange,
   buildEmployeeCalendarEvents,
   resolveVacationStatus,
+  probationEndKey,
 } from '../../utils/employeeCalendar'
 
 const VIEW_STORAGE_KEY = 'empresa.empleados.view'
@@ -608,11 +609,14 @@ export default function EmployeesView({ companyId }) {
     .map((e) => {
       const position = e.position?.position_name ?? '—'
       const team = lineOfMember(lines, e.user_id)?.name
+      const base = team ? `${position} · ${team}` : position
+      const endKey = probationEndKey(e.hire_date)
+      const endLabel = endKey ? `Termina el ${endKey.slice(8, 10)}/${endKey.slice(5, 7)}` : null
       return {
         id: e.user_id,
         user: e,
         name: `${e.first_name} ${e.last_name}`,
-        subtitle: team ? `${position} · ${team}` : position,
+        subtitle: endLabel ? `${base} · ${endLabel}` : base,
         badge: null,
         dashed: false,
       }

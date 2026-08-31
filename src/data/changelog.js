@@ -145,6 +145,7 @@ export const CHANGELOG = [
       'Corregido: archivar o restaurar un empleado, y guardarle el sueldo o el nivel de acceso, podían fallar con un error técnico.',
       'Nuevo: en la ficha de un empleado ahora hay un botón "Quitar foto" para borrar su foto de perfil.',
       'En el chat de MAPPI, cuando falla una respuesta ahora se ve un aviso más claro con un botón "Reintentar" para reenviar la pregunta sin tener que escribirla de nuevo.',
+      'En el recuadro "En período de prueba" de Empresa → Empleados, ahora también se indica en qué fecha termina el período de prueba de cada persona (1 mes desde su fecha de ingreso).',
     ],
   },
   {

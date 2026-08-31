@@ -891,6 +891,26 @@ describe('EmployeesView — tarjetas fijas "De vacaciones ahora" / "En período 
     expect(screen.getByText('Diseñador Gráfico · Team Sabrina')).toBeInTheDocument()
   })
 
+  it('en "En período de prueba", el subtítulo muestra cuándo termina (hire_date + 30 días)', async () => {
+    MOCK_VACATIONS.length = 0
+    const luisa = MOCK_USERS.find((u) => u.user_id === 'u9')
+    const originalHireDate = luisa.hire_date
+    luisa.hire_date = format(addDays(new Date(), -10), 'yyyy-MM-dd')
+    const expectedEndKey = format(addDays(new Date(), 20), 'yyyy-MM-dd')
+    const expectedLabel = `Termina el ${expectedEndKey.slice(8, 10)}/${expectedEndKey.slice(5, 7)}`
+    try {
+      renderAsAdmin()
+      await waitFor(() => {
+        expect(screen.getByText('En período de prueba')).toBeInTheDocument()
+      })
+      expect(
+        screen.getByText(`Diseñador Gráfico · Team Sabrina · ${expectedLabel}`),
+      ).toBeInTheDocument()
+    } finally {
+      luisa.hire_date = originalHireDate
+    }
+  })
+
   it('con "Ver eliminados" activo, ninguna de las dos tarjetas se renderiza', async () => {
     const user = userEvent.setup()
     MOCK_VACATIONS.length = 0
