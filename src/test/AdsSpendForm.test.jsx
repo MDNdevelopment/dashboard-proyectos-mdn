@@ -55,7 +55,7 @@ function renderForm(props = {}) {
       onCreated={() => {}}
       onUpdated={() => {}}
       {...props}
-    />
+    />,
   )
 }
 
@@ -89,14 +89,17 @@ describe('AdsSpendForm', () => {
     await user.click(screen.getByRole('button', { name: 'Crear ad' }))
 
     await waitFor(() => {
-      expect(mockCreateAd).toHaveBeenCalledWith('co-1', expect.objectContaining({
-        client_id: 'c-1',
-        client: 'Banco Exterior',
-        name: 'Campaña Ads Test',
-        amount: 40,
-        start_date: '2026-07-05',
-        end_date: '2026-07-15',
-      }))
+      expect(mockCreateAd).toHaveBeenCalledWith(
+        'co-1',
+        expect.objectContaining({
+          client_id: 'c-1',
+          client: 'Banco Exterior',
+          name: 'Campaña Ads Test',
+          amount: 40,
+          start_date: '2026-07-05',
+          end_date: '2026-07-15',
+        }),
+      )
     })
     expect(onCreated).toHaveBeenCalled()
   })
@@ -117,24 +120,25 @@ describe('AdsSpendForm', () => {
     await fillRequiredFields(user, { amount: 40 })
     await waitFor(() => screen.getByRole('option', { name: 'Katherine Mora' }))
 
-    const responsableSelect = screen.getAllByRole('combobox').find(s =>
-      Array.from(s.options ?? []).some(o => o.text === '— Sin responsable —')
-    )
+    const responsableSelect = screen
+      .getAllByRole('combobox')
+      .find((s) => Array.from(s.options ?? []).some((o) => o.text === '— Sin responsable —'))
     await user.selectOptions(responsableSelect, 'r-1')
 
     await user.click(screen.getByRole('button', { name: 'Crear ad' }))
 
     await waitFor(() => {
-      expect(mockCreateAd).toHaveBeenCalledWith('co-1', expect.objectContaining({ responsable_id: 'r-1' }))
+      expect(mockCreateAd).toHaveBeenCalledWith(
+        'co-1',
+        expect.objectContaining({ responsable_id: 'r-1' }),
+      )
     })
   })
 
   it('muestra el aviso de sobrepaso cuando la suma supera el presupuesto del cliente', async () => {
     const user = userEvent.setup()
     // Ya hay 80 invertidos en julio 2026 para el cliente c-1 (presupuesto: 100)
-    const existingAds = [
-      { id: 'ad-1', client_id: 'c-1', amount: 80, start_date: '2026-07-01' },
-    ]
+    const existingAds = [{ id: 'ad-1', client_id: 'c-1', amount: 80, start_date: '2026-07-01' }]
     renderForm({ ads: existingAds })
 
     await fillRequiredFields(user, { amount: 40 }) // 80 + 40 = 120 > 100
@@ -148,9 +152,7 @@ describe('AdsSpendForm', () => {
 
   it('muestra "Disponible" junto a Monto (USD) cuando el cliente tiene presupuesto', async () => {
     const user = userEvent.setup()
-    const existingAds = [
-      { id: 'ad-1', client_id: 'c-1', amount: 20, start_date: '2026-07-01' },
-    ]
+    const existingAds = [{ id: 'ad-1', client_id: 'c-1', amount: 20, start_date: '2026-07-01' }]
     renderForm({ ads: existingAds })
 
     await waitFor(() => screen.getByRole('option', { name: 'Banco Exterior' }))
@@ -196,9 +198,7 @@ describe('AdsSpendForm', () => {
 
   it('NO muestra el aviso cuando el total está por debajo del presupuesto', async () => {
     const user = userEvent.setup()
-    const existingAds = [
-      { id: 'ad-1', client_id: 'c-1', amount: 20, start_date: '2026-07-01' },
-    ]
+    const existingAds = [{ id: 'ad-1', client_id: 'c-1', amount: 20, start_date: '2026-07-01' }]
     renderForm({ ads: existingAds })
 
     await fillRequiredFields(user, { amount: 30 }) // 20 + 30 = 50 < 100
@@ -209,9 +209,7 @@ describe('AdsSpendForm', () => {
 
   it('el envío sigue habilitado con sobrepaso de presupuesto (no bloquea la creación)', async () => {
     const user = userEvent.setup()
-    const existingAds = [
-      { id: 'ad-1', client_id: 'c-1', amount: 90, start_date: '2026-07-01' },
-    ]
+    const existingAds = [{ id: 'ad-1', client_id: 'c-1', amount: 90, start_date: '2026-07-01' }]
     const onCreated = vi.fn()
     renderForm({ ads: existingAds, onCreated })
 
@@ -231,9 +229,9 @@ describe('AdsSpendForm', () => {
     })
 
     async function selectFinalizado(user) {
-      const statusSelect = screen.getAllByRole('combobox').find(s =>
-        Array.from(s.options ?? []).some(o => o.text === 'Finalizado')
-      )
+      const statusSelect = screen
+        .getAllByRole('combobox')
+        .find((s) => Array.from(s.options ?? []).some((o) => o.text === 'Finalizado'))
       await user.selectOptions(statusSelect, 'Finalizado')
     }
 
@@ -268,15 +266,18 @@ describe('AdsSpendForm', () => {
 
       await user.click(screen.getByRole('button', { name: 'Crear ad' }))
       await waitFor(() => {
-        expect(mockCreateAd).toHaveBeenCalledWith('co-1', expect.objectContaining({
-          status: 'Finalizado',
-          reach: 1000,
-          interactions: null,
-          followers: null,
-          impressions: null,
-          views: null,
-          profile_visits: null,
-        }))
+        expect(mockCreateAd).toHaveBeenCalledWith(
+          'co-1',
+          expect.objectContaining({
+            status: 'Finalizado',
+            reach: 1000,
+            interactions: null,
+            followers: null,
+            impressions: null,
+            views: null,
+            profile_visits: null,
+          }),
+        )
       })
     })
 
@@ -296,6 +297,90 @@ describe('AdsSpendForm', () => {
     })
   })
 
+  describe('mes seleccionado en la página (aviso de UX pedido por usuarios)', () => {
+    it('al crear, precarga la fecha de inicio con el 1er día del periodo seleccionado', async () => {
+      renderForm({ periodo: { month: 7, year: 2026 } })
+      await waitFor(() => screen.getByRole('option', { name: 'Banco Exterior' }))
+      const dateInputs = screen.getAllByPlaceholderText('dd/mm/aaaa')
+      expect(dateInputs[0]).toHaveValue('01/07/2026')
+    })
+
+    it('al editar, NO pisa la fecha del ad existente aunque el periodo sea otro', async () => {
+      const ad = {
+        id: 'ad-1',
+        client_id: 'c-1',
+        client: 'Banco Exterior',
+        name: 'Ya existente',
+        amount: 10,
+        start_date: '2026-05-05',
+        end_date: '2026-05-10',
+        status: 'Pendiente',
+      }
+      renderForm({ ad, periodo: { month: 7, year: 2026 } })
+      await waitFor(() => screen.getByRole('option', { name: 'Banco Exterior' }))
+      const dateInputs = screen.getAllByPlaceholderText('dd/mm/aaaa')
+      expect(dateInputs[0]).toHaveValue('05/05/2026')
+    })
+
+    it('pide confirmar antes de guardar si la fecha de inicio cae fuera del mes seleccionado', async () => {
+      const user = userEvent.setup()
+      renderForm({ periodo: { month: 8, year: 2026 } }) // página en agosto
+
+      await waitFor(() => screen.getByRole('option', { name: 'Banco Exterior' }))
+      const clientSelect = screen.getAllByRole('combobox')[0]
+      await user.selectOptions(clientSelect, 'c-1')
+      await user.type(screen.getByPlaceholderText('Nombre de la campaña'), 'Campaña Ads Test')
+      await user.type(screen.getByPlaceholderText('0.00'), '40')
+      const dateInputs = screen.getAllByPlaceholderText('dd/mm/aaaa')
+      // El campo ya viene precargado con 01/08/2026 (mes seleccionado); se
+      // reemplaza por una fecha de julio para forzar el desfase de mes.
+      await user.clear(dateInputs[0])
+      await user.type(dateInputs[0], '05/07/2026')
+      await user.clear(dateInputs[1])
+      await user.type(dateInputs[1], '15/07/2026')
+      await user.click(screen.getByRole('button', { name: 'Crear ad' }))
+
+      expect(await screen.findByText('¿Guardar en otro mes?')).toBeInTheDocument()
+      expect(mockCreateAd).not.toHaveBeenCalled()
+
+      await user.click(screen.getByRole('button', { name: 'Guardar igual' }))
+      await waitFor(() => expect(mockCreateAd).toHaveBeenCalled())
+    })
+
+    it('"Revisar fecha" cierra el aviso sin guardar', async () => {
+      const user = userEvent.setup()
+      renderForm({ periodo: { month: 8, year: 2026 } })
+
+      await waitFor(() => screen.getByRole('option', { name: 'Banco Exterior' }))
+      const clientSelect = screen.getAllByRole('combobox')[0]
+      await user.selectOptions(clientSelect, 'c-1')
+      await user.type(screen.getByPlaceholderText('Nombre de la campaña'), 'Campaña Ads Test')
+      await user.type(screen.getByPlaceholderText('0.00'), '40')
+      const dateInputs = screen.getAllByPlaceholderText('dd/mm/aaaa')
+      await user.clear(dateInputs[0])
+      await user.type(dateInputs[0], '05/07/2026')
+      await user.clear(dateInputs[1])
+      await user.type(dateInputs[1], '15/07/2026')
+      await user.click(screen.getByRole('button', { name: 'Crear ad' }))
+      await screen.findByText('¿Guardar en otro mes?')
+
+      await user.click(screen.getByRole('button', { name: 'Revisar fecha' }))
+      expect(screen.queryByText('¿Guardar en otro mes?')).not.toBeInTheDocument()
+      expect(mockCreateAd).not.toHaveBeenCalled()
+    })
+
+    it('no pide confirmar cuando la fecha de inicio cae dentro del mes seleccionado', async () => {
+      const user = userEvent.setup()
+      renderForm({ periodo: { month: 7, year: 2026 } }) // misma fecha de fillRequiredFields
+
+      await fillRequiredFields(user, { amount: 40 })
+      await user.click(screen.getByRole('button', { name: 'Crear ad' }))
+
+      await waitFor(() => expect(mockCreateAd).toHaveBeenCalled())
+      expect(screen.queryByText('¿Guardar en otro mes?')).not.toBeInTheDocument()
+    })
+  })
+
   describe('validación de plazo (fin no puede ser anterior a inicio)', () => {
     it('muestra un error y deshabilita el envío si el fin queda antes del inicio', async () => {
       const user = userEvent.setup()
@@ -311,7 +396,9 @@ describe('AdsSpendForm', () => {
       await user.clear(dateInputs[1])
       await user.type(dateInputs[1], '01/07/2026')
 
-      expect(screen.getByText('La fecha de fin no puede ser anterior a la fecha de inicio.')).toBeInTheDocument()
+      expect(
+        screen.getByText('La fecha de fin no puede ser anterior a la fecha de inicio.'),
+      ).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Crear ad' })).toBeDisabled()
       expect(mockCreateAd).not.toHaveBeenCalled()
     })
@@ -326,7 +413,9 @@ describe('AdsSpendForm', () => {
       await user.type(dateInputs[0], '20/07/2026') // después del fin ya elegido
 
       expect(dateInputs[1]).toHaveValue('')
-      expect(screen.queryByText('La fecha de fin no puede ser anterior a la fecha de inicio.')).not.toBeInTheDocument()
+      expect(
+        screen.queryByText('La fecha de fin no puede ser anterior a la fecha de inicio.'),
+      ).not.toBeInTheDocument()
     })
   })
 })

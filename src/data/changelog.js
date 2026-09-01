@@ -151,6 +151,10 @@ export const CHANGELOG = [
       'En Pautas, al cambiar la fecha de una pauta en la pestaña Agenda o Solicitudes, el cambio se guarda apenas eliges el día, sin tener que hacer clic en otro lado.',
       'Corregido: el botón "Modo dios" para cambiar el nivel de acceso o administrador propio daba un error técnico y no guardaba el cambio.',
       'Ahora los diseñadores independientes (que no pertenecen a una sola línea) pueden ser asignados a tareas, CNPs y cuentas de cualquier línea.',
+      'En el punto 4 ("Solicitudes vs Entregados") del reporte mensual de Operaciones ahora se aclara entre paréntesis que combina CNP y Gestión de Tareas.',
+      'En Pautas → Solicitudes, quien pide la pauta ahora puede elegir los asistentes desde esa misma fila (antes solo se podía en Agenda).',
+      'Corregido: en Empresa → Permisos, la lista desplegable de departamentos/usuarios/cargos se cortaba contra el borde de la tarjeta del módulo y no dejaba ver las últimas opciones.',
+      'Al crear un Ad, la fecha de inicio ahora se precarga con el mes que tienes abierto, y si la cambias a un mes distinto se avisa antes de guardar (evita crear ads en un mes por error y que luego "no aparezcan").',
     ],
   },
   {

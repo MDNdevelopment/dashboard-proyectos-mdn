@@ -519,6 +519,7 @@ const AdsSpendView = forwardRef(function AdsSpendView(
           ad={modal}
           ads={ads}
           companyId={companyId}
+          periodo={periodo}
           onClose={() => setModal(undefined)}
           onCreated={handleSaved}
           onUpdated={handleSaved}
