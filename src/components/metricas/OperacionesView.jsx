@@ -934,7 +934,7 @@ export default function OperacionesView({ line, companyId, year, month, closed =
 
       {/* 4. SOLICITUDES */}
       <Section
-        title="4. Solicitudes vs Entregados"
+        title="4. Solicitudes vs Entregados (CNP y gestión de tareas)"
         subtitle={`Peso: ${INDICATORS[3].peso} pts`}
         score={scores?.solicitudes}
         max={INDICATORS[3].peso}

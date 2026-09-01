@@ -68,7 +68,12 @@ export const INDICATORS = [
     short: 'Productividad',
   },
   { key: 'crecimiento', nombre: 'Crecimiento de seguidores', peso: 20, short: 'Crecimiento' },
-  { key: 'solicitudes', nombre: 'Solicitudes vs Entregados', peso: 10, short: 'Solicitudes' },
+  {
+    key: 'solicitudes',
+    nombre: 'Solicitudes vs Entregados (CNP y gestión de tareas)',
+    peso: 10,
+    short: 'Solicitudes',
+  },
   { key: 'pautas', nombre: 'Nº Pautas', peso: 20, short: 'Pautas' },
   { key: 'piezas', nombre: 'Nº Piezas vs Piezas editadas', peso: 10, short: 'Piezas' },
 ]
