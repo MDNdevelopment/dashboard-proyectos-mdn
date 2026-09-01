@@ -418,10 +418,13 @@ export default function AvPhaseTable({
             solicitudes={solicitudes}
             declinadas={declinadas}
             clients={clients}
+            allEmployees={allEmployees}
             employeesById={employeesById}
             canCoordinate={canCoordinate}
             canEdit={canEdit}
             confirmingId={confirmingId}
+            expandedAttendeesId={expandedAttendeesId}
+            onToggleAttendees={toggleAttendees}
             onFields={handleFields}
             onDelete={handleDelete}
             highlightId={highlightId}
@@ -515,10 +518,13 @@ function SolicitudesTable({
   solicitudes,
   declinadas,
   clients,
+  allEmployees,
   employeesById,
   canCoordinate,
   canEdit,
   confirmingId,
+  expandedAttendeesId,
+  onToggleAttendees,
   onFields,
   onDelete,
   highlightId,
@@ -528,7 +534,7 @@ function SolicitudesTable({
   onGoToMonth,
 }) {
   return (
-    <table className="w-full border-collapse min-w-[960px]">
+    <table className="w-full border-collapse min-w-[1080px]">
       <Thead
         cols={[
           'Cliente',
@@ -537,6 +543,7 @@ function SolicitudesTable({
           'Fecha deseada',
           'Formato',
           'Requerimientos / Grilla',
+          'Asistentes',
           'Acción',
           '',
         ]}
@@ -544,7 +551,7 @@ function SolicitudesTable({
       <tbody>
         {drafts.length === 0 && solicitudes.length === 0 && (
           <tr>
-            <td colSpan={8} className="px-4 py-8 text-center text-[13px] text-[#a29b8c]">
+            <td colSpan={9} className="px-4 py-8 text-center text-[13px] text-[#a29b8c]">
               {canCoordinate
                 ? 'No hay solicitudes por agendar en este alcance.'
                 : 'Aún no has solicitado pautas.'}
@@ -556,7 +563,10 @@ function SolicitudesTable({
             key={draft._draftId}
             draft={draft}
             clients={clients}
+            allEmployees={allEmployees}
             saving={savingDraftId === draft._draftId}
+            expandedAttendees={expandedAttendeesId === draft._draftId}
+            onToggleAttendees={onToggleAttendees}
             onChange={(field, value) => onDraftField(draft._draftId, field, value)}
             onSave={() => onSaveDraft(draft)}
             onRemove={() => onRemoveDraft(draft._draftId)}
@@ -567,10 +577,13 @@ function SolicitudesTable({
             key={p.id}
             pauta={p}
             clients={clients}
+            allEmployees={allEmployees}
             employeesById={employeesById}
             canCoordinate={canCoordinate}
             canEdit={canEdit}
             confirming={confirmingId === p.id}
+            expandedAttendees={expandedAttendeesId === p.id}
+            onToggleAttendees={onToggleAttendees}
             onFields={onFields}
             onDelete={onDelete}
             highlighted={highlightId === p.id}
@@ -583,7 +596,7 @@ function SolicitudesTable({
           <>
             <tr>
               <td
-                colSpan={8}
+                colSpan={9}
                 className="px-3 pt-4 pb-1 text-[11px] font-mono uppercase tracking-wide text-[#b3ac9d]"
               >
                 Declinadas
@@ -604,6 +617,11 @@ function SolicitudesTable({
                 <td className="px-3 py-2.5">{formatCodes(p) || '—'}</td>
                 <td className="px-3 py-2.5 text-[12px] text-[#aaa]">
                   {p.link ? 'grilla adjunta' : p.piezas_desc ? 'piezas descritas' : 'sin grilla'}
+                </td>
+                <td className="px-3 py-2.5 text-[12px] text-[#aaa]">
+                  {(p.attendee_ids ?? []).length > 0
+                    ? `${p.attendee_ids.length} asistente(s)`
+                    : '—'}
                 </td>
                 <td className="px-3 py-2.5">
                   {canCoordinate && (
@@ -630,10 +648,13 @@ function SolicitudesTable({
 function SolicitudRow({
   pauta: p,
   clients,
+  allEmployees,
   employeesById,
   canCoordinate,
   canEdit,
   confirming,
+  expandedAttendees,
+  onToggleAttendees,
   onFields,
   onDelete,
   highlighted = false,
@@ -647,176 +668,219 @@ function SolicitudRow({
   useScrollIntoViewWhenHighlighted(rowRef, highlighted)
 
   return (
-    <tr
-      ref={rowRef}
-      className={`border-b border-[#f2efe6] align-top ${highlighted ? 'bg-[#FFF9E8] ring-1 ring-inset ring-[#FFB800] transition-colors duration-500' : ''}`}
-    >
-      <td className="px-2 py-1.5 min-w-[160px]">
-        {editableBrief ? (
-          <select
-            className="input-base input-compact"
-            value={p.client_id ?? ''}
-            onChange={(e) => onFields(p, { client_id: e.target.value || null })}
-          >
-            <option value="">—</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <div className="text-[14px] font-medium text-[#222]">
-            {p.client_name || <span className="text-[#bbb]">sin cliente</span>}
-          </div>
-        )}
-      </td>
-      <td className="px-2 py-1.5 min-w-[110px]">
-        <span className="text-[12px] text-[#888]">{requesterName(p, employeesById) || '—'}</span>
-      </td>
-      <td className="px-2 py-1.5 min-w-[150px]">
-        {editableBrief ? (
-          <input
-            key={`tema-${revertTick}`}
-            className="input-base input-compact"
-            defaultValue={p.tema ?? ''}
-            onBlur={(e) => onFields(p, { tema: e.target.value.trim() })}
-            placeholder="Tema / concepto"
-          />
-        ) : (
-          <span className="text-[13.5px] text-[#333]">
-            {p.tema || <span className="text-[#bbb]">—</span>}
-          </span>
-        )}
-      </td>
-      <td className="px-2 py-1.5 min-w-[130px]">
-        {editableBrief ? (
-          <>
-            <input
-              key={`date-${revertTick}`}
-              type="date"
+    <>
+      <tr
+        ref={rowRef}
+        className={`border-b border-[#f2efe6] align-top ${highlighted ? 'bg-[#FFF9E8] ring-1 ring-inset ring-[#FFB800] transition-colors duration-500' : ''}`}
+      >
+        <td className="px-2 py-1.5 min-w-[160px]">
+          {editableBrief ? (
+            <select
               className="input-base input-compact"
-              defaultValue={p.pauta_date ?? ''}
-              onBlur={(e) => onFields(p, { pauta_date: e.target.value || null })}
-            />
-            <input
-              key={`salida-${revertTick}`}
-              type="time"
-              className="input-base input-compact mt-0.5"
-              defaultValue={p.salida ?? ''}
-              onBlur={(e) => onFields(p, { salida: e.target.value || null })}
-            />
-          </>
-        ) : (
-          <span className="text-[13px] text-[#333]">{formatDayShort(p.pauta_date)}</span>
-        )}
-        {outOfMonth && <OutOfMonthChip pauta={p} onGoToMonth={onGoToMonth} />}
-      </td>
-      <td className="px-2 py-1.5">
-        <FormatToggle pauta={p} canEdit={editableBrief} onFields={onFields} />
-      </td>
-      <td className="px-2 py-1.5 min-w-[230px]">
-        {editableBrief ? (
-          <>
-            <input
-              key={`requirements-${revertTick}`}
-              className="input-base input-compact"
-              defaultValue={p.requirements ?? ''}
-              onBlur={(e) => onFields(p, { requirements: e.target.value.trim() })}
-              placeholder="Requerimientos: herramientas, ropa…"
-            />
-            <input
-              key={`link-${revertTick}`}
-              className="input-base input-compact mt-1"
-              defaultValue={p.link ?? ''}
-              onBlur={(e) => onFields(p, { link: e.target.value.trim() })}
-              placeholder="Enlace de la grilla (Drive)"
-            />
-            <div className="text-[10px] font-mono uppercase tracking-wide text-[#a29b8c] mt-1 mb-0.5">
-              — o describe las piezas —
-            </div>
-            <textarea
-              key={`piezas_desc-${revertTick}`}
-              className="input-base input-compact"
-              rows={2}
-              defaultValue={p.piezas_desc ?? ''}
-              onBlur={(e) => onFields(p, { piezas_desc: e.target.value.trim() })}
-              placeholder="Ej: 3 reels — promo, testimonio, producto"
-            />
-            <div className="text-[10.5px] text-[#b98900] mt-1">
-              La grilla debe estar colocada al menos 2 días antes de la fecha de la pauta.
-            </div>
-            {!complete && (
-              <div className="text-[11px] text-[#c0392b] mt-0.5">
-                Obligatorio: deja el enlace <b>o</b> describe las piezas.
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="text-[12.5px] text-[#555] space-y-1">
-            {p.requirements && <div>{p.requirements}</div>}
-            {p.link ? (
-              <a
-                href={p.link}
-                target="_blank"
-                rel="noreferrer"
-                className="text-[#3b6fd4] underline block"
-              >
-                ver grilla
-              </a>
-            ) : (
-              <div>{p.piezas_desc || <span className="text-[#bbb]">—</span>}</div>
-            )}
-          </div>
-        )}
-      </td>
-      <td className="px-2 py-1.5 min-w-[150px]">
-        {canCoordinate ? (
-          <div className="flex flex-wrap gap-1">
-            <button
-              onClick={() => onFields(p, { status: 'programada', submitted: true })}
-              className="text-[11.5px] font-bold px-2.5 py-1 rounded-lg text-white bg-[#1f8a43]"
+              value={p.client_id ?? ''}
+              onChange={(e) => onFields(p, { client_id: e.target.value || null })}
             >
-              Agendar
-            </button>
-            <button
-              onClick={() => onFields(p, { status: 'declinada' })}
-              className="text-[11.5px] font-bold px-2.5 py-1 rounded-lg text-[#c0392b] border border-[#f4c9c9] bg-[#fdecec]"
-            >
-              Declinar
-            </button>
-          </div>
-        ) : p.submitted ? (
-          <span className="estado-pill inline-block px-2.5 py-1 rounded-full text-[12px] font-semibold bg-[#e9f7ec] border border-[#bfe6c8] text-[#1f8a43]">
-            ✓ Enviada · por agendar
-          </span>
-        ) : (
-          canEdit && (
+              <option value="">—</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className="text-[14px] font-medium text-[#222]">
+              {p.client_name || <span className="text-[#bbb]">sin cliente</span>}
+            </div>
+          )}
+        </td>
+        <td className="px-2 py-1.5 min-w-[110px]">
+          <span className="text-[12px] text-[#888]">{requesterName(p, employeesById) || '—'}</span>
+        </td>
+        <td className="px-2 py-1.5 min-w-[150px]">
+          {editableBrief ? (
+            <input
+              key={`tema-${revertTick}`}
+              className="input-base input-compact"
+              defaultValue={p.tema ?? ''}
+              onBlur={(e) => onFields(p, { tema: e.target.value.trim() })}
+              placeholder="Tema / concepto"
+            />
+          ) : (
+            <span className="text-[13.5px] text-[#333]">
+              {p.tema || <span className="text-[#bbb]">—</span>}
+            </span>
+          )}
+        </td>
+        <td className="px-2 py-1.5 min-w-[130px]">
+          {editableBrief ? (
             <>
-              <button
-                disabled={!complete}
-                onClick={() => onFields(p, { submitted: true })}
-                className={`text-[11.5px] font-bold px-2.5 py-1 rounded-lg ${
-                  complete
-                    ? 'text-white bg-[#1f8a43] cursor-pointer'
-                    : 'text-[#b3ac9d] bg-[#eee9dd] cursor-not-allowed'
-                }`}
-              >
-                Solicitar pauta
-              </button>
+              <input
+                key={`date-${revertTick}`}
+                type="date"
+                className="input-base input-compact"
+                defaultValue={p.pauta_date ?? ''}
+                onBlur={(e) => onFields(p, { pauta_date: e.target.value || null })}
+              />
+              <input
+                key={`salida-${revertTick}`}
+                type="time"
+                className="input-base input-compact mt-0.5"
+                defaultValue={p.salida ?? ''}
+                onBlur={(e) => onFields(p, { salida: e.target.value || null })}
+              />
+            </>
+          ) : (
+            <span className="text-[13px] text-[#333]">{formatDayShort(p.pauta_date)}</span>
+          )}
+          {outOfMonth && <OutOfMonthChip pauta={p} onGoToMonth={onGoToMonth} />}
+        </td>
+        <td className="px-2 py-1.5">
+          <FormatToggle pauta={p} canEdit={editableBrief} onFields={onFields} />
+        </td>
+        <td className="px-2 py-1.5 min-w-[230px]">
+          {editableBrief ? (
+            <>
+              <input
+                key={`requirements-${revertTick}`}
+                className="input-base input-compact"
+                defaultValue={p.requirements ?? ''}
+                onBlur={(e) => onFields(p, { requirements: e.target.value.trim() })}
+                placeholder="Requerimientos: herramientas, ropa…"
+              />
+              <input
+                key={`link-${revertTick}`}
+                className="input-base input-compact mt-1"
+                defaultValue={p.link ?? ''}
+                onBlur={(e) => onFields(p, { link: e.target.value.trim() })}
+                placeholder="Enlace de la grilla (Drive)"
+              />
+              <div className="text-[10px] font-mono uppercase tracking-wide text-[#a29b8c] mt-1 mb-0.5">
+                — o describe las piezas —
+              </div>
+              <textarea
+                key={`piezas_desc-${revertTick}`}
+                className="input-base input-compact"
+                rows={2}
+                defaultValue={p.piezas_desc ?? ''}
+                onBlur={(e) => onFields(p, { piezas_desc: e.target.value.trim() })}
+                placeholder="Ej: 3 reels — promo, testimonio, producto"
+              />
+              <div className="text-[10.5px] text-[#b98900] mt-1">
+                La grilla debe estar colocada al menos 2 días antes de la fecha de la pauta.
+              </div>
               {!complete && (
-                <div className="text-[10.5px] text-[#a29b8c] mt-0.5">
-                  Falta cliente y/o grilla-piezas
+                <div className="text-[11px] text-[#c0392b] mt-0.5">
+                  Obligatorio: deja el enlace <b>o</b> describe las piezas.
                 </div>
               )}
             </>
-          )
-        )}
-      </td>
-      <td className="px-2 py-1.5">
-        <DeleteButton id={p.id} confirming={confirming} onDelete={onDelete} />
-      </td>
-    </tr>
+          ) : (
+            <div className="text-[12.5px] text-[#555] space-y-1">
+              {p.requirements && <div>{p.requirements}</div>}
+              {p.link ? (
+                <a
+                  href={p.link}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[#3b6fd4] underline block"
+                >
+                  ver grilla
+                </a>
+              ) : (
+                <div>{p.piezas_desc || <span className="text-[#bbb]">—</span>}</div>
+              )}
+            </div>
+          )}
+        </td>
+        <td className="px-2 py-1.5">
+          {editableBrief ? (
+            <button
+              onClick={() => onToggleAttendees(expandedAttendees ? null : p.id)}
+              className="input-base input-compact text-left leading-tight"
+            >
+              {(p.attendee_ids ?? []).length > 0
+                ? `${p.attendee_ids.length} asistente(s)`
+                : 'Seleccionar…'}
+            </button>
+          ) : (
+            <span className="text-[12.5px] text-[#888]">
+              {(p.attendee_ids ?? []).length > 0 ? `${p.attendee_ids.length} asistente(s)` : '—'}
+            </span>
+          )}
+        </td>
+        <td className="px-2 py-1.5 min-w-[150px]">
+          {canCoordinate ? (
+            <div className="flex flex-wrap gap-1">
+              <button
+                onClick={() => onFields(p, { status: 'programada', submitted: true })}
+                className="text-[11.5px] font-bold px-2.5 py-1 rounded-lg text-white bg-[#1f8a43]"
+              >
+                Agendar
+              </button>
+              <button
+                onClick={() => onFields(p, { status: 'declinada' })}
+                className="text-[11.5px] font-bold px-2.5 py-1 rounded-lg text-[#c0392b] border border-[#f4c9c9] bg-[#fdecec]"
+              >
+                Declinar
+              </button>
+            </div>
+          ) : p.submitted ? (
+            <span className="estado-pill inline-block px-2.5 py-1 rounded-full text-[12px] font-semibold bg-[#e9f7ec] border border-[#bfe6c8] text-[#1f8a43]">
+              ✓ Enviada · por agendar
+            </span>
+          ) : (
+            canEdit && (
+              <>
+                <button
+                  disabled={!complete}
+                  onClick={() => onFields(p, { submitted: true })}
+                  className={`text-[11.5px] font-bold px-2.5 py-1 rounded-lg ${
+                    complete
+                      ? 'text-white bg-[#1f8a43] cursor-pointer'
+                      : 'text-[#b3ac9d] bg-[#eee9dd] cursor-not-allowed'
+                  }`}
+                >
+                  Solicitar pauta
+                </button>
+                {!complete && (
+                  <div className="text-[10.5px] text-[#a29b8c] mt-0.5">
+                    Falta cliente y/o grilla-piezas
+                  </div>
+                )}
+              </>
+            )
+          )}
+        </td>
+        <td className="px-2 py-1.5">
+          <DeleteButton id={p.id} confirming={confirming} onDelete={onDelete} />
+        </td>
+      </tr>
+      {expandedAttendees && (
+        <tr className="border-b border-[#f2efe6] bg-[#faf9f5]">
+          <td colSpan={9} className="px-4 py-3">
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-[11.5px] font-mono font-bold uppercase tracking-[0.1em] text-[#aaa]">
+                Asistentes
+              </p>
+              <button
+                onClick={() => onToggleAttendees(null)}
+                className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded-full text-[#888] hover:bg-[#ece9df] hover:text-[#111]"
+                aria-label="Cerrar selector de asistentes"
+                title="Cerrar"
+              >
+                ✕
+              </button>
+            </div>
+            <AttendeePicker
+              employees={allEmployees}
+              selectedIds={p.attendee_ids ?? []}
+              onChange={(ids) => onFields(p, { attendee_ids: ids })}
+              hideQuickGroups
+            />
+          </td>
+        </tr>
+      )}
+    </>
   )
 }
 
@@ -836,6 +900,7 @@ function makeDraft() {
     link: '',
     piezas_desc: '',
     requirements: '',
+    attendee_ids: [],
   }
 }
 
@@ -845,118 +910,167 @@ function makeDraft() {
  * la base de datos. "Guardar solicitud" es el único punto de contacto con la API; "Cancelar"
  * solo descarta el borrador (nada que borrar del lado del servidor).
  */
-function DraftSolicitudRow({ draft, clients, saving, onChange, onSave, onRemove }) {
+function DraftSolicitudRow({
+  draft,
+  clients,
+  allEmployees,
+  saving,
+  expandedAttendees,
+  onToggleAttendees,
+  onChange,
+  onSave,
+  onRemove,
+}) {
   const complete = briefComplete(draft)
   return (
-    <tr className="border-b border-[#f2efe6] align-top bg-[#fffdf5]">
-      <td className="px-2 py-1.5 min-w-[160px]">
-        <select
-          className="input-base input-compact"
-          value={draft.client_id ?? ''}
-          onChange={(e) => onChange('client_id', e.target.value || null)}
-        >
-          <option value="">—</option>
-          {clients.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-        <div className="text-[10px] font-mono uppercase tracking-wide text-[#b98900] mt-0.5">
-          Sin guardar
-        </div>
-      </td>
-      <td className="px-2 py-1.5 min-w-[110px]">
-        <span className="text-[12px] text-[#888]">Tú</span>
-      </td>
-      <td className="px-2 py-1.5 min-w-[150px]">
-        <input
-          className="input-base input-compact"
-          value={draft.tema}
-          onChange={(e) => onChange('tema', e.target.value)}
-          placeholder="Tema / concepto"
-        />
-      </td>
-      <td className="px-2 py-1.5 min-w-[130px]">
-        <input
-          type="date"
-          className="input-base input-compact"
-          value={draft.pauta_date ?? ''}
-          onChange={(e) => onChange('pauta_date', e.target.value || null)}
-        />
-        <input
-          type="time"
-          className="input-base input-compact mt-0.5"
-          value={draft.salida ?? ''}
-          onChange={(e) => onChange('salida', e.target.value || null)}
-        />
-      </td>
-      <td className="px-2 py-1.5">
-        <FormatToggle
-          pauta={draft}
-          canEdit
-          onFields={(_, fields) => onChange('formats', fields.formats)}
-        />
-      </td>
-      <td className="px-2 py-1.5 min-w-[230px]">
-        <input
-          className="input-base input-compact"
-          value={draft.requirements}
-          onChange={(e) => onChange('requirements', e.target.value)}
-          placeholder="Requerimientos: herramientas, ropa…"
-        />
-        <input
-          className="input-base input-compact mt-1"
-          value={draft.link}
-          onChange={(e) => onChange('link', e.target.value)}
-          placeholder="Enlace de la grilla (Drive)"
-        />
-        <div className="text-[10px] font-mono uppercase tracking-wide text-[#a29b8c] mt-1 mb-0.5">
-          — o describe las piezas —
-        </div>
-        <textarea
-          className="input-base input-compact"
-          rows={2}
-          value={draft.piezas_desc}
-          onChange={(e) => onChange('piezas_desc', e.target.value)}
-          placeholder="Ej: 3 reels — promo, testimonio, producto"
-        />
-        <div className="text-[10.5px] text-[#b98900] mt-1">
-          La grilla debe estar colocada al menos 2 días antes de la fecha de la pauta.
-        </div>
-        {!complete && (
-          <div className="text-[11px] text-[#c0392b] mt-0.5">
-            Obligatorio: deja el enlace <b>o</b> describe las piezas.
+    <>
+      <tr className="border-b border-[#f2efe6] align-top bg-[#fffdf5]">
+        <td className="px-2 py-1.5 min-w-[160px]">
+          <select
+            className="input-base input-compact"
+            value={draft.client_id ?? ''}
+            onChange={(e) => onChange('client_id', e.target.value || null)}
+          >
+            <option value="">—</option>
+            {clients.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+          <div className="text-[10px] font-mono uppercase tracking-wide text-[#b98900] mt-0.5">
+            Sin guardar
           </div>
-        )}
-      </td>
-      <td className="px-2 py-1.5 min-w-[150px]">
-        <button
-          disabled={!complete || saving}
-          onClick={onSave}
-          className={`text-[11.5px] font-bold px-2.5 py-1 rounded-lg ${
-            complete
-              ? 'text-white bg-[#1f8a43] cursor-pointer'
-              : 'text-[#b3ac9d] bg-[#eee9dd] cursor-not-allowed'
-          }`}
-        >
-          {saving ? 'Guardando…' : 'Guardar solicitud'}
-        </button>
-        {!complete && (
-          <div className="text-[10.5px] text-[#a29b8c] mt-0.5">Falta cliente y/o grilla-piezas</div>
-        )}
-      </td>
-      <td className="px-2 py-1.5">
-        <button
-          onClick={onRemove}
-          disabled={saving}
-          title="Descartar borrador"
-          className="text-[12px] font-bold rounded-lg px-2 py-1 text-[#888] hover:bg-[#f2f0e8]"
-        >
-          Cancelar
-        </button>
-      </td>
-    </tr>
+        </td>
+        <td className="px-2 py-1.5 min-w-[110px]">
+          <span className="text-[12px] text-[#888]">Tú</span>
+        </td>
+        <td className="px-2 py-1.5 min-w-[150px]">
+          <input
+            className="input-base input-compact"
+            value={draft.tema}
+            onChange={(e) => onChange('tema', e.target.value)}
+            placeholder="Tema / concepto"
+          />
+        </td>
+        <td className="px-2 py-1.5 min-w-[130px]">
+          <input
+            type="date"
+            className="input-base input-compact"
+            value={draft.pauta_date ?? ''}
+            onChange={(e) => onChange('pauta_date', e.target.value || null)}
+          />
+          <input
+            type="time"
+            className="input-base input-compact mt-0.5"
+            value={draft.salida ?? ''}
+            onChange={(e) => onChange('salida', e.target.value || null)}
+          />
+        </td>
+        <td className="px-2 py-1.5">
+          <FormatToggle
+            pauta={draft}
+            canEdit
+            onFields={(_, fields) => onChange('formats', fields.formats)}
+          />
+        </td>
+        <td className="px-2 py-1.5 min-w-[230px]">
+          <input
+            className="input-base input-compact"
+            value={draft.requirements}
+            onChange={(e) => onChange('requirements', e.target.value)}
+            placeholder="Requerimientos: herramientas, ropa…"
+          />
+          <input
+            className="input-base input-compact mt-1"
+            value={draft.link}
+            onChange={(e) => onChange('link', e.target.value)}
+            placeholder="Enlace de la grilla (Drive)"
+          />
+          <div className="text-[10px] font-mono uppercase tracking-wide text-[#a29b8c] mt-1 mb-0.5">
+            — o describe las piezas —
+          </div>
+          <textarea
+            className="input-base input-compact"
+            rows={2}
+            value={draft.piezas_desc}
+            onChange={(e) => onChange('piezas_desc', e.target.value)}
+            placeholder="Ej: 3 reels — promo, testimonio, producto"
+          />
+          <div className="text-[10.5px] text-[#b98900] mt-1">
+            La grilla debe estar colocada al menos 2 días antes de la fecha de la pauta.
+          </div>
+          {!complete && (
+            <div className="text-[11px] text-[#c0392b] mt-0.5">
+              Obligatorio: deja el enlace <b>o</b> describe las piezas.
+            </div>
+          )}
+        </td>
+        <td className="px-2 py-1.5">
+          <button
+            onClick={() => onToggleAttendees(expandedAttendees ? null : draft._draftId)}
+            className="input-base input-compact text-left leading-tight"
+          >
+            {(draft.attendee_ids ?? []).length > 0
+              ? `${draft.attendee_ids.length} asistente(s)`
+              : 'Seleccionar…'}
+          </button>
+        </td>
+        <td className="px-2 py-1.5 min-w-[150px]">
+          <button
+            disabled={!complete || saving}
+            onClick={onSave}
+            className={`text-[11.5px] font-bold px-2.5 py-1 rounded-lg ${
+              complete
+                ? 'text-white bg-[#1f8a43] cursor-pointer'
+                : 'text-[#b3ac9d] bg-[#eee9dd] cursor-not-allowed'
+            }`}
+          >
+            {saving ? 'Guardando…' : 'Guardar solicitud'}
+          </button>
+          {!complete && (
+            <div className="text-[10.5px] text-[#a29b8c] mt-0.5">
+              Falta cliente y/o grilla-piezas
+            </div>
+          )}
+        </td>
+        <td className="px-2 py-1.5">
+          <button
+            onClick={onRemove}
+            disabled={saving}
+            title="Descartar borrador"
+            className="text-[12px] font-bold rounded-lg px-2 py-1 text-[#888] hover:bg-[#f2f0e8]"
+          >
+            Cancelar
+          </button>
+        </td>
+      </tr>
+      {expandedAttendees && (
+        <tr className="border-b border-[#f2efe6] bg-[#faf9f5]">
+          <td colSpan={9} className="px-4 py-3">
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-[11.5px] font-mono font-bold uppercase tracking-[0.1em] text-[#aaa]">
+                Asistentes
+              </p>
+              <button
+                onClick={() => onToggleAttendees(null)}
+                className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded-full text-[#888] hover:bg-[#ece9df] hover:text-[#111]"
+                aria-label="Cerrar selector de asistentes"
+                title="Cerrar"
+              >
+                ✕
+              </button>
+            </div>
+            <AttendeePicker
+              employees={allEmployees}
+              selectedIds={draft.attendee_ids ?? []}
+              onChange={(ids) => onChange('attendee_ids', ids)}
+              hideQuickGroups
+            />
+          </td>
+        </tr>
+      )}
+    </>
   )
 }
 

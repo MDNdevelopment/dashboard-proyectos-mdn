@@ -329,6 +329,73 @@ describe('AvPhaseTable — Agenda: "Recursos" (selección múltiple, reemplaza a
   })
 })
 
+describe('AvPhaseTable — Solicitudes: columna "Asistentes" (quien solicita elige quién va)', () => {
+  const EMPLOYEES2 = [
+    { user_id: 'e1', first_name: 'Nadia', last_name: 'Torres', deleted_at: null },
+    { user_id: 'e2', first_name: 'Pablo', last_name: 'Ríos', deleted_at: null },
+  ]
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('la tabla de Solicitudes muestra el encabezado "Asistentes"', () => {
+    renderTable({ editMode: 'solicita', allEmployees: EMPLOYEES2 })
+    expect(screen.getByText('Asistentes')).toBeInTheDocument()
+  })
+
+  it('en un borrador local, elegir asistentes queda en memoria y se envía al guardar la solicitud', async () => {
+    mockCreatePauta.mockResolvedValue({ data: { id: 'p1', status: 'solicitada' }, error: null })
+    renderTable({ editMode: 'solicita', allEmployees: EMPLOYEES2 })
+
+    fireEvent.click(screen.getByText('+ Solicitar pauta'))
+    fireEvent.change(document.querySelector('select'), { target: { value: 'c1' } })
+
+    fireEvent.click(screen.getByText('Seleccionar…'))
+    const search = screen.getByPlaceholderText('Buscar empleado por nombre…')
+    fireEvent.change(search, { target: { value: 'Nadia' } })
+    fireEvent.click(screen.getByRole('button', { name: /Nadia Torres/ }))
+    expect(mockCreatePauta).not.toHaveBeenCalled()
+
+    fireEvent.change(screen.getByPlaceholderText('Enlace de la grilla (Drive)'), {
+      target: { value: 'https://drive.google.com/x' },
+    })
+    await waitFor(() => expect(screen.getByText('Guardar solicitud')).not.toBeDisabled())
+    fireEvent.click(screen.getByText('Guardar solicitud'))
+
+    await waitFor(() => expect(mockCreatePauta).toHaveBeenCalledTimes(1))
+    expect(mockCreatePauta).toHaveBeenCalledWith(
+      'co-1',
+      expect.objectContaining({ attendee_ids: ['e1'] }),
+      'u1',
+      'line-1',
+    )
+  })
+
+  it('en una solicitud ya existente (submitted), quien solicitó puede elegir asistentes y se guarda al toque', async () => {
+    mockUpdatePauta.mockResolvedValue({ data: { id: 'p1' }, error: null })
+    const pauta = {
+      id: 'p1',
+      client_id: 'c1',
+      client_name: 'Cliente A',
+      status: 'solicitada',
+      submitted: false,
+      formats: [],
+      attendee_ids: [],
+    }
+    renderTable({ editMode: 'solicita', pautas: [pauta], allEmployees: EMPLOYEES2 })
+
+    fireEvent.click(screen.getByText('Seleccionar…'))
+    const search = screen.getByPlaceholderText('Buscar empleado por nombre…')
+    fireEvent.change(search, { target: { value: 'Pablo' } })
+    fireEvent.click(screen.getByRole('button', { name: /Pablo Ríos/ }))
+
+    await waitFor(() =>
+      expect(mockUpdatePauta).toHaveBeenCalledWith('p1', { attendee_ids: ['e2'] }),
+    )
+  })
+})
+
 describe('AvPhaseTable — disponibilidad de recursos al asignar (Agenda)', () => {
   const AV_USERS = [{ user_id: 'r1', first_name: 'Nadia', last_name: 'Torres', deleted_at: null }]
   const RESOURCE_USERS_BY_ID = new Map(AV_USERS.map((u) => [u.user_id, u]))
