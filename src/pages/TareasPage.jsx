@@ -42,6 +42,11 @@ export default function TareasPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const [teams, setTeams] = useState([])
+  // Todas las líneas de la empresa (sin el filtro de visibilidad de `teams`), necesario
+  // para calcular correctamente el pool "Independientes" en assignableUsers — si se usara
+  // `teams` (ya filtrado por línea visible), un miembro de una línea fuera del alcance del
+  // usuario parecería "sin línea" y se colaría como asignable en cualquier lado.
+  const [allLines, setAllLines] = useState([])
   const [tasks, setTasks] = useState([])
   const [clients, setClients] = useState([])
   const [clientsById, setClientsById] = useState(new Map())
@@ -120,6 +125,7 @@ export default function TareasPage() {
     // Su membresía no se persiste: se deriva en memoria como el complemento de los
     // miembros de las líneas reales, para que se auto-mantenga al mover empleados.
     const linesWithGeneral = withDerivedGeneralMembers(linesRes.data ?? [], usersRes.data ?? [])
+    setAllLines(linesWithGeneral)
 
     const fetchedTeams = visibleLinesForUser(linesWithGeneral, userProfile)
     setTeams(fetchedTeams)
@@ -423,6 +429,7 @@ export default function TareasPage() {
         <TaskModal
           task={taskModal === undefined ? null : taskModal}
           teams={teams}
+          allLines={allLines}
           clients={clients}
           users={allUsers}
           defaultTeamId={isAll ? null : activeTeamId}

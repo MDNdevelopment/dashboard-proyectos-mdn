@@ -11,7 +11,7 @@ import {
 } from './cnpApi'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import UserPickerSingle from '../tareas/UserPickerSingle'
-import { teamMemberUsers } from '../../utils/lineFilters'
+import { assignableUsers, flattenAssignable } from '../../utils/lineFilters'
 import DateInput from '../common/DateInput'
 
 const EMPTY = {
@@ -35,6 +35,7 @@ function newRef() {
 export default function CnpModal({
   cnp = null,
   teams = [],
+  allLines = teams,
   defaultTeamId = null,
   clients = [],
   users = [],
@@ -130,7 +131,9 @@ export default function CnpModal({
   }
 
   const selectedTeam = teams.find((t) => t.id === form.line_id)
-  const teamMembers = teamMemberUsers(users, selectedTeam)
+  const teamMembers = flattenAssignable(
+    assignableUsers(users, selectedTeam, allLines, form.assignee_id),
+  )
 
   const lineClients = selectedTeam?.is_general
     ? clients
@@ -311,14 +314,17 @@ export default function CnpModal({
                 value={form.line_id}
                 onChange={(e) => {
                   const lineId = e.target.value
-                  const newMembers = teams.find((t) => t.id === lineId)?.member_user_ids ?? []
-                  // Al cambiar de línea, resetear cliente y responsable (puede no
-                  // pertenecer a la nueva línea) — mismo patrón que TaskModal.
+                  const newTeam = teams.find((t) => t.id === lineId)
+                  // Al cambiar de línea, resetear cliente y responsable si ya no es
+                  // asignable en la línea nueva (miembro o del pool "Independientes") —
+                  // mismo patrón que TaskModal.
+                  const { members, crossLine } = assignableUsers(users, newTeam, allLines)
+                  const stillAssignable = new Set([...members, ...crossLine].map((u) => u.user_id))
                   setForm((f) => ({
                     ...f,
                     line_id: lineId,
                     client_id: '',
-                    assignee_id: newMembers.includes(f.assignee_id) ? f.assignee_id : null,
+                    assignee_id: stillAssignable.has(f.assignee_id) ? f.assignee_id : null,
                   }))
                 }}
                 required

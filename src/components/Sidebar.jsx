@@ -204,16 +204,34 @@ function Sidebar() {
   // Mismo user_id que CEO_ANALYSIS_USER_IDS (ceoAnalysisAccess.js) — el email de users.email no es confiable.
   const isGodModeUser = userProfile?.user_id === '2d50a4e5-35db-4be5-b27a-a24d1282ce82'
 
+  // Vía Netlify function con service-role: un UPDATE directo con el cliente anon
+  // choca con el trigger anti-escalada (is_company_admin() evalúa el admin ACTUAL
+  // del caller, así que un no-admin nunca puede tocar admin/access_level ni sobre
+  // su propia fila). Ver netlify/functions/self-god-mode.js.
+  async function callSelfGodMode(payload) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    if (!session) return
+    await fetch('/api/self-god-mode', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify(payload),
+    })
+    await refreshProfile()
+  }
+
   async function handleSelfLevelChange(level) {
     if (!userProfile?.user_id) return
-    await supabase.from('users').update({ access_level: level }).eq('user_id', userProfile.user_id)
-    await refreshProfile()
+    await callSelfGodMode({ access_level: level })
   }
 
   async function handleSelfAdminToggle(admin) {
     if (!userProfile?.user_id) return
-    await supabase.from('users').update({ admin }).eq('user_id', userProfile.user_id)
-    await refreshProfile()
+    await callSelfGodMode({ admin })
   }
 
   useEffect(() => {

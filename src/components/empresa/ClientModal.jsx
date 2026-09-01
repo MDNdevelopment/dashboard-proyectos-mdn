@@ -14,7 +14,7 @@ import { useAuth } from '../../context/AuthContext'
 import { isFinancePrivileged } from '../../lib/permissions'
 import UserPickerSingle from '../tareas/UserPickerSingle'
 import UserPickerMulti from '../tareas/UserPickerMulti'
-import { teamMemberUsers } from '../../utils/lineFilters'
+import { assignableUsers, flattenAssignable } from '../../utils/lineFilters'
 import { EmployeeChip, EmployeeChipList } from '../common/EmployeeChip'
 import DateInput from '../common/DateInput'
 import MoverClienteModal from '../metricas/MoverClienteModal'
@@ -43,6 +43,7 @@ export default function ClientModal({
   client = null,
   companyId,
   lines = [],
+  allLines = lines,
   employees = [],
   readOnly = false,
   canManage = true,
@@ -128,13 +129,19 @@ export default function ClientModal({
     setForm((f) => ({ ...f, [field]: value }))
   }
 
-  // Al cambiar de línea, resetear los empleados que ya no pertenecen a esa línea
+  // Al cambiar de línea, resetear los empleados que ya no sean asignables en la línea
+  // nueva (miembros de esa línea + pool "Independientes", que es asignable en cualquiera).
   function handleLineChange(newLineId) {
-    set('line_id', newLineId)
-    // Limpiar asignaciones si cambia la línea
-    set('social_manager_id', null)
-    set('designer_id', null)
-    set('audiovisual_ids', [])
+    const newLine = allLines.find((l) => l.id === newLineId) ?? null
+    const { members, crossLine } = assignableUsers(employees, newLine, allLines)
+    const stillAssignable = new Set([...members, ...crossLine].map((u) => u.user_id))
+    setForm((f) => ({
+      ...f,
+      line_id: newLineId,
+      social_manager_id: stillAssignable.has(f.social_manager_id) ? f.social_manager_id : null,
+      designer_id: stillAssignable.has(f.designer_id) ? f.designer_id : null,
+      audiovisual_ids: f.audiovisual_ids.filter((id) => stillAssignable.has(id)),
+    }))
   }
 
   // Escape para cerrar
@@ -279,8 +286,8 @@ export default function ClientModal({
     [lines, form.line_id],
   )
   const lineEmployees = useMemo(
-    () => teamMemberUsers(employees, selectedLine),
-    [employees, selectedLine],
+    () => flattenAssignable(assignableUsers(employees, selectedLine, allLines)),
+    [employees, selectedLine, allLines],
   )
   // dept_id 1 = Redes (Social), 3 = Diseño, 2 = Audiovisual
   const socialUsers = useMemo(

@@ -149,6 +149,8 @@ export const CHANGELOG = [
       'En Pautas, al registrar una pauta realizada ahora puedes indicar cuántas piezas salieron y cuántas se editaron de cada formato (video, reel o foto) que se haya marcado en esa pauta.',
       'En Pautas, cada pieza del checklist de edición ahora indica de qué formato es (video, reel o foto) — así se sabe quién edita cada formato. El número de "editadas" se calcula solo a partir del checklist y nunca puede superar las que salieron.',
       'En Pautas, al cambiar la fecha de una pauta en la pestaña Agenda o Solicitudes, el cambio se guarda apenas eliges el día, sin tener que hacer clic en otro lado.',
+      'Corregido: el botón "Modo dios" para cambiar el nivel de acceso o administrador propio daba un error técnico y no guardaba el cambio.',
+      'Ahora los diseñadores independientes (que no pertenecen a una sola línea) pueden ser asignados a tareas, CNPs y cuentas de cualquier línea.',
     ],
   },
   {

@@ -25,6 +25,10 @@ export default function CnpPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const [teams, setTeams] = useState([])
+  // Todas las líneas de la empresa (sin el filtro de visibilidad de `teams`) — ver el
+  // comentario equivalente en TareasPage.jsx. Necesario para que assignableUsers calcule
+  // bien el pool "Independientes" aunque el usuario actual no vea todas las líneas.
+  const [allLines, setAllLines] = useState([])
   const [cnps, setCnps] = useState([])
   const [clients, setClients] = useState([])
   const [clientsById, setClientsById] = useState(new Map())
@@ -97,6 +101,7 @@ export default function CnpPage() {
     ])
 
     const linesWithGeneral = withDerivedGeneralMembers(linesRes.data ?? [], usersRes.data ?? [])
+    setAllLines(linesWithGeneral)
     const fetchedTeams = visibleLinesForUser(linesWithGeneral, userProfile)
     setTeams(fetchedTeams)
     setCnps(cnpRes.data ?? [])
@@ -368,6 +373,7 @@ export default function CnpPage() {
         <CnpModal
           cnp={cnpModal === undefined ? null : cnpModal}
           teams={teams}
+          allLines={allLines}
           defaultTeamId={isAll ? null : activeTeamId}
           clients={clients}
           users={allUsers}

@@ -3,6 +3,7 @@
  * member_user_ids se reconstruye desde metric_line_members al cargar líneas.
  * Mover un empleado = quitar su id de la línea anterior, añadirlo a la nueva.
  */
+import { crossLineUserIds } from './lineFilters'
 
 /**
  * Devuelve la línea que contiene a un empleado, o null si no está en ninguna.
@@ -101,12 +102,7 @@ export function visibleLinesForUser(lines, userProfile, opts) {
  * @returns {Array} Copia de lines con member_user_ids de la línea general recalculado
  */
 export function withDerivedGeneralMembers(lines, users) {
-  const assignedIds = new Set(
-    lines.filter((l) => !l.is_general).flatMap((l) => l.member_user_ids ?? []),
-  )
-  const unassignedIds = (users ?? [])
-    .filter((u) => !u.deleted_at && !assignedIds.has(u.user_id))
-    .map((u) => u.user_id)
+  const unassignedIds = crossLineUserIds(users, lines)
   return lines.map((l) => (l.is_general ? { ...l, member_user_ids: unassignedIds } : l))
 }
 

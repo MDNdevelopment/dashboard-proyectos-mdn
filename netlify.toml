@@ -54,6 +54,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/self-god-mode"
+  to = "/.netlify/functions/self-god-mode"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/mcp"
   to = "/.netlify/functions/mcp"
   status = 200
