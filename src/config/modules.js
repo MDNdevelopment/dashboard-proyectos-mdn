@@ -130,7 +130,10 @@ export const MODULES = [
     routePrefix: '/reportes',
     description: 'Métricas y reportes por línea',
     tabs: [{ key: 'dashboard', label: 'Dashboard' }],
-    manageActions: [{ key: 'reportes.manage', label: 'Editar / importar reportes' }],
+    manageActions: [
+      { key: 'reportes.manage', label: 'Editar / importar reportes' },
+      { key: 'reportes.close', label: 'Cerrar reportes de cualquier línea' },
+    ],
   },
   {
     key: 'reuniones',

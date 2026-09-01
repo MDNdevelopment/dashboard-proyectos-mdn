@@ -51,6 +51,8 @@ function buildEmailHtml(notif: NotificationRecord, firstName: string): string {
     meeting_invite:          'reunión agendada',
     meeting_reminder_day:    'recordatorio de reunión (mañana)',
     meeting_reminder_hour:   'recordatorio de reunión (en 1 hora)',
+    report_close_reminder:  'recordatorio de cierre de reporte',
+    report_autoclosed:      'reporte cerrado automáticamente',
   }
   const typeLabel = typeLabels[notif.type] ?? 'notificación'
 
@@ -62,6 +64,8 @@ function buildEmailHtml(notif: NotificationRecord, firstName: string): string {
     meeting_invite:          `Te agregaron a una <strong>reunión</strong>:<br><em>${notif.body}</em>`,
     meeting_reminder_day:    `Tienes una reunión <strong>mañana</strong>:<br><em>${notif.body}</em>`,
     meeting_reminder_hour:   `Tu reunión empieza <strong>en 1 hora</strong>:<br><em>${notif.body}</em>`,
+    report_close_reminder:  `${notif.body}`,
+    report_autoclosed:      `${notif.body}`,
   }
   const intro = introLines[notif.type]
     ?? `Tienes una nueva notificación de <strong>${typeLabel}</strong>: ${notif.body}`
@@ -113,6 +117,8 @@ function subjectForType(type: string, body: string): string {
     meeting_invite:          `Nueva reunión: ${body.slice(0, 60)}`,
     meeting_reminder_day:    `Recordatorio: reunión mañana — ${body.slice(0, 50)}`,
     meeting_reminder_hour:   `Recordatorio: reunión en 1 hora — ${body.slice(0, 50)}`,
+    report_close_reminder:  `Recordatorio: cierre de reporte — ${body.slice(0, 50)}`,
+    report_autoclosed:      `Reporte cerrado automáticamente — ${body.slice(0, 50)}`,
   }
   return subjects[type] ?? `Nueva notificación MDN: ${body.slice(0, 80)}`
 }

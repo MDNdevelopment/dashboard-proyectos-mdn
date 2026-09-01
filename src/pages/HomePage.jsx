@@ -559,22 +559,6 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Fechas del equipo y clientes */}
-        <HomeDatesCalendar
-          year={calMonth.year}
-          month={calMonth.month}
-          events={homeCalEvents}
-          onMonthChange={(year, month) => setCalMonth({ year, month })}
-          onDayClick={setCalDay}
-        />
-        {calDay !== null && (
-          <HomeDayEventsModal
-            date={calDay}
-            events={homeCalDayEvents}
-            onClose={() => setCalDay(null)}
-          />
-        )}
-
         {/* Análisis IA — oculto temporalmente hasta nuevo aviso (solicitado por el usuario) */}
         {SHOW_CEO_ANALYSIS && canSeeCeoAnalysis(userProfile) && (
           <section className="mb-8 rise-in" style={{ animationDelay: '60ms' }}>
@@ -880,6 +864,24 @@ export default function HomePage() {
             <p className="text-[13px] text-[#888] mt-3">{projects.length} proyecto(s) en total.</p>
           )}
         </section>
+
+        {/* Fechas del equipo y clientes */}
+        <div className="mt-8 rise-in" style={{ animationDelay: '220ms' }}>
+          <HomeDatesCalendar
+            year={calMonth.year}
+            month={calMonth.month}
+            events={homeCalEvents}
+            onMonthChange={(year, month) => setCalMonth({ year, month })}
+            onDayClick={setCalDay}
+          />
+        </div>
+        {calDay !== null && (
+          <HomeDayEventsModal
+            date={calDay}
+            events={homeCalDayEvents}
+            onClose={() => setCalDay(null)}
+          />
+        )}
       </div>
     </div>
   )

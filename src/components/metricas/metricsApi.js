@@ -219,6 +219,22 @@ export async function loadReport(lineId, year, month) {
     .maybeSingle()
 }
 
+/**
+ * Carga `line_id, closed_at` de un conjunto de líneas para un (year, month)
+ * puntual. Usado por el recordatorio de cierre para saber qué líneas
+ * lideradas por el usuario siguen sin cerrarse en el periodo — ver
+ * `src/hooks/useReportCloseReminder.js`.
+ */
+export async function loadReportsClosureStatus(lineIds, year, month) {
+  if (!lineIds || lineIds.length === 0) return { data: [], error: null }
+  return supabase
+    .from('metric_reports')
+    .select('line_id, closed_at')
+    .in('line_id', lineIds)
+    .eq('year', year)
+    .eq('month', month)
+}
+
 export async function loadPrevReport(lineId, year, month) {
   // Busca el reporte del mes anterior (solo 1 mes atrás)
   let m = month - 1
@@ -296,7 +312,7 @@ export async function upsertReport(companyId, lineId, year, month, data) {
 export async function closeReport(lineId, year, month, userId) {
   return supabase
     .from('metric_reports')
-    .update({ closed_at: new Date().toISOString(), closed_by: userId })
+    .update({ closed_at: new Date().toISOString(), closed_by: userId, closed_auto: false })
     .eq('line_id', lineId)
     .eq('year', year)
     .eq('month', month)

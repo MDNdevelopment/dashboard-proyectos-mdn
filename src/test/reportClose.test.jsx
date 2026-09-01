@@ -45,7 +45,7 @@ function renderLineView(initialEntry = '/reportes/linea/l-1?tab=operaciones') {
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
       <LineView line={MOCK_LINE} companyId="co-1" />
-    </MemoryRouter>
+    </MemoryRouter>,
   )
 }
 
@@ -56,7 +56,10 @@ describe('LineView — "Cerrar reporte" (nivel 4 / admin)', () => {
       can: () => true,
       userProfile: { user_id: 'u-1', access_level: 4, admin: true },
     })
-    mockLoadReport.mockResolvedValue({ data: { id: 'r-1', closed_at: null, closed_by: null }, error: null })
+    mockLoadReport.mockResolvedValue({
+      data: { id: 'r-1', closed_at: null, closed_by: null },
+      error: null,
+    })
   })
 
   it('muestra el botón "Cerrar reporte" cuando el usuario tiene la capability y el reporte no está cerrado', async () => {
@@ -72,7 +75,9 @@ describe('LineView — "Cerrar reporte" (nivel 4 / admin)', () => {
       userProfile: { user_id: 'u-2', access_level: 3, admin: false },
     })
     renderLineView()
-    await waitFor(() => { expect(screen.getByTestId('operaciones-view')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByTestId('operaciones-view')).toBeInTheDocument()
+    })
     expect(screen.queryByText('Cerrar reporte')).not.toBeInTheDocument()
   })
 
@@ -83,7 +88,9 @@ describe('LineView — "Cerrar reporte" (nivel 4 / admin)', () => {
       error: null,
     })
     renderLineView()
-    await waitFor(() => { expect(screen.getByText('Cerrar reporte')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Cerrar reporte')).toBeInTheDocument()
+    })
 
     await user.click(screen.getByText('Cerrar reporte'))
     expect(await screen.findByText(/Sí, cerrar permanentemente/)).toBeInTheDocument()
@@ -91,7 +98,12 @@ describe('LineView — "Cerrar reporte" (nivel 4 / admin)', () => {
     await user.click(screen.getByText(/Sí, cerrar permanentemente/))
 
     await waitFor(() => {
-      expect(mockCloseReport).toHaveBeenCalledWith('l-1', expect.any(Number), expect.any(Number), 'u-1')
+      expect(mockCloseReport).toHaveBeenCalledWith(
+        'l-1',
+        expect.any(Number),
+        expect.any(Number),
+        'u-1',
+      )
     })
     expect(await screen.findByText('Reporte cerrado')).toBeInTheDocument()
     expect(screen.queryByText('Cerrar reporte')).not.toBeInTheDocument()
@@ -117,11 +129,69 @@ describe('LineView — "Cerrar reporte" (nivel 4 / admin)', () => {
   it('cancelar el modal no cierra el reporte', async () => {
     const user = userEvent.setup()
     renderLineView()
-    await waitFor(() => { expect(screen.getByText('Cerrar reporte')).toBeInTheDocument() })
+    await waitFor(() => {
+      expect(screen.getByText('Cerrar reporte')).toBeInTheDocument()
+    })
     await user.click(screen.getByText('Cerrar reporte'))
     expect(await screen.findByText(/Sí, cerrar permanentemente/)).toBeInTheDocument()
     await user.click(screen.getByText('Cancelar'))
     expect(screen.queryByText(/Sí, cerrar permanentemente/)).not.toBeInTheDocument()
     expect(mockCloseReport).not.toHaveBeenCalled()
+  })
+
+  it('el badge dice "Cerrado automáticamente" cuando closed_auto es true', async () => {
+    mockLoadReport.mockResolvedValue({
+      data: {
+        id: 'r-1',
+        closed_at: '2026-08-05T11:30:00.000Z',
+        closed_by: null,
+        closed_auto: true,
+      },
+      error: null,
+    })
+    renderLineView()
+    expect(await screen.findByText('Cerrado automáticamente')).toBeInTheDocument()
+  })
+})
+
+describe('LineView — jefa de línea puede cerrar su propio reporte', () => {
+  const LEAD_LINE = { ...MOCK_LINE, lead_user_id: 'u-lead' }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockLoadReport.mockResolvedValue({
+      data: { id: 'r-1', closed_at: null, closed_by: null },
+      error: null,
+    })
+  })
+
+  it('la jefa de la línea ve "Marcar reporte como listo" aunque no tenga reportes.close', async () => {
+    mockUseAuth.mockReturnValue({
+      can: () => false,
+      userProfile: { user_id: 'u-lead', access_level: 3, admin: false },
+    })
+    render(
+      <MemoryRouter initialEntries={['/reportes/linea/l-1?tab=operaciones']}>
+        <LineView line={LEAD_LINE} companyId="co-1" />
+      </MemoryRouter>,
+    )
+    expect(await screen.findByText('Marcar reporte como listo')).toBeInTheDocument()
+  })
+
+  it('una usuaria que no lidera la línea y sin la capability no ve ningún botón', async () => {
+    mockUseAuth.mockReturnValue({
+      can: () => false,
+      userProfile: { user_id: 'u-otra', access_level: 3, admin: false },
+    })
+    render(
+      <MemoryRouter initialEntries={['/reportes/linea/l-1?tab=operaciones']}>
+        <LineView line={LEAD_LINE} companyId="co-1" />
+      </MemoryRouter>,
+    )
+    await waitFor(() => {
+      expect(screen.getByTestId('operaciones-view')).toBeInTheDocument()
+    })
+    expect(screen.queryByText('Marcar reporte como listo')).not.toBeInTheDocument()
+    expect(screen.queryByText('Cerrar reporte')).not.toBeInTheDocument()
   })
 })

@@ -9,8 +9,10 @@ import MDNLogo from './MDNLogo'
 import InstallBanner from './InstallBanner'
 import NotificationBell from './notifications/NotificationBell'
 import WhatsNewModal from './WhatsNewModal'
+import ReportCloseReminderModal from './ReportCloseReminderModal'
 import AiChatWidget from './ai/AiChatWidget'
 import { useWhatsNew } from '../hooks/useWhatsNew'
+import { useReportCloseReminder } from '../hooks/useReportCloseReminder'
 import { exportProjectsToMarkdown, downloadMarkdown } from '../utils/exportProjectsToMarkdown'
 
 const normalize = (row) => ({ ...row, createdAt: row.created_at })
@@ -26,6 +28,7 @@ export default function AppLayout() {
   const [detailId, setDetailId] = useState(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { entries: whatsNewEntries, dismiss: dismissWhatsNew } = useWhatsNew()
+  const reportReminder = useReportCloseReminder(userProfile?.company_id, userProfile?.user_id)
   const detailProject = detailId ? projects.find((p) => p.id === detailId) : null
 
   useEffect(() => {
@@ -193,6 +196,14 @@ export default function AppLayout() {
       <InstallBanner />
 
       <WhatsNewModal entries={whatsNewEntries} onClose={dismissWhatsNew} />
+
+      <ReportCloseReminderModal
+        show={whatsNewEntries.length === 0 && reportReminder.show}
+        pending={reportReminder.pending}
+        period={reportReminder.period}
+        daysLeft={reportReminder.daysLeft}
+        onClose={reportReminder.dismiss}
+      />
 
       <AiChatWidget />
 

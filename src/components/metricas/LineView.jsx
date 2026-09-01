@@ -33,7 +33,10 @@ const VALID_TABS = ['hub', 'operaciones', 'finanzas']
 
 export default function LineView({ line, companyId, onLinesChange }) {
   const { can = () => true, userProfile } = useAuth()
-  const canClose = can('reportes.close')
+  // La jefa de línea (metric_line_members.is_lead) puede marcar su propio
+  // reporte como listo y cerrarlo, aunque no tenga la capability reportes.close.
+  const isLead = !!userProfile?.user_id && line.lead_user_id === userProfile.user_id
+  const canClose = can('reportes.close') || isLead
 
   // sub-tab, mes y año viven en la URL para sobrevivir a F5 y remounts.
   const [searchParams, setSearchParams] = useSearchParams()
@@ -131,96 +134,98 @@ export default function LineView({ line, companyId, onLinesChange }) {
           ))}
         </div>
 
-        {/* Selector mes/año (excepto en Hub que muestra histórico) */}
-        {subView !== 'hub' && (
-          <div className="flex items-center gap-2 ml-auto">
-            <select
-              className="input-base py-1 text-[14px]"
-              value={month}
-              onChange={(e) => setParam('month', e.target.value)}
-            >
-              {MONTHS.map((m, i) => {
-                const monthNum = i + 1
-                if (year === CURRENT_YEAR && monthNum > NEXT_MONTH) return null
-                return (
-                  <option key={i} value={monthNum}>
-                    {m}
-                  </option>
-                )
-              })}
-            </select>
-            <select
-              className="input-base py-1 text-[14px]"
-              value={year}
-              onChange={(e) => {
-                const newYear = Number(e.target.value)
-                setSearchParams(
-                  (prev) => {
-                    const p = new URLSearchParams(prev)
-                    p.set('year', String(newYear))
-                    // Clamp month if switching to current year with a future month selected
-                    if (newYear === CURRENT_YEAR && month > NEXT_MONTH) {
-                      p.set('month', String(NEXT_MONTH))
-                    }
-                    return p
-                  },
-                  { replace: true },
-                )
-              }}
-            >
-              {YEARS.map((y) => (
-                <option key={y} value={y}>
-                  {y}
-                </option>
-              ))}
-            </select>
-
-            {isClosed ? (
-              <span
-                className="flex items-center gap-1.5 text-[12px] font-mono font-bold uppercase tracking-[0.08em] text-[#888] bg-[#f0ede3] border border-[#e0ddd4] rounded-full px-3 py-1"
-                title={
-                  reportMeta?.closed_at
-                    ? `Cerrado el ${new Date(reportMeta.closed_at).toLocaleDateString()}`
-                    : ''
-                }
+        {/* Selector mes/año (excepto en Hub que muestra histórico) + estado de cierre */}
+        <div className="flex items-center gap-2 ml-auto">
+          {subView !== 'hub' && (
+            <>
+              <select
+                className="input-base py-1 text-[14px]"
+                value={month}
+                onChange={(e) => setParam('month', e.target.value)}
               >
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <rect
-                    x="4"
-                    y="10"
-                    width="16"
-                    height="10"
-                    rx="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <path d="M8 10V7a4 4 0 018 0v3" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                Reporte cerrado
-              </span>
-            ) : (
-              canClose && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCloseError(null)
-                    setConfirmOpen(true)
-                  }}
-                  className="text-[13px] font-semibold text-[#888] hover:text-red-600 transition-colors"
-                >
-                  Cerrar reporte
-                </button>
-              )
-            )}
-          </div>
-        )}
+                {MONTHS.map((m, i) => {
+                  const monthNum = i + 1
+                  if (year === CURRENT_YEAR && monthNum > NEXT_MONTH) return null
+                  return (
+                    <option key={i} value={monthNum}>
+                      {m}
+                    </option>
+                  )
+                })}
+              </select>
+              <select
+                className="input-base py-1 text-[14px]"
+                value={year}
+                onChange={(e) => {
+                  const newYear = Number(e.target.value)
+                  setSearchParams(
+                    (prev) => {
+                      const p = new URLSearchParams(prev)
+                      p.set('year', String(newYear))
+                      // Clamp month if switching to current year with a future month selected
+                      if (newYear === CURRENT_YEAR && month > NEXT_MONTH) {
+                        p.set('month', String(NEXT_MONTH))
+                      }
+                      return p
+                    },
+                    { replace: true },
+                  )
+                }}
+              >
+                {YEARS.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
+
+          {isClosed ? (
+            <span
+              className="flex items-center gap-1.5 text-[12px] font-mono font-bold uppercase tracking-[0.08em] text-[#888] bg-[#f0ede3] border border-[#e0ddd4] rounded-full px-3 py-1"
+              title={
+                reportMeta?.closed_at
+                  ? `Cerrado el ${new Date(reportMeta.closed_at).toLocaleDateString()}`
+                  : ''
+              }
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <rect
+                  x="4"
+                  y="10"
+                  width="16"
+                  height="10"
+                  rx="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path d="M8 10V7a4 4 0 018 0v3" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              {reportMeta?.closed_auto ? 'Cerrado automáticamente' : 'Reporte cerrado'}
+            </span>
+          ) : (
+            canClose && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCloseError(null)
+                  setConfirmOpen(true)
+                }}
+                className="text-[13px] font-semibold text-[#888] hover:text-red-600 transition-colors"
+              >
+                {isLead ? 'Marcar reporte como listo' : 'Cerrar reporte'}
+              </button>
+            )
+          )}
+        </div>
       </div>
 
       {/* Contenido del sub-view */}

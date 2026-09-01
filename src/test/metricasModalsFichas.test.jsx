@@ -479,12 +479,12 @@ describe('ClientFichaModal — equipo asignado (sin lista de empleados)', () => 
 import LineHubView from '../components/metricas/LineHubView'
 
 describe('LineHubView — resumen sin reportes', () => {
-  it('con reports=[] renderiza el Resumen completo (no bloquea con "Sin datos")', async () => {
+  it('con reports=[] renderiza el Resumen completo mostrando "Aún no hay datos" del mes actual', async () => {
     wrap(<LineHubView line={MOCK_LINE} companyId="co-1" year={2026} />)
     await waitFor(() => {
-      expect(screen.getByTestId('score-dial')).toBeInTheDocument()
+      expect(screen.getAllByText(/Aún no hay datos de/).length).toBeGreaterThan(0)
     })
-    expect(screen.queryByText(/Sin datos para/)).not.toBeInTheDocument()
+    expect(screen.queryByTestId('score-dial')).not.toBeInTheDocument()
   })
 
   it('muestra un aviso de "Sin reportes" (banner informativo)', async () => {
@@ -496,13 +496,17 @@ describe('LineHubView — resumen sin reportes', () => {
 
   it('NO muestra "Promedio anual"', async () => {
     wrap(<LineHubView line={MOCK_LINE} companyId="co-1" year={2026} />)
-    await waitFor(() => expect(screen.getByTestId('score-dial')).toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.getAllByText(/Aún no hay datos de/).length).toBeGreaterThan(0),
+    )
     expect(screen.queryByText(/promedio anual/i)).not.toBeInTheDocument()
   })
 
   it('NO renderiza el Radar de indicadores', async () => {
     wrap(<LineHubView line={MOCK_LINE} companyId="co-1" year={2026} />)
-    await waitFor(() => expect(screen.getByTestId('score-dial')).toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.getAllByText(/Aún no hay datos de/).length).toBeGreaterThan(0),
+    )
     expect(screen.queryByText(/Radar de indicadores/i)).not.toBeInTheDocument()
   })
 

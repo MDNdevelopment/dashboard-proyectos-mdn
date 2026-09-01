@@ -109,9 +109,9 @@ const MOCK_CLIENT = {
   anniversary_date: null,
 }
 
-// Reportes del año: mes anterior fijo (PREV_MONTH) y un mes más viejo de la
+// Reportes del año: mes actual fijo (CURRENT_MONTH) y el mes anterior de la
 // línea l-1, más un reporte de otra línea en el mes actual — para probar
-// filtrado por línea y el criterio de "mes anterior fijo" (no "último con datos").
+// filtrado por línea y el criterio de "mes actual fijo" (no "último con datos").
 const CURRENT_YEAR = new Date().getFullYear()
 const MONTHS_ES = [
   'Enero',
@@ -132,16 +132,13 @@ const CURRENT_MONTH = _testNow.getMonth() + 1
 const PREV_MONTH_DATE = new Date(_testNow.getFullYear(), _testNow.getMonth() - 1, 1)
 const PREV_YEAR = PREV_MONTH_DATE.getFullYear()
 const PREV_MONTH = PREV_MONTH_DATE.getMonth() + 1
-const OLDER_MONTH_DATE = new Date(PREV_YEAR, PREV_MONTH - 1 - 1, 1)
-const OLDER_YEAR = OLDER_MONTH_DATE.getFullYear()
-const OLDER_MONTH = OLDER_MONTH_DATE.getMonth() + 1
 
 const MOCK_REPORTS = [
   {
     id: 'r-1',
     line_id: 'l-1',
-    year: OLDER_YEAR,
-    month: OLDER_MONTH,
+    year: PREV_YEAR,
+    month: PREV_MONTH,
     data: {
       finanzas: {
         ingresos: [{ id: 'i-0', descripcion: 'Viejo', monto: 500 }],
@@ -154,8 +151,8 @@ const MOCK_REPORTS = [
   {
     id: 'r-2',
     line_id: 'l-1',
-    year: PREV_YEAR,
-    month: PREV_MONTH,
+    year: CURRENT_YEAR,
+    month: CURRENT_MONTH,
     data: {
       finanzas: {
         ingresos: [{ id: 'i-1', descripcion: 'Pepsi', monto: 1000 }],
@@ -533,19 +530,19 @@ describe('LineFichaModal — toggle Lista/Tarjetas', () => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 describe('LineFichaModal — resumen de finanzas del último período', () => {
-  it('usuario privilegiado ve los KPIs del mes anterior fijo', async () => {
+  it('usuario privilegiado ve los KPIs del mes actual fijo', async () => {
     await renderFicha()
     expect(
-      screen.getByText(`Finanzas · ${MONTHS_ES[PREV_MONTH - 1]} ${PREV_YEAR}`),
+      screen.getByText(`Finanzas · ${MONTHS_ES[CURRENT_MONTH - 1]} ${CURRENT_YEAR}`),
     ).toBeInTheDocument()
     expect(screen.getByText('Ingresos brutos')).toBeInTheDocument()
     expect(screen.getByText('Total egresos')).toBeInTheDocument()
     expect(screen.getByText('Diferencia')).toBeInTheDocument()
-    // Montos del mes anterior (único reporte válido de l-1) con calcFinanzas real
+    // Montos del mes actual (único reporte válido de l-1 en ese mes) con calcFinanzas real
     expect(screen.getByText('$1000')).toBeInTheDocument()
     expect(screen.getByText('$400')).toBeInTheDocument()
     expect(screen.getByText('$600')).toBeInTheDocument()
-    // Ni el mes más viejo de la misma línea ni los reportes de otra línea
+    // Ni el mes anterior de la misma línea ni los reportes de otra línea
     expect(screen.queryByText('$500')).not.toBeInTheDocument()
     expect(screen.queryByText('$9999')).not.toBeInTheDocument()
   })
@@ -562,11 +559,13 @@ describe('LineFichaModal — resumen de finanzas del último período', () => {
     expect(screen.queryByText(/Finanzas/)).not.toBeInTheDocument()
   })
 
-  it('privilegiado sin reportes del mes anterior: muestra "Sin datos financieros"', async () => {
+  it('privilegiado sin reportes del mes actual: muestra "Sin datos financieros"', async () => {
     mockLoadYearReports.mockResolvedValueOnce({ data: [], error: null })
     await renderFicha()
     expect(
-      screen.getByText(`Sin datos financieros para ${MONTHS_ES[PREV_MONTH - 1]} ${PREV_YEAR}.`),
+      screen.getByText(
+        `Aún no hay datos financieros para ${MONTHS_ES[CURRENT_MONTH - 1]} ${CURRENT_YEAR}.`,
+      ),
     ).toBeInTheDocument()
     expect(screen.queryByText('Ingresos brutos')).not.toBeInTheDocument()
   })
@@ -577,7 +576,7 @@ describe('LineFichaModal — resumen de finanzas del último período', () => {
     expect(screen.queryByText('Ingresos brutos')).not.toBeInTheDocument()
   })
 
-  it('no muestra el mes en curso aunque ya tenga datos y no esté marcado incompleto (bug: todas las líneas deben compararse en el mismo mes)', async () => {
+  it('no cae al mes anterior aunque tenga datos válidos (bug: todas las líneas deben compararse en el mismo mes)', async () => {
     mockLoadYearReports.mockResolvedValueOnce({
       data: [
         {
@@ -587,7 +586,7 @@ describe('LineFichaModal — resumen de finanzas del último período', () => {
           month: CURRENT_MONTH,
           data: {
             finanzas: {
-              ingresos: [{ id: 'x', descripcion: 'Mes en curso', monto: 9999 }],
+              ingresos: [{ id: 'x', descripcion: 'Real', monto: 9999 }],
               gastosOperativos: [],
               sueldos: [],
               otrosGastos: [],
@@ -601,7 +600,7 @@ describe('LineFichaModal — resumen de finanzas del último período', () => {
           month: PREV_MONTH,
           data: {
             finanzas: {
-              ingresos: [{ id: 'i-1', descripcion: 'Real', monto: 1000 }],
+              ingresos: [{ id: 'i-1', descripcion: 'Anterior', monto: 1000 }],
               gastosOperativos: [{ id: 'g-1', descripcion: 'x', monto: 123 }],
               sueldos: [],
               otrosGastos: [],
@@ -612,25 +611,26 @@ describe('LineFichaModal — resumen de finanzas del último período', () => {
       error: null,
     })
     await renderFicha()
-    // Debe mostrar el mes anterior, no el mes en curso
+    // Debe mostrar el mes actual, no el mes anterior
     expect(
-      screen.getByText(`Finanzas · ${MONTHS_ES[PREV_MONTH - 1]} ${PREV_YEAR}`),
+      screen.getByText(`Finanzas · ${MONTHS_ES[CURRENT_MONTH - 1]} ${CURRENT_YEAR}`),
     ).toBeInTheDocument()
     expect(
-      screen.queryByText(`Finanzas · ${MONTHS_ES[CURRENT_MONTH - 1]} ${CURRENT_YEAR}`),
+      screen.queryByText(`Finanzas · ${MONTHS_ES[PREV_MONTH - 1]} ${PREV_YEAR}`),
     ).not.toBeInTheDocument()
-    // Los KPIs del mes en curso ($9999) no deben aparecer
-    expect(screen.queryByText('$9999')).not.toBeInTheDocument()
+    // Los KPIs del mes anterior ($1000) no deben aparecer
+    expect(screen.queryByText('$1000')).not.toBeInTheDocument()
+    expect(screen.getAllByText('$9999').length).toBeGreaterThan(0)
   })
 
-  it('mes anterior marcado como incompleto: no cae a otro mes, muestra "Sin datos financieros"', async () => {
+  it('mes actual marcado como incompleto: no cae a otro mes, muestra "Sin datos financieros"', async () => {
     mockLoadYearReports.mockResolvedValueOnce({
       data: [
         {
           id: 'r-incomp',
           line_id: 'l-1',
-          year: PREV_YEAR,
-          month: PREV_MONTH,
+          year: CURRENT_YEAR,
+          month: CURRENT_MONTH,
           data: {
             incompleto: true,
             finanzas: {
@@ -642,10 +642,10 @@ describe('LineFichaModal — resumen de finanzas del último período', () => {
           },
         },
         {
-          id: 'r-older',
+          id: 'r-prev',
           line_id: 'l-1',
-          year: OLDER_YEAR,
-          month: OLDER_MONTH,
+          year: PREV_YEAR,
+          month: PREV_MONTH,
           data: {
             finanzas: {
               ingresos: [{ id: 'z', descripcion: 'Previo', monto: 2500 }],
@@ -660,9 +660,11 @@ describe('LineFichaModal — resumen de finanzas del último período', () => {
     })
     await renderFicha()
     expect(
-      screen.getByText(`Sin datos financieros para ${MONTHS_ES[PREV_MONTH - 1]} ${PREV_YEAR}.`),
+      screen.getByText(
+        `Aún no hay datos financieros para ${MONTHS_ES[CURRENT_MONTH - 1]} ${CURRENT_YEAR}.`,
+      ),
     ).toBeInTheDocument()
-    // Ni el valor del mes incompleto ni el de un mes más viejo deben aparecer
+    // Ni el valor del mes incompleto ni el del mes anterior deben aparecer
     expect(screen.queryByText('$5000')).not.toBeInTheDocument()
     expect(screen.queryByText('$2500')).not.toBeInTheDocument()
   })

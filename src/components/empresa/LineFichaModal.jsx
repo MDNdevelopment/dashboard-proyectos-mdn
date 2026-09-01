@@ -10,14 +10,9 @@ import ClientFichaContent from '../metricas/ClientFichaContent'
 import EntityGridList, { ViewToggle } from '../common/EntityGridList'
 import { activeEmployees } from '../../lib/employees'
 
-const CURRENT_YEAR = new Date().getFullYear()
-
-// Mes anterior fijo — mismo criterio que las cards del grid (LinesView.jsx),
-// para que todas las líneas muestren siempre el mismo período de referencia.
 const _now = new Date()
-const PREV_MONTH_DATE = new Date(_now.getFullYear(), _now.getMonth() - 1, 1)
-const PREV_YEAR = PREV_MONTH_DATE.getFullYear()
-const PREV_MONTH = PREV_MONTH_DATE.getMonth() + 1
+const CURRENT_YEAR = _now.getFullYear()
+const CURRENT_MONTH = _now.getMonth() + 1
 
 /**
  * Ficha de una línea operativa (metric_lines), con drill-down en un solo modal:
@@ -79,20 +74,15 @@ export default function LineFichaModal({
   // No depende de member_user_ids para no refetchear al asignar.
   useEffect(() => {
     let cancelled = false
-    // En enero, el mes anterior (diciembre) pertenece al año previo — hay que
-    // traer también ese año para poder mostrarlo.
-    const needsPrevYear = privileged && PREV_YEAR !== CURRENT_YEAR
     Promise.all([
       loadCompanyEmployees(companyId),
       loadClients(companyId, line.id),
       privileged ? loadYearReports(companyId, CURRENT_YEAR) : Promise.resolve({ data: [] }),
-      needsPrevYear ? loadYearReports(companyId, PREV_YEAR) : Promise.resolve({ data: [] }),
-    ]).then(([empRes, cliRes, repRes, prevRepRes]) => {
+    ]).then(([empRes, cliRes, repRes]) => {
       if (cancelled) return
       setAllEmployees(empRes.data ?? [])
       setClients(cliRes.data ?? [])
-      const allReports = [...(repRes.data ?? []), ...(prevRepRes.data ?? [])]
-      setFinReports(allReports.filter((r) => r.line_id === line.id))
+      setFinReports((repRes.data ?? []).filter((r) => r.line_id === line.id))
     })
     return () => {
       cancelled = true
@@ -112,11 +102,10 @@ export default function LineFichaModal({
 
   const loading = allEmployees === null || clients === null
 
-  // Mes anterior fijo (no "último mes con datos"): así todas las líneas se
-  // comparan en el mismo período, aunque alguna ya haya cargado el mes en curso.
+  // Mes actual fijo: así todas las líneas se comparan en el mismo período.
   const lastReport =
     (finReports ?? []).find(
-      (r) => r.month === PREV_MONTH && r.year === PREV_YEAR && !r.data?.incompleto,
+      (r) => r.month === CURRENT_MONTH && r.year === CURRENT_YEAR && !r.data?.incompleto,
     ) ?? null
 
   function goFinanzas(section) {
@@ -427,11 +416,13 @@ export default function LineFichaModal({
                 {privileged && (
                   <div>
                     <p className="text-[11.5px] font-mono font-bold uppercase tracking-[0.12em] text-[#aaa] mb-2">
-                      Finanzas{lastReport ? ` · ${MONTHS[lastReport.month - 1]} ${PREV_YEAR}` : ''}
+                      Finanzas
+                      {lastReport ? ` · ${MONTHS[lastReport.month - 1]} ${CURRENT_YEAR}` : ''}
                     </p>
                     {!lastReport ? (
                       <p className="text-[13.5px] text-[#bbb]">
-                        Sin datos financieros para {MONTHS[PREV_MONTH - 1]} {PREV_YEAR}.
+                        Aún no hay datos financieros para {MONTHS[CURRENT_MONTH - 1]} {CURRENT_YEAR}
+                        .
                       </p>
                     ) : (
                       (() => {

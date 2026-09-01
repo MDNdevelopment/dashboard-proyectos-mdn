@@ -26,7 +26,9 @@ describe('metricsApi.closeReport', () => {
     const { data, error } = await closeReport('line-1', 2026, 6, 'u-1')
 
     expect(from).toHaveBeenCalledWith('metric_reports')
-    expect(update).toHaveBeenCalledWith(expect.objectContaining({ closed_by: 'u-1' }))
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({ closed_by: 'u-1', closed_auto: false }),
+    )
     expect(update.mock.calls[0][0].closed_at).toEqual(expect.any(String))
     expect(eq1).toHaveBeenCalledWith('line_id', 'line-1')
     expect(eq2).toHaveBeenCalledWith('year', 2026)

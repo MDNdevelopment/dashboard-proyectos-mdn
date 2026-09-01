@@ -23,6 +23,7 @@ export const CHANGELOG = [
       'Al eliminar un cliente ahora eliges si sigue contando en el reporte del mes en curso (facturó/trabajó parte del mes) o si se retira de inmediato también de ese mes.',
       'Nueva opción "Mover de línea" para las marcas: al cambiar una cuenta de equipo, los reportes de meses anteriores conservan el nombre y el logo de la marca (ya no aparece como "cliente eliminado"). Al mover eliges si este mes ya cuenta para el equipo nuevo (el ingreso del mes se reparte entre ambos según los días y las métricas pasan al nuevo) o si este mes se queda completo con el equipo actual y el cambio se aplica solo el 1° del próximo mes. Además, las tareas abiertas de la marca pasan al equipo nuevo y quedan a cargo del jefe de ese equipo. También puedes mover una marca a "Independientes"; como no tiene jefe, ahí eliges tú a quién quedan asignadas las tareas.',
       'Ahora las marcas tienen "Fin de contrato" en su ficha: indicas hasta qué fecha trabajó la cuenta y, desde el mes siguiente, deja de aparecer en los reportes. Los reportes ya guardados de meses posteriores se limpian solos (los meses cerrados no se modifican).',
+      'En el Inicio, el calendario de fechas del equipo y clientes ahora se muestra debajo de los Accesos rápidos.',
       'Corregido: los ads y campañas no se estaban finalizando solos al llegar a su fecha de cierre desde el 7 de agosto. Ya se pusieron al día los que quedaron pendientes.',
       'Corregido: en la sección Reuniones de un reporte de mes pasado, una marca movida a otra línea después de ese mes podía seguir apareciendo (en la meta y en el listado de marcas), aunque ya no figurara en el resto de las métricas de ese mes.',
       'Corregido: las tareas pendientes y en proceso de Energon y Maxxis se habían quedado en el equipo anterior al mover esas marcas a Team Sabrina. Ya se movieron al equipo nuevo y quedaron a cargo de la jefa de línea.',
@@ -155,6 +156,10 @@ export const CHANGELOG = [
       'En Pautas → Solicitudes, quien pide la pauta ahora puede elegir los asistentes desde esa misma fila (antes solo se podía en Agenda).',
       'Corregido: en Empresa → Permisos, la lista desplegable de departamentos/usuarios/cargos se cortaba contra el borde de la tarjeta del módulo y no dejaba ver las últimas opciones.',
       'Al crear un Ad, la fecha de inicio ahora se precarga con el mes que tienes abierto, y si la cambias a un mes distinto se avisa antes de guardar (evita crear ads en un mes por error y que luego "no aparezcan").',
+      'En Empresa → Líneas y en el Resumen de cada línea dentro de Reportes, el mes que se muestra ahora es siempre el actual (antes se mostraba el mes anterior). Si todavía no hay datos cargados de ese mes, se avisa con un mensaje en vez de mostrar un puntaje vacío.',
+      'Los reportes mensuales ahora se cierran solos el día 5 del mes siguiente.',
+      'Del 1 al 5 de cada mes las jefas de línea reciben un aviso diario (campanita y ventana emergente al entrar) recordando que su reporte va a cerrarse.',
+      'Las jefas de línea ahora pueden marcar su propio reporte como listo y cerrarlo, sin depender de otra persona.',
     ],
   },
   {
