@@ -51,9 +51,14 @@ describe('calcReuniones', () => {
     expect(calcReuniones(r)).toBe(20)
   })
 
-  it('retorna 0 cuando meta === 0', () => {
+  it('retorna 20 (no penaliza) cuando meta === 0: no había marcas exigibles en el período', () => {
     const r = makeReport({ reuniones: { realizadas: 5, meta: 0 } })
-    expect(calcReuniones(r)).toBe(0)
+    expect(calcReuniones(r)).toBe(20)
+  })
+
+  it('no supera 20 pts aunque realizadas > meta', () => {
+    const r = makeReport({ reuniones: { realizadas: 20, meta: 10 } })
+    expect(calcReuniones(r)).toBe(20)
   })
 
   it('proporciona correctamente realizadas < meta', () => {

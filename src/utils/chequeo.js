@@ -193,3 +193,106 @@ export function computePlataformasProductividad(checks, clients) {
   })
   return { nombre: 'Actualización de Plataformas', realizado, meta }
 }
+
+// ─── Agregación → resumen de estado por cuenta (fila de KPIs y encabezado por línea de
+// ChequeoPage/ChequeoGrid) ──────────────────────────────────────────────────────────────
+
+/**
+ * Resumen de cuántas cuentas están al día en el período activo (semana `weekN`, o mes
+ * completo — "fecha más reciente" — cuando `weekN` es `null`). Mismo recorrido cliente →
+ * social_links → CONTENT_TYPES → contentTypeApplies que `computePlataformasProductividad`,
+ * pero a diferencia de esa función:
+ * - Mide "cuenta al día" en vez de "productividad del mes": una cuenta es 'actualizada'
+ *   solo si TODAS sus casillas aplicables tienen fecha en el período activo, 'parcial' si
+ *   algunas, 'sinRegistrar' si ninguna — así una cuenta de Instagram con Reels e Highlights
+ *   vacíos no puede leerse como "al día" solo porque tiene Publicaciones.
+ * - NO respeta el opt-out `client.fixed_tasks.plataformas === false`: el resumen debe
+ *   cuadrar con lo que la grilla dibuja (ChequeoGrid no oculta esas cuentas), no con lo que
+ *   cuenta para el indicador de Productividad del reporte mensual.
+ * - Usa el mismo semáforo (`recentCheckStatus`) para derivar `enAlerta`/`porVencer`, no un
+ *   conteo de semanas.
+ *
+ * @param {Array} clients  cuentas en alcance (ya acotadas a la línea o a "todas" por el caller)
+ * @param {Array} checks   publication_checks del mes activo
+ * @param {{weekN?: number|null, today?: Date}} [opts]
+ *   weekN: semana fija activa (ver buildFixedWeeks); `null`/omitido = vista "más reciente"
+ *   (usa `mostRecentCheck`, ignora `period_week`, igual que ChequeoGrid en viewMode='recent').
+ * @returns {{
+ *   totalCuentas:number, sinRedes:number,
+ *   actualizadas:number, parciales:number, sinRegistrar:number,
+ *   enAlerta:number, porVencer:number,
+ *   celdasTotal:number, celdasConFecha:number,
+ * }}
+ */
+export function computeChequeoSummary(clients, checks, { weekN = null, today = new Date() } = {}) {
+  let sinRedes = 0
+  let actualizadas = 0
+  let parciales = 0
+  let sinRegistrar = 0
+  let enAlerta = 0
+  let porVencer = 0
+  let celdasTotal = 0
+  let celdasConFecha = 0
+
+  clients.forEach((client) => {
+    const networks = Array.isArray(client?.social_links)
+      ? client.social_links.map((s) => s?.red).filter((red) => typeof red === 'string' && red)
+      : []
+    if (networks.length === 0) {
+      sinRedes += 1
+      return
+    }
+
+    let cuentaCeldas = 0
+    let cuentaConFecha = 0
+    let cuentaTieneRojo = false
+    let cuentaTieneNaranja = false
+
+    networks.forEach((network) => {
+      CONTENT_TYPES.forEach((contentType) => {
+        if (!contentTypeApplies(network, contentType)) return
+        cuentaCeldas += 1
+        const check =
+          weekN == null
+            ? mostRecentCheck(checks, client.id, network, contentType)
+            : checks.find(
+                (c) =>
+                  c.client_id === client.id &&
+                  c.network === network &&
+                  c.content_type === contentType &&
+                  c.period_week === weekN,
+              )
+        if (check?.last_published_at) cuentaConFecha += 1
+        const status = recentCheckStatus(check?.last_published_at, network, today)
+        if (status === 'rojo') cuentaTieneRojo = true
+        else if (status === 'naranja') cuentaTieneNaranja = true
+      })
+    })
+
+    if (cuentaCeldas === 0) {
+      sinRedes += 1
+      return
+    }
+    celdasTotal += cuentaCeldas
+    celdasConFecha += cuentaConFecha
+
+    if (cuentaConFecha === 0) sinRegistrar += 1
+    else if (cuentaConFecha === cuentaCeldas) actualizadas += 1
+    else parciales += 1
+
+    if (cuentaTieneRojo) enAlerta += 1
+    else if (cuentaTieneNaranja) porVencer += 1
+  })
+
+  return {
+    totalCuentas: actualizadas + parciales + sinRegistrar,
+    sinRedes,
+    actualizadas,
+    parciales,
+    sinRegistrar,
+    enAlerta,
+    porVencer,
+    celdasTotal,
+    celdasConFecha,
+  }
+}

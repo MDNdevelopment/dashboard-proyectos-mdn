@@ -160,6 +160,8 @@ export const CHANGELOG = [
       'Los reportes mensuales ahora se cierran solos el día 5 del mes siguiente.',
       'Del 1 al 5 de cada mes las jefas de línea reciben un aviso diario (campanita y ventana emergente al entrar) recordando que su reporte va a cerrarse.',
       'Las jefas de línea ahora pueden marcar su propio reporte como listo y cerrarlo, sin depender de otra persona.',
+      'Nuevo resumen en Chequeo: arriba de la grilla se ven tarjetas con cuántas cuentas están actualizadas, parciales (con algunas casillas sin registrar), sin registrar y en alerta (12+ días sin publicar), tanto por línea como en la vista "Todas". En "Todas" cada línea ahora muestra su nombre y su propio mini-resumen encima de sus cuentas.',
+      'En el punto "1. Reuniones realizadas" del reporte de Operaciones, la Meta ya no se escribe a mano: se calcula sola como una reunión por cada marca de la línea, descontando las que se marquen como "No aplica" en Ver marcas. Se quitó también el campo de meta de reuniones en Empresa → Líneas.',
     ],
   },
   {

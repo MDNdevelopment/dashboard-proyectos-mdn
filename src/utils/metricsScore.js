@@ -10,8 +10,11 @@
 /** Reuniones — peso 20 */
 export function calcReuniones(report) {
   const meta = report.reuniones?.meta ?? 0
-  if (meta === 0) return 0
-  return (Number(report.reuniones.realizadas ?? 0) / meta) * 20
+  // meta 0 = no había ninguna marca exigible en el período (todas "No aplica", o línea
+  // sin marcas): no penaliza, puntaje completo. Distinto de "meta sin configurar" — la
+  // meta ahora es siempre derivada, nunca queda en 0 por descuido.
+  if (meta === 0) return 20
+  return Math.min((Number(report.reuniones.realizadas ?? 0) / meta) * 20, 20)
 }
 
 /** Productividad (tareas fijas) — peso 20 */

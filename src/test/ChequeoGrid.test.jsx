@@ -91,6 +91,19 @@ describe('ChequeoGrid', () => {
     expect(screen.getAllByText('TikTok')).toHaveLength(2)
   })
 
+  it('en modo agrupado, cada línea muestra un encabezado con su nombre y su mini-resumen', () => {
+    renderGrid({
+      clients: [client(), client({ id: 'c2', name: 'Superfina', line_id: 'line-2' })],
+      checks: [check()], // solo Encco/Instagram registrado; TikTok y Superfina quedan sin registrar
+      groupByLine: true,
+    })
+    expect(screen.getByText('Team Danielly')).toBeInTheDocument()
+    expect(screen.getByText('Team Ana')).toBeInTheDocument()
+    // Ninguna cuenta queda "actualizada" (cada una tiene 2 redes, Instagram y TikTok, y
+    // solo Instagram de Encco tiene fecha) → ambas líneas caen en "sin registrar" o "parcial".
+    expect(screen.getAllByText(/sin registrar/).length).toBeGreaterThan(0)
+  })
+
   it('muestra la fecha formateada de una celda registrada en la semana activa', () => {
     renderGrid({ checks: [check({ last_published_at: '2026-08-19' })] })
     expect(screen.getByText('19 ago')).toBeInTheDocument()

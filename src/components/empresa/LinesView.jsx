@@ -434,7 +434,6 @@ export default function LinesView({ companyId, canManage = true }) {
       {metasModal && (
         <LineMetasModal
           line={metasModal}
-          clientCount={clients.filter((c) => c.line_id === metasModal.id && !c.deleted_at).length}
           onClose={() => setMetasModal(null)}
           onSaved={(row) => {
             handleLineSaved(row)

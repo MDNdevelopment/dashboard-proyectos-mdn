@@ -1,8 +1,8 @@
 /**
  * Tests de LineMetasModal — configuración de metas por defecto de una línea
- * (Empresa → Líneas → "Configurar metas"). Cubre el tope de la meta de reuniones
- * a la cantidad de marcas activas de la línea (clientCount), tanto al tipear
- * como al guardar.
+ * (Empresa → Líneas → "Configurar metas"). Solo configura las Tareas Fijas
+ * (productividad); la meta de Reuniones ya no se captura acá — se calcula sola
+ * en Operaciones (ver utils/reunionesMeta.js).
  */
 import { render, screen, fireEvent } from '@testing-library/react'
 import { vi } from 'vitest'
@@ -15,51 +15,40 @@ vi.mock('../components/metricas/metricsApi', () => ({
 
 import LineMetasModal from '../components/empresa/LineMetasModal'
 
-const LINE = { id: 'line-1', name: 'Georgina', color: '#FAB51A', metas: { reuniones: 15 } }
-
-function renderModal(props = {}) {
-  return render(
-    <LineMetasModal line={LINE} clientCount={3} onClose={() => {}} onSaved={() => {}} {...props} />
-  )
+const LINE = {
+  id: 'line-1',
+  name: 'Georgina',
+  color: '#FAB51A',
+  metas: { tareas: [{ nombre: 'Métricas', meta: 15 }] },
 }
 
-describe('LineMetasModal — meta de reuniones topada a clientCount', () => {
+function renderModal(props = {}) {
+  return render(<LineMetasModal line={LINE} onClose={() => {}} onSaved={() => {}} {...props} />)
+}
+
+describe('LineMetasModal', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockUpdateLine.mockResolvedValue({ data: null, error: null })
   })
 
-  it('al abrir, clampa un valor guardado que excede la cantidad de marcas', () => {
-    renderModal({ clientCount: 3 }) // line.metas.reuniones = 15, pero solo hay 3 marcas
-    const metaInput = document.querySelectorAll('input[type="number"]')[0]
-    expect(metaInput.value).toBe('3')
+  it('no muestra ningún campo de meta de reuniones', () => {
+    renderModal()
+    expect(screen.queryByText(/meta de reuniones/i)).not.toBeInTheDocument()
   })
 
-  it('clampa un valor tipeado por encima del límite', () => {
-    renderModal({ clientCount: 3 })
-    const metaInput = document.querySelectorAll('input[type="number"]')[0]
-    fireEvent.change(metaInput, { target: { value: '9' } })
-    expect(metaInput.value).toBe('3')
+  it('muestra las tareas fijas configuradas en la línea', () => {
+    renderModal()
+    expect(screen.getByDisplayValue('Métricas')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('15')).toBeInTheDocument()
   })
 
-  it('permite un valor dentro del límite', () => {
-    renderModal({ clientCount: 3 })
-    const metaInput = document.querySelectorAll('input[type="number"]')[0]
-    fireEvent.change(metaInput, { target: { value: '2' } })
-    expect(metaInput.value).toBe('2')
-  })
-
-  it('muestra el hint con el máximo permitido', () => {
-    renderModal({ clientCount: 3 })
-    expect(screen.getByText('Máx. 3 (1 por marca activa de la línea)')).toBeInTheDocument()
-  })
-
-  it('al guardar, envía la meta ya clampada a updateLine', async () => {
-    renderModal({ clientCount: 3 })
+  it('al guardar, envía solo las tareas a updateLine (sin clave "reuniones")', async () => {
+    renderModal()
     fireEvent.click(screen.getByText('Guardar metas'))
     await vi.waitFor(() => {
       expect(mockUpdateLine).toHaveBeenCalledWith('line-1', {
-        metas: expect.objectContaining({ reuniones: 3 }),
+        metas: { tareas: [{ nombre: 'Métricas', meta: 15 }] },
       })
     })
   })

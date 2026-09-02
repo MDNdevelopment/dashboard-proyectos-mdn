@@ -18,6 +18,7 @@ import { isReportFrozen } from '../../utils/reportPeriod'
 import { calcTotal, sumScore, crecimientoCliente } from '../../utils/metricsScore'
 import { buildFixedWeeks, computeProductividad } from '../../utils/fixedTasks'
 import { computePlataformasProductividad } from '../../utils/chequeo'
+import { computeReunionesMeta } from '../../utils/reunionesMeta'
 import { loadChecks } from '../chequeo/chequeoApi'
 import {
   MONTHS,
@@ -50,6 +51,13 @@ function clientAvatar(c) {
 
 export default function OperacionesView({ line, companyId, year, month, closed = false }) {
   const { can = () => true } = useAuth()
+  // La Meta de reuniones se recalcula sola (1 por marca de la línea, menos las "No
+  // aplica") solo en el mes en curso y no cerrado. Meses pasados conservan la meta que
+  // ya tenían guardada, igual criterio que "Realizadas" con REUNIONES_MODULE_START.
+  // Se lee la fecha en cada render (no a nivel de módulo) para no congelar "hoy" en el
+  // momento en que se importó el archivo.
+  const today = new Date()
+  const metaAutoSync = !closed && year === today.getFullYear() && month === today.getMonth() + 1
   const [report, setReport] = useState(null)
   const [prevReport, setPrevReport] = useState(null)
   const [clients, setClients] = useState([])
@@ -181,6 +189,15 @@ export default function OperacionesView({ line, companyId, year, month, closed =
     // en reportes cerrados, donde se conserva el valor histórico guardado.
     if (shouldAutoSync) synced.reuniones.realizadas = meetingsCount
     synced.reuniones.justificativos = pruneJustificativos(synced.reuniones)
+    // Meta de reuniones: 1 por marca de la línea, menos las "No aplica" — recalculada
+    // solo en el mes en curso (metaAutoSync, ver arriba). metaAutoSync implica mes no
+    // congelado, así que el roster vigente es siempre activeLineClients.
+    if (metaAutoSync) {
+      synced.reuniones.meta = computeReunionesMeta(
+        activeLineClients,
+        synced.reuniones.justificativos,
+      )
+    }
 
     // "Productividad – Tareas Fijas" ya no se captura a mano — se deriva de lo tildado
     // en Gestión de Tareas → Tareas Fijas (fixed_task_marks), mismo patrón que
@@ -275,7 +292,7 @@ export default function OperacionesView({ line, companyId, year, month, closed =
       setReunionesClients(activeLineClients)
     }
     setLoading(false)
-  }, [line?.id, line?.member_user_ids, companyId, year, month, closed])
+  }, [line?.id, line?.member_user_ids, companyId, year, month, closed, metaAutoSync])
 
   useEffect(() => {
     load()
@@ -347,11 +364,8 @@ export default function OperacionesView({ line, companyId, year, month, closed =
 
   if (!report) return null
 
-  // Tope de la meta de reuniones: no puede superar la cantidad de marcas activas de la
-  // línea EN ESE MES (cada marca aporta como máximo 1 reunión al conteo — ver
-  // countMeetingsHeldForLine). Ver `reunionesClients` en `load()` para el congelamiento.
+  // Ver `reunionesClients` en `load()` para el congelamiento por período.
   const activeClients = reunionesClients
-  const maxMeta = activeClients.length
 
   // ── Helpers de actualización ──────────────────────────────────────────────
   function setField(path, value) {
@@ -366,6 +380,7 @@ export default function OperacionesView({ line, companyId, year, month, closed =
   }
 
   // Guarda (o quita, si value es "") el justificativo de una marca sin reunión en el período.
+  // En mes en curso, la Meta se recalcula en el acto (1 por marca activa, menos "No aplica").
   function setJustificativo(clienteId, value) {
     setReport((prev) => {
       const next = structuredClone(prev)
@@ -373,6 +388,9 @@ export default function OperacionesView({ line, companyId, year, month, closed =
       if (value) justificativos[clienteId] = value
       else delete justificativos[clienteId]
       next.reuniones.justificativos = justificativos
+      if (metaAutoSync) {
+        next.reuniones.meta = computeReunionesMeta(reunionesClients, justificativos)
+      }
       return next
     })
   }
@@ -491,21 +509,14 @@ export default function OperacionesView({ line, companyId, year, month, closed =
           <Field label="Meta">
             <input
               type="number"
-              min="1"
-              max={maxMeta || undefined}
-              className="input-base"
-              value={report.reuniones.meta ?? ''}
-              onChange={(e) => {
-                if (e.target.value === '') {
-                  setField('reuniones.meta', null)
-                  return
-                }
-                const clamped = Math.min(Number(e.target.value), maxMeta)
-                setField('reuniones.meta', clamped)
-              }}
+              className="input-base bg-[#f2f0e8] text-[#888] cursor-not-allowed"
+              value={report.reuniones.meta ?? 0}
+              disabled
+              readOnly
+              title="1 por cada marca de la línea, menos las marcadas «No aplica» en este período"
             />
             <p className="mt-1 text-[12px] font-mono text-[#888]">
-              Máx. {maxMeta} (1 por marca activa de la línea)
+              {metaAutoSync ? 'Marcas de la línea − «No aplica»' : 'Meta guardada del período'}
             </p>
           </Field>
         </div>

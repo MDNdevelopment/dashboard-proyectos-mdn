@@ -5,9 +5,10 @@ import { loadLines, loadClients } from '../components/metricas/metricsApi'
 import { MONTHS } from '../components/metricas/constants'
 import { visibleLinesForUser } from '../utils/lineMembers'
 import { buildFixedWeeks } from '../utils/fixedTasks'
-import { currentFixedWeekN } from '../utils/chequeo'
+import { currentFixedWeekN, computeChequeoSummary } from '../utils/chequeo'
 import { loadChecks } from '../components/chequeo/chequeoApi'
 import ChequeoGrid from '../components/chequeo/ChequeoGrid'
+import ChequeoSummary from '../components/chequeo/ChequeoSummary'
 
 const ALL_LINES = '__all__'
 
@@ -121,6 +122,12 @@ export default function ChequeoPage() {
     activeLineId === ALL_LINES ? lines : lines.filter((l) => l.id === activeLineId)
   const scopedLineIds = scopedLines.map((l) => l.id)
   const scopedClients = clients.filter((c) => scopedLineIds.includes(c.line_id))
+
+  const summary = computeChequeoSummary(scopedClients, checks, {
+    weekN: viewMode === 'recent' ? null : weekN,
+  })
+  const periodoLabel =
+    viewMode === 'recent' ? `Fecha más reciente · ${MONTHS[month - 1]}` : `Semana S${weekN}`
 
   return (
     <main className="flex-1 overflow-y-auto main-bg">
@@ -241,6 +248,8 @@ export default function ChequeoPage() {
                 {viewMode === 'recent' ? '← Ver por semana' : 'Ver fecha más reciente'}
               </button>
             </div>
+
+            <ChequeoSummary summary={summary} periodoLabel={periodoLabel} />
 
             <ChequeoGrid
               lines={scopedLines}

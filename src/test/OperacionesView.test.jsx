@@ -455,8 +455,12 @@ describe('OperacionesView — reporte cerrado (prop "closed")', () => {
   })
 })
 
-describe('OperacionesView — meta de reuniones topada a la cantidad de marcas activas', () => {
+describe('OperacionesView — meta de reuniones automática (1 por marca, menos "No aplica")', () => {
+  // Fija "hoy" en julio 2026 para que metaAutoSync esté activo (solo corre en el mes en
+  // curso, no cerrado — ver OperacionesView.jsx).
   beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date('2026-07-17T12:00:00'))
     vi.clearAllMocks()
     mockLoadPrevReport.mockResolvedValue({ data: null, error: null })
     mockLoadClients.mockResolvedValue({ data: MOCK_CLIENTS, error: null }) // 2 marcas activas
@@ -467,36 +471,55 @@ describe('OperacionesView — meta de reuniones topada a la cantidad de marcas a
     mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: [], error: null })
     mockLoadFixedTaskMarks.mockResolvedValue({ data: [], error: null })
   })
-
-  it('clampa un valor tipeado por encima de la cantidad de marcas activas', async () => {
-    mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
-    renderView()
-    await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
-    })
-    const metaInput = document.querySelectorAll('input[type="number"]')[1]
-    fireEvent.change(metaInput, { target: { value: '9' } })
-    expect(metaInput.value).toBe('2') // MOCK_CLIENTS tiene 2 marcas
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
-  it('permite un valor dentro del límite', async () => {
+  it('la Meta es de solo lectura e igual a la cantidad de marcas de la línea', async () => {
     mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
     renderView()
     await waitFor(() => {
       expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
     })
     const metaInput = document.querySelectorAll('input[type="number"]')[1]
-    fireEvent.change(metaInput, { target: { value: '1' } })
+    expect(metaInput.value).toBe('2') // MOCK_CLIENTS tiene 2 marcas
+    expect(metaInput).toBeDisabled()
+  })
+
+  it('al marcar una marca como "No aplica" la Meta baja en 1 al instante', async () => {
+    mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
+    renderView()
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Ver marcas/ }))
+    const heading = await screen.findByText('Cobertura de reuniones por marca')
+    const modal = heading.closest('div.bg-white')
+    fireEvent.change(within(modal).getAllByRole('combobox')[0], {
+      target: { value: 'no_aplica' },
+    })
+    const metaInput = document.querySelectorAll('input[type="number"]')[1]
     expect(metaInput.value).toBe('1')
   })
 
-  it('muestra el hint con el máximo permitido', async () => {
+  it('muestra el hint de meta derivada', async () => {
     mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
     renderView()
     await waitFor(() => {
       expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
     })
-    expect(screen.getByText('Máx. 2 (1 por marca activa de la línea)')).toBeInTheDocument()
+    expect(screen.getByText('Marcas de la línea − «No aplica»')).toBeInTheDocument()
+  })
+
+  it('en un mes cerrado NO recalcula: conserva la meta guardada y muestra el hint correspondiente', async () => {
+    mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null }) // meta guardada: 15
+    renderView({ closed: true })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
+    const metaInput = document.querySelectorAll('input[type="number"]')[1]
+    expect(metaInput.value).toBe('15')
+    expect(screen.getByText('Meta guardada del período')).toBeInTheDocument()
   })
 })
 
@@ -589,16 +612,16 @@ describe('OperacionesView — meses pasados congelados no reconcilian contra el 
     expect(screen.queryByText('Marca Nueva')).not.toBeInTheDocument()
   })
 
-  it('junio (mes pasado): el roster de Reuniones (meta máx. y modal) también respeta el congelamiento, no la asignación de línea actual', async () => {
+  it('junio (mes pasado): el roster de Reuniones (meta guardada y modal) también respeta el congelamiento, no la asignación de línea actual', async () => {
     // c-3 ("Marca Nueva") está asignada HOY a esta línea (mockLoadClients la incluye),
     // pero el reporte de junio guardado (crecimiento.items) solo tiene c-1 y c-2 — igual
-    // que le pasaría a una cuenta movida a otra línea después de junio: no debe contar
-    // como "marca de la línea" para la meta ni aparecer en el picker de justificativos.
+    // que le pasaría a una cuenta movida a otra línea después de junio: no debe aparecer
+    // en el picker de justificativos, y la meta (mes pasado, no editable) no se recalcula.
     renderView({ month: 6 })
     await waitFor(() => {
       expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
     })
-    expect(await screen.findByText('Máx. 2 (1 por marca activa de la línea)')).toBeInTheDocument()
+    expect(await screen.findByText('Meta guardada del período')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /Ver marcas/ }))
     const heading = await screen.findByText('Cobertura de reuniones por marca')

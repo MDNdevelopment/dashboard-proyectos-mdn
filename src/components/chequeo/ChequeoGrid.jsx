@@ -8,6 +8,7 @@ import {
   recentCheckStatus,
   formatCheckDate,
   contentTypeApplies,
+  computeChequeoSummary,
 } from '../../utils/chequeo'
 
 /**
@@ -217,12 +218,39 @@ export default function ChequeoGrid({
           </thead>
           <tbody>
             {groups.map((group) => {
-              const rowsClients = groupByLine
-                ? clients.filter((c) => c.line_id === group.id)
-                : [...clients].sort((a, b) => a.name.localeCompare(b.name, 'es'))
+              const rowsClients = (
+                groupByLine ? clients.filter((c) => c.line_id === group.id) : clients
+              )
+                .slice()
+                .sort((a, b) => a.name.localeCompare(b.name, 'es'))
               if (groupByLine && rowsClients.length === 0) return null
+              const lineSummary = groupByLine
+                ? computeChequeoSummary(rowsClients, checks, {
+                    weekN: isRecentView ? null : weekN,
+                  })
+                : null
               return (
                 <Fragment key={group.id}>
+                  {groupByLine && (
+                    <tr className="bg-[#faf8f2] border-b border-t border-[#eee9dd]">
+                      <td colSpan={colCount} className="px-2 py-2 sm:px-4">
+                        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                          <span className="text-[14.5px] font-bold text-[#111]">{group.name}</span>
+                          <span className="text-[12px] text-[#777]">
+                            <b className="text-[#1f8a43]">{lineSummary.actualizadas}</b> al día ·{' '}
+                            <b className="text-[#111]">{lineSummary.parciales}</b> parciales ·{' '}
+                            <b className="text-[#888]">{lineSummary.sinRegistrar}</b> sin registrar
+                            {lineSummary.enAlerta > 0 && (
+                              <>
+                                {' · '}
+                                <b className="text-[#c0392b]">{lineSummary.enAlerta}</b> en alerta
+                              </>
+                            )}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
                   {rowsClients.map((client) => {
                     const socials = clientSocialLinks(client)
                     return (

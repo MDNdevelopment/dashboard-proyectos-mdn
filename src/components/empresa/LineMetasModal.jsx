@@ -5,25 +5,22 @@ import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 
 /**
  * Modal para configurar las metas por defecto de una línea operativa.
- * Edita: meta de Reuniones y lista de Tareas Fijas (productividad).
+ * Edita: lista de Tareas Fijas (productividad). La meta de Reuniones ya no se
+ * configura acá — se calcula sola (1 por marca de la línea, menos las "No aplica"
+ * del período, ver utils/reunionesMeta.js) directamente en Operaciones.
  * Los valores aquí son los defaults que se usan al inicializar un nuevo periodo;
  * siguen siendo editables en el tab Operaciones de Métricas.
  */
-export default function LineMetasModal({ line, clientCount = 0, onClose, onSaved }) {
+export default function LineMetasModal({ line, onClose, onSaved }) {
   const existingMetas = line.metas ?? {}
-  // La meta de reuniones no puede superar la cantidad de marcas activas de la línea
-  // (cada marca aporta como máximo 1 reunión al conteo — ver countMeetingsHeldForLine).
-  const [metaReuniones, setMetaReuniones] = useState(
-    Math.min(existingMetas.reuniones ?? 15, clientCount)
-  )
   const [tareas, setTareas] = useState(
-    (existingMetas.tareas && existingMetas.tareas.length > 0)
-      ? existingMetas.tareas.map(t => ({ ...t }))
-      : DEFAULT_SUBTAREAS.map(t => ({ ...t }))
+    existingMetas.tareas && existingMetas.tareas.length > 0
+      ? existingMetas.tareas.map((t) => ({ ...t }))
+      : DEFAULT_SUBTAREAS.map((t) => ({ ...t })),
   )
-  const initialMetas = useRef({ metaReuniones, tareas })
+  const initialMetas = useRef({ tareas })
   const { requestClose } = useUnsavedChanges({
-    value: { metaReuniones, tareas },
+    value: { tareas },
     baseline: initialMetas.current,
     onClose,
   })
@@ -31,7 +28,7 @@ export default function LineMetasModal({ line, clientCount = 0, onClose, onSaved
   const [error, setError] = useState(null)
 
   function setTareaField(idx, field, value) {
-    setTareas(prev => {
+    setTareas((prev) => {
       const next = [...prev]
       next[idx] = {
         ...next[idx],
@@ -42,23 +39,25 @@ export default function LineMetasModal({ line, clientCount = 0, onClose, onSaved
   }
 
   function addTarea() {
-    setTareas(prev => [...prev, { nombre: '', meta: 0 }])
+    setTareas((prev) => [...prev, { nombre: '', meta: 0 }])
   }
 
   function removeTarea(idx) {
-    setTareas(prev => prev.filter((_, i) => i !== idx))
+    setTareas((prev) => prev.filter((_, i) => i !== idx))
   }
 
   async function handleSave() {
     setSaving(true)
     setError(null)
     const metas = {
-      reuniones: Math.min(Number(metaReuniones) || 0, clientCount),
-      tareas: tareas.map(t => ({ nombre: t.nombre, meta: Number(t.meta) || 0 })),
+      tareas: tareas.map((t) => ({ nombre: t.nombre, meta: Number(t.meta) || 0 })),
     }
     const { data, error: err } = await updateLine(line.id, { metas })
     setSaving(false)
-    if (err) { setError(err.message); return }
+    if (err) {
+      setError(err.message)
+      return
+    }
     onSaved({ ...line, metas, ...data })
     onClose()
   }
@@ -67,7 +66,6 @@ export default function LineMetasModal({ line, clientCount = 0, onClose, onSaved
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(0,0,0,0.35)' }}
-      
     >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col">
         {/* Header */}
@@ -77,17 +75,22 @@ export default function LineMetasModal({ line, clientCount = 0, onClose, onSaved
         >
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 rounded-full" style={{ background: line.color }} />
-            <h2 className="text-[16px] font-bold text-[#111]">
-              Metas — {line.name}
-            </h2>
+            <h2 className="text-[16px] font-bold text-[#111]">Metas — {line.name}</h2>
           </div>
           <button
             onClick={requestClose}
             className="text-[#aaa] hover:text-[#555] transition-colors"
             aria-label="Cerrar"
           >
-            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d="M3 3l10 10M13 3L3 13" strokeLinecap="round"/>
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+            >
+              <path d="M3 3l10 10M13 3L3 13" strokeLinecap="round" />
             </svg>
           </button>
         </div>
@@ -95,31 +98,11 @@ export default function LineMetasModal({ line, clientCount = 0, onClose, onSaved
         {/* Cuerpo */}
         <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
           <p className="text-[13px] text-[#888]">
-            Estas metas se aplican a todos los periodos <strong>aún no guardados</strong> en Operaciones,
-            con prioridad sobre el mes anterior. Los meses ya guardados no se modifican (se editan
-            a mano si hace falta). Podés ajustar cualquier valor por periodo directamente en el tab Operaciones.
+            Estas metas se aplican a todos los periodos <strong>aún no guardados</strong> en
+            Operaciones, con prioridad sobre el mes anterior. Los meses ya guardados no se modifican
+            (se editan a mano si hace falta). Podés ajustar cualquier valor por periodo directamente
+            en el tab Operaciones.
           </p>
-
-          {/* Meta reuniones */}
-          <div>
-            <label className="block text-[12px] font-mono font-bold uppercase tracking-[0.1em] text-[#888] mb-1">
-              Meta de reuniones mensuales
-            </label>
-            <input
-              type="number"
-              min="0"
-              max={clientCount || undefined}
-              className="input-base w-32"
-              value={metaReuniones}
-              onChange={e => {
-                const value = e.target.value
-                setMetaReuniones(value === '' ? '' : Math.min(Number(value), clientCount))
-              }}
-            />
-            <p className="mt-1 text-[12px] font-mono text-[#888]">
-              Máx. {clientCount} (1 por marca activa de la línea)
-            </p>
-          </div>
 
           {/* Tareas fijas */}
           <div>
@@ -134,7 +117,7 @@ export default function LineMetasModal({ line, clientCount = 0, onClose, onSaved
                     placeholder="Nombre de tarea"
                     className="input-base flex-1 text-[14px]"
                     value={tarea.nombre}
-                    onChange={e => setTareaField(idx, 'nombre', e.target.value)}
+                    onChange={(e) => setTareaField(idx, 'nombre', e.target.value)}
                   />
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <span className="text-[11px] text-[#aaa]">Meta</span>
@@ -143,7 +126,7 @@ export default function LineMetasModal({ line, clientCount = 0, onClose, onSaved
                       min="0"
                       className="input-base w-20 text-[14px]"
                       value={tarea.meta}
-                      onChange={e => setTareaField(idx, 'meta', e.target.value)}
+                      onChange={(e) => setTareaField(idx, 'meta', e.target.value)}
                     />
                   </div>
                   <button
@@ -151,8 +134,15 @@ export default function LineMetasModal({ line, clientCount = 0, onClose, onSaved
                     className="text-[#ccc] hover:text-red-400 transition-colors flex-shrink-0"
                     title="Eliminar tarea"
                   >
-                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
-                      <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round"/>
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                    >
+                      <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
                     </svg>
                   </button>
                 </div>
@@ -161,8 +151,15 @@ export default function LineMetasModal({ line, clientCount = 0, onClose, onSaved
                 onClick={addTarea}
                 className="text-[13px] text-[#888] hover:text-[#111] font-medium flex items-center gap-1 mt-1"
               >
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <path d="M6 1v10M1 6h10" strokeLinecap="round"/>
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 12 12"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                >
+                  <path d="M6 1v10M1 6h10" strokeLinecap="round" />
                 </svg>
                 Agregar tarea
               </button>
