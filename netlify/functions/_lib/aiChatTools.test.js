@@ -14,6 +14,8 @@ import {
   misReuniones,
   resumenPautas,
   pautasDelDia,
+  resolveAudiovisualEmployee,
+  diasCargaAlta,
   executeTool,
   TOOL_DECLARATIONS,
 } from './aiChatTools.js'
@@ -669,6 +671,269 @@ describe('pautasDelDia', () => {
   })
 })
 
+const AV_USERS = [
+  {
+    user_id: 'a1',
+    first_name: 'Lizdania',
+    last_name: 'Andrade',
+    department_id: 2,
+    deleted_at: null,
+  },
+  { user_id: 'a2', first_name: 'Luis', last_name: 'Gómez', department_id: 2, deleted_at: null },
+  { user_id: 'a3', first_name: 'Lizbeth', last_name: 'Ruiz', department_id: 2, deleted_at: null },
+  { user_id: 'r1', first_name: 'Marta', last_name: 'Ruiz', department_id: 1, deleted_at: null },
+]
+
+describe('resolveAudiovisualEmployee', () => {
+  it('resuelve por nombre exacto', () => {
+    expect(resolveAudiovisualEmployee('Lizdania Andrade', AV_USERS)).toEqual({ user: AV_USERS[0] })
+  })
+
+  it('resuelve por prefijo, sin distinguir mayúsculas/acentos', () => {
+    expect(resolveAudiovisualEmployee('lizdania', AV_USERS)).toEqual({ user: AV_USERS[0] })
+  })
+
+  it('es ambiguo si el prefijo coincide con varias personas', () => {
+    const { error } = resolveAudiovisualEmployee('Liz', AV_USERS)
+    expect(error).toMatch(/ambiguo/)
+  })
+
+  it('no encuentra a alguien que no es de Audiovisual', () => {
+    const { error } = resolveAudiovisualEmployee('Marta', AV_USERS)
+    expect(error).toMatch(/No se encontró/)
+  })
+
+  it('devuelve error si el nombre está vacío', () => {
+    expect(resolveAudiovisualEmployee('', AV_USERS).error).toBeDefined()
+  })
+})
+
+describe('diasCargaAlta', () => {
+  const PAST_YEAR = CUR_YEAR - 1 // garantiza fechas siempre en el pasado, sin flakiness
+
+  it('no cuenta un día que no llega al mínimo (default 3)', () => {
+    const dataset = {
+      users: AV_USERS,
+      pautas: [
+        pauta({
+          id: '1',
+          status: 'realizada',
+          pauta_date: `${PAST_YEAR}-01-05`,
+          recurso_ids: ['a1'],
+        }),
+        pauta({
+          id: '2',
+          status: 'realizada',
+          pauta_date: `${PAST_YEAR}-01-05`,
+          recurso_ids: ['a1'],
+        }),
+      ],
+    }
+    const res = diasCargaAlta({ persona: 'Lizdania', mes: 1, anio: PAST_YEAR }, dataset)
+    expect(res.total_dias).toBe(0)
+    expect(res.dias).toEqual([])
+  })
+
+  it('marca el día con 3 pautas realizadas, con cliente/tema/estado de cada una', () => {
+    const dataset = {
+      users: AV_USERS,
+      pautas: [
+        pauta({
+          id: '1',
+          status: 'realizada',
+          pauta_date: `${PAST_YEAR}-01-05`,
+          recurso_ids: ['a1'],
+          client_name: 'Maxxis',
+          tema: 'Montaje',
+        }),
+        pauta({
+          id: '2',
+          status: 'realizada',
+          pauta_date: `${PAST_YEAR}-01-05`,
+          recurso_ids: ['a1'],
+          client_name: 'Ruedas Dario',
+          tema: 'Continuación',
+        }),
+        pauta({
+          id: '3',
+          status: 'realizada',
+          pauta_date: `${PAST_YEAR}-01-05`,
+          recurso_ids: ['a1'],
+          client_name: '21st Century',
+          tema: 'Test',
+        }),
+      ],
+    }
+    const res = diasCargaAlta({ persona: 'Lizdania', mes: 1, anio: PAST_YEAR }, dataset)
+    expect(res.persona).toBe('Lizdania Andrade')
+    expect(res.total_dias).toBe(1)
+    expect(res.dias[0]).toMatchObject({ fecha: `${PAST_YEAR}-01-05`, cantidad: 3 })
+    expect(res.dias[0].pautas).toEqual([
+      { cliente: 'Maxxis', tema: 'Montaje', estado: 'realizada' },
+      { cliente: 'Ruedas Dario', tema: 'Continuación', estado: 'realizada' },
+      { cliente: '21st Century', tema: 'Test', estado: 'realizada' },
+    ])
+  })
+
+  it('respeta un "minimo" explícito ("más de 2" -> minimo: 3, o el que se pase)', () => {
+    const dataset = {
+      users: AV_USERS,
+      pautas: [
+        pauta({
+          id: '1',
+          status: 'realizada',
+          pauta_date: `${PAST_YEAR}-01-05`,
+          recurso_ids: ['a1'],
+        }),
+        pauta({
+          id: '2',
+          status: 'realizada',
+          pauta_date: `${PAST_YEAR}-01-05`,
+          recurso_ids: ['a1'],
+        }),
+      ],
+    }
+    const res = diasCargaAlta({ persona: 'Lizdania', mes: 1, anio: PAST_YEAR, minimo: 2 }, dataset)
+    expect(res.total_dias).toBe(1)
+  })
+
+  it('en días ya pasados NO cuenta pautas "programada" (solo "realizada") — el bug que se reportó', () => {
+    const dataset = {
+      users: AV_USERS,
+      pautas: [
+        pauta({
+          id: '1',
+          status: 'programada',
+          pauta_date: `${PAST_YEAR}-01-05`,
+          recurso_ids: ['a1'],
+        }),
+        pauta({
+          id: '2',
+          status: 'programada',
+          pauta_date: `${PAST_YEAR}-01-05`,
+          recurso_ids: ['a1'],
+        }),
+        pauta({
+          id: '3',
+          status: 'programada',
+          pauta_date: `${PAST_YEAR}-01-05`,
+          recurso_ids: ['a1'],
+        }),
+      ],
+    }
+    const res = diasCargaAlta({ persona: 'Lizdania', mes: 1, anio: PAST_YEAR }, dataset)
+    expect(res.total_dias).toBe(0)
+  })
+
+  it('para hoy o el futuro sí cuenta pautas "programada"', () => {
+    const hoy = dateStrInCurrentMonth(NOW.getDate())
+    const dataset = {
+      users: AV_USERS,
+      pautas: [
+        pauta({ id: '1', status: 'programada', pauta_date: hoy, recurso_ids: ['a1'] }),
+        pauta({ id: '2', status: 'programada', pauta_date: hoy, recurso_ids: ['a1'] }),
+        pauta({ id: '3', status: 'programada', pauta_date: hoy, recurso_ids: ['a1'] }),
+      ],
+    }
+    const res = diasCargaAlta({ persona: 'Lizdania', mes: CUR_MONTH, anio: CUR_YEAR }, dataset)
+    expect(res.total_dias).toBe(1)
+  })
+
+  it('ignora pautas de otro mes', () => {
+    const dataset = {
+      users: AV_USERS,
+      pautas: [
+        pauta({
+          id: '1',
+          status: 'realizada',
+          pauta_date: `${PAST_YEAR}-02-05`,
+          recurso_ids: ['a1'],
+        }),
+        pauta({
+          id: '2',
+          status: 'realizada',
+          pauta_date: `${PAST_YEAR}-02-05`,
+          recurso_ids: ['a1'],
+        }),
+        pauta({
+          id: '3',
+          status: 'realizada',
+          pauta_date: `${PAST_YEAR}-02-05`,
+          recurso_ids: ['a1'],
+        }),
+      ],
+    }
+    const res = diasCargaAlta({ persona: 'Lizdania', mes: 1, anio: PAST_YEAR }, dataset)
+    expect(res.total_dias).toBe(0)
+  })
+
+  it('solo cuenta pautas asignadas a esa persona, no a otro recurso', () => {
+    const dataset = {
+      users: AV_USERS,
+      pautas: [
+        pauta({
+          id: '1',
+          status: 'realizada',
+          pauta_date: `${PAST_YEAR}-01-05`,
+          recurso_ids: ['a2'],
+        }),
+        pauta({
+          id: '2',
+          status: 'realizada',
+          pauta_date: `${PAST_YEAR}-01-05`,
+          recurso_ids: ['a2'],
+        }),
+        pauta({
+          id: '3',
+          status: 'realizada',
+          pauta_date: `${PAST_YEAR}-01-05`,
+          recurso_ids: ['a2'],
+        }),
+      ],
+    }
+    const res = diasCargaAlta({ persona: 'Lizdania', mes: 1, anio: PAST_YEAR }, dataset)
+    expect(res.total_dias).toBe(0)
+  })
+
+  it('usa el último mes cerrado si no se especifica mes/año', () => {
+    const { year, month } = defaultPeriod()
+    const monthStr = String(month).padStart(2, '0')
+    const dataset = {
+      users: AV_USERS,
+      pautas: [
+        pauta({
+          id: '1',
+          status: 'realizada',
+          pauta_date: `${year}-${monthStr}-05`,
+          recurso_ids: ['a1'],
+        }),
+        pauta({
+          id: '2',
+          status: 'realizada',
+          pauta_date: `${year}-${monthStr}-05`,
+          recurso_ids: ['a1'],
+        }),
+        pauta({
+          id: '3',
+          status: 'realizada',
+          pauta_date: `${year}-${monthStr}-05`,
+          recurso_ids: ['a1'],
+        }),
+      ],
+    }
+    const res = diasCargaAlta({ persona: 'Lizdania' }, dataset)
+    expect(res.total_dias).toBe(1)
+  })
+
+  it('propaga el error cuando la persona no se resuelve', () => {
+    const res = diasCargaAlta(
+      { persona: 'Nadie', mes: 1, anio: PAST_YEAR },
+      { users: AV_USERS, pautas: [] },
+    )
+    expect(res.error).toBeDefined()
+  })
+})
+
 describe('executeTool', () => {
   it('ejecuta una tool conocida', () => {
     const res = executeTool('listar_lineas', {}, { lines: LINES, reports: [] })
@@ -687,8 +952,8 @@ describe('executeTool', () => {
 })
 
 describe('TOOL_DECLARATIONS', () => {
-  it('declara las 12 herramientas con nombre y parámetros', () => {
-    expect(TOOL_DECLARATIONS).toHaveLength(12)
+  it('declara las 13 herramientas con nombre y parámetros', () => {
+    expect(TOOL_DECLARATIONS).toHaveLength(13)
     TOOL_DECLARATIONS.forEach((t) => {
       expect(t.name).toBeTruthy()
       expect(t.description).toBeTruthy()

@@ -20,8 +20,9 @@ describe('trimHistory', () => {
     expect(trimmed[trimmed.length - 1].text).toBe('m29')
   })
 
-  it('garantiza que el primer mensaje sea de role user', () => {
+  it('si el recorte deja un assistant huérfano al inicio, lo descarta también', () => {
     const msgs = [
+      { role: 'user', text: 'pregunta vieja, cae fuera del recorte' },
       { role: 'assistant', text: 'huerfano' },
       { role: 'user', text: 'primero real' },
       { role: 'assistant', text: 'respuesta' },
@@ -29,6 +30,15 @@ describe('trimHistory', () => {
     const trimmed = trimHistory(msgs, 3)
     expect(trimmed[0].role).toBe('user')
     expect(trimmed[0].text).toBe('primero real')
+  })
+
+  it('conserva un assistant inicial cuando el array ya cabía sin recorte (mensaje de contexto sembrado)', () => {
+    const msgs = [
+      { role: 'assistant', text: 'contexto de MAPPI' },
+      { role: 'user', text: 'pregunta del usuario' },
+    ]
+    const trimmed = trimHistory(msgs, 10)
+    expect(trimmed).toEqual(msgs)
   })
 
   it('usa MAX_MESSAGES como default', () => {

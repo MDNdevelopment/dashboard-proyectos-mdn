@@ -162,6 +162,12 @@ export const CHANGELOG = [
       'Las jefas de línea ahora pueden marcar su propio reporte como listo y cerrarlo, sin depender de otra persona.',
       'Nuevo resumen en Chequeo: arriba de la grilla se ven tarjetas con cuántas cuentas están actualizadas, parciales (con algunas casillas sin registrar), sin registrar y en alerta (12+ días sin publicar), tanto por línea como en la vista "Todas". En "Todas" cada línea ahora muestra su nombre y su propio mini-resumen encima de sus cuentas.',
       'En el punto "1. Reuniones realizadas" del reporte de Operaciones, la Meta ya no se escribe a mano: se calcula sola como una reunión por cada marca de la línea, descontando las que se marquen como "No aplica" en Ver marcas. Se quitó también el campo de meta de reuniones en Empresa → Líneas.',
+      'Nuevo en Inicio: un recuadro de "Recomendaciones" donde MAPPI avisa cuándo alguien de Audiovisual acumuló 3 o más pautas en un mismo día (entre 3 días atrás y 3 días adelante), con quién es y a qué pautas está agendada o ya asistió. No es una alerta de problema, es para conversar con la persona y ver cómo se siente. Se puede llevar la recomendación al chat de MAPPI con un botón para preguntar más. Solo lo ven los administradores.',
+      'MAPPI ahora puede responder cuántos días en un mes tuvo alguien de Audiovisual más de N pautas en un mismo día (ej. "¿cuántos días Lizdania tuvo más de 2 pautas en agosto?").',
+      'Corregido: en las Recomendaciones de MAPPI, una pauta agendada para hoy (todavía no realizada) aparecía descrita como si ya hubiera ocurrido.',
+      'Corregido: las fechas que menciona MAPPI ahora se muestran en formato dd/mm/aaaa.',
+      'Agrandado el ícono de MAPPI en el recuadro de Recomendaciones del Inicio.',
+      'Corregido: la Meta de "1. Reuniones realizadas" del reporte de Operaciones se había quedado sin poder editarse en los reportes de agosto hacia atrás. El cálculo automático (una reunión por marca, descontando "No aplica") rige desde el reporte de septiembre; los meses anteriores se pueden seguir editando a mano como siempre.',
     ],
   },
   {

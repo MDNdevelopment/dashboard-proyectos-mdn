@@ -42,6 +42,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/av-workload-insight"
+  to = "/.netlify/functions/av-workload-insight"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/employees/manage"
   to = "/.netlify/functions/archive-employee"
   status = 200

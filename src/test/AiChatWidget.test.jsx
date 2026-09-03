@@ -13,6 +13,7 @@ vi.mock('../supabase', () => ({
 vi.mock('../context/AuthContext', () => ({ useAuth: vi.fn() }))
 
 import { useAuth } from '../context/AuthContext'
+import { AiChatProvider, useAiChatContext } from '../context/AiChatContext'
 import AiChatWidget from '../components/ai/AiChatWidget'
 
 beforeEach(() => {
@@ -24,28 +25,39 @@ function mockAuth(admin) {
   useAuth.mockReturnValue({ userProfile: admin === null ? null : { user_id: 'u1', admin } })
 }
 
+// El estado del chat (open, mensajes) vive en AiChatProvider desde que se elevó fuera del
+// widget (ver src/context/AiChatContext.jsx), para que RecomendacionesCard también pueda
+// abrir el panel con contexto precargado.
+function renderWidget() {
+  return render(
+    <AiChatProvider>
+      <AiChatWidget />
+    </AiChatProvider>,
+  )
+}
+
 describe('AiChatWidget', () => {
   it('no renderiza nada si el usuario no es admin', () => {
     mockAuth(false)
-    const { container } = render(<AiChatWidget />)
+    const { container } = renderWidget()
     expect(container).toBeEmptyDOMElement()
   })
 
   it('no renderiza nada si userProfile es null (aún cargando)', () => {
     mockAuth(null)
-    const { container } = render(<AiChatWidget />)
+    const { container } = renderWidget()
     expect(container).toBeEmptyDOMElement()
   })
 
   it('muestra el botón flotante para un admin', () => {
     mockAuth(true)
-    render(<AiChatWidget />)
+    renderWidget()
     expect(screen.getByRole('button', { name: /abrir asistente ia/i })).toBeInTheDocument()
   })
 
   it('abre y cierra el panel al hacer click en el FAB', async () => {
     mockAuth(true)
-    render(<AiChatWidget />)
+    renderWidget()
     fireEvent.click(screen.getByRole('button', { name: /abrir asistente ia/i }))
     expect(screen.getByRole('dialog', { name: /asistente ia/i })).toBeInTheDocument()
 
@@ -55,7 +67,7 @@ describe('AiChatWidget', () => {
 
   it('cierra el panel con Escape', () => {
     mockAuth(true)
-    render(<AiChatWidget />)
+    renderWidget()
     fireEvent.click(screen.getByRole('button', { name: /abrir asistente ia/i }))
     expect(screen.getByRole('dialog')).toBeInTheDocument()
 
@@ -65,7 +77,7 @@ describe('AiChatWidget', () => {
 
   it('muestra las preguntas sugeridas en el estado vacío', () => {
     mockAuth(true)
-    render(<AiChatWidget />)
+    renderWidget()
     fireEvent.click(screen.getByRole('button', { name: /abrir asistente ia/i }))
     expect(screen.getByText('¿Cómo va la empresa este mes?')).toBeInTheDocument()
   })
@@ -77,7 +89,7 @@ describe('AiChatWidget', () => {
       json: async () => ({ reply: 'La empresa va bien este mes.', toolsUsed: ['ranking_lineas'] }),
     })
 
-    render(<AiChatWidget />)
+    renderWidget()
     fireEvent.click(screen.getByRole('button', { name: /abrir asistente ia/i }))
 
     const textarea = screen.getByPlaceholderText('Escribe tu pregunta…')
@@ -105,7 +117,7 @@ describe('AiChatWidget', () => {
       json: async () => ({ reply: 'La línea **Alfa** va mejor.', toolsUsed: [] }),
     })
 
-    render(<AiChatWidget />)
+    renderWidget()
     fireEvent.click(screen.getByRole('button', { name: /abrir asistente ia/i }))
     await userEvent.type(screen.getByPlaceholderText('Escribe tu pregunta…'), 'hola')
     fireEvent.click(screen.getByRole('button', { name: /enviar/i }))
@@ -117,7 +129,7 @@ describe('AiChatWidget', () => {
     mockAuth(true)
     global.fetch.mockResolvedValue({ ok: false, json: async () => ({ error: 'Sin acceso' }) })
 
-    render(<AiChatWidget />)
+    renderWidget()
     fireEvent.click(screen.getByRole('button', { name: /abrir asistente ia/i }))
     await userEvent.type(screen.getByPlaceholderText('Escribe tu pregunta…'), 'hola')
     fireEvent.click(screen.getByRole('button', { name: /enviar/i }))
@@ -129,7 +141,7 @@ describe('AiChatWidget', () => {
     mockAuth(true)
     global.fetch.mockRejectedValue(new Error('network down'))
 
-    render(<AiChatWidget />)
+    renderWidget()
     fireEvent.click(screen.getByRole('button', { name: /abrir asistente ia/i }))
     await userEvent.type(screen.getByPlaceholderText('Escribe tu pregunta…'), 'hola')
     fireEvent.click(screen.getByRole('button', { name: /enviar/i }))
@@ -144,7 +156,7 @@ describe('AiChatWidget', () => {
       json: async () => ({ reply: 'Ahora sí.', toolsUsed: [] }),
     })
 
-    render(<AiChatWidget />)
+    renderWidget()
     fireEvent.click(screen.getByRole('button', { name: /abrir asistente ia/i }))
     await userEvent.type(screen.getByPlaceholderText('Escribe tu pregunta…'), 'hola')
     fireEvent.click(screen.getByRole('button', { name: /enviar/i }))
@@ -164,34 +176,34 @@ describe('AiChatWidget', () => {
       json: async () => ({ reply: 'Respuesta.', toolsUsed: [] }),
     })
 
-    const { unmount } = render(<AiChatWidget />)
+    const { unmount } = renderWidget()
     fireEvent.click(screen.getByRole('button', { name: /abrir asistente ia/i }))
     await userEvent.type(screen.getByPlaceholderText('Escribe tu pregunta…'), 'pregunta efímera')
     fireEvent.click(screen.getByRole('button', { name: /enviar/i }))
     await waitFor(() => expect(screen.getByText('Respuesta.')).toBeInTheDocument())
     unmount()
 
-    render(<AiChatWidget />)
+    renderWidget()
     fireEvent.click(screen.getByRole('button', { name: /abrir asistente ia/i }))
     expect(screen.queryByText('pregunta efímera')).not.toBeInTheDocument()
   })
 
   it('muestra la burbuja de CTAs con el estado inicial cerrado', () => {
     mockAuth(true)
-    render(<AiChatWidget />)
+    renderWidget()
     expect(screen.getByText('¿En qué te puedo ayudar?')).toBeInTheDocument()
   })
 
   it('cierra la burbuja de CTAs con el botón de cerrar', () => {
     mockAuth(true)
-    render(<AiChatWidget />)
+    renderWidget()
     fireEvent.click(screen.getByRole('button', { name: /cerrar sugerencias/i }))
     expect(screen.queryByText('¿En qué te puedo ayudar?')).not.toBeInTheDocument()
   })
 
   it('el CTA abre el panel sin enviar ninguna pregunta', () => {
     mockAuth(true)
-    render(<AiChatWidget />)
+    renderWidget()
     fireEvent.click(screen.getByText('¿En qué te puedo ayudar?'))
 
     expect(screen.getByRole('dialog', { name: /asistente ia/i })).toBeInTheDocument()
@@ -200,7 +212,7 @@ describe('AiChatWidget', () => {
 
   it('abrir el panel con el FAB oculta la burbuja de CTAs', () => {
     mockAuth(true)
-    render(<AiChatWidget />)
+    renderWidget()
     fireEvent.click(screen.getByRole('button', { name: /abrir asistente ia/i }))
     expect(screen.queryByText('¿En qué te puedo ayudar?')).not.toBeInTheDocument()
   })
@@ -212,7 +224,7 @@ describe('AiChatWidget', () => {
       json: async () => ({ reply: 'Respuesta.', toolsUsed: [] }),
     })
 
-    render(<AiChatWidget />)
+    renderWidget()
     fireEvent.click(screen.getByRole('button', { name: /abrir asistente ia/i }))
     await userEvent.type(screen.getByPlaceholderText('Escribe tu pregunta…'), 'algo')
     fireEvent.click(screen.getByRole('button', { name: /enviar/i }))
@@ -220,5 +232,32 @@ describe('AiChatWidget', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /limpiar/i }))
     expect(screen.queryByText('algo')).not.toBeInTheDocument()
+  })
+
+  it('openWithContext (ej. desde RecomendacionesCard) abre el panel con el mensaje de contexto, sin llamar al backend', () => {
+    mockAuth(true)
+
+    function TriggerFromOutside() {
+      const { openWithContext } = useAiChatContext()
+      return (
+        <button type="button" onClick={() => openWithContext('Contexto de MAPPI sobre pautas.')}>
+          Preguntarle a MAPPI
+        </button>
+      )
+    }
+
+    render(
+      <AiChatProvider>
+        <TriggerFromOutside />
+        <AiChatWidget />
+      </AiChatProvider>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /preguntarle a mappi/i }))
+
+    expect(screen.getByRole('dialog', { name: /asistente ia/i })).toBeInTheDocument()
+    expect(screen.getByText('Contexto de MAPPI sobre pautas.')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Escribe tu pregunta…')).toHaveValue('')
+    expect(global.fetch).not.toHaveBeenCalled()
   })
 })

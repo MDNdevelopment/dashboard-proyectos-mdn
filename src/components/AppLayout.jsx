@@ -11,6 +11,7 @@ import NotificationBell from './notifications/NotificationBell'
 import WhatsNewModal from './WhatsNewModal'
 import ReportCloseReminderModal from './ReportCloseReminderModal'
 import AiChatWidget from './ai/AiChatWidget'
+import { AiChatProvider } from '../context/AiChatContext'
 import { useWhatsNew } from '../hooks/useWhatsNew'
 import { useReportCloseReminder } from '../hooks/useReportCloseReminder'
 import { exportProjectsToMarkdown, downloadMarkdown } from '../utils/exportProjectsToMarkdown'
@@ -139,100 +140,102 @@ export default function AppLayout() {
   }
 
   return (
-    <div className="flex min-h-screen bg-[#f2f0e8]">
-      {sidebarOpen && (
+    <AiChatProvider>
+      <div className="flex min-h-screen bg-[#f2f0e8]">
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 bg-black/60 z-40 lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
         <div
-          className="fixed inset-0 bg-black/60 z-40 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      <div
-        className={`fixed lg:sticky top-0 h-screen z-50 transition-transform duration-200 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
-      >
-        <Sidebar />
-      </div>
-
-      <div className="flex-1 min-w-0 flex flex-col">
-        {/* Mobile top bar — visible on all routes */}
-        <div className="lg:hidden flex items-center px-5 py-3.5 bg-white border-b border-[#e8e5db] sticky top-0 z-30">
-          <button
-            onClick={() => setSidebarOpen((o) => !o)}
-            className="text-[#777] hover:text-[#111] transition-colors flex-shrink-0"
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 20 20"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-            >
-              <path d="M3 5h14M3 10h14M3 15h14" strokeLinecap="round" />
-            </svg>
-          </button>
-          <div className="flex-1 flex justify-center">
-            <MDNLogo size={44} />
-          </div>
-          <NotificationBell />
+          className={`fixed lg:sticky top-0 h-screen z-50 transition-transform duration-200 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
+        >
+          <Sidebar />
         </div>
 
-        <Outlet
-          context={{
-            projects,
-            loading,
-            onNewProject: () => setModalProject(null),
-            onEditProject: (p) => setModalProject(p),
-            onViewProject: (p) => setDetailId(p.id),
-            onUpdateProject: updateProject,
-            onDeleteProject: deleteProject,
-            onDuplicateProject: duplicateProject,
-            onMenuToggle: () => setSidebarOpen((o) => !o),
-            onExport: exportProjects,
-          }}
+        <div className="flex-1 min-w-0 flex flex-col">
+          {/* Mobile top bar — visible on all routes */}
+          <div className="lg:hidden flex items-center px-5 py-3.5 bg-white border-b border-[#e8e5db] sticky top-0 z-30">
+            <button
+              onClick={() => setSidebarOpen((o) => !o)}
+              className="text-[#777] hover:text-[#111] transition-colors flex-shrink-0"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+              >
+                <path d="M3 5h14M3 10h14M3 15h14" strokeLinecap="round" />
+              </svg>
+            </button>
+            <div className="flex-1 flex justify-center">
+              <MDNLogo size={44} />
+            </div>
+            <NotificationBell />
+          </div>
+
+          <Outlet
+            context={{
+              projects,
+              loading,
+              onNewProject: () => setModalProject(null),
+              onEditProject: (p) => setModalProject(p),
+              onViewProject: (p) => setDetailId(p.id),
+              onUpdateProject: updateProject,
+              onDeleteProject: deleteProject,
+              onDuplicateProject: duplicateProject,
+              onMenuToggle: () => setSidebarOpen((o) => !o),
+              onExport: exportProjects,
+            }}
+          />
+        </div>
+
+        <InstallBanner />
+
+        <WhatsNewModal entries={whatsNewEntries} onClose={dismissWhatsNew} />
+
+        <ReportCloseReminderModal
+          show={whatsNewEntries.length === 0 && reportReminder.show}
+          pending={reportReminder.pending}
+          period={reportReminder.period}
+          daysLeft={reportReminder.daysLeft}
+          onClose={reportReminder.dismiss}
         />
+
+        <AiChatWidget />
+
+        {detailProject && (
+          <ProjectDetailModal
+            project={detailProject}
+            onClose={() => setDetailId(null)}
+            onUpdate={(u) => updateProject(detailProject.id, u)}
+            onEdit={() => {
+              setDetailId(null)
+              setModalProject(detailProject)
+            }}
+          />
+        )}
+
+        {modalProject !== undefined && (
+          <ProjectModal
+            project={modalProject}
+            onClose={() => setModalProject(undefined)}
+            onSave={async (data) => {
+              if (modalProject) {
+                await updateProject(modalProject.id, data)
+              } else {
+                await createProject(data)
+              }
+              setModalProject(undefined)
+            }}
+          />
+        )}
       </div>
-
-      <InstallBanner />
-
-      <WhatsNewModal entries={whatsNewEntries} onClose={dismissWhatsNew} />
-
-      <ReportCloseReminderModal
-        show={whatsNewEntries.length === 0 && reportReminder.show}
-        pending={reportReminder.pending}
-        period={reportReminder.period}
-        daysLeft={reportReminder.daysLeft}
-        onClose={reportReminder.dismiss}
-      />
-
-      <AiChatWidget />
-
-      {detailProject && (
-        <ProjectDetailModal
-          project={detailProject}
-          onClose={() => setDetailId(null)}
-          onUpdate={(u) => updateProject(detailProject.id, u)}
-          onEdit={() => {
-            setDetailId(null)
-            setModalProject(detailProject)
-          }}
-        />
-      )}
-
-      {modalProject !== undefined && (
-        <ProjectModal
-          project={modalProject}
-          onClose={() => setModalProject(undefined)}
-          onSave={async (data) => {
-            if (modalProject) {
-              await updateProject(modalProject.id, data)
-            } else {
-              await createProject(data)
-            }
-            setModalProject(undefined)
-          }}
-        />
-      )}
-    </div>
+    </AiChatProvider>
   )
 }

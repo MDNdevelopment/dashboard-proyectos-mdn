@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react'
 import { supabase } from '../supabase'
-import { trimHistory } from '../lib/aiChatHistory'
+import { trimHistory, MAX_MESSAGE_LENGTH } from '../lib/aiChatHistory'
 
 /**
  * Estado y llamada de red del chat IA (ver netlify/functions/ai-chat.js). Conversación en
@@ -95,5 +95,17 @@ export function useAiChat() {
     setError(null)
   }, [])
 
-  return { messages, sending, error, send, retry, clear }
+  // Siembra un mensaje de 'assistant' (contexto de MAPPI, ej. desde RecomendacionesCard) sin
+  // enviarlo al backend: reemplaza el historial en memoria para que el usuario escriba su
+  // propia pregunta a continuación y MAPPI vea el contexto en el próximo request. Se trunca
+  // a MAX_MESSAGE_LENGTH (2000, ver netlify/functions/ai-chat.js) porque el backend rechaza
+  // con 400 cualquier mensaje más largo.
+  const seed = useCallback((text) => {
+    const trimmedText = text.trim().slice(0, MAX_MESSAGE_LENGTH)
+    if (!trimmedText) return
+    setError(null)
+    setMessages([{ role: 'assistant', text: trimmedText }])
+  }, [])
+
+  return { messages, sending, error, send, retry, clear, seed }
 }

@@ -456,11 +456,11 @@ describe('OperacionesView — reporte cerrado (prop "closed")', () => {
 })
 
 describe('OperacionesView — meta de reuniones automática (1 por marca, menos "No aplica")', () => {
-  // Fija "hoy" en julio 2026 para que metaAutoSync esté activo (solo corre en el mes en
-  // curso, no cerrado — ver OperacionesView.jsx).
+  // Fija "hoy" en septiembre 2026 para que metaAutoSync esté activo (solo corre en el mes
+  // en curso, no cerrado, y en o después de REUNIONES_META_AUTO_START — ver OperacionesView.jsx).
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
-    vi.setSystemTime(new Date('2026-07-17T12:00:00'))
+    vi.setSystemTime(new Date('2026-09-17T12:00:00'))
     vi.clearAllMocks()
     mockLoadPrevReport.mockResolvedValue({ data: null, error: null })
     mockLoadClients.mockResolvedValue({ data: MOCK_CLIENTS, error: null }) // 2 marcas activas
@@ -477,7 +477,7 @@ describe('OperacionesView — meta de reuniones automática (1 por marca, menos 
 
   it('la Meta es de solo lectura e igual a la cantidad de marcas de la línea', async () => {
     mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
-    renderView()
+    renderView({ month: 9 })
     await waitFor(() => {
       expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
     })
@@ -488,7 +488,7 @@ describe('OperacionesView — meta de reuniones automática (1 por marca, menos 
 
   it('al marcar una marca como "No aplica" la Meta baja en 1 al instante', async () => {
     mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
-    renderView()
+    renderView({ month: 9 })
     await waitFor(() => {
       expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
     })
@@ -504,7 +504,7 @@ describe('OperacionesView — meta de reuniones automática (1 por marca, menos 
 
   it('muestra el hint de meta derivada', async () => {
     mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
-    renderView()
+    renderView({ month: 9 })
     await waitFor(() => {
       expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
     })
@@ -513,13 +513,28 @@ describe('OperacionesView — meta de reuniones automática (1 por marca, menos 
 
   it('en un mes cerrado NO recalcula: conserva la meta guardada y muestra el hint correspondiente', async () => {
     mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null }) // meta guardada: 15
-    renderView({ closed: true })
+    renderView({ month: 9, closed: true })
     await waitFor(() => {
       expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
     })
     const metaInput = document.querySelectorAll('input[type="number"]')[1]
     expect(metaInput.value).toBe('15')
     expect(screen.getByText('Meta guardada del período')).toBeInTheDocument()
+  })
+
+  it('antes de REUNIONES_META_AUTO_START (ago 2026) la Meta sigue siendo captura manual editable', async () => {
+    mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null }) // meta guardada: 15
+    renderView({ month: 8 })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
+    const metaInput = document.querySelectorAll('input[type="number"]')[1]
+    expect(metaInput.value).toBe('15')
+    expect(metaInput).not.toBeDisabled()
+    fireEvent.change(metaInput, { target: { value: '7' } })
+    expect(metaInput.value).toBe('7')
+    expect(screen.queryByText('Meta guardada del período')).not.toBeInTheDocument()
+    expect(screen.queryByText('Marcas de la línea − «No aplica»')).not.toBeInTheDocument()
   })
 })
 
@@ -621,7 +636,10 @@ describe('OperacionesView — meses pasados congelados no reconcilian contra el 
     await waitFor(() => {
       expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
     })
-    expect(await screen.findByText('Meta guardada del período')).toBeInTheDocument()
+    // Junio es previo a REUNIONES_META_AUTO_START: la Meta sigue siendo captura manual,
+    // pero conserva el valor guardado en vez de recalcularse contra el roster de hoy.
+    const metaInput = document.querySelectorAll('input[type="number"]')[1]
+    expect(metaInput.value).toBe('15')
 
     fireEvent.click(screen.getByRole('button', { name: /Ver marcas/ }))
     const heading = await screen.findByText('Cobertura de reuniones por marca')

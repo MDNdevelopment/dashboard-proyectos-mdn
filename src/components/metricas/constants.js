@@ -59,6 +59,13 @@ export const CHEQUEO_PRODUCTIVIDAD_START = { year: 2026, month: 9 }
 // separan de `tasks`), así que esos reportes conservan la captura manual.
 export const SOLICITUDES_MODULE_START = { year: 2026, month: 9 }
 
+// Mes en que arranca la regla automática de «Meta» de Reuniones (1 por cada marca de la
+// línea, menos las «No aplica» — ver utils/reunionesMeta.js). Antes de este mes la Meta
+// se capturaba a mano y esos reportes ya guardados reflejan esa captura manual; no tiene
+// sentido derivarla retroactivamente. Meses en o después de este corte usan la regla
+// automática (solo en el mes en curso y no cerrado, ver `metaAutoSync` en OperacionesView).
+export const REUNIONES_META_AUTO_START = { year: 2026, month: 9 }
+
 export const INDICATORS = [
   { key: 'reuniones', nombre: 'Reuniones realizadas', peso: 20, short: 'Reuniones' },
   {

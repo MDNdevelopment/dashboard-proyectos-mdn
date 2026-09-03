@@ -24,6 +24,7 @@ import { MONTHS } from '../components/metricas/constants'
 import { visibleLinesForUser } from '../utils/lineMembers'
 import { canSeeCeoAnalysis } from '../lib/ceoAnalysisAccess'
 import CeoAnalysisCard from '../components/home/CeoAnalysisCard'
+import RecomendacionesCard from '../components/home/RecomendacionesCard'
 import HomeDatesCalendar from '../components/home/HomeDatesCalendar'
 import HomeDayEventsModal from '../components/home/HomeDayEventsModal'
 import { buildHomeCalendarEvents } from '../utils/homeCalendar'
@@ -563,6 +564,13 @@ export default function HomePage() {
         {SHOW_CEO_ANALYSIS && canSeeCeoAnalysis(userProfile) && (
           <section className="mb-8 rise-in" style={{ animationDelay: '60ms' }}>
             <CeoAnalysisCard />
+          </section>
+        )}
+
+        {/* Recomendaciones de MAPPI — carga de recursos de Audiovisual, solo admins */}
+        {userProfile?.admin === true && (
+          <section className="mb-8 rise-in" style={{ animationDelay: '60ms' }}>
+            <RecomendacionesCard />
           </section>
         )}
 

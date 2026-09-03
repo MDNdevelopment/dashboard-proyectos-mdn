@@ -29,7 +29,7 @@ export async function loadMetricsDataset(companyId) {
       .eq('company_id', companyId),
     supabase
       .from('users')
-      .select('user_id, first_name, last_name')
+      .select('user_id, first_name, last_name, department_id')
       .eq('company_id', companyId)
       .is('deleted_at', null),
     supabase
@@ -41,7 +41,7 @@ export async function loadMetricsDataset(companyId) {
     supabase
       .from('av_pautas')
       .select(
-        'id, line_id, client_name, pauta_date, salida, llegada, status, piezas_totales, piezas_editadas',
+        'id, line_id, client_name, tema, pauta_date, salida, llegada, status, recurso_ids, piezas_totales, piezas_editadas',
       )
       .eq('company_id', companyId)
       .is('deleted_at', null),

@@ -24,6 +24,7 @@ import {
   MONTHS,
   INDICATORS,
   REUNIONES_MODULE_START,
+  REUNIONES_META_AUTO_START,
   TAREAS_FIJAS_MODULE_START,
   AUDIOVISUAL_MODULE_START,
   CHEQUEO_PRODUCTIVIDAD_START,
@@ -52,12 +53,18 @@ function clientAvatar(c) {
 export default function OperacionesView({ line, companyId, year, month, closed = false }) {
   const { can = () => true } = useAuth()
   // La Meta de reuniones se recalcula sola (1 por marca de la línea, menos las "No
-  // aplica") solo en el mes en curso y no cerrado. Meses pasados conservan la meta que
-  // ya tenían guardada, igual criterio que "Realizadas" con REUNIONES_MODULE_START.
+  // aplica") solo en el mes en curso, no cerrado, y en o después de
+  // REUNIONES_META_AUTO_START. Antes de ese mes la Meta se sigue capturando a mano (ver
+  // Field "Meta" más abajo); meses pasados dentro de la era automática conservan la meta
+  // que ya tenían guardada, igual criterio que "Realizadas" con REUNIONES_MODULE_START.
   // Se lee la fecha en cada render (no a nivel de módulo) para no congelar "hoy" en el
   // momento en que se importó el archivo.
   const today = new Date()
-  const metaAutoSync = !closed && year === today.getFullYear() && month === today.getMonth() + 1
+  const isReunionesMetaEra =
+    year > REUNIONES_META_AUTO_START.year ||
+    (year === REUNIONES_META_AUTO_START.year && month >= REUNIONES_META_AUTO_START.month)
+  const metaAutoSync =
+    isReunionesMetaEra && !closed && year === today.getFullYear() && month === today.getMonth() + 1
   const [report, setReport] = useState(null)
   const [prevReport, setPrevReport] = useState(null)
   const [clients, setClients] = useState([])
@@ -180,7 +187,15 @@ export default function OperacionesView({ line, companyId, year, month, closed =
     } else {
       // Inicializar con carry-forward y metas de la línea
       const lineMetas = line?.metas ?? {}
-      const fresh = initMetricReport(prevRes.data?.data ?? null, activeLineClients, lineMetas)
+      const fresh = initMetricReport(
+        prevRes.data?.data ?? null,
+        activeLineClients,
+        lineMetas,
+        undefined,
+        {
+          metaAuto: isReunionesMetaEra,
+        },
+      )
       synced = frozen ? fresh : syncReportClients(fresh, activeLineClients, lineEmployees)
     }
     // "Realizadas" ya no es editable — siempre refleja el conteo automático (clientes
@@ -507,17 +522,31 @@ export default function OperacionesView({ line, companyId, year, month, closed =
             </p>
           </Field>
           <Field label="Meta">
-            <input
-              type="number"
-              className="input-base bg-[#f2f0e8] text-[#888] cursor-not-allowed"
-              value={report.reuniones.meta ?? 0}
-              disabled
-              readOnly
-              title="1 por cada marca de la línea, menos las marcadas «No aplica» en este período"
-            />
-            <p className="mt-1 text-[12px] font-mono text-[#888]">
-              {metaAutoSync ? 'Marcas de la línea − «No aplica»' : 'Meta guardada del período'}
-            </p>
+            {isReunionesMetaEra ? (
+              <>
+                <input
+                  type="number"
+                  className="input-base bg-[#f2f0e8] text-[#888] cursor-not-allowed"
+                  value={report.reuniones.meta ?? 0}
+                  disabled
+                  readOnly
+                  title="1 por cada marca de la línea, menos las marcadas «No aplica» en este período"
+                />
+                <p className="mt-1 text-[12px] font-mono text-[#888]">
+                  {metaAutoSync ? 'Marcas de la línea − «No aplica»' : 'Meta guardada del período'}
+                </p>
+              </>
+            ) : (
+              <input
+                type="number"
+                min="0"
+                className="input-base"
+                value={report.reuniones.meta ?? ''}
+                onChange={(e) =>
+                  setField('reuniones.meta', e.target.value === '' ? null : Number(e.target.value))
+                }
+              />
+            )}
           </Field>
         </div>
         {(() => {

@@ -160,6 +160,13 @@ vi.mock('../components/home/CeoAnalysisCard', () => ({
   default: () => <div>Análisis IA mock</div>,
 }))
 
+// Mock del recuadro de Recomendaciones (MAPPI): solo nos interesa que se muestre/oculte
+// según userProfile.admin — su comportamiento interno se prueba en
+// RecomendacionesCard.test.jsx. Evita además depender de AiChatProvider en este archivo.
+vi.mock('../components/home/RecomendacionesCard', () => ({
+  default: () => <div>Recomendaciones mock</div>,
+}))
+
 import { useAuth } from '../context/AuthContext'
 import HomePage from '../pages/HomePage'
 import { CEO_ANALYSIS_USER_IDS } from '../lib/ceoAnalysisAccess'
@@ -220,6 +227,18 @@ describe('HomePage — Análisis IA (oculto temporalmente hasta nuevo aviso)', (
   it('NO se muestra para un usuario en la lista de acceso mientras SHOW_CEO_ANALYSIS esté en false', () => {
     renderPage({ user_id: CEO_ANALYSIS_USER_IDS[0], admin: false, access_level: 2 })
     expect(screen.queryByText(/análisis ia mock/i)).not.toBeInTheDocument()
+  })
+})
+
+describe('HomePage — Recomendaciones (MAPPI)', () => {
+  it('se muestra para un admin', () => {
+    renderPage({ admin: true })
+    expect(screen.getByText(/recomendaciones mock/i)).toBeInTheDocument()
+  })
+
+  it('NO se muestra para un usuario que no es admin', () => {
+    renderPage({ admin: false, access_level: 4 })
+    expect(screen.queryByText(/recomendaciones mock/i)).not.toBeInTheDocument()
   })
 })
 

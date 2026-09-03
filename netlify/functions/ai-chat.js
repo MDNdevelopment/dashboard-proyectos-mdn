@@ -1,6 +1,7 @@
 import { requireAdmin } from './_lib/requireAdmin.js'
 import { loadMetricsDataset } from './_lib/aiChatData.js'
 import { TOOL_DECLARATIONS, executeTool } from './_lib/aiChatTools.js'
+import { normalizeDatesToDDMMYYYY } from './_lib/dateFormat.js'
 import { MAX_MESSAGES } from '../../src/lib/aiChatHistory.js'
 
 const json = (statusCode, body) => ({
@@ -61,6 +62,13 @@ pautas_del_dia en vez de resumen_pautas — te da el listado del día con hora y
 hoy te la doy al inicio de la conversación; para "mañana" u otro día relativo, calcula tú la fecha
 en formato YYYY-MM-DD a partir de esa referencia antes de llamar a la tool.
 
+Si preguntan cuántos días una persona de Audiovisual tuvo "más de N" pautas en un mismo día en un
+mes concreto (o cuándo estuvo más cargada), usa dias_carga_alta — nunca respondas que no puedes
+calcularlo ni intentes contarlo a mano con otra tool. Al pasar "minimo", conviértelo tú: "más de 2"
+es minimo:3, "3 o más" es minimo:3. Cada pauta que te devuelva trae su "estado"
+('realizada'/'programada'): usa pasado solo para las 'realizada' y futuro/presente para
+'programada' — no digas que alguien "fue" a una pauta que todavía no ha ocurrido.
+
 Sobre finanzas, tu única fuente es la herramienta "finanzas" (ingresos, egresos y diferencia de una
 línea en un mes, tal como están cargados en su reporte). No hables de finanzas más allá de esos 3
 números por línea/mes: no proyectes, no extrapoles a rentabilidad general de la empresa, no opines
@@ -75,6 +83,10 @@ proyectar a futuro o hablar de rentabilidad más allá de esa comparación direc
 
 Sé breve: 2-5 frases por respuesta salvo que el usuario pida detalle. Puedes usar **negrita** (con
 doble asterisco) para resaltar la cifra o el nombre más importante de la respuesta, sin abusar.
+
+Fechas: las herramientas te las dan en formato YYYY-MM-DD (ej. "2026-09-02"). Cuando menciones una
+fecha en tu respuesta, escríbela SIEMPRE como dd/mm/aaaa usando barras "/" — nunca guiones ni el
+formato original (ej. "02/09/2026", no "2026-09-02" ni "02-09-2026").
 
 Tu alcance es EXCLUSIVAMENTE la gestión de MDN Publicidad a través de tus herramientas: métricas y
 scores de línea, tareas, reuniones, pautas y finanzas. No respondas preguntas ajenas a ese ámbito
@@ -211,7 +223,9 @@ export const handler = async (event) => {
       const calls = message.tool_calls
       if (!calls || calls.length === 0) {
         if (!message.content) throw new Error('Sin respuesta de texto de OpenRouter')
-        return json(200, { reply: message.content, toolsUsed })
+        // Red de seguridad: `openrouter/free` no siempre respeta el formato dd/mm/aaaa
+        // pedido en SYSTEM_INSTRUCTION (se ha visto devolver dd-mm-aaaa con guiones).
+        return json(200, { reply: normalizeDatesToDDMMYYYY(message.content), toolsUsed })
       }
 
       // Reinyectar el turno del modelo TAL CUAL (con sus tool_calls) antes de las

@@ -5,10 +5,12 @@
  * Lógica de precedencia (para periodos NO guardados):
  *   1. Se construye una base carry-forward desde prevReport (si existe) o con
  *      DEFAULT_SUBTAREAS (si no hay mes anterior).
- *   2. reuniones.meta es siempre derivada: 1 por cada marca de la cartera (nadie
- *      justificó "No aplica" todavía en un período recién inicializado) — ver
- *      computeReunionesMeta en utils/reunionesMeta.js. Se recalcula en vivo en
- *      OperacionesView a medida que se marcan justificativos.
+ *   2. reuniones.meta: en meses en o después de REUNIONES_META_AUTO_START (ver
+ *      constants.js) es derivada — 1 por cada marca de la cartera (nadie justificó
+ *      "No aplica" todavía en un período recién inicializado), ver computeReunionesMeta
+ *      en utils/reunionesMeta.js; se recalcula en vivo en OperacionesView a medida que se
+ *      marcan justificativos. Antes de ese mes la Meta se sigue capturando a mano (queda
+ *      null, como el resto de las metas manuales), controlado por el flag `metaAuto`.
  *   3. Las metas de tareas fijas de la línea (lineMetas.tareas) sobreescriben
  *      productividad.tareas en AMBOS casos. Esto garantiza que cambiar la meta
  *      en Empresa › Líneas se refleje en todos los meses aún no guardados.
@@ -28,17 +30,28 @@ import { computeReunionesMeta } from './reunionesMeta'
  * @param {object} lineMetas         - Metas configuradas en la línea: { reuniones?: number, tareas?: [{nombre, meta}] }.
  *                                     Tiene prioridad sobre el carry-forward para meses no guardados.
  * @param {Array}  lineEmployees     - Array de empleados (de users) filtrados para la línea.
+ * @param {object} [opts]
+ * @param {boolean} [opts.metaAuto] - true si el mes cae en la era de auto-cálculo de
+ *   reuniones.meta (REUNIONES_META_AUTO_START); default true por compatibilidad. En false,
+ *   reuniones.meta arranca en null (captura manual).
  * @returns {object} - Objeto de datos del nuevo reporte (sin id/line_id/year/month).
  */
-export function initMetricReport(prevReport, lineClients = [], lineMetas = {}, lineEmployees = []) {
+export function initMetricReport(
+  prevReport,
+  lineClients = [],
+  lineMetas = {},
+  lineEmployees = [],
+  { metaAuto = true } = {},
+) {
   // ── 1. Construir base (carry-forward o defaults) ──────────────────────────────
   let base
+  const reunionesMeta = metaAuto ? computeReunionesMeta(lineClients, {}) : null
 
   if (prevReport) {
     base = {
       reuniones: {
         realizadas: null,
-        meta: computeReunionesMeta(lineClients, {}),
+        meta: reunionesMeta,
         comentario: null,
         justificativos: {}, // no se hereda del mes anterior: cada mes justifica lo suyo
       },
@@ -89,7 +102,7 @@ export function initMetricReport(prevReport, lineClients = [], lineMetas = {}, l
     base = {
       reuniones: {
         realizadas: null,
-        meta: computeReunionesMeta(lineClients, {}),
+        meta: reunionesMeta,
         comentario: null,
         justificativos: {},
       },

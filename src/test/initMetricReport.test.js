@@ -78,6 +78,11 @@ describe('initMetricReport — sin mes anterior', () => {
     expect(r.reuniones.meta).toBe(0)
   })
 
+  it('con metaAuto:false la meta de reuniones arranca en null (captura manual)', () => {
+    const r = initMetricReport(null, MANY_CLIENTS, {}, [], { metaAuto: false })
+    expect(r.reuniones.meta).toBeNull()
+  })
+
   it('inicializa finanzas con sueldos/gastos vacíos cuando no hay empleados', () => {
     const r = initMetricReport(null, [])
     expect(r.finanzas.sueldos).toEqual([])
@@ -147,6 +152,11 @@ describe('initMetricReport — con mes anterior (carry-forward)', () => {
     const r = initMetricReport(makePrevReport(), MANY_CLIENTS) // prevReport.meta = 20
     expect(r.reuniones.meta).toBe(MANY_CLIENTS.length)
     expect(r.reuniones.realizadas).toBeNull() // reseteada
+  })
+
+  it('con metaAuto:false tampoco hereda la meta del mes anterior — queda null (captura manual)', () => {
+    const r = initMetricReport(makePrevReport(), MANY_CLIENTS, {}, [], { metaAuto: false })
+    expect(r.reuniones.meta).toBeNull()
   })
 
   it('resetea los valores pero conserva las metas de tareas', () => {

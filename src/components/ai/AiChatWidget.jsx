@@ -1,18 +1,20 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
-import { useAiChat } from '../../hooks/useAiChat'
+import { useAiChatContext } from '../../context/AiChatContext'
 import AiChatPanel from './AiChatPanel'
 import AiAvatar from './AiAvatar'
 
 /**
- * Botón flotante + panel del chat IA. Autocontenido: solo se monta para admins
- * (userProfile.admin === true). Montado en AppLayout junto a InstallBanner/WhatsNewModal.
+ * Botón flotante + panel del chat IA. Solo se monta para admins (userProfile.admin ===
+ * true). Montado en AppLayout junto a InstallBanner/WhatsNewModal, dentro de
+ * AiChatProvider (ver src/context/AiChatContext.jsx) — el estado (open, mensajes) vive en
+ * el contexto para que otros componentes (ej. RecomendacionesCard) puedan abrir el panel
+ * con contexto precargado.
  */
 export default function AiChatWidget() {
   const { userProfile } = useAuth()
-  const [open, setOpen] = useState(false)
+  const { open, setOpen, ...chat } = useAiChatContext()
   const [ctasDismissed, setCtasDismissed] = useState(false)
-  const chat = useAiChat()
 
   useEffect(() => {
     if (!open) return

@@ -577,6 +577,101 @@ export function pautasDelDia(args, dataset) {
   }
 }
 
+const AV_DEPARTMENT_ID = 2
+
+function fullNameOf(u) {
+  return `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim()
+}
+
+/**
+ * Resuelve un nombre de persona escrito en lenguaje natural contra los empleados de
+ * Audiovisual (department_id === 2, activos) — quienes pueden aparecer en
+ * av_pautas.recurso_ids. Mismo patrón exacto→prefijo→substring que resolveLine.
+ */
+export function resolveAudiovisualEmployee(nombre, users) {
+  const candidates = (users ?? []).filter(
+    (u) => u.department_id === AV_DEPARTMENT_ID && !u.deleted_at,
+  )
+  const catalogo = candidates.map(fullNameOf).join(', ') || '(ninguno)'
+  const q = normalize(nombre)
+  if (!q) {
+    return {
+      error: `Falta indicar el nombre de la persona. Empleados de Audiovisual: ${catalogo}.`,
+    }
+  }
+
+  const exact = candidates.filter((u) => normalize(fullNameOf(u)) === q)
+  if (exact.length === 1) return { user: exact[0] }
+
+  const prefix = candidates.filter((u) => normalize(fullNameOf(u)).startsWith(q))
+  if (prefix.length === 1) return { user: prefix[0] }
+
+  const substr = candidates.filter((u) => normalize(fullNameOf(u)).includes(q))
+  if (substr.length === 1) return { user: substr[0] }
+
+  const ambiguous = prefix.length > 1 ? prefix : substr.length > 1 ? substr : []
+  if (ambiguous.length > 1) {
+    return {
+      error: `"${nombre}" es ambiguo, coincide con: ${ambiguous.map(fullNameOf).join(', ')}. Especifica cuál.`,
+    }
+  }
+  return {
+    error: `No se encontró a "${nombre}" en Audiovisual. Empleados de Audiovisual: ${catalogo}.`,
+  }
+}
+
+/**
+ * Días de un mes en que un recurso de Audiovisual (quien sale a grabar, av_pautas.recurso_ids)
+ * tuvo "minimo" o más pautas en un mismo día — para "¿cuántos días tuvo Fulana más de N pautas
+ * en tal mes?" o "¿cuándo estuvo más cargada?". Mismo criterio que el recuadro
+ * "Recomendaciones" del Home (avWorkloadSnapshot.js): 'realizada' para días ya pasados,
+ * 'realizada'/'programada' para hoy y días futuros — así una pauta agendada para más tarde
+ * hoy o para la semana que viene no se cuenta como si ya hubiera ocurrido.
+ */
+export function diasCargaAlta(args, dataset) {
+  const resolved = resolveAudiovisualEmployee(args.persona, dataset.users)
+  if (resolved.error) return { error: resolved.error }
+  const persona = resolved.user
+
+  // A diferencia de las tools de métricas, av_pautas no está acotada a availableYears (ver
+  // aiChatData.js): se carga completa, así que no hay rango de años que validar acá.
+  const { year, month } =
+    args.mes && args.anio ? { year: args.anio, month: args.mes } : defaultPeriod()
+  const minimo = Number.isInteger(args.minimo) && args.minimo > 0 ? args.minimo : 3
+  const monthPrefix = `${year}-${String(month).padStart(2, '0')}`
+  const hoyKey = dateKey(today())
+
+  const inMonth = (dataset.pautas ?? []).filter((p) => {
+    if (!p.pauta_date || !p.pauta_date.startsWith(`${monthPrefix}-`)) return false
+    if (!(p.recurso_ids ?? []).includes(persona.user_id)) return false
+    const isPast = p.pauta_date < hoyKey
+    return isPast ? p.status === 'realizada' : p.status === 'realizada' || p.status === 'programada'
+  })
+
+  const byDate = new Map()
+  for (const p of inMonth) {
+    if (!byDate.has(p.pauta_date)) byDate.set(p.pauta_date, [])
+    byDate.get(p.pauta_date).push({
+      cliente: p.client_name ?? '(sin cliente)',
+      tema: p.tema ?? null,
+      estado: p.status,
+    })
+  }
+
+  const dias = [...byDate.entries()]
+    .filter(([, items]) => items.length >= minimo)
+    .map(([fecha, items]) => ({ fecha, cantidad: items.length, pautas: items }))
+    .sort((a, b) => a.fecha.localeCompare(b.fecha))
+
+  return {
+    persona: fullNameOf(persona) || persona.user_id,
+    periodo: `${MONTH_NAMES[month - 1]} ${year}`,
+    minimo,
+    total_dias: dias.length,
+    dias,
+  }
+}
+
 const monthProp = {
   type: 'integer',
   description: 'Mes 1-12. Si se omite junto con anio, se usa el último mes cerrado.',
@@ -588,6 +683,16 @@ const yearProp = {
 const lineaProp = {
   type: 'string',
   description: 'Nombre de la línea operativa tal como lo diría el usuario.',
+}
+const personaProp = {
+  type: 'string',
+  description:
+    'Nombre del empleado de Audiovisual (quien graba/sale a la pauta), tal como lo diría el usuario.',
+}
+const minimoProp = {
+  type: 'integer',
+  description:
+    'Cantidad mínima de pautas en un mismo día para contar ese día (ej. "más de 2" → minimo: 3, "3 o más" → minimo: 3). Por defecto 3.',
 }
 
 export const TOOL_DECLARATIONS = [
@@ -749,6 +854,17 @@ export const TOOL_DECLARATIONS = [
       additionalProperties: false,
     },
   },
+  {
+    name: 'dias_carga_alta',
+    description:
+      'Días de un mes en que un recurso de Audiovisual (quien sale a grabar) tuvo X o más pautas en un mismo día. Úsala para preguntas como "¿cuántos días tuvo Fulana más de 2 pautas en agosto?" o "¿cuándo estuvo más cargada tal persona?" — nunca cuentes esto a mano ni digas que no puedes calcularlo. Sin mes/año, usa el último mes cerrado.',
+    parameters: {
+      type: 'object',
+      properties: { persona: personaProp, mes: monthProp, anio: yearProp, minimo: minimoProp },
+      required: ['persona'],
+      additionalProperties: false,
+    },
+  },
 ]
 
 const EXECUTORS = {
@@ -764,6 +880,7 @@ const EXECUTORS = {
   mis_reuniones: misReuniones,
   resumen_pautas: resumenPautas,
   pautas_del_dia: pautasDelDia,
+  dias_carga_alta: diasCargaAlta,
 }
 
 /** Ejecuta una tool por nombre sobre el dataset cargado. Nunca lanza: errores van en `{error}`. */
