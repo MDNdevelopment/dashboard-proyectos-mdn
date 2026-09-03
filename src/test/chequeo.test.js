@@ -11,6 +11,8 @@ import {
   WEEKLY_EXEMPT_NETWORKS,
   computePlataformasProductividad,
   MONTHLY_TARGET_PER_NETWORK,
+  periodEndDate,
+  checkReferenceDate,
 } from '../utils/chequeo'
 import { buildFixedWeeks } from '../utils/fixedTasks'
 
@@ -91,11 +93,21 @@ describe('recentCheckStatus', () => {
     expect(recentCheckStatus(null, 'Instagram')).toBe('vacio')
   })
 
-  it('0-5 días → normal, 6-11 → naranja, 12+ → rojo', () => {
+  it('0-6 días → normal, 7-12 → naranja, 13+ → rojo', () => {
     const today = new Date(2026, 7, 20)
     expect(recentCheckStatus('2026-08-16', 'Instagram', today)).toBe('normal') // 4 días
     expect(recentCheckStatus('2026-08-12', 'Instagram', today)).toBe('naranja') // 8 días
     expect(recentCheckStatus('2026-08-01', 'Instagram', today)).toBe('rojo') // 19 días
+  })
+
+  it('umbral exacto: 6 días es normal, 7 días ya es naranja', () => {
+    expect(recentCheckStatus('2026-08-14', 'Instagram', new Date(2026, 7, 20))).toBe('normal') // 6 días
+    expect(recentCheckStatus('2026-08-13', 'Instagram', new Date(2026, 7, 20))).toBe('naranja') // 7 días
+  })
+
+  it('umbral exacto: 12 días es naranja, 13 días ya es rojo', () => {
+    expect(recentCheckStatus('2026-08-08', 'Instagram', new Date(2026, 7, 20))).toBe('naranja') // 12 días
+    expect(recentCheckStatus('2026-08-07', 'Instagram', new Date(2026, 7, 20))).toBe('rojo') // 13 días
   })
 
   it('Mailchimp solo pasa a rojo a los 30 días, nunca naranja', () => {
@@ -110,8 +122,44 @@ describe('recentCheckStatus', () => {
     expect(recentCheckStatus('2026-07-01', 'YouTube', today)).toBe('rojo') // 50 días
   })
 
-  it('YouTube Shorts no está exento: usa el default 6/12 días', () => {
+  it('YouTube Shorts no está exento: usa el default 7/13 días', () => {
     expect(recentCheckStatus('2026-08-12', 'YouTube Shorts', new Date(2026, 7, 20))).toBe('naranja')
+  })
+})
+
+describe('periodEndDate', () => {
+  it('con weekN, devuelve el domingo (dom) de esa semana', () => {
+    const end = periodEndDate(WEEKS, 3, 2026, 8)
+    expect(end.getTime()).toBe(S3.dom.getTime())
+  })
+
+  it('con weekN null, devuelve el último día del mes', () => {
+    const end = periodEndDate(WEEKS, null, 2026, 8)
+    expect(end.getFullYear()).toBe(2026)
+    expect(end.getMonth()).toBe(7) // agosto (0-indexado)
+    expect(end.getDate()).toBe(31)
+  })
+})
+
+describe('checkReferenceDate', () => {
+  it('período todavía no cerró (fin ≥ hoy): usa la fecha real de hoy', () => {
+    const periodEnd = new Date(2026, 7, 25) // domingo futuro
+    const today = new Date(2026, 7, 20)
+    expect(checkReferenceDate(periodEnd, today).getTime()).toBe(today.getTime())
+  })
+
+  it('período ya cerró (fin < hoy): usa la fecha de cierre del período, no hoy', () => {
+    const periodEnd = new Date(2026, 7, 22) // domingo de una semana de agosto, ya pasado
+    const today = new Date(2026, 11, 15) // diciembre, mucho después
+    expect(checkReferenceDate(periodEnd, today).getTime()).toBe(periodEnd.getTime())
+  })
+
+  it('congela el semáforo: una celda "verde" al cierre de su semana sigue verde meses después', () => {
+    // Semana 3 de agosto 2026 cierra el domingo 23 ago. Se marcó el mismo domingo (0 días
+    // de atraso al cierre) → 'normal'. Si se revisa en diciembre sin congelar la fecha de
+    // referencia, "hoy" real haría que los días transcurridos sean altísimos → 'rojo'.
+    const ref = checkReferenceDate(periodEndDate(WEEKS, 3, 2026, 8), new Date(2026, 11, 15))
+    expect(recentCheckStatus('2026-08-23', 'Instagram', ref)).toBe('normal')
   })
 })
 

@@ -9,13 +9,18 @@ import {
   formatCheckDate,
   contentTypeApplies,
   computeChequeoSummary,
+  periodEndDate,
+  checkReferenceDate,
 } from '../../utils/chequeo'
 
 /**
- * Semáforo de ambas vistas: días transcurridos desde la fecha registrada hasta hoy (ver
- * `recentCheckStatus` en utils/chequeo.js). La fecha de cada celda es libre (puede ser de
- * otra semana o de otro mes — es un registro histórico, no una validación), así que el
- * color nunca depende de en qué casilla quedó guardada, solo de cuántos días pasaron.
+ * Semáforo de ambas vistas: días transcurridos desde la fecha registrada hasta la fecha
+ * de referencia del período activo (ver `recentCheckStatus`/`checkReferenceDate` en
+ * utils/chequeo.js). La fecha de cada celda es libre (puede ser de otra semana o de otro
+ * mes — es un registro histórico, no una validación), así que el color nunca depende de
+ * en qué casilla quedó guardada, solo de cuántos días pasaron. Un período (semana o mes)
+ * que ya cerró queda congelado en cómo se veía al cerrar — no se recalcula contra la
+ * fecha real cada vez que alguien revisa el histórico después.
  */
 const RECENT_STATUS_META = {
   vacio: {
@@ -24,17 +29,17 @@ const RECENT_STATUS_META = {
     cls: 'bg-white border-[#e6e2d8] text-[#9a9488]',
   },
   normal: {
-    label: 'Al día (0-5 días)',
+    label: 'Al día (0-6 días)',
     dot: '#1f8a43',
     cls: 'bg-[#e9f7ec] border-[#bfe6c8] text-[#1f8a43]',
   },
   naranja: {
-    label: '6-11 días sin publicar',
+    label: '7-12 días sin publicar',
     dot: '#e08a1e',
     cls: 'bg-[#fdf1e2] border-[#f2d6a8] text-[#b3690f]',
   },
   rojo: {
-    label: '12+ días sin publicar',
+    label: '13+ días sin publicar',
     dot: '#c0392b',
     cls: 'bg-[#fdecec] border-[#f4c9c9] text-[#c0392b]',
   },
@@ -121,6 +126,8 @@ function MailchimpEditor({ defaultDate, defaultComment, disabled, onSave, onCanc
  *   checks         — publication_checks del mes activo (ya filtradas por línea en la página)
  *   weeks          — buildFixedWeeks(year, month)
  *   weekN          — semana activa (1-indexado)
+ *   year, month    — período activo, para calcular la fecha de cierre del semáforo
+ *                    (`periodEndDate`/`checkReferenceDate`)
  *   viewMode       — 'week' (default, editable) | 'recent' (solo lectura, ver abajo)
  *   canManage      — si el usuario puede editar (capability chequeo.manage)
  *   onCheckChanged(check) — { ...row } al crear/actualizar
@@ -138,6 +145,8 @@ export default function ChequeoGrid({
   checks,
   weeks,
   weekN,
+  year,
+  month,
   viewMode = 'week',
   companyId,
   canManage,
@@ -150,6 +159,11 @@ export default function ChequeoGrid({
   const [error, setError] = useState(null)
 
   const isRecentView = viewMode === 'recent'
+  // Semáforo fijo por período: mientras la semana/mes activo no cierre, el color sigue en
+  // vivo; una vez cerrado queda congelado en cómo se veía ese día (ver checkReferenceDate).
+  const referenceDate = checkReferenceDate(
+    periodEndDate(weeks, isRecentView ? null : weekN, year, month),
+  )
   const week = weeks.find((w) => w.n === weekN)
   const canEditNow = !isRecentView && canManage && Boolean(week)
 
@@ -227,6 +241,7 @@ export default function ChequeoGrid({
               const lineSummary = groupByLine
                 ? computeChequeoSummary(rowsClients, checks, {
                     weekN: isRecentView ? null : weekN,
+                    today: referenceDate,
                   })
                 : null
               return (
@@ -329,7 +344,11 @@ export default function ChequeoGrid({
                                 const check = findCheck(client.id, network, contentType)
                                 const meta =
                                   RECENT_STATUS_META[
-                                    recentCheckStatus(check?.last_published_at, network)
+                                    recentCheckStatus(
+                                      check?.last_published_at,
+                                      network,
+                                      referenceDate,
+                                    )
                                   ]
                                 const key = `${client.id}:${network}:${contentType}`
                                 const isEditing = !isRecentView && editingKey === key
@@ -417,13 +436,13 @@ export default function ChequeoGrid({
               : 'Solo lectura · color por días desde hoy'}
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-[7px] h-[7px] rounded-full bg-[#1f8a43]" /> Al día (0-5 días)
+          <span className="w-[7px] h-[7px] rounded-full bg-[#1f8a43]" /> Al día (0-6 días)
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-[7px] h-[7px] rounded-full bg-[#e08a1e]" /> 6-11 días sin publicar
+          <span className="w-[7px] h-[7px] rounded-full bg-[#e08a1e]" /> 7-12 días sin publicar
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-[7px] h-[7px] rounded-full bg-[#c0392b]" /> 12+ días sin publicar
+          <span className="w-[7px] h-[7px] rounded-full bg-[#c0392b]" /> 13+ días sin publicar
         </span>
         <span className="flex items-center gap-1.5">
           <span className="w-[7px] h-[7px] rounded-full bg-[#d8d4c8]" /> Sin registrar

@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { vi } from 'vitest'
 import { createSupabaseMock } from './helpers/supabaseMock'
 import { buildFixedWeeks } from '../utils/fixedTasks'
+import { currentFixedWeekN } from '../utils/chequeo'
 
 const { UPDATED_CHECK } = vi.hoisted(() => ({
   UPDATED_CHECK: {
@@ -68,6 +69,8 @@ function renderGrid(props = {}) {
       checks={[]}
       weeks={WEEKS}
       weekN={WEEK_N}
+      year={2026}
+      month={8}
       companyId="co-1"
       canManage={true}
       userId="u1"
@@ -77,6 +80,47 @@ function renderGrid(props = {}) {
     />,
   )
 }
+
+describe('ChequeoGrid — el semáforo de un período cerrado queda congelado', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('una celda marcada a tiempo en una semana ya cerrada sigue "al día" meses después', () => {
+    // S3 de agosto 2026 cierra el domingo 23 ago. Se marcó ese mismo domingo (0 días de
+    // atraso al cierre de la semana) → debería verse "Al día" sin importar cuándo se revise.
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date('2026-12-15T12:00:00'))
+
+    renderGrid({ checks: [check({ last_published_at: '2026-08-23' })] })
+
+    const btn = screen.getAllByRole('button')[0]
+    expect(btn.className).toContain('bg-[#e9f7ec]') // verde/normal, no rojo
+    expect(btn.title).toContain('Al día')
+  })
+
+  it('sin congelar (semana en curso), el mismo caso sí se vería vencido — control del test anterior', () => {
+    // Mismo check "viejo", pero ahora la semana/mes activo SÍ es el mes en curso (no
+    // cerró) → usa "hoy" real, que está muy lejos del 23 de agosto → debe verse rojo.
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const now = new Date('2026-12-15T12:00:00')
+    vi.setSystemTime(now)
+
+    const decWeeks = buildFixedWeeks(2026, 12)
+    const activeWeekN = currentFixedWeekN(decWeeks, now)
+
+    renderGrid({
+      checks: [check({ last_published_at: '2026-08-23', period_week: activeWeekN })],
+      weeks: decWeeks,
+      weekN: activeWeekN,
+      year: 2026,
+      month: 12,
+    })
+
+    const btn = screen.getAllByRole('button')[0]
+    expect(btn.className).toContain('bg-[#fdecec]') // rojo
+  })
+})
 
 describe('ChequeoGrid', () => {
   it('agrupa por línea y renderiza una fila por cada red social del cliente', () => {
@@ -296,12 +340,12 @@ describe('ChequeoGrid', () => {
 
     it('colorea con el semáforo por días transcurridos (verde/naranja/rojo), no por semana', () => {
       renderGrid({
-        // Fecha muy vieja: sea cual sea "hoy" al correr el test, ya lleva 12+ días.
+        // Fecha muy vieja: sea cual sea "hoy" al correr el test, ya lleva 13+ días.
         checks: [check({ last_published_at: '2020-01-01' })],
         viewMode: 'recent',
       })
       const btn = screen.getAllByRole('button')[0]
-      expect(btn.className).toContain('bg-[#fdecec]') // rojo: 12+ días
+      expect(btn.className).toContain('bg-[#fdecec]') // rojo: 13+ días
     })
 
     it('celda sin ningún registro en el mes muestra "—"', () => {

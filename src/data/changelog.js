@@ -168,6 +168,8 @@ export const CHANGELOG = [
       'Corregido: las fechas que menciona MAPPI ahora se muestran en formato dd/mm/aaaa.',
       'Agrandado el ícono de MAPPI en el recuadro de Recomendaciones del Inicio.',
       'Corregido: la Meta de "1. Reuniones realizadas" del reporte de Operaciones se había quedado sin poder editarse en los reportes de agosto hacia atrás. El cálculo automático (una reunión por marca, descontando "No aplica") rige desde el reporte de septiembre; los meses anteriores se pueden seguir editando a mano como siempre.',
+      'En Chequeo, los umbrales del semáforo pasaron de 0-5/6-11/12+ días a 0-6/7-12/13+ días.',
+      'Corregido: en Chequeo, una casilla marcada a tiempo se iba poniendo en amarillo o rojo con el simple paso de los días, aunque se estuviera revisando un mes ya cerrado. Ahora, si la semana o el mes ya pasó, el color queda fijo en cómo se veía al cerrar ese período (marcar todo a tiempo en agosto se sigue viendo al día si lo revisas en diciembre).',
     ],
   },
   {

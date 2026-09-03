@@ -33,13 +33,13 @@ export default function ChequeoSummary({ summary, periodoLabel }) {
         <KpiCard
           label="Por vencer"
           value={porVencer}
-          sub="6-11 días"
+          sub="7-12 días"
           color={porVencer ? '#e08a1e' : undefined}
         />
         <KpiCard
           label="En alerta"
           value={enAlerta}
-          sub="12+ días"
+          sub="13+ días"
           color={enAlerta ? '#c0392b' : undefined}
         />
       </div>

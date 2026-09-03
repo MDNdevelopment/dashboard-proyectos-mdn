@@ -6,8 +6,12 @@
  *
  * Cada celda guarda una fecha libre (puede ser de otra semana o de otro mes — es un
  * registro histórico de "cuándo se publicó", no una validación de "esta semana"). El
- * semáforo (`recentCheckStatus`) es siempre días transcurridos desde esa fecha hasta hoy,
- * el mismo criterio en la grilla semanal y en la vista "Más reciente".
+ * semáforo (`recentCheckStatus`) es días transcurridos desde esa fecha hasta la fecha de
+ * referencia del período activo, el mismo criterio en la grilla semanal y en la vista
+ * "Más reciente". La fecha de referencia es "hoy" mientras el período (semana o mes)
+ * sigue en curso, pero queda fija en su fecha de cierre una vez que pasó — así el color
+ * de un período histórico no se recalcula cada vez que alguien lo revisa después (ver
+ * `periodEndDate`/`checkReferenceDate`).
  */
 
 /** Los 3 tipos de contenido que se registran por cada red social del cliente. */
@@ -92,12 +96,16 @@ const MONTHLY_STALE_DAYS = 30
 
 /**
  * Semáforo único del módulo (grilla semanal y vista "Más reciente" — ver ChequeoGrid.jsx):
- * días transcurridos desde la fecha registrada hasta hoy — 0-5 días 'normal', 6-11
- * 'naranja', 12+ 'rojo'. Sin fecha → 'vacio'. Como la fecha de cada celda es libre (puede
+ * días transcurridos desde la fecha registrada hasta `today` — 0-6 días 'normal', 7-12
+ * 'naranja', 13+ 'rojo'. Sin fecha → 'vacio'. Como la fecha de cada celda es libre (puede
  * ser de otra semana o de otro mes), "cumplimiento de esta semana concreta" dejó de tener
  * sentido como criterio de color — lo único verificable es cuán reciente es el registro.
  *
-
+ * IMPORTANTE: `today` no es necesariamente "ahora" — para un período (semana/mes) que ya
+ * cerró, el caller debe pasar `checkReferenceDate(...)` en vez del default, para que el
+ * color quede fijo en cómo se veía al cerrar ese período y no se recalcule cada vez que
+ * alguien revisa el histórico más adelante (ver `checkReferenceDate` más abajo).
+ *
  * Reglas por red que se apartan del default, igual que la alerta original:
  * - Mailchimp y YouTube (horizontal): cadencia mensual, no semanal — se quedan en
  *   'normal' hasta el mes sin publicar (~30 días) y ahí pasan directo a 'rojo', sin pasar
@@ -114,9 +122,43 @@ export function recentCheckStatus(dateISO, network, today = new Date()) {
   if (network === 'Mailchimp' || network === 'YouTube') {
     return days >= MONTHLY_STALE_DAYS ? 'rojo' : 'normal'
   }
-  if (days >= 12) return 'rojo'
-  if (days >= 6) return 'naranja'
+  if (days >= 13) return 'rojo'
+  if (days >= 7) return 'naranja'
   return 'normal'
+}
+
+/**
+ * Último día del período activo del semáforo: el domingo de la semana fija activa
+ * (`weekN`), o el último día del mes cuando `weekN` es `null` (vista "Más reciente",
+ * mismo período que usa `mostRecentCheck`).
+ * @param {Array} weeks  buildFixedWeeks(year, month)
+ * @param {number|null} weekN
+ * @param {number} year
+ * @param {number} month  1-indexado
+ * @returns {Date}
+ */
+export function periodEndDate(weeks, weekN, year, month) {
+  if (weekN != null) {
+    const week = weeks.find((w) => w.n === weekN)
+    if (week) return week.dom
+  }
+  return new Date(year, month, 0) // día 0 del mes siguiente = último día de `month`
+}
+
+/**
+ * Fecha de referencia para el semáforo de un período: si el período todavía no cerró
+ * (su último día es hoy o está por venir), es `today` — el color sigue en vivo mientras
+ * la semana/mes está en curso. Si el período ya cerró, es la fecha de cierre del período
+ * — así el semáforo de un período pasado queda fijo para siempre en cómo se veía el día
+ * que cerró, en vez de recalcularse contra la fecha real cada vez que se revisa después
+ * (ej.: todo marcado a tiempo en agosto se ve verde en agosto y sigue verde en diciembre).
+ * @param {Date} periodEnd  resultado de `periodEndDate`
+ * @param {Date} [today]
+ * @returns {Date}
+ */
+export function checkReferenceDate(periodEnd, today = new Date()) {
+  const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  return startOfDay(periodEnd) < startOfDay(today) ? periodEnd : today
 }
 
 /** Formatea una fecha 'YYYY-MM-DD' como "18 jul" (es-VE). */

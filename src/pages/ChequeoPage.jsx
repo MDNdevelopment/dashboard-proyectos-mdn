@@ -5,7 +5,12 @@ import { loadLines, loadClients } from '../components/metricas/metricsApi'
 import { MONTHS } from '../components/metricas/constants'
 import { visibleLinesForUser } from '../utils/lineMembers'
 import { buildFixedWeeks } from '../utils/fixedTasks'
-import { currentFixedWeekN, computeChequeoSummary } from '../utils/chequeo'
+import {
+  currentFixedWeekN,
+  computeChequeoSummary,
+  periodEndDate,
+  checkReferenceDate,
+} from '../utils/chequeo'
 import { loadChecks } from '../components/chequeo/chequeoApi'
 import ChequeoGrid from '../components/chequeo/ChequeoGrid'
 import ChequeoSummary from '../components/chequeo/ChequeoSummary'
@@ -123,8 +128,12 @@ export default function ChequeoPage() {
   const scopedLineIds = scopedLines.map((l) => l.id)
   const scopedClients = clients.filter((c) => scopedLineIds.includes(c.line_id))
 
+  const referenceDate = checkReferenceDate(
+    periodEndDate(weeks, viewMode === 'recent' ? null : weekN, year, month),
+  )
   const summary = computeChequeoSummary(scopedClients, checks, {
     weekN: viewMode === 'recent' ? null : weekN,
+    today: referenceDate,
   })
   const periodoLabel =
     viewMode === 'recent' ? `Fecha más reciente · ${MONTHS[month - 1]}` : `Semana S${weekN}`
@@ -257,6 +266,8 @@ export default function ChequeoPage() {
               checks={checks}
               weeks={weeks}
               weekN={weekN}
+              year={year}
+              month={month}
               viewMode={viewMode}
               companyId={userProfile?.company_id}
               canManage={canManage}
