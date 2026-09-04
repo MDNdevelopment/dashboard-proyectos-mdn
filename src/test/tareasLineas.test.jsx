@@ -153,7 +153,10 @@ describe('TareasPage — líneas desde metric_lines', () => {
   it('llama a loadLines con el company_id del usuario, incluyendo la línea general', async () => {
     renderPage()
     await waitFor(() => {
-      expect(mockLoadLines).toHaveBeenCalledWith('co-1', { includeGeneral: true })
+      expect(mockLoadLines).toHaveBeenCalledWith('co-1', {
+        includeGeneral: true,
+        includeManagement: true,
+      })
     })
   })
 
@@ -302,6 +305,68 @@ describe('TareasPage — líneas desde metric_lines', () => {
         expect(screen.getByRole('button', { name: 'Georgina' })).toBeInTheDocument()
       })
       expect(screen.queryByRole('button', { name: 'Independientes' })).not.toBeInTheDocument()
+    })
+
+    it('al elegir "Independientes" no se muestra la pestaña "Dashboard" y entra directo a Base con Responsable visible', async () => {
+      const user = userEvent.setup()
+      renderPage({ admin: true, access_level: 1, user_id: 'u-otro' })
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Independientes' })).toBeInTheDocument()
+      })
+      // Antes de elegirla, sobre una línea operativa, Dashboard sigue disponible
+      expect(screen.getByRole('button', { name: 'Dashboard' })).toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'Independientes' }))
+
+      await waitFor(() => {
+        expect(screen.queryByRole('button', { name: 'Dashboard' })).not.toBeInTheDocument()
+      })
+      expect(screen.getByRole('button', { name: 'Base' })).toHaveClass('bg-[#111]')
+      expect(screen.getByDisplayValue('Responsable: todos')).toBeInTheDocument()
+    })
+  })
+
+  // ── Grupo "Alta Gerencia" (dirección sin línea, is_management) ────────────────
+  describe('grupo "Alta Gerencia"', () => {
+    const LINES_WITH_MANAGEMENT = [
+      ...MOCK_LINES,
+      {
+        id: 'line-general',
+        company_id: 'co-1',
+        name: 'Independientes',
+        color: '#9CA3AF',
+        sort_order: 9999,
+        is_general: true,
+        member_user_ids: [],
+      },
+      {
+        id: 'line-management',
+        company_id: 'co-1',
+        name: 'Alta Gerencia',
+        color: '#6B7280',
+        sort_order: 9998,
+        is_management: true,
+        member_user_ids: [],
+      },
+    ]
+
+    beforeEach(() => {
+      mockLoadLines.mockResolvedValue({ data: LINES_WITH_MANAGEMENT, error: null })
+    })
+
+    it('admin ve el botón "Alta Gerencia" y al elegirlo entra directo a Base sin Dashboard', async () => {
+      const user = userEvent.setup()
+      renderPage({ admin: true, access_level: 1, user_id: 'u-otro' })
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Alta Gerencia' })).toBeInTheDocument()
+      })
+
+      await user.click(screen.getByRole('button', { name: 'Alta Gerencia' }))
+
+      await waitFor(() => {
+        expect(screen.queryByRole('button', { name: 'Dashboard' })).not.toBeInTheDocument()
+      })
+      expect(screen.getByRole('button', { name: 'Base' })).toHaveClass('bg-[#111]')
     })
   })
 })

@@ -11,12 +11,16 @@ import { firstOfNextMonthISO } from '../../utils/prorateMonthlyFee'
 
 // ─── Líneas ───────────────────────────────────────────────────────────────────
 
-export async function loadLines(companyId, { includeGeneral = false } = {}) {
+export async function loadLines(
+  companyId,
+  { includeGeneral = false, includeManagement = false } = {},
+) {
   let query = supabase
     .from('metric_lines')
     .select('*, members:metric_line_members(user_id, is_lead)')
     .eq('company_id', companyId)
   if (!includeGeneral) query = query.eq('is_general', false)
+  if (!includeManagement) query = query.eq('is_management', false)
   const { data, error } = await query.order('sort_order')
   return {
     data: (data ?? []).map((line) => ({
@@ -605,6 +609,16 @@ export async function seedMetricsIfEmpty(companyId) {
     color: '#9CA3AF',
     sort_order: 9999,
     is_general: true,
+  })
+
+  // Fila oculta "Alta Gerencia": agrupa tareas de dirección (access_level >= 4) sin línea
+  // asignada, separada de Independientes. Se excluye vía el default includeManagement=false.
+  await supabase.from('metric_lines').insert({
+    company_id: companyId,
+    name: 'Alta Gerencia',
+    color: '#6B7280',
+    sort_order: 9998,
+    is_management: true,
   })
 
   return lines

@@ -54,9 +54,6 @@ export default function TareasPage() {
   const [allUsers, setAllUsers] = useState([])
   const [loading, setLoading] = useState(true)
 
-  // Visibilidad de vistas: config-driven vía capacidades de permisos.
-  // Sin reglas configuradas → acceso libre (mismo default del sistema).
-  const visibleViews = VIEWS.filter((v) => can(`tareas.${v.key}`))
   const canManage = can('tareas.manage')
   // "Todos" (ver todas las líneas combinadas) es exclusivo de nivel 4 / admin.
   const canViewAll = userProfile?.access_level >= 4 || userProfile?.admin === true
@@ -64,14 +61,6 @@ export default function TareasPage() {
   const [activeView, setActiveView] = useState(() =>
     searchParams.get('view') === 'base' ? 'base' : 'team',
   )
-
-  // Cuando cargan los permisos, redirigir si la vista activa no está disponible.
-  useEffect(() => {
-    if (userProfile && visibleViews.length > 0 && !visibleViews.find((v) => v.key === activeView)) {
-      setActiveView(visibleViews[0].key)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userProfile, activeView])
 
   // Sincroniza la vista activa con el historial del navegador: cuando una card del
   // dashboard navega a Base se empuja una entrada de historial (ver goToBaseWithFilter);
@@ -98,6 +87,25 @@ export default function TareasPage() {
 
   const isAll = activeTeamId === ALL_TEAMS
   const activeTeam = isAll ? null : (teams.find((t) => t.id === activeTeamId) ?? null)
+  // Independientes y Alta Gerencia no tienen clientes ni semáforo por cuenta: el Dashboard
+  // no aplica, así que entran directo a Base (con los responsables visibles).
+  const isNonOperational = !!(activeTeam?.is_general || activeTeam?.is_management)
+
+  // Visibilidad de vistas: config-driven vía capacidades de permisos, menos "Dashboard"
+  // para líneas no operativas. Sin reglas configuradas → acceso libre (mismo default del
+  // sistema).
+  const visibleViews = VIEWS.filter((v) => can(`tareas.${v.key}`)).filter(
+    (v) => v.key !== 'team' || !isNonOperational,
+  )
+
+  // Cuando cargan los permisos, o al elegir Independientes/Alta Gerencia estando en
+  // Dashboard, redirigir si la vista activa deja de estar disponible.
+  useEffect(() => {
+    if (userProfile && visibleViews.length > 0 && !visibleViews.find((v) => v.key === activeView)) {
+      setActiveView(visibleViews[0].key)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userProfile, activeView, activeTeamId, isNonOperational])
 
   const loadAll = useCallback(async () => {
     if (!userProfile?.company_id) return
@@ -105,7 +113,7 @@ export default function TareasPage() {
     const companyId = userProfile.company_id
 
     const [linesRes, tasksRes, usersRes, clientsRes] = await Promise.all([
-      loadLines(companyId, { includeGeneral: true }),
+      loadLines(companyId, { includeGeneral: true, includeManagement: true }),
       supabase
         .from('tasks')
         .select('*')

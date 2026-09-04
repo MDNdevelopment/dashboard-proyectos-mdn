@@ -11,8 +11,15 @@ import { MemoryRouter } from 'react-router-dom'
 import { vi } from 'vitest'
 
 const {
-  mockChannelOn, mockSubscribe, mockRemoveChannel, mockFrom,
-  mockMarkMeetingHeld, mockUnmarkMeetingHeld, mockCancelMeeting, mockUpdateMeeting, mockDeleteMeeting,
+  mockChannelOn,
+  mockSubscribe,
+  mockRemoveChannel,
+  mockFrom,
+  mockMarkMeetingHeld,
+  mockUnmarkMeetingHeld,
+  mockCancelMeeting,
+  mockUpdateMeeting,
+  mockDeleteMeeting,
 } = vi.hoisted(() => ({
   mockChannelOn: vi.fn(),
   mockSubscribe: vi.fn(),
@@ -39,7 +46,9 @@ vi.mock('../supabase', () => ({
 }))
 
 vi.mock('../components/metricas/metricsApi', () => ({
-  loadClients: vi.fn().mockResolvedValue({ data: [{ id: 'c-1', name: 'Banco Exterior' }], error: null }),
+  loadClients: vi
+    .fn()
+    .mockResolvedValue({ data: [{ id: 'c-1', name: 'Banco Exterior' }], error: null }),
   loadCompanyEmployees: vi.fn().mockResolvedValue({
     data: [{ user_id: 'u1', first_name: 'Ana', last_name: 'García', access_level: 4 }],
     error: null,
@@ -63,7 +72,11 @@ import ReunionesPage from '../pages/ReunionesPage'
 
 // ReunionesPage usa useSearchParams (deeplink ?meetingId=) — necesita un <Router> alrededor.
 function renderPage(initialEntries = ['/reuniones']) {
-  return render(<ReunionesPage />, { wrapper: ({ children }) => <MemoryRouter initialEntries={initialEntries}>{children}</MemoryRouter> })
+  return render(<ReunionesPage />, {
+    wrapper: ({ children }) => (
+      <MemoryRouter initialEntries={initialEntries}>{children}</MemoryRouter>
+    ),
+  })
 }
 
 function mockMeetingsSelect(data) {
@@ -96,7 +109,9 @@ describe('ReunionesPage — con permiso de gestión', () => {
   it('muestra el botón "Nueva reunión" y abre el modal en modo crear al hacer click', async () => {
     const user = userEvent.setup()
     renderPage()
-    await waitFor(() => expect(screen.getByRole('button', { name: /Nueva reunión/ })).toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Nueva reunión/ })).toBeInTheDocument(),
+    )
     await user.click(screen.getByRole('button', { name: /Nueva reunión/ }))
     expect(screen.getByRole('heading', { name: 'Nueva reunión' })).toBeInTheDocument()
     expect(screen.queryByText('Editar reunión')).not.toBeInTheDocument()
@@ -104,7 +119,14 @@ describe('ReunionesPage — con permiso de gestión', () => {
 
   it('click en una reunión existente del calendario abre la vista de detalle (no el modal de edición)', async () => {
     mockMeetingsSelect([
-      { id: 'm-1', title: 'Kickoff', company_id: 'co-1', starts_at: new Date().toISOString(), status: 'programada', attendee_ids: [] },
+      {
+        id: 'm-1',
+        title: 'Kickoff',
+        company_id: 'co-1',
+        starts_at: new Date().toISOString(),
+        status: 'programada',
+        attendee_ids: [],
+      },
     ])
     const user = userEvent.setup()
     renderPage()
@@ -117,7 +139,14 @@ describe('ReunionesPage — con permiso de gestión', () => {
 
   it('"Editar" dentro del detalle cierra la vista y abre MeetingModal en modo edición', async () => {
     mockMeetingsSelect([
-      { id: 'm-1', title: 'Kickoff', company_id: 'co-1', starts_at: new Date().toISOString(), status: 'programada', attendee_ids: [] },
+      {
+        id: 'm-1',
+        title: 'Kickoff',
+        company_id: 'co-1',
+        starts_at: new Date().toISOString(),
+        status: 'programada',
+        attendee_ids: [],
+      },
     ])
     const user = userEvent.setup()
     renderPage()
@@ -132,7 +161,11 @@ describe('ReunionesPage — con permiso de gestión', () => {
   it('se suscribe al canal realtime de "meetings" y lo limpia al desmontar', async () => {
     const { unmount } = renderPage()
     await waitFor(() => expect(mockChannelOn).toHaveBeenCalled())
-    expect(mockChannelOn.mock.calls[0][1]).toMatchObject({ event: '*', schema: 'public', table: 'meetings' })
+    expect(mockChannelOn.mock.calls[0][1]).toMatchObject({
+      event: '*',
+      schema: 'public',
+      table: 'meetings',
+    })
     unmount()
     expect(mockRemoveChannel).toHaveBeenCalled()
   })
@@ -143,7 +176,14 @@ describe('ReunionesPage — con permiso de gestión', () => {
     const yesterday = new Date()
     yesterday.setDate(yesterday.getDate() - 1)
     mockMeetingsSelect([
-      { id: 'm-1', title: 'Vencida', company_id: 'co-1', starts_at: yesterday.toISOString(), status: 'programada', attendee_ids: [] },
+      {
+        id: 'm-1',
+        title: 'Vencida',
+        company_id: 'co-1',
+        starts_at: yesterday.toISOString(),
+        status: 'programada',
+        attendee_ids: [],
+      },
     ])
     const user = userEvent.setup()
     renderPage()
@@ -157,22 +197,46 @@ describe('ReunionesPage — con permiso de gestión', () => {
   it('click en el ✓ de una reunión realizada llama a unmarkMeetingHeld', async () => {
     const now = new Date().toISOString()
     mockMeetingsSelect([
-      { id: 'm-1', title: 'Hecha', company_id: 'co-1', starts_at: now, status: 'realizada', attendee_ids: [] },
+      {
+        id: 'm-1',
+        title: 'Hecha',
+        company_id: 'co-1',
+        starts_at: now,
+        status: 'realizada',
+        attendee_ids: [],
+      },
     ])
     mockUnmarkMeetingHeld.mockResolvedValue({
-      data: { id: 'm-1', title: 'Hecha', starts_at: now, status: 'programada' }, error: null,
+      data: { id: 'm-1', title: 'Hecha', starts_at: now, status: 'programada' },
+      error: null,
     })
     const user = userEvent.setup()
     renderPage()
-    const toggleBtn = await screen.findByRole('button', { name: /Desmarcar "Hecha" como realizada/ })
+    const toggleBtn = await screen.findByRole('button', {
+      name: /Desmarcar "Hecha" como realizada/,
+    })
     await user.click(toggleBtn)
     await waitFor(() => expect(mockUnmarkMeetingHeld).toHaveBeenCalledWith('m-1'))
   })
 
   it('con ?meetingId=<id> en la URL (deeplink desde la notificación), abre el detalle de esa reunión automáticamente', async () => {
     mockMeetingsSelect([
-      { id: 'm-1', title: 'Kickoff', company_id: 'co-1', starts_at: new Date().toISOString(), status: 'programada', attendee_ids: [] },
-      { id: 'm-2', title: 'Otra', company_id: 'co-1', starts_at: new Date().toISOString(), status: 'programada', attendee_ids: [] },
+      {
+        id: 'm-1',
+        title: 'Kickoff',
+        company_id: 'co-1',
+        starts_at: new Date().toISOString(),
+        status: 'programada',
+        attendee_ids: [],
+      },
+      {
+        id: 'm-2',
+        title: 'Otra',
+        company_id: 'co-1',
+        starts_at: new Date().toISOString(),
+        status: 'programada',
+        attendee_ids: [],
+      },
     ])
     renderPage(['/reuniones?meetingId=m-2'])
     expect(await screen.findByRole('heading', { name: 'Otra' })).toBeInTheDocument()
@@ -192,24 +256,100 @@ describe('ReunionesPage — cards de resumen y filtros', () => {
   const now = new Date()
   const inMonth = (day) => new Date(now.getFullYear(), now.getMonth(), day, 10, 0).toISOString()
 
-  it('muestra el conteo correcto de Pautadas/Completadas/Canceladas del mes visible', async () => {
+  it('muestra el conteo correcto de Agendadas/Completadas/Canceladas del mes visible', async () => {
     mockMeetingsSelect([
-      { id: 'm1', title: 'A', company_id: 'co-1', starts_at: inMonth(5), status: 'programada', attendee_ids: [] },
-      { id: 'm2', title: 'B', company_id: 'co-1', starts_at: inMonth(6), status: 'programada', attendee_ids: [] },
-      { id: 'm3', title: 'C', company_id: 'co-1', starts_at: inMonth(7), status: 'realizada', attendee_ids: [] },
-      { id: 'm4', title: 'D', company_id: 'co-1', starts_at: inMonth(8), status: 'cancelada', attendee_ids: [] },
+      {
+        id: 'm1',
+        title: 'A',
+        company_id: 'co-1',
+        starts_at: inMonth(5),
+        status: 'programada',
+        attendee_ids: [],
+      },
+      {
+        id: 'm2',
+        title: 'B',
+        company_id: 'co-1',
+        starts_at: inMonth(6),
+        status: 'programada',
+        attendee_ids: [],
+      },
+      {
+        id: 'm3',
+        title: 'C',
+        company_id: 'co-1',
+        starts_at: inMonth(7),
+        status: 'realizada',
+        attendee_ids: [],
+      },
+      {
+        id: 'm4',
+        title: 'D',
+        company_id: 'co-1',
+        starts_at: inMonth(8),
+        status: 'cancelada',
+        attendee_ids: [],
+      },
     ])
     renderPage()
-    await waitFor(() => expect(screen.getByText('Pautadas')).toBeInTheDocument())
-    expect(screen.getByText('Pautadas').closest('button')).toHaveTextContent('2')
+    await waitFor(() => expect(screen.getByText('Agendadas')).toBeInTheDocument())
+    // Agendadas cuenta TODAS las reuniones del mes sin importar su estado (4), no solo
+    // las 'programada' — a diferencia de Completadas/Canceladas, que sí filtran por estado.
+    expect(screen.getByText('Agendadas').closest('button')).toHaveTextContent('4')
     expect(screen.getByText('Completadas').closest('button')).toHaveTextContent('1')
     expect(screen.getByText('Canceladas').closest('button')).toHaveTextContent('1')
   })
 
+  it('click en "Agendadas" limpia el filtro de estado (no togglea como las otras cards)', async () => {
+    mockMeetingsSelect([
+      {
+        id: 'm1',
+        title: 'ReunionProgramada',
+        company_id: 'co-1',
+        starts_at: inMonth(5),
+        status: 'programada',
+        attendee_ids: [],
+      },
+      {
+        id: 'm2',
+        title: 'ReunionRealizada',
+        company_id: 'co-1',
+        starts_at: inMonth(6),
+        status: 'realizada',
+        attendee_ids: [],
+      },
+    ])
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getByText(/ReunionProgramada/)).toBeInTheDocument())
+
+    await user.click(screen.getByText('Completadas'))
+    expect(screen.queryByText(/ReunionProgramada/)).not.toBeInTheDocument()
+
+    await user.click(screen.getByText('Agendadas'))
+    expect(screen.getByText(/ReunionProgramada/)).toBeInTheDocument()
+    expect(screen.getByText(/ReunionRealizada/)).toBeInTheDocument()
+    expect(screen.getByText('Agendadas').closest('button')).toHaveClass('border-[#111]')
+  })
+
   it('click en una card activa el filtro de estado (oculta el resto); click de nuevo lo desactiva', async () => {
     mockMeetingsSelect([
-      { id: 'm1', title: 'ReunionProgramada', company_id: 'co-1', starts_at: inMonth(5), status: 'programada', attendee_ids: [] },
-      { id: 'm2', title: 'ReunionRealizada', company_id: 'co-1', starts_at: inMonth(6), status: 'realizada', attendee_ids: [] },
+      {
+        id: 'm1',
+        title: 'ReunionProgramada',
+        company_id: 'co-1',
+        starts_at: inMonth(5),
+        status: 'programada',
+        attendee_ids: [],
+      },
+      {
+        id: 'm2',
+        title: 'ReunionRealizada',
+        company_id: 'co-1',
+        starts_at: inMonth(6),
+        status: 'realizada',
+        attendee_ids: [],
+      },
     ])
     const user = userEvent.setup()
     renderPage()
@@ -226,21 +366,54 @@ describe('ReunionesPage — cards de resumen y filtros', () => {
 
   it('el filtro de modalidad oculta reuniones de la otra modalidad', async () => {
     mockMeetingsSelect([
-      { id: 'm1', title: 'ReunionPresencial', company_id: 'co-1', starts_at: inMonth(5), status: 'programada', modality: 'presencial', attendee_ids: [] },
-      { id: 'm2', title: 'ReunionVirtual', company_id: 'co-1', starts_at: inMonth(6), status: 'programada', modality: 'videollamada', attendee_ids: [] },
+      {
+        id: 'm1',
+        title: 'ReunionPresencial',
+        company_id: 'co-1',
+        starts_at: inMonth(5),
+        status: 'programada',
+        modality: 'presencial',
+        attendee_ids: [],
+      },
+      {
+        id: 'm2',
+        title: 'ReunionVirtual',
+        company_id: 'co-1',
+        starts_at: inMonth(6),
+        status: 'programada',
+        modality: 'videollamada',
+        attendee_ids: [],
+      },
     ])
     const user = userEvent.setup()
     renderPage()
     await waitFor(() => expect(screen.getByText(/ReunionPresencial/)).toBeInTheDocument())
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Filtrar por modalidad' }), 'videollamada')
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Filtrar por modalidad' }),
+      'videollamada',
+    )
     expect(screen.queryByText(/ReunionPresencial/)).not.toBeInTheDocument()
     expect(screen.getByText(/ReunionVirtual/)).toBeInTheDocument()
   })
 
   it('el filtro "Solo las mías" oculta reuniones donde el usuario no es asistente', async () => {
     mockMeetingsSelect([
-      { id: 'm1', title: 'ReunionPropia', company_id: 'co-1', starts_at: inMonth(5), status: 'programada', attendee_ids: ['u1'] },
-      { id: 'm2', title: 'ReunionAjena', company_id: 'co-1', starts_at: inMonth(6), status: 'programada', attendee_ids: ['u2'] },
+      {
+        id: 'm1',
+        title: 'ReunionPropia',
+        company_id: 'co-1',
+        starts_at: inMonth(5),
+        status: 'programada',
+        attendee_ids: ['u1'],
+      },
+      {
+        id: 'm2',
+        title: 'ReunionAjena',
+        company_id: 'co-1',
+        starts_at: inMonth(6),
+        status: 'programada',
+        attendee_ids: ['u2'],
+      },
     ])
     const user = userEvent.setup()
     renderPage()
@@ -252,16 +425,37 @@ describe('ReunionesPage — cards de resumen y filtros', () => {
 
   it('las cards NO cambian sus números al activar modalidad/alcance (siempre cuentan todo el mes)', async () => {
     mockMeetingsSelect([
-      { id: 'm1', title: 'A', company_id: 'co-1', starts_at: inMonth(5), status: 'programada', modality: 'presencial', attendee_ids: ['u2'] },
-      { id: 'm2', title: 'B', company_id: 'co-1', starts_at: inMonth(6), status: 'programada', modality: 'videollamada', attendee_ids: ['u1'] },
+      {
+        id: 'm1',
+        title: 'A',
+        company_id: 'co-1',
+        starts_at: inMonth(5),
+        status: 'programada',
+        modality: 'presencial',
+        attendee_ids: ['u2'],
+      },
+      {
+        id: 'm2',
+        title: 'B',
+        company_id: 'co-1',
+        starts_at: inMonth(6),
+        status: 'programada',
+        modality: 'videollamada',
+        attendee_ids: ['u1'],
+      },
     ])
     const user = userEvent.setup()
     renderPage()
-    await waitFor(() => expect(screen.getByText('Pautadas').closest('button')).toHaveTextContent('2'))
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Filtrar por modalidad' }), 'videollamada')
-    expect(screen.getByText('Pautadas').closest('button')).toHaveTextContent('2')
+    await waitFor(() =>
+      expect(screen.getByText('Agendadas').closest('button')).toHaveTextContent('2'),
+    )
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Filtrar por modalidad' }),
+      'videollamada',
+    )
+    expect(screen.getByText('Agendadas').closest('button')).toHaveTextContent('2')
     await user.selectOptions(screen.getByRole('combobox', { name: 'Filtrar por alcance' }), 'mias')
-    expect(screen.getByText('Pautadas').closest('button')).toHaveTextContent('2')
+    expect(screen.getByText('Agendadas').closest('button')).toHaveTextContent('2')
   })
 })
 
@@ -281,7 +475,14 @@ describe('ReunionesPage — sin permiso de gestión', () => {
 
   it('puede abrir el detalle de una reunión (ver es universal) pero no ve Editar/Eliminar ni acciones', async () => {
     mockMeetingsSelect([
-      { id: 'm-1', title: 'Kickoff', company_id: 'co-1', starts_at: new Date().toISOString(), status: 'programada', attendee_ids: [] },
+      {
+        id: 'm-1',
+        title: 'Kickoff',
+        company_id: 'co-1',
+        starts_at: new Date().toISOString(),
+        status: 'programada',
+        attendee_ids: [],
+      },
     ])
     const user = userEvent.setup()
     renderPage()

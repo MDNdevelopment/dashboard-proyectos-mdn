@@ -301,11 +301,11 @@ describe('HomePage — nivel 4 (dirección)', () => {
     expect(screen.getByText('1 atrasada(s)')).toBeInTheDocument()
   })
 
-  it('NO muestra "Asignadas activas" ni "Atrasadas" (nivel 4 no recibe tareas asignadas, solo apoyo)', async () => {
+  it('SÍ muestra "Asignadas activas" y "Atrasadas" además del apoyo de dirección (nivel 4 también recibe tareas asignadas)', async () => {
     renderPage({ access_level: 4 })
     await waitFor(() => expect(screen.getByText(/apoyo de dirección/i)).toBeInTheDocument())
-    expect(screen.queryByText(/asignadas activas/i)).not.toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /^atrasadas/i })).not.toBeInTheDocument()
+    expect(screen.getByText(/asignadas activas/i)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /^atrasadas/i })).toBeInTheDocument()
   })
 
   it('SÍ muestra "Asignadas activas" para un admin que no es nivel 4', async () => {
@@ -506,6 +506,24 @@ describe('HomePage — Mis reuniones', () => {
     expect(screen.getByText(/^alsa$/i)).toBeInTheDocument()
     expect(screen.getByText(/videollamada/i)).toBeInTheDocument()
     expect(screen.queryByText(/no tienes reuniones agendadas/i)).not.toBeInTheDocument()
+  })
+
+  it('con varias marcas, muestra la primera + "+N"', async () => {
+    globalThis.__MOCK_MEETINGS_OVERRIDE__ = [
+      {
+        id: 'm5',
+        title: 'ALsa estrategia',
+        client_names: ['ALSA', 'ALSA Foods'],
+        modality: 'videollamada',
+        starts_at: inWeek,
+        status: 'programada',
+        attendee_ids: ['u1'],
+      },
+    ]
+    renderPage({ access_level: 1 })
+    await waitFor(() => {
+      expect(screen.getByText(/alsa \+1/i)).toBeInTheDocument()
+    })
   })
 
   it('NO lista reuniones donde el usuario no es asistente, ni canceladas/realizadas', async () => {

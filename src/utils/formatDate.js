@@ -15,6 +15,22 @@ export function fmtDate(iso) {
 }
 
 /**
+ * Formatea un ISO string / Date a hora 12h "2:30 P.M." (mismo estilo de salida que
+ * formatTime12() de audiovisual.js, pero a partir de un timestamp/Date en vez de un
+ * valor `time` de Postgres). Devuelve '' si el valor es vacío o inválido.
+ */
+export function fmtTime12(value) {
+  const d = value instanceof Date ? value : value ? new Date(value) : null
+  if (!d || isNaN(d)) return ''
+  let h = d.getHours()
+  const m = d.getMinutes()
+  const ap = h < 12 ? 'A.M.' : 'P.M.'
+  h = h % 12
+  if (h === 0) h = 12
+  return `${h}:${String(m).padStart(2, '0')} ${ap}`
+}
+
+/**
  * Convierte una fecha ISO "solo fecha" (YYYY-MM-DD) a texto DD/MM/YYYY para
  * mostrarla en un campo editable. A diferencia de fmtDate(), no normaliza a
  * mediodía UTC porque aquí interesa el valor tal cual, sin ambigüedad de zona
@@ -35,10 +51,12 @@ export function isoToDdmmyyyy(iso) {
 export function parseDdmmyyyy(text) {
   const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec((text ?? '').trim())
   if (!m) return null
-  const day = Number(m[1]), month = Number(m[2]), year = Number(m[3])
+  const day = Number(m[1]),
+    month = Number(m[2]),
+    year = Number(m[3])
   if (month < 1 || month > 12 || day < 1 || day > 31) return null
   const daysInMonth = new Date(year, month, 0).getDate()
   if (day > daysInMonth) return null
-  const pad = n => String(n).padStart(2, '0')
+  const pad = (n) => String(n).padStart(2, '0')
   return `${year}-${pad(month)}-${pad(day)}`
 }

@@ -35,14 +35,14 @@ describe('CalendarView', () => {
     expect(screen.getByText(/julio 2026/i)).toBeInTheDocument()
   })
 
-  it('muestra las reuniones del mes con su hora y título', () => {
+  it('muestra las reuniones del mes con su hora en formato 12h y título', () => {
     renderCalendar()
-    expect(screen.getByText(/14:00 Kickoff/)).toBeInTheDocument()
+    expect(screen.getByText(/2:00 P\.M\. Kickoff/)).toBeInTheDocument()
   })
 
   it('marca visualmente una reunión cancelada (tachada, con ícono X)', () => {
     renderCalendar()
-    const pill = screen.getByText(/10:00 Cancelada/).closest('[role="button"]')
+    const pill = screen.getByText(/10:00 A\.M\. Cancelada/).closest('[role="button"]')
     expect(pill.className).toContain('line-through')
     expect(pill.querySelector('svg')).toBeTruthy()
   })
@@ -63,9 +63,40 @@ describe('CalendarView', () => {
     const onMeetingClick = vi.fn()
     const onDayClick = vi.fn()
     renderCalendar({ onMeetingClick, onDayClick })
-    await user.click(screen.getByText(/14:00 Kickoff/))
+    await user.click(screen.getByText(/2:00 P\.M\. Kickoff/))
     expect(onMeetingClick).toHaveBeenCalledWith(MEETINGS[0])
     expect(onDayClick).not.toHaveBeenCalled()
+  })
+
+  it('ordena las reuniones del día por hora aunque lleguen desordenadas en el prop', () => {
+    // "Kickoff" (14:00) llega antes que "Temprana" (09:00) en el array — simula una
+    // reunión recién creada que ReunionesPage agrega al final sin reordenar.
+    const meetings = [
+      { id: 'm-1', title: 'Kickoff', starts_at: '2026-07-15T14:00:00', status: 'programada' },
+      { id: 'm-2', title: 'Temprana', starts_at: '2026-07-15T09:00:00', status: 'programada' },
+    ]
+    renderCalendar({ meetings })
+    const pills = screen
+      .getAllByRole('button')
+      .filter((el) => /Kickoff|Temprana/.test(el.textContent))
+    expect(pills[0].textContent).toMatch(/Temprana/)
+    expect(pills[1].textContent).toMatch(/Kickoff/)
+  })
+
+  it('con más de 3 reuniones desordenadas, muestra las 3 más tempranas en la celda', () => {
+    const meetings = [
+      { id: 'm-1', title: 'Cinco', starts_at: '2026-07-15T13:00:00', status: 'programada' },
+      { id: 'm-2', title: 'Cuatro', starts_at: '2026-07-15T12:00:00', status: 'programada' },
+      { id: 'm-3', title: 'Uno', starts_at: '2026-07-15T09:00:00', status: 'programada' },
+      { id: 'm-4', title: 'Tres', starts_at: '2026-07-15T11:00:00', status: 'programada' },
+      { id: 'm-5', title: 'Dos', starts_at: '2026-07-15T10:00:00', status: 'programada' },
+    ]
+    renderCalendar({ meetings })
+    expect(screen.getByText(/9:00 A\.M\. Uno/)).toBeInTheDocument()
+    expect(screen.getByText(/10:00 A\.M\. Dos/)).toBeInTheDocument()
+    expect(screen.getByText(/11:00 A\.M\. Tres/)).toBeInTheDocument()
+    expect(screen.queryByText(/Cuatro/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Cinco/)).not.toBeInTheDocument()
   })
 
   it('click en un día vacío llama a onDayClick con esa fecha', async () => {
@@ -90,7 +121,7 @@ describe('CalendarView — estados visuales por status', () => {
       { id: 'm-1', title: 'Futura', starts_at: '2099-01-25T14:00:00', status: 'programada' },
     ]
     renderCalendar({ meetings, year: 2099, month: 1 })
-    const pill = screen.getByText(/14:00 Futura/).closest('[role="button"]')
+    const pill = screen.getByText(/2:00 P\.M\. Futura/).closest('[role="button"]')
     expect(pill.className).toContain('bg-blue-50')
     expect(pill.className).not.toContain('line-through')
     expect(
@@ -201,7 +232,7 @@ describe('CalendarView — ícono de "me incluye"', () => {
       },
     ]
     renderCalendar({ meetings, currentUserId: 'u1' })
-    const pill = screen.getByText(/14:00 Conmigo/).closest('[role="button"]')
+    const pill = screen.getByText(/2:00 P\.M\. Conmigo/).closest('[role="button"]')
     expect(pill.querySelector('svg[aria-label="Te incluye como participante"]')).toBeInTheDocument()
   })
 
@@ -216,7 +247,7 @@ describe('CalendarView — ícono de "me incluye"', () => {
       },
     ]
     renderCalendar({ meetings, currentUserId: 'u1' })
-    const pill = screen.getByText(/14:00 SinMi/).closest('[role="button"]')
+    const pill = screen.getByText(/2:00 P\.M\. SinMi/).closest('[role="button"]')
     expect(
       pill.querySelector('svg[aria-label="Te incluye como participante"]'),
     ).not.toBeInTheDocument()
@@ -235,8 +266,8 @@ describe('CalendarView — nombre de cliente en la pill', () => {
       },
     ]
     renderCalendar({ meetings })
-    expect(screen.getByText(/14:00 Acme Corp/)).toBeInTheDocument()
-    expect(screen.queryByText(/14:00 Kickoff/)).not.toBeInTheDocument()
+    expect(screen.getByText(/2:00 P\.M\. Acme Corp/)).toBeInTheDocument()
+    expect(screen.queryByText(/2:00 P\.M\. Kickoff/)).not.toBeInTheDocument()
   })
 
   it('usa el título como fallback cuando la reunión no tiene client_name', () => {
@@ -250,7 +281,21 @@ describe('CalendarView — nombre de cliente en la pill', () => {
       },
     ]
     renderCalendar({ meetings })
-    expect(screen.getByText(/14:00 Kickoff/)).toBeInTheDocument()
+    expect(screen.getByText(/2:00 P\.M\. Kickoff/)).toBeInTheDocument()
+  })
+
+  it('muestra el primer client_names + "+N" cuando la reunión tiene varias marcas', () => {
+    const meetings = [
+      {
+        id: 'm-1',
+        title: 'Kickoff',
+        client_names: ['Acme Corp', 'Acme Foods', 'Acme Retail'],
+        starts_at: '2026-07-15T14:00:00',
+        status: 'programada',
+      },
+    ]
+    renderCalendar({ meetings })
+    expect(screen.getByText(/2:00 P\.M\. Acme Corp \+2/)).toBeInTheDocument()
   })
 })
 
@@ -336,7 +381,7 @@ describe('CalendarView — overflow del día ("+N más")', () => {
     const onMeetingClick = vi.fn()
     renderCalendar({ meetings: SAME_DAY_MEETINGS, onMeetingClick })
     await user.click(screen.getByRole('button', { name: '+2 más' }))
-    await user.click(screen.getByText(/13:00 Cinco/))
+    await user.click(screen.getByText(/1:00 P\.M\. Cinco/))
     expect(onMeetingClick).toHaveBeenCalledWith(SAME_DAY_MEETINGS[4])
     // La lista se cierra tras seleccionar
     expect(screen.queryByText(/15 de julio/i)).not.toBeInTheDocument()

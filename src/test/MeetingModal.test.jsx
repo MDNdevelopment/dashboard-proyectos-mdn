@@ -40,7 +40,7 @@ function renderModal(props = {}) {
       onClose={() => {}}
       onSaved={() => {}}
       {...props}
-    />
+    />,
   )
 }
 
@@ -83,7 +83,10 @@ describe('MeetingModal — toggle de modalidad', () => {
     renderModal()
     await user.type(screen.getByPlaceholderText('Asunto de la reunión'), 'Reunión remota')
     await user.click(screen.getByRole('button', { name: 'Videollamada' }))
-    await user.type(screen.getByPlaceholderText('Link de la reunión (opcional)'), 'https://meet.example.com/abc')
+    await user.type(
+      screen.getByPlaceholderText('Link de la reunión (opcional)'),
+      'https://meet.example.com/abc',
+    )
     await user.click(screen.getByRole('button', { name: 'Crear reunión' }))
 
     await waitFor(() => expect(mockCreateMeeting).toHaveBeenCalled())
@@ -93,10 +96,72 @@ describe('MeetingModal — toggle de modalidad', () => {
   })
 })
 
+describe('MeetingModal — selector de varias marcas (ClientPicker)', () => {
+  const MULTI_CLIENTS = [
+    { id: 'c-1', name: 'Banco Exterior' },
+    { id: 'c-2', name: 'Banco Exterior Seguros' },
+  ]
+
+  it('permite elegir varias marcas y el payload lleva client_ids con todas', async () => {
+    const user = userEvent.setup()
+    renderModal({ clients: MULTI_CLIENTS })
+    await user.type(
+      screen.getByPlaceholderText('Asunto de la reunión'),
+      'Reunión con Banco Exterior',
+    )
+    await user.type(screen.getByPlaceholderText('Buscar cliente por nombre…'), 'Banco Exterior')
+    await user.click(screen.getByText('Banco Exterior'))
+    await user.type(screen.getByPlaceholderText('Buscar cliente por nombre…'), 'Seguros')
+    await user.click(screen.getByText('Banco Exterior Seguros'))
+    await user.click(screen.getByRole('button', { name: 'Crear reunión' }))
+
+    await waitFor(() => expect(mockCreateMeeting).toHaveBeenCalled())
+    const [, fields] = mockCreateMeeting.mock.calls[0]
+    expect(fields.client_ids).toEqual(['c-1', 'c-2'])
+  })
+
+  it('permite quitar una marca ya agregada con el botón de la chip', async () => {
+    const user = userEvent.setup()
+    renderModal({ clients: MULTI_CLIENTS })
+    await user.type(screen.getByPlaceholderText('Buscar cliente por nombre…'), 'Banco')
+    await user.click(screen.getByText('Banco Exterior'))
+    expect(screen.getByText('Banco Exterior')).toBeInTheDocument()
+    await user.click(screen.getByLabelText('Quitar a Banco Exterior'))
+    expect(screen.queryByText('Sin clientes agregados.')).toBeInTheDocument()
+  })
+
+  it('al editar una reunión vieja (solo client_id escalar) el picker la muestra preseleccionada', () => {
+    renderModal({
+      clients: MULTI_CLIENTS,
+      meeting: {
+        id: 'm-1',
+        title: 'Vieja',
+        client_id: 'c-1',
+        starts_at: '2026-07-20T14:00:00.000Z',
+        modality: 'presencial',
+        location: '',
+        meeting_url: null,
+        notes: '',
+        attendee_ids: [],
+        status: 'programada',
+      },
+    })
+    expect(screen.getByText('Banco Exterior')).toBeInTheDocument()
+    expect(screen.queryByText('Sin clientes agregados.')).not.toBeInTheDocument()
+  })
+})
+
 describe('MeetingModal — crear / editar / cancelar (cerrar)', () => {
   const existing = {
-    id: 'm-1', title: 'Reunión existente', client_id: 'c-1', starts_at: '2026-07-20T14:00:00.000Z',
-    modality: 'presencial', location: 'Oficina', meeting_url: null, notes: '', attendee_ids: ['u1'],
+    id: 'm-1',
+    title: 'Reunión existente',
+    client_id: 'c-1',
+    starts_at: '2026-07-20T14:00:00.000Z',
+    modality: 'presencial',
+    location: 'Oficina',
+    meeting_url: null,
+    notes: '',
+    attendee_ids: ['u1'],
     status: 'programada',
   }
 
@@ -127,14 +192,24 @@ describe('MeetingModal — crear / editar / cancelar (cerrar)', () => {
 
 describe('MeetingModal — red de seguridad al reagendar desde el formulario', () => {
   const realizada = {
-    id: 'm-1', title: 'Reunión existente', client_id: 'c-1', starts_at: '2026-07-20T14:00:00.000Z',
-    modality: 'presencial', location: 'Oficina', meeting_url: null, notes: '', attendee_ids: ['u1'],
+    id: 'm-1',
+    title: 'Reunión existente',
+    client_id: 'c-1',
+    starts_at: '2026-07-20T14:00:00.000Z',
+    modality: 'presencial',
+    location: 'Oficina',
+    meeting_url: null,
+    notes: '',
+    attendee_ids: ['u1'],
     status: 'realizada',
   }
 
   it('cambiar la fecha de una reunión "realizada" y guardar envía status: "programada"', async () => {
     const user = userEvent.setup()
-    mockUpdateMeeting.mockResolvedValue({ data: { ...realizada, status: 'programada' }, error: null })
+    mockUpdateMeeting.mockResolvedValue({
+      data: { ...realizada, status: 'programada' },
+      error: null,
+    })
     renderModal({ meeting: realizada })
 
     const dateInput = document.querySelector('input[type="datetime-local"]')

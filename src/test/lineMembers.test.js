@@ -246,4 +246,39 @@ describe('withDerivedGeneralMembers', () => {
     expect(antes.find((l) => l.id === 'line-general').member_user_ids).toContain('u-x')
     expect(despues.find((l) => l.id === 'line-general').member_user_ids).not.toContain('u-x')
   })
+
+  describe('Alta Gerencia (is_management) vs Independientes (is_general)', () => {
+    const USERS_MGMT = [
+      { user_id: 'u-a', access_level: 2 }, // en line-1
+      { user_id: 'u-dir', access_level: 4 }, // sin línea → Alta Gerencia
+      { user_id: 'u-admin', access_level: 1, admin: true }, // sin línea, no nivel 4 → Independientes
+      { user_id: 'u-x', access_level: 2 }, // sin línea → Independientes
+    ]
+    const linesWithBoth = (extra = []) => [
+      { id: 'line-1', member_user_ids: ['u-a'] },
+      { id: 'line-general', is_general: true, member_user_ids: [] },
+      { id: 'line-management', is_management: true, member_user_ids: [] },
+      ...extra,
+    ]
+
+    it('reparte el pool sin línea: nivel 4 a Alta Gerencia, el resto a Independientes', () => {
+      const result = withDerivedGeneralMembers(linesWithBoth(), USERS_MGMT)
+      const general = result.find((l) => l.id === 'line-general')
+      const management = result.find((l) => l.id === 'line-management')
+      expect(management.member_user_ids).toEqual(['u-dir'])
+      expect(general.member_user_ids).toEqual(expect.arrayContaining(['u-admin', 'u-x']))
+      expect(general.member_user_ids).toHaveLength(2)
+    })
+
+    it('un nivel 4 que sí pertenece a una línea real no entra en Alta Gerencia', () => {
+      const users = [...USERS_MGMT, { user_id: 'u-dir2', access_level: 4 }]
+      const lines = [
+        { id: 'line-1', member_user_ids: ['u-a', 'u-dir2'] },
+        { id: 'line-general', is_general: true, member_user_ids: [] },
+        { id: 'line-management', is_management: true, member_user_ids: [] },
+      ]
+      const result = withDerivedGeneralMembers(lines, users)
+      expect(result.find((l) => l.id === 'line-management').member_user_ids).not.toContain('u-dir2')
+    })
+  })
 })

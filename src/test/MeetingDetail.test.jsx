@@ -10,7 +10,11 @@ import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
 
 const {
-  mockMarkMeetingHeld, mockUnmarkMeetingHeld, mockCancelMeeting, mockUpdateMeeting, mockDeleteMeeting,
+  mockMarkMeetingHeld,
+  mockUnmarkMeetingHeld,
+  mockCancelMeeting,
+  mockUpdateMeeting,
+  mockDeleteMeeting,
 } = vi.hoisted(() => ({
   mockMarkMeetingHeld: vi.fn(),
   mockUnmarkMeetingHeld: vi.fn(),
@@ -36,9 +40,17 @@ const EMPLOYEES = [
 
 // Fecha futura fija — no depende del reloj real ni cae en "vencida".
 const MEETING = {
-  id: 'm-1', title: 'Reunión con Pepsi', client_name: 'Pepsi', starts_at: '2099-01-15T14:00:00',
-  modality: 'presencial', location: 'Oficina MDN', meeting_url: null,
-  notes: 'Llevar la propuesta', attendee_ids: ['u1'], status: 'programada', created_by: 'u1',
+  id: 'm-1',
+  title: 'Reunión con Pepsi',
+  client_name: 'Pepsi',
+  starts_at: '2099-01-15T14:00:00',
+  modality: 'presencial',
+  location: 'Oficina MDN',
+  meeting_url: null,
+  notes: 'Llevar la propuesta',
+  attendee_ids: ['u1'],
+  status: 'programada',
+  created_by: 'u1',
 }
 
 function renderDetail(props = {}) {
@@ -52,7 +64,7 @@ function renderDetail(props = {}) {
       onDeleted={() => {}}
       onEdit={() => {}}
       {...props}
-    />
+    />,
   )
 }
 
@@ -70,6 +82,17 @@ describe('MeetingDetail — info de solo lectura', () => {
     expect(screen.getByText('Llevar la propuesta')).toBeInTheDocument()
   })
 
+  it('muestra la hora en formato 12h con A.M./P.M.', () => {
+    renderDetail()
+    expect(screen.getByText(/2:00 P\.M\./)).toBeInTheDocument()
+  })
+
+  it('con varias marcas, muestra "Clientes" y los nombres unidos con ·', () => {
+    renderDetail({ meeting: { ...MEETING, client_names: ['Pepsi', 'Pepsi Foods'] } })
+    expect(screen.getByText('Clientes')).toBeInTheDocument()
+    expect(screen.getByText('Pepsi · Pepsi Foods')).toBeInTheDocument()
+  })
+
   it('muestra a los participantes resueltos desde employees', () => {
     renderDetail()
     expect(screen.getByText('Ana García')).toBeInTheDocument()
@@ -77,7 +100,14 @@ describe('MeetingDetail — info de solo lectura', () => {
   })
 
   it('videollamada muestra el link como <a> en vez de "lugar"', () => {
-    renderDetail({ meeting: { ...MEETING, modality: 'videollamada', meeting_url: 'https://meet.example.com/x', location: null } })
+    renderDetail({
+      meeting: {
+        ...MEETING,
+        modality: 'videollamada',
+        meeting_url: 'https://meet.example.com/x',
+        location: null,
+      },
+    })
     const link = screen.getByRole('link', { name: 'https://meet.example.com/x' })
     expect(link).toHaveAttribute('href', 'https://meet.example.com/x')
   })
@@ -106,7 +136,10 @@ describe('MeetingDetail — info de solo lectura', () => {
 describe('MeetingDetail — acciones rápidas (con canManage)', () => {
   it('"Marcar realizada" marca al instante (un solo click, sin esperar ningún link)', async () => {
     const user = userEvent.setup()
-    mockMarkMeetingHeld.mockResolvedValue({ data: { ...MEETING, status: 'realizada' }, error: null })
+    mockMarkMeetingHeld.mockResolvedValue({
+      data: { ...MEETING, status: 'realizada' },
+      error: null,
+    })
     const onSaved = vi.fn()
     const onClose = vi.fn()
     renderDetail({ onSaved, onClose })
@@ -121,52 +154,142 @@ describe('MeetingDetail — acciones rápidas (con canManage)', () => {
 
   it('el panel de minuta que aparece tras marcar guarda el link vía updateMeeting, sin haber bloqueado el marcado', async () => {
     const user = userEvent.setup()
-    mockMarkMeetingHeld.mockResolvedValue({ data: { ...MEETING, status: 'realizada' }, error: null })
-    mockUpdateMeeting.mockResolvedValue({ data: { ...MEETING, status: 'realizada', minuta_url: 'https://drive.google.com/x' }, error: null })
+    mockMarkMeetingHeld.mockResolvedValue({
+      data: { ...MEETING, status: 'realizada' },
+      error: null,
+    })
+    mockUpdateMeeting.mockResolvedValue({
+      data: { ...MEETING, status: 'realizada', minuta_url: 'https://drive.google.com/x' },
+      error: null,
+    })
     const onSaved = vi.fn()
     renderDetail({ onSaved })
     await user.click(screen.getByRole('button', { name: 'Marcar realizada' }))
-    await waitFor(() => expect(screen.getByLabelText('Link de la minuta (Google Drive)')).toBeInTheDocument())
-    await user.type(screen.getByLabelText('Link de la minuta (Google Drive)'), 'https://drive.google.com/x')
+    await waitFor(() =>
+      expect(screen.getByLabelText('Link de la minuta (Google Drive)')).toBeInTheDocument(),
+    )
+    await user.type(
+      screen.getByLabelText('Link de la minuta (Google Drive)'),
+      'https://drive.google.com/x',
+    )
     await user.click(screen.getByRole('button', { name: 'Confirmar' }))
-    await waitFor(() => expect(mockUpdateMeeting).toHaveBeenCalledWith('m-1', { minuta_url: 'https://drive.google.com/x' }))
-    expect(onSaved).toHaveBeenLastCalledWith({ ...MEETING, status: 'realizada', minuta_url: 'https://drive.google.com/x' })
+    await waitFor(() =>
+      expect(mockUpdateMeeting).toHaveBeenCalledWith('m-1', {
+        minuta_url: 'https://drive.google.com/x',
+        minuta_text: '',
+      }),
+    )
+    expect(onSaved).toHaveBeenLastCalledWith({
+      ...MEETING,
+      status: 'realizada',
+      minuta_url: 'https://drive.google.com/x',
+    })
+  })
+
+  it('el panel de minuta permite guardar link y resumen de texto juntos', async () => {
+    const user = userEvent.setup()
+    mockMarkMeetingHeld.mockResolvedValue({
+      data: { ...MEETING, status: 'realizada' },
+      error: null,
+    })
+    mockUpdateMeeting.mockResolvedValue({
+      data: {
+        ...MEETING,
+        status: 'realizada',
+        minuta_url: 'https://drive.google.com/x',
+        minuta_text: 'Se acordó X',
+      },
+      error: null,
+    })
+    const onSaved = vi.fn()
+    renderDetail({ onSaved })
+    await user.click(screen.getByRole('button', { name: 'Marcar realizada' }))
+    await waitFor(() =>
+      expect(screen.getByLabelText('Resumen de la reunión (opcional)')).toBeInTheDocument(),
+    )
+    await user.type(
+      screen.getByLabelText('Link de la minuta (Google Drive)'),
+      'https://drive.google.com/x',
+    )
+    await user.type(screen.getByLabelText('Resumen de la reunión (opcional)'), 'Se acordó X')
+    await user.click(screen.getByRole('button', { name: 'Confirmar' }))
+    await waitFor(() =>
+      expect(mockUpdateMeeting).toHaveBeenCalledWith('m-1', {
+        minuta_url: 'https://drive.google.com/x',
+        minuta_text: 'Se acordó X',
+      }),
+    )
   })
 
   it('una reunión "realizada" muestra "Desmarcar realizada" y desmarca directo, sin pedir nada', async () => {
     const user = userEvent.setup()
-    mockUnmarkMeetingHeld.mockResolvedValue({ data: { ...MEETING, status: 'programada' }, error: null })
+    mockUnmarkMeetingHeld.mockResolvedValue({
+      data: { ...MEETING, status: 'programada' },
+      error: null,
+    })
     renderDetail({ meeting: { ...MEETING, status: 'realizada' } })
     await user.click(screen.getByRole('button', { name: 'Desmarcar realizada' }))
     await waitFor(() => expect(mockUnmarkMeetingHeld).toHaveBeenCalledWith('m-1'))
     expect(mockMarkMeetingHeld).not.toHaveBeenCalled()
   })
 
-  it('una reunión "realizada" muestra el link de la minuta, o "Sin minuta" si no tiene', () => {
-    renderDetail({ meeting: { ...MEETING, status: 'realizada', minuta_url: 'https://drive.google.com/abc' } })
-    expect(screen.getByRole('link', { name: 'https://drive.google.com/abc' })).toHaveAttribute('href', 'https://drive.google.com/abc')
+  it('una reunión "realizada" muestra el link y el resumen de la minuta, o "Sin minuta" si no tiene ninguno', () => {
+    renderDetail({
+      meeting: {
+        ...MEETING,
+        status: 'realizada',
+        minuta_url: 'https://drive.google.com/abc',
+        minuta_text: 'Se acordó X',
+      },
+    })
+    expect(screen.getByRole('link', { name: 'https://drive.google.com/abc' })).toHaveAttribute(
+      'href',
+      'https://drive.google.com/abc',
+    )
+    expect(screen.getByText('Se acordó X')).toBeInTheDocument()
 
-    const { unmount } = renderDetail({ meeting: { ...MEETING, status: 'realizada', minuta_url: null } })
+    const { unmount } = renderDetail({
+      meeting: { ...MEETING, status: 'realizada', minuta_url: null, minuta_text: null },
+    })
     expect(screen.getByText('Sin minuta')).toBeInTheDocument()
     unmount()
   })
 
-  it('"Editar link"/"Agregar link" de la minuta abre el panel pre-cargado con el link existente', async () => {
+  it('"Editar minuta"/"Agregar minuta" abre el panel pre-cargado con el link y el texto existentes', async () => {
     const user = userEvent.setup()
-    mockUpdateMeeting.mockResolvedValue({ data: { ...MEETING, status: 'realizada', minuta_url: 'https://drive.google.com/nuevo' }, error: null })
-    renderDetail({ meeting: { ...MEETING, status: 'realizada', minuta_url: 'https://drive.google.com/viejo' } })
-    await user.click(screen.getByRole('button', { name: 'Editar link' }))
+    mockUpdateMeeting.mockResolvedValue({
+      data: { ...MEETING, status: 'realizada', minuta_url: 'https://drive.google.com/nuevo' },
+      error: null,
+    })
+    renderDetail({
+      meeting: {
+        ...MEETING,
+        status: 'realizada',
+        minuta_url: 'https://drive.google.com/viejo',
+        minuta_text: 'Resumen viejo',
+      },
+    })
+    await user.click(screen.getByRole('button', { name: 'Editar minuta' }))
     const input = screen.getByLabelText('Link de la minuta (Google Drive)')
     expect(input).toHaveValue('https://drive.google.com/viejo')
+    expect(screen.getByLabelText('Resumen de la reunión (opcional)')).toHaveValue('Resumen viejo')
     await user.clear(input)
     await user.type(input, 'https://drive.google.com/nuevo')
     await user.click(screen.getByRole('button', { name: 'Confirmar' }))
-    await waitFor(() => expect(mockUpdateMeeting).toHaveBeenCalledWith('m-1', { minuta_url: 'https://drive.google.com/nuevo' }))
+    await waitFor(() =>
+      expect(mockUpdateMeeting).toHaveBeenCalledWith('m-1', {
+        minuta_url: 'https://drive.google.com/nuevo',
+        minuta_text: 'Resumen viejo',
+      }),
+    )
   })
 
   it('"Reagendar" abre el panel de fecha; "Confirmar" envía starts_at + status: programada', async () => {
     const user = userEvent.setup()
-    mockUpdateMeeting.mockResolvedValue({ data: { ...MEETING, starts_at: '2099-02-01T10:00:00.000Z' }, error: null })
+    mockUpdateMeeting.mockResolvedValue({
+      data: { ...MEETING, starts_at: '2099-02-01T10:00:00.000Z' },
+      error: null,
+    })
     renderDetail()
     expect(screen.queryByLabelText('Nueva fecha y hora')).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Reagendar' }))

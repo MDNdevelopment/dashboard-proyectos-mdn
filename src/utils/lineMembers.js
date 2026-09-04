@@ -92,18 +92,28 @@ export function visibleLinesForUser(lines, userProfile, opts) {
 }
 
 /**
- * Rellena member_user_ids de la línea "Independientes" (is_general) con los empleados
- * que no pertenecen a ninguna línea real. Es una derivación pura (no se persiste en
- * metric_line_members): se recalcula cada vez que se cargan líneas/usuarios, así que
- * se auto-mantiene al mover empleados entre líneas.
+ * Rellena member_user_ids de "Independientes" (is_general) y "Alta Gerencia"
+ * (is_management) con los empleados que no pertenecen a ninguna línea real, repartidos
+ * por nivel de acceso: dirección (access_level >= 4) va a Alta Gerencia, el resto a
+ * Independientes — así los independientes no ven las tareas de dirección. Es una
+ * derivación pura (no se persiste en metric_line_members): se recalcula cada vez que se
+ * cargan líneas/usuarios, así que se auto-mantiene al mover empleados entre líneas o
+ * cambiarles el nivel de acceso.
  *
- * @param {Array} lines - Líneas cargadas (incluye la fila is_general si existe)
- * @param {Array} users - Empleados de la empresa (con user_id, deleted_at)
- * @returns {Array} Copia de lines con member_user_ids de la línea general recalculado
+ * @param {Array} lines - Líneas cargadas (incluye las filas is_general/is_management si existen)
+ * @param {Array} users - Empleados de la empresa (con user_id, access_level, deleted_at)
+ * @returns {Array} Copia de lines con member_user_ids de ambas líneas ocultas recalculado
  */
 export function withDerivedGeneralMembers(lines, users) {
-  const unassignedIds = crossLineUserIds(users, lines)
-  return lines.map((l) => (l.is_general ? { ...l, member_user_ids: unassignedIds } : l))
+  const unassignedIds = new Set(crossLineUserIds(users, lines))
+  const byId = new Map((users ?? []).map((u) => [u.user_id, u]))
+  const managementIds = [...unassignedIds].filter((id) => (byId.get(id)?.access_level ?? 0) >= 4)
+  const generalIds = [...unassignedIds].filter((id) => (byId.get(id)?.access_level ?? 0) < 4)
+  return lines.map((l) => {
+    if (l.is_management) return { ...l, member_user_ids: managementIds }
+    if (l.is_general) return { ...l, member_user_ids: generalIds }
+    return l
+  })
 }
 
 /**

@@ -299,11 +299,13 @@ export default function TaskModal({
               </label>
               {(() => {
                 const selectedTeam = teams.find((t) => t.id === form.team_id)
-                // El grupo "Independientes" no tiene clientes propios: al elegirlo se
-                // muestran todos los clientes de la empresa (no hay línea que los acote).
-                const lineClients = selectedTeam?.is_general
-                  ? clients
-                  : clients.filter((c) => c.line_id === form.team_id)
+                // Los grupos "Independientes" y "Alta Gerencia" no tienen clientes propios:
+                // al elegirlos se muestran todos los clientes de la empresa (no hay línea
+                // que los acote).
+                const lineClients =
+                  selectedTeam?.is_general || selectedTeam?.is_management
+                    ? clients
+                    : clients.filter((c) => c.line_id === form.team_id)
                 // Tarea heredada: tiene nombre de texto pero sin client_id (pre-migración)
                 const hasLegacyName = form.client && !form.client_id
                 const clientNotInLine =

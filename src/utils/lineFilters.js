@@ -78,19 +78,23 @@ export function assignableUsers(users, team, allLines, currentUserId = null) {
 /**
  * Aplana el resultado de assignableUsers en una sola lista para pasar a pickers que no
  * soportan grupos (UserPickerSingle/Multi ordenan alfabéticamente y no agrupan). A los
- * usuarios del pool transversal se les anota el puesto con el sufijo "Independiente" para
- * que se distingan en la lista aunque queden intercalados con los miembros de la línea.
+ * usuarios del pool transversal se les anota el puesto con el sufijo "Independiente" (o
+ * "Alta gerencia" para access_level >= 4, ver withDerivedGeneralMembers en lineMembers.js)
+ * para que se distingan en la lista aunque queden intercalados con los miembros de la línea.
  *
  * @param {{ members: Array, crossLine: Array }} assignable - resultado de assignableUsers
  * @returns {Array}
  */
 export function flattenAssignable({ members, crossLine }) {
-  const taggedCrossLine = crossLine.map((u) => ({
-    ...u,
-    position: u.position?.position_name
-      ? { ...u.position, position_name: `${u.position.position_name} · Independiente` }
-      : { position_name: 'Independiente' },
-  }))
+  const taggedCrossLine = crossLine.map((u) => {
+    const tag = (u.access_level ?? 0) >= 4 ? 'Alta gerencia' : 'Independiente'
+    return {
+      ...u,
+      position: u.position?.position_name
+        ? { ...u.position, position_name: `${u.position.position_name} · ${tag}` }
+        : { position_name: tag },
+    }
+  })
   return [...members, ...taggedCrossLine]
 }
 

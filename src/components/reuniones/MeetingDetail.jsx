@@ -1,19 +1,26 @@
-import { useState } from "react";
-import { format, isBefore, startOfDay } from "date-fns";
-import { es } from "date-fns/locale";
-import { markMeetingHeld, unmarkMeetingHeld, cancelMeeting, updateMeeting, deleteMeeting } from "./meetingsApi";
+import { useState } from 'react'
+import { format, isBefore, startOfDay } from 'date-fns'
+import { es } from 'date-fns/locale'
+import { fmtTime12 } from '../../utils/formatDate'
+import {
+  markMeetingHeld,
+  unmarkMeetingHeld,
+  cancelMeeting,
+  updateMeeting,
+  deleteMeeting,
+} from './meetingsApi'
 
 const STATUS_META = {
-  programada: { label: "Programada", className: "bg-blue-50 text-blue-700" },
-  realizada: { label: "Realizada", className: "bg-green-100 text-green-800" },
-  cancelada: { label: "Cancelada", className: "bg-[#f3f3f3] text-[#999]" },
-};
+  programada: { label: 'Programada', className: 'bg-blue-50 text-blue-700' },
+  realizada: { label: 'Realizada', className: 'bg-green-100 text-green-800' },
+  cancelada: { label: 'Cancelada', className: 'bg-[#f3f3f3] text-[#999]' },
+}
 
 function fullName(u) {
-  return `${u?.first_name ?? ""} ${u?.last_name ?? ""}`.trim();
+  return `${u?.first_name ?? ''} ${u?.last_name ?? ''}`.trim()
 }
 function initials(u) {
-  return `${u?.first_name?.[0] ?? ""}${u?.last_name?.[0] ?? ""}`.toUpperCase();
+  return `${u?.first_name?.[0] ?? ''}${u?.last_name?.[0] ?? ''}`.toUpperCase()
 }
 
 /**
@@ -22,91 +29,124 @@ function initials(u) {
  * si `canManage`, las acciones de estado (marcar realizada, reagendar, cancelar) más
  * Editar/Eliminar. El formulario de edición (MeetingModal) queda solo con los campos.
  */
-export default function MeetingDetail({ meeting, employees, onClose, onSaved, onDeleted, onEdit, canManage }) {
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState(null);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [reschedulePanelOpen, setReschedulePanelOpen] = useState(false);
-  const [rescheduleDate, setRescheduleDate] = useState(() => toLocalInputValue(meeting.starts_at));
-  const [minutaPanelOpen, setMinutaPanelOpen] = useState(false);
-  const [minutaUrl, setMinutaUrl] = useState(meeting.minuta_url ?? "");
+export default function MeetingDetail({
+  meeting,
+  employees,
+  onClose,
+  onSaved,
+  onDeleted,
+  onEdit,
+  canManage,
+}) {
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState(null)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [reschedulePanelOpen, setReschedulePanelOpen] = useState(false)
+  const [rescheduleDate, setRescheduleDate] = useState(() => toLocalInputValue(meeting.starts_at))
+  const [minutaPanelOpen, setMinutaPanelOpen] = useState(false)
+  const [minutaUrl, setMinutaUrl] = useState(meeting.minuta_url ?? '')
+  const [minutaText, setMinutaText] = useState(meeting.minuta_text ?? '')
 
-  const isPast = isBefore(startOfDay(new Date(meeting.starts_at)), startOfDay(new Date()));
-  const isOverdueUnmarked = meeting.status === "programada" && isPast;
+  const isPast = isBefore(startOfDay(new Date(meeting.starts_at)), startOfDay(new Date()))
+  const isOverdueUnmarked = meeting.status === 'programada' && isPast
   const statusMeta = isOverdueUnmarked
-    ? { label: "Vencida sin marcar", className: "bg-red-100 text-red-700" }
-    : STATUS_META[meeting.status] ?? STATUS_META.programada;
+    ? { label: 'Vencida sin marcar', className: 'bg-red-100 text-red-700' }
+    : (STATUS_META[meeting.status] ?? STATUS_META.programada)
 
-  const attendees = employees.filter((u) => (meeting.attendee_ids ?? []).includes(u.user_id));
-  const creator = employees.find((u) => u.user_id === meeting.created_by);
+  const attendees = employees.filter((u) => (meeting.attendee_ids ?? []).includes(u.user_id))
+  const creator = employees.find((u) => u.user_id === meeting.created_by)
 
   /** Desmarcar es directo (sin pedir nada). */
   async function handleUnmarkHeld() {
-    if (submitting) return;
-    setSubmitting(true);
-    const { data, error: err } = await unmarkMeetingHeld(meeting.id);
-    setSubmitting(false);
-    if (err) { setError("Error al actualizar el estado de la reunión."); return; }
-    onSaved(data);
+    if (submitting) return
+    setSubmitting(true)
+    const { data, error: err } = await unmarkMeetingHeld(meeting.id)
+    setSubmitting(false)
+    if (err) {
+      setError('Error al actualizar el estado de la reunión.')
+      return
+    }
+    onSaved(data)
   }
 
   /** Marcar como realizada es inmediato (un solo click, sin esperar ningún link) — el
    * panel de minuta se abre después, ya marcada, como algo opcional que se puede completar
    * ahí mismo o más tarde. El link nunca bloquea el marcado. */
   async function handleMarkHeld() {
-    if (submitting) return;
-    setSubmitting(true);
-    const { data, error: err } = await markMeetingHeld(meeting.id);
-    setSubmitting(false);
-    if (err) { setError("Error al actualizar el estado de la reunión."); return; }
-    setMinutaPanelOpen(true);
-    onSaved(data);
+    if (submitting) return
+    setSubmitting(true)
+    const { data, error: err } = await markMeetingHeld(meeting.id)
+    setSubmitting(false)
+    if (err) {
+      setError('Error al actualizar el estado de la reunión.')
+      return
+    }
+    setMinutaPanelOpen(true)
+    onSaved(data)
   }
 
-  /** Guarda/edita el link de la minuta de una reunión ya marcada como realizada. */
+  /** Guarda/edita la minuta (link y/o resumen corto) de una reunión ya marcada como realizada. */
   async function handleConfirmMinuta() {
-    if (submitting) return;
-    setSubmitting(true);
-    const { data, error: err } = await updateMeeting(meeting.id, { minuta_url: minutaUrl });
-    setSubmitting(false);
-    if (err) { setError("Error al guardar el link de la minuta."); return; }
-    setMinutaPanelOpen(false);
-    onSaved(data);
+    if (submitting) return
+    setSubmitting(true)
+    const { data, error: err } = await updateMeeting(meeting.id, {
+      minuta_url: minutaUrl,
+      minuta_text: minutaText,
+    })
+    setSubmitting(false)
+    if (err) {
+      setError('Error al guardar la minuta.')
+      return
+    }
+    setMinutaPanelOpen(false)
+    onSaved(data)
   }
 
   async function handleReschedule() {
-    if (!rescheduleDate || submitting) return;
-    setSubmitting(true);
+    if (!rescheduleDate || submitting) return
+    setSubmitting(true)
     const { data, error: err } = await updateMeeting(meeting.id, {
       starts_at: new Date(rescheduleDate).toISOString(),
-      status: "programada",
-    });
-    setSubmitting(false);
-    if (err) { setError("Error al reagendar la reunión."); return; }
-    setReschedulePanelOpen(false);
-    onSaved(data);
+      status: 'programada',
+    })
+    setSubmitting(false)
+    if (err) {
+      setError('Error al reagendar la reunión.')
+      return
+    }
+    setReschedulePanelOpen(false)
+    onSaved(data)
   }
 
   async function handleCancel() {
-    if (submitting) return;
-    setSubmitting(true);
-    const { data, error: err } = await cancelMeeting(meeting.id);
-    setSubmitting(false);
-    if (err) { setError("Error al cancelar la reunión."); return; }
-    onSaved(data);
+    if (submitting) return
+    setSubmitting(true)
+    const { data, error: err } = await cancelMeeting(meeting.id)
+    setSubmitting(false)
+    if (err) {
+      setError('Error al cancelar la reunión.')
+      return
+    }
+    onSaved(data)
   }
 
   async function handleDelete() {
-    if (!confirmingDelete) { setConfirmingDelete(true); return; }
-    setSubmitting(true);
-    const { error: err } = await deleteMeeting(meeting.id);
-    setSubmitting(false);
-    if (err) { setError("Error al eliminar la reunión."); return; }
-    onDeleted(meeting.id);
-    onClose();
+    if (!confirmingDelete) {
+      setConfirmingDelete(true)
+      return
+    }
+    setSubmitting(true)
+    const { error: err } = await deleteMeeting(meeting.id)
+    setSubmitting(false)
+    if (err) {
+      setError('Error al eliminar la reunión.')
+      return
+    }
+    onDeleted(meeting.id)
+    onClose()
   }
 
-  const labelClass = "font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-0.5";
+  const labelClass = 'font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-0.5'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-black/30">
@@ -115,12 +155,21 @@ export default function MeetingDetail({ meeting, employees, onClose, onSaved, on
         <div className="flex-shrink-0 px-6 pt-6 pb-4 border-b border-[#ece9df] flex items-start justify-between gap-4">
           <div className="flex-1">
             <h2 className="text-[19px] font-bold text-[#111] leading-snug mb-2">{meeting.title}</h2>
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold ${statusMeta.className}`}>
+            <span
+              className={`inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold ${statusMeta.className}`}
+            >
               {statusMeta.label}
             </span>
           </div>
           <button onClick={onClose} className="text-[#999] hover:text-[#111] transition-colors p-1">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
               <path d="M2 2l12 12M14 2L2 14" strokeLinecap="round" />
             </svg>
           </button>
@@ -136,27 +185,45 @@ export default function MeetingDetail({ meeting, employees, onClose, onSaved, on
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 text-[14px]">
             <div>
-              <p className={labelClass}>Cliente</p>
-              <p className="text-[#333] font-medium">{meeting.client_name ?? "Sin cliente"}</p>
+              <p className={labelClass}>
+                {(meeting.client_names ?? []).filter(Boolean).length > 1 ? 'Clientes' : 'Cliente'}
+              </p>
+              <p className="text-[#333] font-medium">
+                {(meeting.client_names ?? []).filter(Boolean).length > 0
+                  ? meeting.client_names.filter(Boolean).join(' · ')
+                  : (meeting.client_name ?? 'Sin cliente')}
+              </p>
             </div>
             <div>
               <p className={labelClass}>Fecha y hora</p>
               <p className="text-[#333] font-medium capitalize">
-                {format(new Date(meeting.starts_at), "EEEE d 'de' MMMM, HH:mm", { locale: es })}
+                {format(new Date(meeting.starts_at), "EEEE d 'de' MMMM", { locale: es })},{' '}
+                {fmtTime12(meeting.starts_at)}
               </p>
             </div>
             <div>
               <p className={labelClass}>Modalidad</p>
-              <p className="text-[#333]">{meeting.modality === "videollamada" ? "Videollamada" : "Presencial"}</p>
+              <p className="text-[#333]">
+                {meeting.modality === 'videollamada' ? 'Videollamada' : 'Presencial'}
+              </p>
             </div>
             <div>
-              <p className={labelClass}>{meeting.modality === "videollamada" ? "Link" : "Lugar"}</p>
-              {meeting.modality === "videollamada" && meeting.meeting_url ? (
-                <a href={meeting.meeting_url} target="_blank" rel="noreferrer" className="text-[#111] underline break-all">
+              <p className={labelClass}>{meeting.modality === 'videollamada' ? 'Link' : 'Lugar'}</p>
+              {meeting.modality === 'videollamada' && meeting.meeting_url ? (
+                <a
+                  href={meeting.meeting_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[#111] underline break-all"
+                >
                   {meeting.meeting_url}
                 </a>
               ) : (
-                <p className="text-[#333]">{meeting.modality === "videollamada" ? meeting.meeting_url || "—" : meeting.location || "—"}</p>
+                <p className="text-[#333]">
+                  {meeting.modality === 'videollamada'
+                    ? meeting.meeting_url || '—'
+                    : meeting.location || '—'}
+                </p>
               )}
             </div>
           </div>
@@ -168,8 +235,14 @@ export default function MeetingDetail({ meeting, employees, onClose, onSaved, on
             ) : (
               <div className="flex flex-wrap gap-2">
                 {attendees.map((u) => (
-                  <div key={u.user_id} className="flex items-center gap-1.5 pl-1.5 pr-2.5 py-1 rounded-full bg-[#faf9f5] border border-[#ece9df]">
-                    <span aria-hidden="true" className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 overflow-hidden bg-[#eee]">
+                  <div
+                    key={u.user_id}
+                    className="flex items-center gap-1.5 pl-1.5 pr-2.5 py-1 rounded-full bg-[#faf9f5] border border-[#ece9df]"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 overflow-hidden bg-[#eee]"
+                    >
                       {u.avatar_url ? (
                         <img src={u.avatar_url} alt="" className="w-full h-full object-cover" />
                       ) : (
@@ -183,27 +256,39 @@ export default function MeetingDetail({ meeting, employees, onClose, onSaved, on
             )}
           </div>
 
-          {meeting.status === "realizada" && (
+          {meeting.status === 'realizada' && (
             <div className="mb-4">
               <p className={`${labelClass} mb-1.5`}>Minuta</p>
-              <div className="flex items-center gap-2 flex-wrap">
-                {meeting.minuta_url ? (
-                  <a href={meeting.minuta_url} target="_blank" rel="noreferrer" className="text-[14px] text-[#111] underline break-all">
-                    {meeting.minuta_url}
-                  </a>
-                ) : (
-                  <p className="text-[14px] text-[#999]">Sin minuta</p>
-                )}
-                {canManage && !minutaPanelOpen && (
-                  <button
-                    type="button"
-                    onClick={() => setMinutaPanelOpen(true)}
-                    className="text-[12px] font-semibold text-[#888] hover:text-[#111] transition-colors"
-                  >
-                    {meeting.minuta_url ? "Editar link" : "Agregar link"}
-                  </button>
-                )}
-              </div>
+              {meeting.minuta_url || meeting.minuta_text ? (
+                <div className="flex flex-col gap-1.5">
+                  {meeting.minuta_url && (
+                    <a
+                      href={meeting.minuta_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[14px] text-[#111] underline break-all"
+                    >
+                      {meeting.minuta_url}
+                    </a>
+                  )}
+                  {meeting.minuta_text && (
+                    <p className="text-[14px] text-[#444] whitespace-pre-wrap leading-relaxed bg-[#f5f3eb] rounded-xl p-3">
+                      {meeting.minuta_text}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-[14px] text-[#999]">Sin minuta</p>
+              )}
+              {canManage && !minutaPanelOpen && (
+                <button
+                  type="button"
+                  onClick={() => setMinutaPanelOpen(true)}
+                  className="text-[12px] font-semibold text-[#888] hover:text-[#111] transition-colors mt-1.5"
+                >
+                  {meeting.minuta_url || meeting.minuta_text ? 'Editar minuta' : 'Agregar minuta'}
+                </button>
+              )}
             </div>
           )}
 
@@ -224,11 +309,13 @@ export default function MeetingDetail({ meeting, employees, onClose, onSaved, on
             <>
               {/* Acciones rápidas de estado */}
               <div className="flex items-center justify-center flex-wrap gap-1.5 mt-2 mb-4">
-                {meeting.status !== "cancelada" && (
+                {meeting.status !== 'cancelada' && (
                   <ActionIcon
-                    onClick={meeting.status === "realizada" ? handleUnmarkHeld : handleMarkHeld}
+                    onClick={meeting.status === 'realizada' ? handleUnmarkHeld : handleMarkHeld}
                     disabled={submitting}
-                    label={meeting.status === "realizada" ? "Desmarcar realizada" : "Marcar realizada"}
+                    label={
+                      meeting.status === 'realizada' ? 'Desmarcar realizada' : 'Marcar realizada'
+                    }
                     colorClass="text-green-700 hover:bg-green-50"
                   >
                     <path d="M3 8l3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
@@ -244,7 +331,7 @@ export default function MeetingDetail({ meeting, employees, onClose, onSaved, on
                   <path d="M1.5 6h13" strokeLinecap="round" />
                   <path d="M5 1v3M11 1v3" strokeLinecap="round" />
                 </ActionIcon>
-                {meeting.status !== "cancelada" && (
+                {meeting.status !== 'cancelada' && (
                   <ActionIcon
                     onClick={handleCancel}
                     disabled={submitting}
@@ -259,7 +346,9 @@ export default function MeetingDetail({ meeting, employees, onClose, onSaved, on
               {reschedulePanelOpen && (
                 <div className="flex items-end gap-2 mb-4 bg-[#fdf8ec] border border-[#f0e3b8] rounded-xl p-3">
                   <div className="flex-1">
-                    <label htmlFor="reschedule-date" className={labelClass}>Nueva fecha y hora</label>
+                    <label htmlFor="reschedule-date" className={labelClass}>
+                      Nueva fecha y hora
+                    </label>
                     <input
                       id="reschedule-date"
                       type="datetime-local"
@@ -280,9 +369,11 @@ export default function MeetingDetail({ meeting, employees, onClose, onSaved, on
               )}
 
               {minutaPanelOpen && (
-                <div className="flex items-end gap-2 mb-4 bg-green-50 border border-green-200 rounded-xl p-3">
-                  <div className="flex-1">
-                    <label htmlFor="minuta-url" className={labelClass}>Link de la minuta (Google Drive)</label>
+                <div className="flex flex-col gap-2 mb-4 bg-green-50 border border-green-200 rounded-xl p-3">
+                  <div>
+                    <label htmlFor="minuta-url" className={labelClass}>
+                      Link de la minuta (Google Drive)
+                    </label>
                     <input
                       id="minuta-url"
                       type="url"
@@ -292,11 +383,24 @@ export default function MeetingDetail({ meeting, employees, onClose, onSaved, on
                       onChange={(e) => setMinutaUrl(e.target.value)}
                     />
                   </div>
+                  <div>
+                    <label htmlFor="minuta-text" className={labelClass}>
+                      Resumen de la reunión (opcional)
+                    </label>
+                    <textarea
+                      id="minuta-text"
+                      rows={4}
+                      placeholder="Qué se acordó, próximos pasos…"
+                      className="input-base w-full resize-none"
+                      value={minutaText}
+                      onChange={(e) => setMinutaText(e.target.value)}
+                    />
+                  </div>
                   <button
                     type="button"
                     onClick={handleConfirmMinuta}
                     disabled={submitting}
-                    className="bg-[#111] text-white text-[14px] font-bold px-3.5 py-2.5 rounded-xl hover:bg-[#222] transition-colors disabled:opacity-50 flex-shrink-0"
+                    className="self-end bg-[#111] text-white text-[14px] font-bold px-3.5 py-2.5 rounded-xl hover:bg-[#222] transition-colors disabled:opacity-50"
                   >
                     Confirmar
                   </button>
@@ -315,11 +419,11 @@ export default function MeetingDetail({ meeting, employees, onClose, onSaved, on
                   disabled={submitting}
                   className={`flex-1 py-2.5 rounded-xl text-[15px] font-bold transition-colors disabled:opacity-50 ${
                     confirmingDelete
-                      ? "bg-red-600 text-white hover:bg-red-700"
-                      : "border border-[#e0ddd4] text-[#555] hover:bg-[#f5f3eb]"
+                      ? 'bg-red-600 text-white hover:bg-red-700'
+                      : 'border border-[#e0ddd4] text-[#555] hover:bg-[#f5f3eb]'
                   }`}
                 >
-                  {submitting ? "Eliminando..." : confirmingDelete ? "¿Confirmar?" : "Eliminar"}
+                  {submitting ? 'Eliminando...' : confirmingDelete ? '¿Confirmar?' : 'Eliminar'}
                 </button>
                 {confirmingDelete && (
                   <button
@@ -335,7 +439,7 @@ export default function MeetingDetail({ meeting, employees, onClose, onSaved, on
         </div>
       </div>
     </div>
-  );
+  )
 }
 
 /** Botón de acción con ícono SVG de trazo fino + label visible (consistente con el resto
@@ -349,17 +453,25 @@ function ActionIcon({ onClick, disabled, label, colorClass, children }) {
       title={label}
       className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[13px] font-semibold transition-colors disabled:opacity-40 ${colorClass}`}
     >
-      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" className="flex-shrink-0">
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        className="flex-shrink-0"
+      >
         {children}
       </svg>
       {label}
     </button>
-  );
+  )
 }
 
 /** Convierte un ISO string a formato local "YYYY-MM-DDTHH:mm" para el input datetime-local. */
 function toLocalInputValue(value) {
-  const d = value ? new Date(value) : new Date();
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const d = value ? new Date(value) : new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }

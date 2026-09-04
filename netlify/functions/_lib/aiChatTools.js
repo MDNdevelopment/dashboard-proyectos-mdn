@@ -492,7 +492,7 @@ export function misReuniones(args, dataset) {
       const d = new Date(m.starts_at)
       return {
         titulo: m.title ?? '(sin título)',
-        cliente: m.client_name ?? null,
+        cliente: (m.client_names ?? []).filter(Boolean).join(', ') || m.client_name || null,
         linea: lineName(m.line_id, dataset),
         fecha: dateKey(d),
         hora: timeKey(d),

@@ -15,6 +15,7 @@ import {
   loadCompanyUsers,
 } from '../components/metricas/metricsApi'
 import { loadMeetings } from '../components/reuniones/meetingsApi'
+import { fmtTime12 } from '../utils/formatDate'
 import { activeEmployees } from '../lib/employees'
 import { calcTotal, sumScore, monthLineScore } from '../utils/metricsScore'
 import { calcFinanzas } from '../utils/metricsFinance'
@@ -336,8 +337,6 @@ export default function HomePage() {
   const [calDay, setCalDay] = useState(null)
 
   const isDirector = userProfile?.access_level >= 4 || userProfile?.admin === true
-  // A nivel 4 no se le asignan tareas directamente, solo se le pone como apoyo de dirección.
-  const isLevel4 = userProfile?.access_level >= 4
   // Nivel 3 no-admin: lidera una línea, ve tareas y salud de su línea (pero no el resumen de empresa).
   const isLineLead = userProfile?.access_level === 3 && !isDirector
   const showTareas = can('tareas')
@@ -584,26 +583,22 @@ export default function HomePage() {
               </h2>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {!isLevel4 && (
-                <>
-                  <KpiCard
-                    label="Asignadas activas"
-                    value={loadingTasks ? '—' : myTasks.length}
-                    icon={ICON_ASSIGNED}
-                    to={`/tareas?view=base&assignee=${myUserId}`}
-                    linkLabel="Ver mis tareas"
-                  />
-                  <KpiCard
-                    label="Atrasadas"
-                    value={loadingTasks ? '—' : myLateTasks.length}
-                    accent={myLateTasks.length > 0 ? '#E14848' : '#111'}
-                    icon={ICON_LATE}
-                    iconColor={myLateTasks.length > 0 ? '#E14848' : '#FFB800'}
-                    to={`/tareas?view=base&assignee=${myUserId}&fAlert=late`}
-                    linkLabel="Ver atrasadas"
-                  />
-                </>
-              )}
+              <KpiCard
+                label="Asignadas activas"
+                value={loadingTasks ? '—' : myTasks.length}
+                icon={ICON_ASSIGNED}
+                to={`/tareas?view=base&assignee=${myUserId}`}
+                linkLabel="Ver mis tareas"
+              />
+              <KpiCard
+                label="Atrasadas"
+                value={loadingTasks ? '—' : myLateTasks.length}
+                accent={myLateTasks.length > 0 ? '#E14848' : '#111'}
+                icon={ICON_LATE}
+                iconColor={myLateTasks.length > 0 ? '#E14848' : '#FFB800'}
+                to={`/tareas?view=base&assignee=${myUserId}&fAlert=late`}
+                linkLabel="Ver atrasadas"
+              />
               {isDirector && (
                 <KpiCard
                   label="Apoyo de dirección"
@@ -660,16 +655,22 @@ export default function HomePage() {
                       <p className="text-[13.5px] font-bold text-[#111] leading-snug truncate">
                         {m.title}
                       </p>
-                      {/* Cliente: slot de altura fija, invisible si no aplica, para no correr el resto del contenido. */}
+                      {/* Cliente(s): slot de altura fija, invisible si no aplica, para no correr el resto del contenido.
+                          Con varias marcas se muestra la primera + "+N" (mismo criterio que CalendarView). */}
                       <p
-                        className={`text-[12px] text-[#888] mt-0.5 truncate ${m.client_name ? '' : 'invisible'}`}
+                        className={`text-[12px] text-[#888] mt-0.5 truncate ${m.client_name || (m.client_names ?? []).length > 0 ? '' : 'invisible'}`}
                       >
-                        {m.client_name || '—'}
+                        {(m.client_names ?? []).filter(Boolean).length > 0
+                          ? m.client_names.filter(Boolean).length > 1
+                            ? `${m.client_names[0]} +${m.client_names.filter(Boolean).length - 1}`
+                            : m.client_names[0]
+                          : m.client_name || '—'}
                       </p>
                       <p className="flex items-center gap-1.5 text-[12px] text-[#555] font-medium capitalize mt-2">
                         {ICON_CALENDAR}
                         <span className="truncate">
-                          {format(new Date(m.starts_at), 'EEE d · HH:mm', { locale: es })}
+                          {format(new Date(m.starts_at), 'EEE d', { locale: es })} ·{' '}
+                          {fmtTime12(m.starts_at)}
                         </span>
                       </p>
                       <p className="flex items-center gap-1.5 text-[12px] text-[#555] mt-1.5 truncate">
