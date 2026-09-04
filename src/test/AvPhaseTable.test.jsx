@@ -197,6 +197,52 @@ describe('AvPhaseTable — borrador local de "Solicitar pauta" (rol solicita)', 
       'line-1',
     )
   })
+
+  it('rol solicita: puede reabrir el brief de su propia solicitud ya enviada (submitted:true, created_by=userId)', async () => {
+    mockUpdatePauta.mockResolvedValue({ data: { id: 'p1', client_id: 'c1' }, error: null })
+    const pauta = {
+      id: 'p1',
+      client_id: null,
+      client_name: null,
+      tema: '',
+      status: 'solicitada',
+      submitted: true,
+      created_by: 'u1', // coincide con userId="u1" del TableWrapper
+      formats: [],
+    }
+    renderTable({ editMode: 'solicita', pautas: [pauta] })
+
+    expect(screen.getByText('✓ Enviada · por agendar')).toBeInTheDocument()
+    expect(document.querySelector('select')).toBeNull()
+
+    fireEvent.click(screen.getByText('Editar'))
+
+    const clientSelect = document.querySelector('select')
+    expect(clientSelect).not.toBeNull()
+    fireEvent.change(clientSelect, { target: { value: 'c1' } })
+
+    await waitFor(() => expect(mockUpdatePauta).toHaveBeenCalledWith('p1', { client_id: 'c1' }))
+
+    fireEvent.click(screen.getByText('Listo'))
+    expect(document.querySelector('select')).toBeNull()
+  })
+
+  it('rol solicita: NO puede editar una solicitud ya enviada de otra persona (created_by distinto de userId)', () => {
+    const pauta = {
+      id: 'p1',
+      client_id: 'c1',
+      client_name: 'Cliente A',
+      status: 'solicitada',
+      submitted: true,
+      created_by: 'otro-usuario',
+      formats: [],
+    }
+    renderTable({ editMode: 'solicita', pautas: [pauta] })
+
+    expect(screen.getByText('✓ Enviada · por agendar')).toBeInTheDocument()
+    expect(screen.queryByText('Editar')).not.toBeInTheDocument()
+    expect(document.querySelector('select')).toBeNull()
+  })
 })
 
 describe('AvPhaseTable — errores de guardado se traducen y revierten el input (fix uuid=text)', () => {

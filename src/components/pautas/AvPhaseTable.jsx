@@ -420,6 +420,7 @@ export default function AvPhaseTable({
             clients={clients}
             allEmployees={allEmployees}
             employeesById={employeesById}
+            userId={userId}
             canCoordinate={canCoordinate}
             canEdit={canEdit}
             confirmingId={confirmingId}
@@ -520,6 +521,7 @@ function SolicitudesTable({
   clients,
   allEmployees,
   employeesById,
+  userId,
   canCoordinate,
   canEdit,
   confirmingId,
@@ -579,6 +581,7 @@ function SolicitudesTable({
             clients={clients}
             allEmployees={allEmployees}
             employeesById={employeesById}
+            userId={userId}
             canCoordinate={canCoordinate}
             canEdit={canEdit}
             confirming={confirmingId === p.id}
@@ -650,6 +653,7 @@ function SolicitudRow({
   clients,
   allEmployees,
   employeesById,
+  userId,
   canCoordinate,
   canEdit,
   confirming,
@@ -662,7 +666,14 @@ function SolicitudRow({
   outOfMonth = false,
   onGoToMonth,
 }) {
-  const editableBrief = canCoordinate || (canEdit && !p.submitted)
+  // Una vez enviada (submitted:true) la solicitud queda de solo lectura para quien la pidió
+  // — solo la coordinadora puede tocarla desde acá. La única excepción es su propio creador,
+  // que puede reabrirla para corregir algo (p.ej. la grilla) antes de que se agende, mediante
+  // este toggle local: no persiste nada por sí mismo, solo habilita los mismos inputs
+  // autoguardados (onBlur) que ya usa el borrador sin enviar.
+  const [editingOwn, setEditingOwn] = useState(false)
+  const isOwner = Boolean(userId) && p.created_by === userId
+  const editableBrief = canCoordinate || (canEdit && !p.submitted) || (canEdit && editingOwn)
   const complete = briefComplete(p)
   const rowRef = useRef(null)
   useScrollIntoViewWhenHighlighted(rowRef, highlighted)
@@ -825,9 +836,19 @@ function SolicitudRow({
               </button>
             </div>
           ) : p.submitted ? (
-            <span className="estado-pill inline-block px-2.5 py-1 rounded-full text-[12px] font-semibold bg-[#e9f7ec] border border-[#bfe6c8] text-[#1f8a43]">
-              ✓ Enviada · por agendar
-            </span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="estado-pill inline-block px-2.5 py-1 rounded-full text-[12px] font-semibold bg-[#e9f7ec] border border-[#bfe6c8] text-[#1f8a43]">
+                ✓ Enviada · por agendar
+              </span>
+              {canEdit && isOwner && (
+                <button
+                  onClick={() => setEditingOwn((v) => !v)}
+                  className="text-[11.5px] font-bold px-2 py-1 rounded-lg border border-[#e0ddd4] text-[#555]"
+                >
+                  {editingOwn ? 'Listo' : 'Editar'}
+                </button>
+              )}
+            </div>
           ) : (
             canEdit && (
               <>

@@ -192,6 +192,7 @@ export const CHANGELOG = [
       'Al archivar una marca en Empresa → Clientes ahora indicas la fecha real en que terminó el contrato y el motivo, así los reportes de meses anteriores quedan exactos.',
       'Nuevo panel "Clientes por mes" en Empresa → Clientes: cuántas cuentas activas, altas y bajas hubo cada mes del año, con el detalle de cada baja.',
       'Las marcas ahora tienen RIF en su ficha y en el formulario de creación/edición.',
+      'En Audiovisual → Solicitudes, quien pidió una pauta ya enviada ahora puede volver a editarla con el botón "Editar" (mientras siga pendiente de agendar). Solo puede hacerlo quien la creó.',
     ],
   },
   {
