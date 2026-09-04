@@ -46,6 +46,18 @@ function updateChain(result) {
   return builder
 }
 
+// Builder para el DELETE de metric_line_members: delete().eq() (thenable, sin .single())
+function deleteMembersChain(result = { error: null }) {
+  const builder = {
+    delete: () => builder,
+    eq: (...args) => {
+      builder._eqArgs = args
+      return Promise.resolve(result)
+    },
+  }
+  return builder
+}
+
 const BODY = { user_id: 'u1', action: 'archive' }
 
 describe('archive-employee.js handler', () => {
@@ -58,12 +70,46 @@ describe('archive-employee.js handler', () => {
     fromMock
       .mockReturnValueOnce(targetChain({ data: { user_id: 'u1', company_id: 'c1' }, error: null }))
       .mockReturnValueOnce(updateChain())
+      .mockReturnValueOnce(deleteMembersChain())
     updateUserByIdMock.mockResolvedValue({ error: null })
 
     const res = await handler(makeEvent(BODY))
 
     expect(res.statusCode).toBe(200)
     expect(updateUserByIdMock).toHaveBeenCalledWith('u1', { ban_duration: '876000h' })
+  })
+
+  it('al archivar, saca al empleado de metric_line_members (ya no pertenece a ningún equipo)', async () => {
+    requireCapabilityMock.mockResolvedValue({
+      caller: { user_id: 'rrhh-1', admin: false, access_level: 2, company_id: 'c1' },
+    })
+    const membersChain = deleteMembersChain()
+    fromMock
+      .mockReturnValueOnce(targetChain({ data: { user_id: 'u1', company_id: 'c1' }, error: null }))
+      .mockReturnValueOnce(updateChain())
+      .mockReturnValueOnce(membersChain)
+    updateUserByIdMock.mockResolvedValue({ error: null })
+
+    const res = await handler(makeEvent(BODY))
+
+    expect(res.statusCode).toBe(200)
+    expect(fromMock).toHaveBeenCalledWith('metric_line_members')
+    expect(membersChain._eqArgs).toEqual(['user_id', 'u1'])
+  })
+
+  it('al restaurar NO toca metric_line_members (no se reasigna solo a un equipo)', async () => {
+    requireCapabilityMock.mockResolvedValue({
+      caller: { user_id: 'rrhh-1', admin: false, access_level: 2, company_id: 'c1' },
+    })
+    fromMock
+      .mockReturnValueOnce(targetChain({ data: { user_id: 'u1', company_id: 'c1' }, error: null }))
+      .mockReturnValueOnce(updateChain())
+    updateUserByIdMock.mockResolvedValue({ error: null })
+
+    const res = await handler(makeEvent({ user_id: 'u1', action: 'restore' }))
+
+    expect(res.statusCode).toBe(200)
+    expect(fromMock).not.toHaveBeenCalledWith('metric_line_members')
   })
 
   // Este es el bug real: el trigger prevent_users_privilege_escalation evaluaba

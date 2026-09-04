@@ -70,5 +70,18 @@ export const handler = async (event) => {
     })
   }
 
+  // 3. Al archivar, sacarlo de cualquier equipo (metric_line_members) — si no, sigue
+  // apareciendo como miembro/jefa en Monitor de uso y en la ficha del equipo aunque ya
+  // esté eliminado. Al restaurar NO se reasigna solo: un admin debe volver a añadirlo.
+  if (action === 'archive') {
+    const { error: membersErr } = await supabase
+      .from('metric_line_members')
+      .delete()
+      .eq('user_id', user_id)
+    if (membersErr) {
+      console.error('archive-employee: no se pudo limpiar metric_line_members', membersErr)
+    }
+  }
+
   return json(200, employee)
 }

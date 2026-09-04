@@ -179,6 +179,7 @@ export const CHANGELOG = [
       'En Monitor de uso se cambió el orden de las pestañas: ahora "Gráficas" aparece primero y "Dashboard" después.',
       'En Inicio, el recuadro de recomendaciones de MAPPI ya no aparece cuando no hay ninguna recomendación que mostrar.',
       'En Monitor de uso, los conteos y el semáforo ahora suman la actividad de todo el equipo (jefa + miembros), no solo lo que registra la jefa de línea.',
+      'Corregido: al eliminar un empleado, ahora también se le quita del equipo/línea al que pertenecía. Antes seguía apareciendo como miembro (por ejemplo en Monitor de uso) aunque ya estuviera eliminado.',
     ],
   },
   {
