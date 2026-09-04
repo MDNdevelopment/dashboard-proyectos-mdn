@@ -166,20 +166,6 @@ const MEETINGS_ICON = (
     <path d="M4.5 9h2M4.5 11.5h5" strokeLinecap="round" />
   </svg>
 )
-const LEADS_ICON = (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 16 16"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.7"
-  >
-    <path d="M1.5 4.5h13v9h-13v-9Z" strokeLinejoin="round" />
-    <path d="M1.5 4.5 8 9.5l6.5-5" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-)
-
 function Sidebar() {
   const {
     signOut,
@@ -263,8 +249,8 @@ function Sidebar() {
 
   const canEval = userProfile?.access_level >= 2 || userProfile?.admin === true
   const isMetricasRoute = location.pathname.startsWith('/reportes')
+  const isMonitorUsoRoute = location.pathname.startsWith('/monitor-uso')
   const isReunionesRoute = location.pathname.startsWith('/reuniones')
-  const isLeadsRoute = location.pathname.startsWith('/leads')
   const isEvalRoute = location.pathname.startsWith('/evaluaciones')
   const evalActive = location.pathname === '/evaluaciones'
   const evalResumenActive = location.pathname === '/evaluaciones/resumen'
@@ -535,22 +521,7 @@ function Sidebar() {
             </Link>
           )}
 
-          {/* Leads — botón directo */}
-          {canR('leads') && (
-            <Link
-              to="/leads"
-              className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all ${
-                isLeadsRoute
-                  ? 'bg-[#FFB800] text-[#111]'
-                  : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
-              }`}
-            >
-              <span className={`flex-shrink-0 ${isLeadsRoute ? 'text-[#111]' : 'text-[#666]'}`}>
-                {LEADS_ICON}
-              </span>
-              <span className="flex-1">Leads</span>
-            </Link>
-          )}
+          {/* Leads — oculto del sidebar por ahora; ruta y módulo siguen activos */}
 
           {/* Proyectos — botón directo */}
           <Link
@@ -680,6 +651,25 @@ function Sidebar() {
                 {METRICS_ICON}
               </span>
               <span className="flex-1">Reportes</span>
+            </Link>
+          )}
+
+          {/* Monitor de uso — botón directo */}
+          {canR('monitor_uso') && (
+            <Link
+              to="/monitor-uso"
+              className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all ${
+                isMonitorUsoRoute
+                  ? 'bg-[#FFB800] text-[#111]'
+                  : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+              }`}
+            >
+              <span
+                className={`flex-shrink-0 ${isMonitorUsoRoute ? 'text-[#111]' : 'text-[#666]'}`}
+              >
+                {CHART_ICON}
+              </span>
+              <span className="flex-1">Monitor de uso</span>
             </Link>
           )}
         </div>

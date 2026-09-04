@@ -666,3 +666,87 @@ export async function importMetrics(companyId, payload) {
 
   return { success: true }
 }
+
+// ─── Monitor de uso ─────────────────────────────────────────────────────────
+
+/**
+ * Carga, en 5 queries paralelas, todas las filas crudas que alimentan
+ * `aggregateUsageMonitor` (src/utils/aggregateUsageMonitor.js) para una ventana de
+ * `monthsBack` meses terminando en (year, month). Una sola carga por cambio de mes —
+ * el filtrado por mes/persona ocurre en memoria dentro del util puro, así que no hay
+ * una query por línea ni por módulo.
+ *
+ * Evaluaciones se excluye a propósito: ese módulo no se está usando hoy (ver
+ * USAGE_MODULES en aggregateUsageMonitor.js), así que no tiene sentido pedir
+ * `evaluation_sessions` en cada carga.
+ * @param {string} companyId
+ * @param {{year:number, month:number, monthsBack?:number}} period
+ */
+export async function loadUsageActivity(companyId, { year, month, monthsBack = 4 }) {
+  let y = year,
+    m = month
+  for (let i = 1; i < monthsBack; i++) {
+    m--
+    if (m < 1) {
+      m = 12
+      y--
+    }
+  }
+  const from = new Date(y, m - 1, 1).toISOString()
+  const to = new Date(year, month, 1).toISOString()
+  const fromYear = y
+
+  const [meetingsRes, tasksRes, marksRes, cnpRes, pautasRes, usersRes] = await Promise.all([
+    supabase
+      .from('meetings')
+      .select('created_by, created_at, starts_at, status, line_id')
+      .eq('company_id', companyId)
+      .gte('created_at', from)
+      .lt('created_at', to),
+    supabase
+      .from('tasks')
+      .select('created_by, created_at, due_date, team_id')
+      .eq('company_id', companyId)
+      .gte('created_at', from)
+      .lt('created_at', to),
+    supabase
+      .from('fixed_task_marks')
+      .select(
+        'marked_by, marked_at, period_year, period_month, period_week, task_key, status, line_id',
+      )
+      .eq('company_id', companyId)
+      .gte('period_year', fromYear)
+      .lte('period_year', year),
+    supabase
+      .from('cnp_requests')
+      .select('created_by, created_at, line_id')
+      .eq('company_id', companyId)
+      .is('deleted_at', null)
+      .gte('created_at', from)
+      .lt('created_at', to),
+    supabase
+      .from('av_pautas')
+      .select('created_by, created_at, line_id')
+      .eq('company_id', companyId)
+      .is('deleted_at', null)
+      .gte('created_at', from)
+      .lt('created_at', to),
+    loadCompanyUsers(companyId),
+  ])
+
+  const error =
+    [meetingsRes, tasksRes, marksRes, cnpRes, pautasRes, usersRes].find((r) => r.error)?.error ??
+    null
+
+  return {
+    data: {
+      meetings: meetingsRes.data ?? [],
+      tasks: tasksRes.data ?? [],
+      fixedMarks: marksRes.data ?? [],
+      cnp: cnpRes.data ?? [],
+      pautas: pautasRes.data ?? [],
+      users: usersRes.data ?? [],
+    },
+    error,
+  }
+}

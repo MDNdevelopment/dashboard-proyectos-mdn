@@ -136,6 +136,18 @@ export const MODULES = [
     ],
   },
   {
+    key: 'monitor_uso',
+    label: 'Monitor de uso',
+    routePrefix: '/monitor-uso',
+    description:
+      'Auditoría de uso del sistema por línea operativa — vista de dirección (conteos, semáforo relativo y narrativa)',
+    tabs: [
+      { key: 'dashboard', label: 'Dashboard' },
+      { key: 'graficas', label: 'Gráficas' },
+    ],
+    manageActions: [],
+  },
+  {
     key: 'reuniones',
     label: 'Reuniones',
     routePrefix: '/reuniones',

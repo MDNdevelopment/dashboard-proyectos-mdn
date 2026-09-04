@@ -21,6 +21,7 @@ import ChequeoPage from './pages/ChequeoPage.jsx'
 import EmpresaPage from './pages/EmpresaPage.jsx'
 import EvaluacionesPage from './pages/EvaluacionesPage.jsx'
 import MetricasPage from './pages/MetricasPage.jsx'
+import MonitorUsoPage from './pages/MonitorUsoPage.jsx'
 import ReunionesPage from './pages/ReunionesPage.jsx'
 import LeadsPage from './pages/LeadsPage.jsx'
 
@@ -236,6 +237,23 @@ createRoot(document.getElementById('root')).render(
               element={
                 <RequireModule moduleKey="reportes">
                   <MetricasPage />
+                </RequireModule>
+              }
+            />
+            {/* Monitor de uso */}
+            <Route
+              path="/monitor-uso"
+              element={
+                <RequireModule moduleKey="monitor_uso">
+                  <MonitorUsoPage />
+                </RequireModule>
+              }
+            />
+            <Route
+              path="/monitor-uso/graficas"
+              element={
+                <RequireModule moduleKey="monitor_uso">
+                  <MonitorUsoPage />
                 </RequireModule>
               }
             />
