@@ -17,7 +17,9 @@ vi.mock('../context/AuthContext', () => ({
   useAuth: vi.fn(),
 }))
 
-const MOCK_LINES = [
+// Mutable: el grupo "Independientes" reasigna estas listas para agregar la línea general
+// y una cuenta sin línea (ver factory de vi.mock arriba, que las lee por referencia).
+let MOCK_LINES = [
   {
     id: 'line-1',
     name: 'Georgina',
@@ -25,7 +27,7 @@ const MOCK_LINES = [
     members: [{ user_id: 'u1', is_lead: true }],
   },
 ]
-const MOCK_CLIENTS = [
+let MOCK_CLIENTS = [
   {
     id: 'c-1',
     name: 'Pepsi',
@@ -103,5 +105,55 @@ describe('ChequeoPage', () => {
       expect(screen.getByText('Pepsi')).toBeInTheDocument()
     })
     expect(screen.queryByText('No hay líneas visibles')).not.toBeInTheDocument()
+  })
+})
+
+describe('ChequeoPage — team "Independientes" para cuentas sin línea', () => {
+  const ORIGINAL_LINES = MOCK_LINES
+  const ORIGINAL_CLIENTS = MOCK_CLIENTS
+
+  beforeEach(() => {
+    MOCK_LINES = [
+      ...ORIGINAL_LINES,
+      {
+        id: 'line-general',
+        name: 'Independientes',
+        company_id: 'co-1',
+        is_general: true,
+        members: [],
+      },
+    ]
+    MOCK_CLIENTS = [
+      ...ORIGINAL_CLIENTS,
+      { id: 'c-2', name: 'Credimara', line_id: null, logo_url: null, social_links: [] },
+    ]
+    useAuth.mockReturnValue({
+      userProfile: { user_id: 'u1', company_id: 'co-1', access_level: 1, admin: false },
+      can: () => false,
+    })
+  })
+
+  afterEach(() => {
+    MOCK_LINES = ORIGINAL_LINES
+    MOCK_CLIENTS = ORIGINAL_CLIENTS
+  })
+
+  it('muestra la píldora "Independientes" aunque el usuario no sea nivel 4/admin/ver_todo', async () => {
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByText('Pepsi')).toBeInTheDocument()
+    })
+    expect(screen.getByText('Independientes')).toBeInTheDocument()
+  })
+
+  it('al elegir "Independientes" se ve la cuenta sin línea', async () => {
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByText('Independientes')).toBeInTheDocument()
+    })
+    screen.getByText('Independientes').click()
+    await waitFor(() => {
+      expect(screen.getByText('Credimara')).toBeInTheDocument()
+    })
   })
 })

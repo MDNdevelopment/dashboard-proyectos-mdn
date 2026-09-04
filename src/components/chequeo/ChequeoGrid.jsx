@@ -11,6 +11,8 @@ import {
   computeChequeoSummary,
   periodEndDate,
   checkReferenceDate,
+  effectiveLineId,
+  clientsForLine,
 } from '../../utils/chequeo'
 
 /**
@@ -132,6 +134,9 @@ function MailchimpEditor({ defaultDate, defaultComment, disabled, onSave, onCanc
  *   canManage      — si el usuario puede editar (capability chequeo.manage)
  *   onCheckChanged(check) — { ...row } al crear/actualizar
  *   groupByLine    — si true, agrupa las filas por línea
+ *   generalLineId  — id de la línea general "Independientes" (metric_lines.is_general), si
+ *                    existe; las cuentas sin línea (line_id=null) se agrupan y guardan ahí
+ *                    (ver effectiveLineId/clientsForLine en utils/chequeo.js)
  *
  * `viewMode='recent'` reemplaza la grilla semanal por una vista de solo lectura: cada
  * celda muestra la fecha más reciente registrada en cualquier semana del mes activo
@@ -153,6 +158,7 @@ export default function ChequeoGrid({
   userId,
   onCheckChanged,
   groupByLine,
+  generalLineId = null,
 }) {
   const [editingKey, setEditingKey] = useState(null)
   const [savingKey, setSavingKey] = useState(null)
@@ -186,7 +192,7 @@ export default function ChequeoGrid({
     const { data, error: err } = await upsertCheck({
       companyId,
       clientId: client.id,
-      lineId: client.line_id,
+      lineId: effectiveLineId(client, generalLineId),
       network,
       contentType,
       lastPublishedAt: value || null,
@@ -233,7 +239,7 @@ export default function ChequeoGrid({
           <tbody>
             {groups.map((group) => {
               const rowsClients = (
-                groupByLine ? clients.filter((c) => c.line_id === group.id) : clients
+                groupByLine ? clientsForLine(clients, group, generalLineId) : clients
               )
                 .slice()
                 .sort((a, b) => a.name.localeCompare(b.name, 'es'))

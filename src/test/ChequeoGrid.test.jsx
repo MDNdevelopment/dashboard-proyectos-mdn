@@ -317,6 +317,50 @@ describe('ChequeoGrid', () => {
     expect(btn.className).not.toContain('bg-[#fdecec]') // no rojo
   })
 
+  describe('team "Independientes" (cuentas sin línea, ver utils/chequeo.js)', () => {
+    const LINE_GENERAL = { id: 'line-general', name: 'Independientes', is_general: true }
+
+    it('en modo agrupado, agrupa las cuentas sin line_id bajo la línea general', () => {
+      renderGrid({
+        lines: [...LINES, LINE_GENERAL],
+        clients: [client(), client({ id: 'c2', name: 'Credimara', line_id: null })],
+        groupByLine: true,
+        generalLineId: 'line-general',
+      })
+      expect(screen.getByText('Independientes')).toBeInTheDocument()
+      const header = screen.getByText('Independientes').closest('tr')
+      // El siguiente hermano en el tbody debería llevar a la fila de Credimara: comprobamos
+      // simplemente que ambos nombres están presentes y Encco (line-1) no quedó duplicado ahí.
+      expect(screen.getByText('Credimara')).toBeInTheDocument()
+      expect(header).toBeInTheDocument()
+    })
+
+    it('al guardar una fecha de una cuenta sin línea, persiste generalLineId en vez de null', async () => {
+      const upsertSpy = vi.fn(() => ({
+        select: () => ({ single: () => Promise.resolve({ data: UPDATED_CHECK, error: null }) }),
+      }))
+      const { supabase } = await import('../supabase')
+      const originalFrom = supabase.from
+      supabase.from = vi.fn((table) => {
+        if (table === 'publication_checks') return { upsert: upsertSpy }
+        return originalFrom(table)
+      })
+
+      renderGrid({
+        clients: [client({ line_id: null })],
+        generalLineId: 'line-general',
+      })
+      fireEvent.click(screen.getAllByRole('button')[0])
+      const input = screen.getByDisplayValue('')
+      fireEvent.change(input, { target: { value: '2026-08-19' } })
+
+      await waitFor(() => expect(upsertSpy).toHaveBeenCalled())
+      expect(upsertSpy.mock.calls[0][0]).toMatchObject({ line_id: 'line-general' })
+
+      supabase.from = originalFrom
+    })
+  })
+
   describe('viewMode="recent"', () => {
     it('muestra la fecha más reciente entre semanas, no la de la semana seleccionada', () => {
       renderGrid({

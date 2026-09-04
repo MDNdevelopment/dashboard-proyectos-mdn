@@ -10,13 +10,12 @@ import KpiCard from '../tareas/KpiCard'
  * dejar explícito qué período miden estos números, porque cambian con el selector de semana.
  */
 export default function ChequeoSummary({ summary, periodoLabel }) {
-  const { totalCuentas, sinRedes, actualizadas, parciales, sinRegistrar, enAlerta, porVencer } =
-    summary
+  const { totalCuentas, sinRedes, actualizadas, parciales, sinRegistrar, porVencer } = summary
   const pctActualizadas = totalCuentas ? Math.round((actualizadas / totalCuentas) * 100) : 0
 
   return (
     <div className="mb-4">
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <KpiCard
           label="Cuentas"
           value={totalCuentas}
@@ -28,19 +27,11 @@ export default function ChequeoSummary({ summary, periodoLabel }) {
           sub={totalCuentas ? `${pctActualizadas}% del total` : undefined}
           color="#1f8a43"
         />
-        <KpiCard label="Parciales" value={parciales} sub="Algunas casillas" />
-        <KpiCard label="Sin registrar" value={sinRegistrar} sub="Ninguna casilla" color="#888" />
         <KpiCard
           label="Por vencer"
           value={porVencer}
           sub="7-12 días"
           color={porVencer ? '#e08a1e' : undefined}
-        />
-        <KpiCard
-          label="En alerta"
-          value={enAlerta}
-          sub="13+ días"
-          color={enAlerta ? '#c0392b' : undefined}
         />
       </div>
 

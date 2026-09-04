@@ -169,6 +169,39 @@ export function formatCheckDate(dateISO) {
   return date.toLocaleDateString('es-VE', { day: 'numeric', month: 'short' }).replace('.', '')
 }
 
+// ─── Cuentas sin línea → línea general "Independientes" (metric_lines.is_general) ──────
+
+/**
+ * Id de línea "efectivo" de una cuenta para el módulo Chequeo: las cuentas sin línea
+ * asignada (`line_id = null`, p. ej. tras borrar su línea — la FK es `ON DELETE SET
+ * NULL`) cuentan como pertenecientes a la línea general "Independientes", igual que ya
+ * pasa en Tareas (ver `crossLineUserIds`/`withDerivedGeneralMembers` en
+ * utils/lineMembers.js, mismo concepto aplicado a empleados en vez de a cuentas).
+ * Se calcula en lectura y también al guardar un chequeo, para que la fila de
+ * `publication_checks` no quede con `line_id = null` (rompería las policies de
+ * escritura, que exigen pertenencia a una línea concreta).
+ * @param {object|null} client        cuenta (metric_clients), con line_id
+ * @param {string|null} generalLineId id de la línea is_general de la empresa (o null si no existe)
+ * @returns {string|null}
+ */
+export function effectiveLineId(client, generalLineId) {
+  return client?.line_id ?? generalLineId ?? null
+}
+
+/**
+ * Cuentas que pertenecen a una línea, incluyendo en la línea general las que no tienen
+ * línea asignada. Usado por ChequeoPage (alcance de la selección) y ChequeoGrid
+ * (agrupado por línea en la vista "Todas").
+ * @param {Array} clients        cuentas (metric_clients)
+ * @param {object|null} line     línea objetivo (metric_lines), o null
+ * @param {string|null} generalLineId id de la línea is_general de la empresa (o null si no existe)
+ * @returns {Array}
+ */
+export function clientsForLine(clients, line, generalLineId) {
+  if (!line) return []
+  return clients.filter((c) => effectiveLineId(c, generalLineId) === line.id)
+}
+
 // ─── Agregación → indicador «2. Productividad» del reporte (fila "Actualización de
 // Plataformas", derivada de Chequeo) ────────────────────────────────────────────────
 

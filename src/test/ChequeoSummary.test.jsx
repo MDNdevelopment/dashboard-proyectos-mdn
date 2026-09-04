@@ -18,14 +18,21 @@ function summary(overrides = {}) {
 }
 
 describe('ChequeoSummary', () => {
-  it('muestra los conteos de cada tarjeta', () => {
+  it('muestra los conteos de las 3 tarjetas (Cuentas, Actualizadas, Por vencer)', () => {
     render(<ChequeoSummary summary={summary()} periodoLabel="Semana S3" />)
+    expect(screen.getByText('Cuentas')).toBeInTheDocument()
     expect(screen.getByText('24')).toBeInTheDocument()
+    expect(screen.getByText('Actualizadas')).toBeInTheDocument()
     expect(screen.getByText('11')).toBeInTheDocument()
-    expect(screen.getByText('6')).toBeInTheDocument()
-    expect(screen.getByText('7')).toBeInTheDocument()
-    expect(screen.getByText('4')).toBeInTheDocument()
+    expect(screen.getByText('Por vencer')).toBeInTheDocument()
     expect(screen.getByText('3')).toBeInTheDocument()
+  })
+
+  it('ya no muestra las tarjetas de Parciales, Sin registrar ni En alerta', () => {
+    render(<ChequeoSummary summary={summary()} periodoLabel="Semana S3" />)
+    expect(screen.queryByText('Parciales')).not.toBeInTheDocument()
+    expect(screen.queryByText('Sin registrar')).not.toBeInTheDocument()
+    expect(screen.queryByText('En alerta')).not.toBeInTheDocument()
   })
 
   it('muestra el porcentaje de cuentas actualizadas sobre el total', () => {

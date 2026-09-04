@@ -10,6 +10,7 @@ import {
   computeChequeoSummary,
   periodEndDate,
   checkReferenceDate,
+  clientsForLine,
 } from '../utils/chequeo'
 import { loadChecks } from '../components/chequeo/chequeoApi'
 import ChequeoGrid from '../components/chequeo/ChequeoGrid'
@@ -61,15 +62,21 @@ export default function ChequeoPage() {
     const companyId = userProfile.company_id
 
     const [linesRes, clientsRes, checksRes] = await Promise.all([
-      loadLines(companyId, { includeGeneral: false }),
+      loadLines(companyId, { includeGeneral: true }),
       loadClients(companyId),
       loadChecks(companyId, year, month),
     ])
 
-    const visible = visibleLinesForUser(linesRes.data ?? [], userProfile, {
+    // La línea general "Independientes" no tiene miembros persistidos (agrupa a quienes no
+    // pertenecen a ninguna línea real y a las cuentas sin línea), así que se excluye del
+    // scoping por membresía y se agrega aparte, visible para todos los que entran a Chequeo.
+    const allLines = linesRes.data ?? []
+    const generalLine = allLines.find((l) => l.is_general) ?? null
+    const realLines = allLines.filter((l) => !l.is_general)
+    const visible = visibleLinesForUser(realLines, userProfile, {
       extraViewAll: can('chequeo.ver_todo'),
     })
-    setLines(visible)
+    setLines(generalLine ? [...visible, generalLine] : visible)
     setClients(clientsRes.data ?? [])
     setChecks(checksRes.data ?? [])
     setActiveLineId((prev) => prev ?? (canViewAll ? ALL_LINES : (visible[0]?.id ?? null)))
@@ -123,10 +130,10 @@ export default function ChequeoPage() {
   }
 
   // Líneas en alcance según la selección (una línea concreta, o todas las visibles).
+  const generalLineId = lines.find((l) => l.is_general)?.id ?? null
   const scopedLines =
     activeLineId === ALL_LINES ? lines : lines.filter((l) => l.id === activeLineId)
-  const scopedLineIds = scopedLines.map((l) => l.id)
-  const scopedClients = clients.filter((c) => scopedLineIds.includes(c.line_id))
+  const scopedClients = scopedLines.flatMap((l) => clientsForLine(clients, l, generalLineId))
 
   const referenceDate = checkReferenceDate(
     periodEndDate(weeks, viewMode === 'recent' ? null : weekN, year, month),
@@ -274,6 +281,7 @@ export default function ChequeoPage() {
               userId={userProfile?.user_id}
               onCheckChanged={handleCheckChanged}
               groupByLine={activeLineId === ALL_LINES}
+              generalLineId={generalLineId}
             />
           </>
         )}

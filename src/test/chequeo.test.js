@@ -13,6 +13,8 @@ import {
   MONTHLY_TARGET_PER_NETWORK,
   periodEndDate,
   checkReferenceDate,
+  effectiveLineId,
+  clientsForLine,
 } from '../utils/chequeo'
 import { buildFixedWeeks } from '../utils/fixedTasks'
 
@@ -300,5 +302,50 @@ describe('computePlataformasProductividad', () => {
     const row = computePlataformasProductividad(checks, clients)
     expect(row.meta).toBe(1)
     expect(row.realizado).toBe(1)
+  })
+})
+
+describe('effectiveLineId', () => {
+  const GENERAL_ID = 'line-general'
+
+  it('cuenta con línea real: devuelve su line_id, ignora generalLineId', () => {
+    expect(effectiveLineId({ line_id: 'line-1' }, GENERAL_ID)).toBe('line-1')
+  })
+
+  it('cuenta sin línea (line_id null): cae en la línea general', () => {
+    expect(effectiveLineId({ line_id: null }, GENERAL_ID)).toBe(GENERAL_ID)
+  })
+
+  it('cuenta ya asignada explícitamente a la línea general: se mantiene', () => {
+    expect(effectiveLineId({ line_id: GENERAL_ID }, GENERAL_ID)).toBe(GENERAL_ID)
+  })
+
+  it('sin línea general en la empresa: una cuenta sin línea da null', () => {
+    expect(effectiveLineId({ line_id: null }, null)).toBeNull()
+  })
+})
+
+describe('clientsForLine', () => {
+  const GENERAL_ID = 'line-general'
+  const lineReal = { id: 'line-1' }
+  const lineGeneral = { id: GENERAL_ID, is_general: true }
+  const clients = [
+    { id: 'c-1', name: 'Pepsi', line_id: 'line-1' },
+    { id: 'c-2', name: 'Credimara', line_id: null },
+    { id: 'c-3', name: 'Bellezza', line_id: GENERAL_ID },
+  ]
+
+  it('una línea real solo incluye sus cuentas — no absorbe las sin línea', () => {
+    const result = clientsForLine(clients, lineReal, GENERAL_ID)
+    expect(result.map((c) => c.name)).toEqual(['Pepsi'])
+  })
+
+  it('la línea general incluye las cuentas sin línea y las asignadas explícitamente a ella', () => {
+    const result = clientsForLine(clients, lineGeneral, GENERAL_ID)
+    expect(result.map((c) => c.name).sort()).toEqual(['Bellezza', 'Credimara'])
+  })
+
+  it('línea null: devuelve vacío', () => {
+    expect(clientsForLine(clients, null, GENERAL_ID)).toEqual([])
   })
 })
