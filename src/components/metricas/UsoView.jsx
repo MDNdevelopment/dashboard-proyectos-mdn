@@ -125,7 +125,7 @@ export default function UsoView({ companyId, lines, section = 'dashboard' }) {
       {/* Selector de mes/año */}
       <div className="flex items-center justify-between">
         <p className="text-[15px] text-[#888]">
-          Conteo de acciones manuales por jefa de línea — comparación relativa, sin mínimos fijos
+          Conteo de acciones manuales por equipo — comparación relativa, sin mínimos fijos
         </p>
         <div className="flex items-center gap-2">
           <span className="text-[13px] font-mono font-bold uppercase tracking-[0.1em] text-[#888]">
@@ -345,7 +345,7 @@ export default function UsoView({ companyId, lines, section = 'dashboard' }) {
 
           <div className="bg-white rounded-2xl border border-[#e0ddd4] px-5 py-4">
             <p className="text-[13px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] mb-4">
-              Tendencia · total de acciones de la jefa por mes
+              Tendencia · total de acciones del equipo por mes
             </p>
             {trendData.length === 0 ? (
               <p className="text-[15px] text-[#aaa] text-center py-8">
@@ -408,8 +408,8 @@ function UsoLineDetail({ line, prevMonthNumber }) {
           userId: line.lead.userId,
           name: line.lead.name,
           isLead: true,
-          counts: line.counts,
-          total: line.total,
+          counts: line.lead.counts,
+          total: line.lead.total,
         },
         ...line.members,
       ]
@@ -487,9 +487,7 @@ function UsoLineDetail({ line, prevMonthNumber }) {
 
       {punctualitySummary.length > 0 && (
         <div className="text-[13px] text-[#888]">
-          <span className="font-semibold text-[#555]">
-            Detalle de puntualidad de {line.lead?.name ?? 'la jefa'}:{' '}
-          </span>
+          <span className="font-semibold text-[#555]">Detalle de puntualidad del equipo: </span>
           {punctualitySummary.join(' · ')}
         </div>
       )}

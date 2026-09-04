@@ -296,9 +296,32 @@ describe('aggregateUsageMonitor', () => {
       month: MONTH,
     })
     const [l1] = byLine
-    expect(l1.counts.tareas).toBe(1) // solo la jefa
+    expect(l1.counts.tareas).toBe(2) // jefa + miembro-1 (equipo), sin el apoyo externo
     expect(l1.members.find((m) => m.userId === 'miembro-1').total).toBe(1)
     expect(l1.external.map((e) => e.name)).toContain('Paola G.')
+  })
+
+  it('counts del equipo suma jefa + miembros, no solo lo que crea la jefa', () => {
+    const raw = emptyRaw({
+      tasks: [
+        { team_id: 'l1', created_by: 'jefa-1', created_at: '2026-09-03', due_date: null },
+        { team_id: 'l1', created_by: 'miembro-1', created_at: '2026-09-04', due_date: null },
+        { team_id: 'l1', created_by: 'miembro-1', created_at: '2026-09-05', due_date: null },
+      ],
+    })
+    const { byLine } = aggregateUsageMonitor({
+      lines: [line()],
+      users: users(),
+      raw,
+      year: YEAR,
+      month: MONTH,
+    })
+    expect(byLine[0].counts.tareas).toBe(3) // 1 de la jefa + 2 del miembro
+    expect(byLine[0].total).toBe(3)
+    // El desglose propio de la jefa (para la fila "Jefa" del detalle) sigue
+    // mostrando solo lo que ELLA creó, separado del total de equipo.
+    expect(byLine[0].lead.counts.tareas).toBe(1)
+    expect(byLine[0].lead.total).toBe(1)
   })
 
   it('la baseline es el promedio literal de los 3 meses previos, incluyendo meses en 0', () => {

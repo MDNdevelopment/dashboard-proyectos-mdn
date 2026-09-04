@@ -42,7 +42,7 @@ describe('buildUsageNarrative', () => {
     )
   })
 
-  it('lista los módulos en cero de la jefa', () => {
+  it('lista los módulos en cero del equipo', () => {
     const text = buildUsageNarrative(
       baseLine({ counts: zeroCounts({ tareas: 0, cnp: 0, pautasAv: 0 }) }),
       8,
@@ -56,7 +56,7 @@ describe('buildUsageNarrative', () => {
   it('sin ceros, destaca el módulo más fuerte', () => {
     const counts = zeroCounts({ reuniones: 3, tareas: 1, tareasFijas: 2, cnp: 1, pautasAv: 1 })
     const text = buildUsageNarrative(baseLine({ counts }), 8)
-    expect(text).toContain('Bianca R. concentra su uso en reuniones.')
+    expect(text).toContain('El equipo concentra su uso en reuniones.')
   })
 
   it('señala una caída mes a mes con las cifras correctas', () => {

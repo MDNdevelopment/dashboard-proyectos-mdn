@@ -46,12 +46,12 @@ export function buildUsageNarrative(lineResult, prevMonthNumber) {
   const zeroModules = USAGE_MODULES.filter((m) => counts[m.key] === 0)
   if (zeroModules.length > 0) {
     const labels = joinNatural(zeroModules.map((m) => `cero en ${m.label.toLowerCase()}`))
-    sentences.push(`${lead.name} tiene ${labels}.`)
+    sentences.push(`El equipo tiene ${labels}.`)
   } else {
     // ── Módulo más fuerte (solo se destaca si no hay ceros que contar) ──────
     const strongest = [...USAGE_MODULES].sort((a, b) => counts[b.key] - counts[a.key])[0]
     if (strongest && counts[strongest.key] > 0) {
-      sentences.push(`${lead.name} concentra su uso en ${strongest.label.toLowerCase()}.`)
+      sentences.push(`El equipo concentra su uso en ${strongest.label.toLowerCase()}.`)
     }
   }
 

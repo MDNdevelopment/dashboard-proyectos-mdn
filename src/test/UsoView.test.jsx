@@ -179,7 +179,7 @@ describe('UsoView', () => {
     await user.click(screen.getByText('Team Bianca'))
 
     await waitFor(() => {
-      expect(screen.getByText(/Detalle de puntualidad de Bianca R\./)).toBeInTheDocument()
+      expect(screen.getByText(/Detalle de puntualidad del equipo/)).toBeInTheDocument()
     })
     expect(screen.getByText(/De 2 tareas, 1 fue tardía/)).toBeInTheDocument()
   })

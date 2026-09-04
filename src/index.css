@@ -51,6 +51,9 @@ select option {
 .input-base:focus {
   border-color: #999;
 }
+.recharts-wrapper *:focus {
+  outline: none;
+}
 .input-base::placeholder {
   color: #999;
 }
