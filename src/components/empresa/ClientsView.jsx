@@ -14,9 +14,12 @@ import { clientInMonth } from '../../utils/clientInMonth'
 import { exportClientsToPdf } from '../../utils/exportClientsToPdf'
 import ClientModal from './ClientModal'
 import ConfirmDeleteDialog from '../common/ConfirmDeleteDialog'
+import DateInput from '../common/DateInput'
+import ClientsPerMonthPanel from './ClientsPerMonthPanel'
 
 const CURRENT_YEAR = new Date().getFullYear()
 const YEARS = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2, CURRENT_YEAR - 3]
+const TODAY_ISO = new Date().toISOString().slice(0, 10)
 
 export default function ClientsView({ companyId, canManage = true }) {
   // Deep-link desde Inicio ("Clientes de mi línea"): ?line=<lineId> preselecciona el filtro.
@@ -31,6 +34,9 @@ export default function ClientsView({ companyId, canManage = true }) {
   const [confirmDelete, setConfirmDelete] = useState(null)
   // Al eliminar: ¿el cliente cuenta en el reporte del mes de baja? (facturó/trabajó parte del mes)
   const [incluyeMes, setIncluyeMes] = useState(true)
+  // Fecha real de fin de contrato (default: hoy) y motivo de la baja.
+  const [contractEndInput, setContractEndInput] = useState(TODAY_ISO)
+  const [contractEndReason, setContractEndReason] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState(null)
   const [generatingPdf, setGeneratingPdf] = useState(false)
@@ -38,6 +44,7 @@ export default function ClientsView({ companyId, canManage = true }) {
   // Período: null = "Actual" (roster vigente), o { month, year } para vista histórica
   const [periodo, setPeriodo] = useState(null)
   const [showArchived, setShowArchived] = useState(false)
+  const [showPerMonth, setShowPerMonth] = useState(false)
 
   const handleModalClose = useCallback(() => {
     setModal(undefined)
@@ -91,10 +98,20 @@ export default function ClientsView({ companyId, canManage = true }) {
   }
 
   // ── Archivar (soft delete) ────────────────────────────────────────────────────
+  // La fecha de fin de contrato cae en el mes en curso → el radio "¿cuenta este
+  // mes?" sigue siendo relevante. Si es de un mes pasado, contract_end manda solo
+  // (clientInMonth.js lo prioriza sobre baja_incluye_mes) y el radio no aplica.
+  const contractEndInCurrentMonth =
+    !contractEndInput || contractEndInput.slice(0, 7) === TODAY_ISO.slice(0, 7)
+
   async function handleDelete() {
     if (!confirmDelete) return
     setDeleting(true)
-    const { error: err } = await deleteClient(confirmDelete.id, { incluyeMes })
+    const { error: err } = await deleteClient(confirmDelete.id, {
+      incluyeMes,
+      contractEnd: contractEndInput,
+      reason: contractEndReason.trim() || null,
+    })
     setDeleting(false)
     if (err) {
       setError(err.message)
@@ -104,7 +121,15 @@ export default function ClientsView({ companyId, canManage = true }) {
     const now = new Date().toISOString()
     setClients((prev) =>
       prev.map((c) =>
-        c.id === confirmDelete.id ? { ...c, deleted_at: now, baja_incluye_mes: incluyeMes } : c,
+        c.id === confirmDelete.id
+          ? {
+              ...c,
+              deleted_at: now,
+              baja_incluye_mes: incluyeMes,
+              contract_end: contractEndInput || now.slice(0, 10),
+              contract_end_reason: contractEndReason.trim() || null,
+            }
+          : c,
       ),
     )
     setConfirmDelete(null)
@@ -251,6 +276,20 @@ export default function ClientsView({ companyId, canManage = true }) {
             </button>
           )}
 
+          {/* Toggle panel "Clientes por mes" — solo en modo Actual */}
+          {modoActual && (
+            <button
+              onClick={() => setShowPerMonth((v) => !v)}
+              className={`px-3 py-1.5 rounded-lg text-[13.5px] font-semibold border transition-all ${
+                showPerMonth
+                  ? 'bg-[#111] text-white border-[#111]'
+                  : 'bg-white text-[#666] border-[#e0ddd4] hover:bg-[#f5f3eb]'
+              }`}
+            >
+              Clientes por mes
+            </button>
+          )}
+
           {/* Descargar PDF — clientes activos agrupados por social */}
           <button
             onClick={handleExportPdf}
@@ -374,6 +413,9 @@ export default function ClientsView({ companyId, canManage = true }) {
           {error}
         </div>
       )}
+
+      {/* Panel "Clientes por mes" */}
+      {modoActual && showPerMonth && <ClientsPerMonthPanel clients={clients} years={YEARS} />}
 
       {/* Lista de clientes */}
       <div className="bg-white rounded-2xl border border-[#e0ddd4] overflow-hidden">
@@ -556,6 +598,8 @@ export default function ClientsView({ companyId, canManage = true }) {
                             onClick={(e) => {
                               e.stopPropagation()
                               setIncluyeMes(true)
+                              setContractEndInput(TODAY_ISO)
+                              setContractEndReason('')
                               setConfirmDelete({
                                 id: client.id,
                                 name: client.name,
@@ -616,37 +660,74 @@ export default function ClientsView({ companyId, canManage = true }) {
           onCancel={() => setConfirmDelete(null)}
           confirming={deleting}
         >
-          <fieldset className="rounded-xl border border-[#ece9df] bg-[#faf9f4] p-3">
-            <legend className="px-1 text-[13px] font-mono font-bold tracking-[0.08em] uppercase text-[#888]">
-              Reporte del mes en curso
-            </legend>
-            <label className="flex items-start gap-2.5 py-1 cursor-pointer">
-              <input
-                type="radio"
-                name="incluyeMes"
-                className="mt-1 accent-[#FFB800]"
-                checked={incluyeMes === true}
-                onChange={() => setIncluyeMes(true)}
-              />
-              <span className="text-[14px] text-[#333]">
-                <strong>Sí, facturó o trabajó este mes.</strong> Se mantiene en el reporte del mes
-                actual y desaparece a partir del próximo.
-              </span>
+          <div>
+            <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+              Fecha de fin de contrato
             </label>
-            <label className="flex items-start gap-2.5 py-1 cursor-pointer">
-              <input
-                type="radio"
-                name="incluyeMes"
-                className="mt-1 accent-[#FFB800]"
-                checked={incluyeMes === false}
-                onChange={() => setIncluyeMes(false)}
-              />
-              <span className="text-[14px] text-[#333]">
-                <strong>No, sacarlo también de este mes.</strong> Se retira de inmediato del reporte
-                del mes actual (se pierden sus ingresos y métricas cargados este mes).
-              </span>
+            <DateInput
+              value={contractEndInput}
+              onChange={(v) => setContractEndInput(v || TODAY_ISO)}
+              max={TODAY_ISO}
+              clearable={false}
+            />
+            <p className="text-[12px] text-[#999] mt-1">
+              Último mes que trabajó la cuenta. Los reportes ya guardados de meses posteriores se
+              limpian solos (los meses cerrados no se modifican).
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+              Motivo de la baja
             </label>
-          </fieldset>
+            <textarea
+              className="input-base"
+              rows={2}
+              value={contractEndReason}
+              onChange={(e) => setContractEndReason(e.target.value)}
+              placeholder="Opcional — por qué terminó el contrato"
+            />
+          </div>
+
+          {contractEndInCurrentMonth ? (
+            <fieldset className="rounded-xl border border-[#ece9df] bg-[#faf9f4] p-3">
+              <legend className="px-1 text-[13px] font-mono font-bold tracking-[0.08em] uppercase text-[#888]">
+                Reporte del mes en curso
+              </legend>
+              <label className="flex items-start gap-2.5 py-1 cursor-pointer">
+                <input
+                  type="radio"
+                  name="incluyeMes"
+                  className="mt-1 accent-[#FFB800]"
+                  checked={incluyeMes === true}
+                  onChange={() => setIncluyeMes(true)}
+                />
+                <span className="text-[14px] text-[#333]">
+                  <strong>Sí, facturó o trabajó este mes.</strong> Se mantiene en el reporte del mes
+                  actual y desaparece a partir del próximo.
+                </span>
+              </label>
+              <label className="flex items-start gap-2.5 py-1 cursor-pointer">
+                <input
+                  type="radio"
+                  name="incluyeMes"
+                  className="mt-1 accent-[#FFB800]"
+                  checked={incluyeMes === false}
+                  onChange={() => setIncluyeMes(false)}
+                />
+                <span className="text-[14px] text-[#333]">
+                  <strong>No, sacarlo también de este mes.</strong> Se retira de inmediato del
+                  reporte del mes actual (se pierden sus ingresos y métricas cargados este mes).
+                </span>
+              </label>
+            </fieldset>
+          ) : (
+            <p className="text-[13px] text-[#888] bg-[#faf9f4] border border-[#ece9df] rounded-xl px-3 py-2.5">
+              La cuenta contará hasta {MONTHS[Number(contractEndInput.slice(5, 7)) - 1]}{' '}
+              {contractEndInput.slice(0, 4)} inclusive; desde el mes siguiente ya no aparece en los
+              reportes.
+            </p>
+          )}
         </ConfirmDeleteDialog>
       )}
     </div>

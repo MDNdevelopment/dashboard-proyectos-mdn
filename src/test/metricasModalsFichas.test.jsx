@@ -279,6 +279,7 @@ const MOCK_CLIENT = {
   website: 'https://pepsi.com',
   anniversary_date: '2019-04-01',
   mdn_since: '2021-06-15',
+  rif: 'J-12345678-9',
   logo_url: null,
   social_manager_id: 'u-social',
   designer_id: 'u-design',
@@ -337,6 +338,11 @@ describe('ClientFichaModal — ficha técnica del cliente (usuario privilegiado)
   it('renderiza el sitio web', () => {
     wrap(<ClientFichaModal client={MOCK_CLIENT} line={MOCK_LINE} onClose={vi.fn()} />)
     expect(screen.getByText('pepsi.com')).toBeInTheDocument()
+  })
+
+  it('renderiza el RIF', () => {
+    wrap(<ClientFichaModal client={MOCK_CLIENT} line={MOCK_LINE} onClose={vi.fn()} />)
+    expect(screen.getByText('J-12345678-9')).toBeInTheDocument()
   })
 
   it('renderiza los contactos', () => {

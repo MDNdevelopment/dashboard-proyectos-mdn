@@ -1,9 +1,9 @@
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
-import { isFinancePrivileged } from "../../lib/permissions";
-import { fmtUSD } from "../../utils/metricsFinance";
-import { MONTHS } from "./constants";
-import { EmployeeChip, EmployeeChipList } from "../common/EmployeeChip";
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../../context/AuthContext'
+import { isFinancePrivileged } from '../../lib/permissions'
+import { fmtUSD } from '../../utils/metricsFinance'
+import { MONTHS } from './constants'
+import { EmployeeChip, EmployeeChipList } from '../common/EmployeeChip'
 
 /**
  * Cuerpo embebible de la ficha técnica de un cliente (metric_clients).
@@ -16,33 +16,37 @@ import { EmployeeChip, EmployeeChipList } from "../common/EmployeeChip";
  *   onClose — cierre total del modal contenedor (para acciones close-then-navigate)
  */
 export default function ClientFichaContent({ client, line, onClose, employees = [] }) {
-  const navigate = useNavigate();
-  const { can = () => true, userProfile } = useAuth();
-  const privileged = isFinancePrivileged(userProfile);
+  const navigate = useNavigate()
+  const { can = () => true, userProfile } = useAuth()
+  const privileged = isFinancePrivileged(userProfile)
 
-  const contacts = client.contacts ?? [];
-  const socialLinks = client.social_links ?? [];
+  const contacts = client.contacts ?? []
+  const socialLinks = client.social_links ?? []
 
   // Equipo asignado (resuelto contra la lista de empleados pasada por el padre)
-  const socialManagerUser = employees.find(u => u.user_id === client.social_manager_id) ?? null;
-  const designerUser      = employees.find(u => u.user_id === client.designer_id) ?? null;
-  const audiovisualIds    = client.audiovisual_ids ?? [];
-  const apoyoIds          = client.apoyo_ids ?? [];
-  const hasTeam = employees.length > 0 &&
-    (!!client.social_manager_id || !!client.designer_id || audiovisualIds.length > 0 || apoyoIds.length > 0);
+  const socialManagerUser = employees.find((u) => u.user_id === client.social_manager_id) ?? null
+  const designerUser = employees.find((u) => u.user_id === client.designer_id) ?? null
+  const audiovisualIds = client.audiovisual_ids ?? []
+  const apoyoIds = client.apoyo_ids ?? []
+  const hasTeam =
+    employees.length > 0 &&
+    (!!client.social_manager_id ||
+      !!client.designer_id ||
+      audiovisualIds.length > 0 ||
+      apoyoIds.length > 0)
 
   function fmtDate(dateStr) {
-    if (!dateStr) return "—";
-    const [y, m, d] = dateStr.split("-");
-    return `${d}/${m}/${y}`;
+    if (!dateStr) return '—'
+    const [y, m, d] = dateStr.split('-')
+    return `${d}/${m}/${y}`
   }
 
   function fmtBirthday(day, month) {
-    if (!day && !month) return null;
-    const monthName = month ? MONTHS[Number(month) - 1] : null;
-    if (day && monthName) return `${day} de ${monthName}`;
-    if (day) return `día ${day}`;
-    return monthName ?? null;
+    if (!day && !month) return null
+    const monthName = month ? MONTHS[Number(month) - 1] : null
+    if (day && monthName) return `${day} de ${monthName}`
+    if (day) return `día ${day}`
+    return monthName ?? null
   }
 
   return (
@@ -58,7 +62,7 @@ export default function ClientFichaContent({ client, line, onClose, employees = 
           />
         ) : (
           <span className="w-10 h-10 rounded-full bg-[#f0ede3] flex items-center justify-center flex-shrink-0 text-[15px] font-bold text-[#aaa] uppercase">
-            {client.name?.[0] ?? "?"}
+            {client.name?.[0] ?? '?'}
           </span>
         )}
         <div className="flex-1 min-w-0">
@@ -66,7 +70,7 @@ export default function ClientFichaContent({ client, line, onClose, employees = 
           {line && (
             <span
               className="inline-block mt-0.5 px-2 py-0.5 rounded-full text-[11.5px] font-semibold"
-              style={{ background: line.color + "22", color: line.color }}
+              style={{ background: line.color + '22', color: line.color }}
             >
               {line.name}
             </span>
@@ -76,19 +80,24 @@ export default function ClientFichaContent({ client, line, onClose, employees = 
 
       {/* Cuerpo */}
       <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
-
         {/* Datos financieros — solo nivel 4 / admin */}
         {privileged && (
           <div className="grid grid-cols-2 gap-3">
             <InfoItem label="Mensualidad">
               {client.monthly_fee != null ? (
-                <span className="text-[16px] font-bold text-[#111]">{fmtUSD(client.monthly_fee)}</span>
-              ) : "—"}
+                <span className="text-[16px] font-bold text-[#111]">
+                  {fmtUSD(client.monthly_fee)}
+                </span>
+              ) : (
+                '—'
+              )}
             </InfoItem>
             <InfoItem label="Día de pago">
               {client.payment_day ? (
                 <span className="text-[16px] font-bold text-[#111]">día {client.payment_day}</span>
-              ) : "—"}
+              ) : (
+                '—'
+              )}
             </InfoItem>
           </div>
         )}
@@ -96,8 +105,12 @@ export default function ClientFichaContent({ client, line, onClose, employees = 
         {/* Presupuesto de campañas — visible para todos */}
         <InfoItem label="Presupuesto mensual campañas">
           {client.campaign_budget != null ? (
-            <span className="text-[16px] font-bold text-[#111]">{fmtUSD(client.campaign_budget)}</span>
-          ) : "—"}
+            <span className="text-[16px] font-bold text-[#111]">
+              {fmtUSD(client.campaign_budget)}
+            </span>
+          ) : (
+            '—'
+          )}
         </InfoItem>
 
         {/* Fechas */}
@@ -105,6 +118,9 @@ export default function ClientFichaContent({ client, line, onClose, employees = 
           <InfoItem label="Cliente MDN desde">{fmtDate(client.mdn_since)}</InfoItem>
           <InfoItem label="Aniversario empresa">{fmtDate(client.anniversary_date)}</InfoItem>
         </div>
+
+        {/* RIF */}
+        {client.rif && <InfoItem label="RIF">{client.rif}</InfoItem>}
 
         {/* Web */}
         {client.website && (
@@ -115,11 +131,18 @@ export default function ClientFichaContent({ client, line, onClose, employees = 
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 text-[#555] hover:text-[#111] hover:underline transition-colors text-[14px]"
             >
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
-                <circle cx="8" cy="8" r="6.5"/>
-                <path d="M8 1.5c-2 2-2 9 0 13M8 1.5c2 2 2 9 0 13M1.5 8h13" strokeLinecap="round"/>
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+              >
+                <circle cx="8" cy="8" r="6.5" />
+                <path d="M8 1.5c-2 2-2 9 0 13M8 1.5c2 2 2 9 0 13M1.5 8h13" strokeLinecap="round" />
               </svg>
-              {client.website.replace(/^https?:\/\//, "")}
+              {client.website.replace(/^https?:\/\//, '')}
             </a>
           </InfoItem>
         )}
@@ -151,11 +174,14 @@ export default function ClientFichaContent({ client, line, onClose, employees = 
             </p>
             <div className="space-y-2">
               {contacts.map((c, i) => {
-                const bday = fmtBirthday(c.birth_day, c.birth_month);
+                const bday = fmtBirthday(c.birth_day, c.birth_month)
                 return (
-                  <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-[#faf9f5] border border-[#ece9df]">
+                  <div
+                    key={i}
+                    className="flex items-start gap-3 p-3 rounded-xl bg-[#faf9f5] border border-[#ece9df]"
+                  >
                     <div className="w-7 h-7 rounded-full bg-[#e8e5db] flex items-center justify-center flex-shrink-0 text-[11px] font-bold text-[#888] uppercase">
-                      {c.name?.[0] ?? "?"}
+                      {c.name?.[0] ?? '?'}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-[14px] font-semibold text-[#222]">{c.name}</p>
@@ -163,7 +189,7 @@ export default function ClientFichaContent({ client, line, onClose, employees = 
                       {bday && <p className="text-[11.5px] text-[#aaa] mt-0.5">🎂 {bday}</p>}
                     </div>
                   </div>
-                );
+                )
               })}
             </div>
           </div>
@@ -177,23 +203,31 @@ export default function ClientFichaContent({ client, line, onClose, employees = 
             </p>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <p className="text-[11px] font-mono text-[#bbb] uppercase tracking-wide mb-1">Social</p>
+                <p className="text-[11px] font-mono text-[#bbb] uppercase tracking-wide mb-1">
+                  Social
+                </p>
                 <EmployeeChip user={socialManagerUser} />
               </div>
               <div>
-                <p className="text-[11px] font-mono text-[#bbb] uppercase tracking-wide mb-1">Diseñador</p>
+                <p className="text-[11px] font-mono text-[#bbb] uppercase tracking-wide mb-1">
+                  Diseñador
+                </p>
                 <EmployeeChip user={designerUser} />
               </div>
             </div>
             {audiovisualIds.length > 0 && (
               <div>
-                <p className="text-[11px] font-mono text-[#bbb] uppercase tracking-wide mb-1">Audiovisual</p>
+                <p className="text-[11px] font-mono text-[#bbb] uppercase tracking-wide mb-1">
+                  Audiovisual
+                </p>
                 <EmployeeChipList userIds={audiovisualIds} employees={employees} />
               </div>
             )}
             {apoyoIds.length > 0 && (
               <div>
-                <p className="text-[11px] font-mono text-[#bbb] uppercase tracking-wide mb-1">Apoyo</p>
+                <p className="text-[11px] font-mono text-[#bbb] uppercase tracking-wide mb-1">
+                  Apoyo
+                </p>
                 <EmployeeChipList userIds={apoyoIds} employees={employees} />
               </div>
             )}
@@ -201,18 +235,25 @@ export default function ClientFichaContent({ client, line, onClose, employees = 
         )}
 
         {/* Acciones */}
-        {can("tareas") && (
+        {can('tareas') && (
           <div className="pt-1 border-t border-[#ece9df]">
             <button
               type="button"
               onClick={() => {
-                onClose();
-                navigate(`/tareas?view=base&team=${line?.id}&client=${client.id}`);
+                onClose()
+                navigate(`/tareas?view=base&team=${line?.id}&client=${client.id}`)
               }}
               className="flex items-center gap-2 text-[14px] font-semibold text-[#555] hover:text-[#111] transition-colors"
             >
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M3 8h10M9 4l4 4-4 4" strokeLinecap="round" strokeLinejoin="round"/>
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+              >
+                <path d="M3 8h10M9 4l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               Ver tareas de este cliente
             </button>
@@ -220,14 +261,16 @@ export default function ClientFichaContent({ client, line, onClose, employees = 
         )}
       </div>
     </>
-  );
+  )
 }
 
 function InfoItem({ label, children }) {
   return (
     <div>
-      <p className="text-[11.5px] font-mono font-bold uppercase tracking-[0.12em] text-[#aaa] mb-0.5">{label}</p>
-      <div className="text-[14px] text-[#555]">{children ?? "—"}</div>
+      <p className="text-[11.5px] font-mono font-bold uppercase tracking-[0.12em] text-[#aaa] mb-0.5">
+        {label}
+      </p>
+      <div className="text-[14px] text-[#555]">{children ?? '—'}</div>
     </div>
-  );
+  )
 }

@@ -110,42 +110,38 @@ const MOCK_EMPLOYEES = [
 const mockLoadLines = vi.fn().mockResolvedValue({ data: MOCK_LINES, error: null })
 const mockLoadClients = vi.fn().mockResolvedValue({ data: MOCK_CLIENTS, error: null })
 const mockLoadCompanyEmployees = vi.fn().mockResolvedValue({ data: MOCK_EMPLOYEES, error: null })
-const mockCreateClient = vi
-  .fn()
-  .mockResolvedValue({
-    data: {
-      id: 'cli-new',
-      company_id: 'co-1',
-      name: 'Nuevo',
-      line_id: null,
-      website: null,
-      payment_day: null,
-      social_links: [],
-      social_manager_id: null,
-      designer_id: null,
-      audiovisual_ids: [],
-      apoyo_ids: [],
-    },
-    error: null,
-  })
-const mockUpdateClient = vi
-  .fn()
-  .mockResolvedValue({
-    data: {
-      id: 'cli-1',
-      company_id: 'co-1',
-      name: 'ALSA Editado',
-      line_id: null,
-      website: null,
-      payment_day: null,
-      social_links: [],
-      social_manager_id: null,
-      designer_id: null,
-      audiovisual_ids: [],
-      apoyo_ids: [],
-    },
-    error: null,
-  })
+const mockCreateClient = vi.fn().mockResolvedValue({
+  data: {
+    id: 'cli-new',
+    company_id: 'co-1',
+    name: 'Nuevo',
+    line_id: null,
+    website: null,
+    payment_day: null,
+    social_links: [],
+    social_manager_id: null,
+    designer_id: null,
+    audiovisual_ids: [],
+    apoyo_ids: [],
+  },
+  error: null,
+})
+const mockUpdateClient = vi.fn().mockResolvedValue({
+  data: {
+    id: 'cli-1',
+    company_id: 'co-1',
+    name: 'ALSA Editado',
+    line_id: null,
+    website: null,
+    payment_day: null,
+    social_links: [],
+    social_manager_id: null,
+    designer_id: null,
+    audiovisual_ids: [],
+    apoyo_ids: [],
+  },
+  error: null,
+})
 const mockDeleteClient = vi.fn().mockResolvedValue({ data: null, error: null })
 const mockRestoreClient = vi.fn().mockResolvedValue({ data: null, error: null })
 const mockSeedIfEmpty = vi.fn().mockResolvedValue(null)
@@ -356,6 +352,38 @@ describe('ClientsView (sección Clientes en Empresa) — lista plana', () => {
     })
   })
 
+  it('editar cliente y cargar RIF lo incluye en el payload de updateClient', async () => {
+    const user = userEvent.setup()
+    renderAsManager()
+    await waitFor(() => {
+      expect(screen.getByText('ALSA')).toBeInTheDocument()
+    })
+    const editBtns = screen.getAllByRole('button', { name: 'Editar' })
+    await user.click(editBtns[0])
+    await user.type(screen.getByPlaceholderText('J-12345678-9'), 'J-12345678-9')
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+    await waitFor(() => {
+      expect(mockUpdateClient).toHaveBeenCalledWith(
+        'cli-1',
+        expect.objectContaining({ rif: 'J-12345678-9' }),
+      )
+    })
+  })
+
+  it('el botón "Clientes por mes" muestra el panel de activos/altas/bajas', async () => {
+    const user = userEvent.setup()
+    renderAsManager()
+    await waitFor(() => {
+      expect(screen.getByText('ALSA')).toBeInTheDocument()
+    })
+    expect(screen.queryByText('Clientes por mes')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Clientes por mes' }))
+    expect(screen.getAllByText('Clientes por mes').length).toBeGreaterThan(1)
+    expect(screen.getByText('Activos')).toBeInTheDocument()
+    expect(screen.getByText('Altas')).toBeInTheDocument()
+    expect(screen.getByText('Bajas')).toBeInTheDocument()
+  })
+
   it('archivar abre el diálogo de confirmación y llama a deleteClient (soft delete)', async () => {
     const user = userEvent.setup()
     renderAsManager()
@@ -375,9 +403,41 @@ describe('ClientsView (sección Clientes en Empresa) — lista plana', () => {
     const allEliminar = screen.getAllByRole('button', { name: 'Eliminar' })
     await user.click(allEliminar[allEliminar.length - 1])
 
-    // Por defecto se conserva el cliente en el reporte del mes de baja (incluyeMes: true).
+    // Por defecto se conserva el cliente en el reporte del mes de baja (incluyeMes: true),
+    // y la fecha de fin de contrato default es hoy.
     await waitFor(() => {
-      expect(mockDeleteClient).toHaveBeenCalledWith('cli-1', { incluyeMes: true })
+      expect(mockDeleteClient).toHaveBeenCalledWith('cli-1', {
+        incluyeMes: true,
+        contractEnd: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+        reason: null,
+      })
+    })
+  })
+
+  it('archivar permite indicar la fecha real de fin de contrato y un motivo', async () => {
+    const user = userEvent.setup()
+    renderAsManager()
+    await waitFor(() => {
+      expect(screen.getByText('ALSA')).toBeInTheDocument()
+    })
+
+    const archiveBtns = screen.getAllByRole('button', { name: 'Archivar' })
+    await user.click(archiveBtns[0])
+
+    expect(screen.getByText('Fecha de fin de contrato')).toBeInTheDocument()
+    const reasonInput = screen.getByPlaceholderText(/por qué terminó el contrato/i)
+    await user.type(reasonInput, 'Cierre de operaciones')
+
+    const confirmInput = screen.getByPlaceholderText('ALSA')
+    await user.type(confirmInput, 'ALSA')
+    const allEliminar = screen.getAllByRole('button', { name: 'Eliminar' })
+    await user.click(allEliminar[allEliminar.length - 1])
+
+    await waitFor(() => {
+      expect(mockDeleteClient).toHaveBeenCalledWith(
+        'cli-1',
+        expect.objectContaining({ reason: 'Cierre de operaciones' }),
+      )
     })
   })
 
@@ -401,8 +461,30 @@ describe('ClientsView (sección Clientes en Empresa) — lista plana', () => {
     await user.click(allEliminar[allEliminar.length - 1])
 
     await waitFor(() => {
-      expect(mockDeleteClient).toHaveBeenCalledWith('cli-1', { incluyeMes: false })
+      expect(mockDeleteClient).toHaveBeenCalledWith(
+        'cli-1',
+        expect.objectContaining({ incluyeMes: false }),
+      )
     })
+  })
+
+  it('el radio de "reporte del mes en curso" se oculta si la fecha de fin es de un mes anterior', async () => {
+    const user = userEvent.setup()
+    renderAsManager()
+    await waitFor(() => {
+      expect(screen.getByText('ALSA')).toBeInTheDocument()
+    })
+
+    const archiveBtns = screen.getAllByRole('button', { name: 'Archivar' })
+    await user.click(archiveBtns[0])
+    expect(screen.getByText('Reporte del mes en curso')).toBeInTheDocument()
+
+    const dateInput = screen.getByPlaceholderText('dd/mm/aaaa')
+    await user.clear(dateInput)
+    await user.type(dateInput, '15/01/2026')
+
+    expect(screen.queryByText('Reporte del mes en curso')).not.toBeInTheDocument()
+    expect(screen.getByText(/contará hasta/i)).toBeInTheDocument()
   })
 
   it('tras archivar, el cliente desaparece de la lista activa', async () => {

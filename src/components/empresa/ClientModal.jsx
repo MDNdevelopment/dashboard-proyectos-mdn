@@ -63,6 +63,7 @@ export default function ClientModal({
     monthly_fee: client?.monthly_fee ?? '',
     campaign_budget: client?.campaign_budget ?? '',
     website: client?.website ?? '',
+    rif: client?.rif ?? '',
     social_links: client?.social_links ?? [],
     contacts: client?.contacts ?? [],
     anniversary_date: client?.anniversary_date ?? '',
@@ -220,6 +221,7 @@ export default function ClientModal({
       logo_url: form.logo_url || null,
       line_id: form.line_id || null,
       website: form.website.trim() || null,
+      rif: form.rif.trim() || null,
       payment_day,
       monthly_fee,
       campaign_budget,
@@ -571,19 +573,34 @@ export default function ClientModal({
             />
           </div>
 
-          {/* Sitio web */}
-          <div>
-            <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
-              Sitio web
-            </label>
-            <input
-              type="url"
-              className="input-base"
-              value={form.website}
-              onChange={(e) => set('website', e.target.value)}
-              placeholder="https://..."
-              disabled={readOnly}
-            />
+          {/* Sitio web + RIF */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+                Sitio web
+              </label>
+              <input
+                type="url"
+                className="input-base"
+                value={form.website}
+                onChange={(e) => set('website', e.target.value)}
+                placeholder="https://..."
+                disabled={readOnly}
+              />
+            </div>
+            <div>
+              <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+                RIF
+              </label>
+              <input
+                type="text"
+                className="input-base"
+                value={form.rif}
+                onChange={(e) => set('rif', e.target.value)}
+                placeholder="J-12345678-9"
+                disabled={readOnly}
+              />
+            </div>
           </div>
 
           {/* Aniversario + Cliente desde MDN */}

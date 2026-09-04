@@ -108,6 +108,7 @@ export async function createClient(companyId, fields) {
     contacts = [],
     anniversary_date = null,
     mdn_since = null,
+    rif = null,
     social_manager_id = null,
     designer_id = null,
     audiovisual_ids = [],
@@ -129,6 +130,7 @@ export async function createClient(companyId, fields) {
       contacts,
       anniversary_date,
       mdn_since,
+      rif,
       social_manager_id,
       designer_id,
       audiovisual_ids,
@@ -164,15 +166,28 @@ export async function loadCompanyEmployees(companyId) {
 
 // incluyeMes = true  → el cliente cuenta en el reporte del mes de baja (facturó/trabajó parte del mes).
 // incluyeMes = false → se excluye también del mes en curso (ver utils/clientInMonth.js).
-export async function deleteClient(clientId, { incluyeMes = true } = {}) {
+// contractEnd = fecha real (YYYY-MM-DD) en que terminó el contrato; si no se indica, se asume que
+// terminó hoy. reason = motivo de la baja, texto libre opcional.
+export async function deleteClient(
+  clientId,
+  { incluyeMes = true, contractEnd, reason = null } = {},
+) {
   return supabase
     .from('metric_clients')
-    .update({ deleted_at: new Date().toISOString(), baja_incluye_mes: incluyeMes })
+    .update({
+      deleted_at: new Date().toISOString(),
+      baja_incluye_mes: incluyeMes,
+      contract_end: contractEnd || new Date().toISOString().slice(0, 10),
+      contract_end_reason: reason,
+    })
     .eq('id', clientId)
 }
 
 export async function restoreClient(clientId) {
-  return supabase.from('metric_clients').update({ deleted_at: null }).eq('id', clientId)
+  return supabase
+    .from('metric_clients')
+    .update({ deleted_at: null, contract_end: null, contract_end_reason: null })
+    .eq('id', clientId)
 }
 
 // Datos privados de contacto (teléfono, correo de Instagram). Viven en
