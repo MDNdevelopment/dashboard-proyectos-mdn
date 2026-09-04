@@ -69,16 +69,6 @@ export default function MonitorUsoPage() {
         {/* Tab switcher */}
         <div className="flex flex-wrap gap-1 bg-white border border-[#e0ddd4] rounded-xl p-1 w-fit mb-6">
           <button
-            onClick={() => navigate('/monitor-uso')}
-            className={`px-4 py-1.5 rounded-lg text-[14.5px] font-semibold transition-all ${
-              activeSection === 'dashboard'
-                ? 'bg-[#111] text-white'
-                : 'text-[#666] hover:text-[#111] hover:bg-[#f5f3eb]'
-            }`}
-          >
-            Dashboard
-          </button>
-          <button
             onClick={() => navigate('/monitor-uso/graficas')}
             className={`px-4 py-1.5 rounded-lg text-[14.5px] font-semibold transition-all ${
               activeSection === 'graficas'
@@ -87,6 +77,16 @@ export default function MonitorUsoPage() {
             }`}
           >
             Gráficas
+          </button>
+          <button
+            onClick={() => navigate('/monitor-uso')}
+            className={`px-4 py-1.5 rounded-lg text-[14.5px] font-semibold transition-all ${
+              activeSection === 'dashboard'
+                ? 'bg-[#111] text-white'
+                : 'text-[#666] hover:text-[#111] hover:bg-[#f5f3eb]'
+            }`}
+          >
+            Dashboard
           </button>
         </div>
 

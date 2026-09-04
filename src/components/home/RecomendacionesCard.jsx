@@ -67,6 +67,10 @@ export default function RecomendacionesCard() {
 
   const hallazgos = Array.isArray(insight?.hallazgos) ? insight.hallazgos : []
 
+  if (!loading && !error && !insight?.resumen && hallazgos.length === 0) {
+    return null
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-3 gap-3">

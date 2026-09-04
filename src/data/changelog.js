@@ -176,6 +176,8 @@ export const CHANGELOG = [
       '"Monitor de uso" ahora es su propia sección en el menú lateral (ya no una pestaña dentro de Reportes), con dos pestañas: Dashboard (la tabla y el detalle por línea de siempre) y Gráficas (la tendencia mensual).',
       'Se ocultó "Leads" del menú lateral.',
       'En Monitor de uso → Gráficas se agregaron dos gráficos: "Uso general por team" (el Total de cada línea, igual que en la tabla del Dashboard) y "Acciones por módulo", con un mini-gráfico por Reuniones, Tareas, Tareas Fijas, CNP y Pautas AV — cada uno con su propia escala, para que Reuniones no se vea aplastada al lado de Tareas.',
+      'En Monitor de uso se cambió el orden de las pestañas: ahora "Gráficas" aparece primero y "Dashboard" después.',
+      'En Inicio, el recuadro de recomendaciones de MAPPI ya no aparece cuando no hay ninguna recomendación que mostrar.',
     ],
   },
   {
