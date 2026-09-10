@@ -477,7 +477,7 @@ export default function HomePage() {
     ((userProfile?.first_name?.[0] ?? '') + (userProfile?.last_name?.[0] ?? '')).toUpperCase() ||
     '?'
 
-  const quickAccessModules = MODULES.filter((m) => can(m.key))
+  const quickAccessModules = MODULES.filter((m) => !m.hidden && can(m.key))
 
   // Salud de la empresa del mes cerrado más reciente, promediada entre todas las líneas.
   const health = lines.length

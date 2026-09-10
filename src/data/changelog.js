@@ -211,6 +211,7 @@ export const CHANGELOG = [
       'Corregido: en el Monitor de uso, si alguien ajeno al equipo (por ejemplo, dirección) cargaba CNP, tareas u otras actividades a nombre de una línea, no se contaba en el total de esa línea. Ahora toda la actividad cargada a un equipo cuenta para su monitor de uso, sea o no quien la cargó parte formal del equipo. Además, ese apoyo externo ahora aparece como filas más de la tabla de detalle (con la etiqueta "Apoyo externo"), en vez de un texto aparte.',
       'MAPPI ahora también responde sobre tickets de soporte, leads, vacaciones, Contenido No Planificado, Chequeo de publicación y desempeño promedio por equipo/departamento/cargo, además de tareas, reuniones y pautas con más filtros que antes (por persona, cliente, estado y rango de fechas). Cuando una pregunta todavía se le escapa, ya no improvisa una respuesta: avisa que quedó registrada, y en Empresa → MAPPI se puede ver el listado de preguntas sin responder ordenadas por frecuencia.',
       'Katherine ahora también puede aprobar la impresión de los CNP, junto con Paola y Stephanie.',
+      'Nuevo botón amarillo "Sugerencias y errores" en el menú lateral: cualquiera puede enviar una recomendación o reportar un error de forma totalmente anónima, sin dejar rastro de quién lo escribió (ni siquiera el administrador puede saberlo). Por ahora reemplaza el acceso a Soporte Técnico.',
     ],
   },
   {

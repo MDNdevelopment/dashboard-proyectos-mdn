@@ -185,29 +185,33 @@ describe('Sidebar — sección Evaluaciones (sigue siendo desplegable)', () => {
   })
 })
 
-describe('Sidebar — Soporte Técnico (link único, sin desplegable)', () => {
-  it('muestra el enlace directo Soporte Técnico (sin desplegable)', () => {
+describe('Sidebar — Soporte Técnico oculto / Buzón anónimo', () => {
+  it('no muestra el enlace a Soporte Técnico (oculto, ver src/config/modules.js)', () => {
     renderSidebar(USER)
-    expect(screen.getByRole('link', { name: /soporte técnico/i })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /soporte técnico/i })).not.toBeInTheDocument()
   })
 
-  it('el enlace Soporte Técnico apunta a /tickets', () => {
+  it('muestra el botón amarillo "Sugerencias y errores"', () => {
     renderSidebar(USER)
-    expect(screen.getByRole('link', { name: /soporte técnico/i })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: /sugerencias y errores/i })).toBeInTheDocument()
+  })
+
+  it('el botón "Sugerencias y errores" abre el modal de feedback anónimo', () => {
+    renderSidebar(USER)
+    fireEvent.click(screen.getByRole('button', { name: /sugerencias y errores/i }))
+    expect(screen.getByRole('dialog', { name: /sugerencias y errores/i })).toBeInTheDocument()
+  })
+
+  it('no muestra el link "Buzón anónimo" para un usuario sin admin', () => {
+    renderSidebar(USER)
+    expect(screen.queryByRole('link', { name: /buzón anónimo/i })).not.toBeInTheDocument()
+  })
+
+  it('muestra el link "Buzón anónimo" para un admin, apuntando a /feedback', () => {
+    renderSidebar({ department_id: 1, access_level: 1, admin: true })
+    expect(screen.getByRole('link', { name: /buzón anónimo/i })).toHaveAttribute(
       'href',
-      '/tickets',
+      '/feedback',
     )
-  })
-
-  it('no hay botón desplegable para Soporte Técnico', () => {
-    renderSidebar(USER)
-    expect(screen.queryByRole('button', { name: /soporte técnico/i })).not.toBeInTheDocument()
-  })
-
-  it('no muestra sub-enlaces en el sidebar (las secciones son tabs dentro de la página)', () => {
-    renderSidebar({ department_id: 0, access_level: 3, admin: false })
-    expect(screen.queryByRole('link', { name: /^lista de tickets$/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /^analíticas$/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /^notificaciones$/i })).not.toBeInTheDocument()
   })
 })

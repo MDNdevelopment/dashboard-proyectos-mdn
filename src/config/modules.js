@@ -30,6 +30,10 @@ export const MODULES = [
     label: 'Soporte Técnico',
     routePrefix: '/tickets',
     description: 'Sistema de tickets de soporte',
+    // Oculto de Sidebar y accesos rápidos del Inicio mientras el buzón anónimo
+    // (ver módulo 'feedback' más abajo) lo reemplaza. La ruta /tickets sigue activa,
+    // así que para reactivarlo solo hace falta quitar esta línea.
+    hidden: true,
     tabs: [],
     manageActions: [{ key: 'tickets.manage', label: 'Crear y gestionar tickets' }],
   },

@@ -7,11 +7,13 @@ import AppLayout from './components/AppLayout.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
 import RequireModule from './components/RequireModule.jsx'
+import RequireAdmin from './components/RequireAdmin.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx'
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx'
 import HomePage from './pages/HomePage.jsx'
 import TicketsPage from './pages/TicketsPage.jsx'
+import FeedbackPage from './pages/FeedbackPage.jsx'
 import AdsPage from './pages/AdsPage.jsx'
 import TareasPage from './pages/TareasPage.jsx'
 import TareasFijasPage from './pages/TareasFijasPage.jsx'
@@ -66,6 +68,16 @@ createRoot(document.getElementById('root')).render(
                 <RequireModule moduleKey="tickets">
                   <TicketsPage />
                 </RequireModule>
+              }
+            />
+
+            {/* Buzón anónimo de sugerencias y errores — solo admins */}
+            <Route
+              path="/feedback"
+              element={
+                <RequireAdmin>
+                  <FeedbackPage />
+                </RequireAdmin>
               }
             />
 

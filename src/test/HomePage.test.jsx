@@ -595,6 +595,11 @@ describe('HomePage — accesos rápidos', () => {
     expect(screen.queryByText(/tareas qc \/ cierre/i)).not.toBeInTheDocument()
   })
 
+  it('oculta Soporte Técnico aunque can() lo permita (módulo marcado hidden, ver modules.js)', () => {
+    renderPage()
+    expect(screen.queryByRole('link', { name: /soporte técnico/i })).not.toBeInTheDocument()
+  })
+
   it('oculta los módulos no permitidos por can()', () => {
     useAuth.mockReturnValue({
       userProfile: {

@@ -5,6 +5,7 @@ import { supabase } from '../supabase'
 import MDNLogo from './MDNLogo'
 import AvatarUpload from './empresa/AvatarUpload'
 import NotificationBell from './notifications/NotificationBell'
+import FeedbackModal from './feedback/FeedbackModal'
 
 const HOME_ICON = (
   <svg
@@ -38,7 +39,7 @@ const PROJECTS_ICON = (
     <rect x="9" y="9" width="6" height="6" rx="1.5" />
   </svg>
 )
-const TICKET_ICON = (
+const MEGAPHONE_ICON = (
   <svg
     width="14"
     height="14"
@@ -47,9 +48,8 @@ const TICKET_ICON = (
     stroke="currentColor"
     strokeWidth="1.7"
   >
-    <rect x="1" y="3" width="14" height="10" rx="1.5" />
-    <path d="M1 6h14" strokeLinecap="round" />
-    <path d="M5 10h6" strokeLinecap="round" />
+    <path d="M1.5 6.5v3a1 1 0 0 0 1 1H4l6 3V2.5L4 5.5H2.5a1 1 0 0 0-1 1Z" strokeLinejoin="round" />
+    <path d="M12.5 6a2 2 0 0 1 0 4" strokeLinecap="round" />
   </svg>
 )
 const BELL_ICON = (
@@ -177,6 +177,7 @@ function Sidebar() {
   // Hasta que los permisos carguen desde BD, ningún módulo gateado aparece (evita flash).
   const canR = permissionsLoaded ? can : () => false
   const [menuOpen, setMenuOpen] = useState(false)
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
   const avatarInputRef = useRef(null)
   const menuRef = useRef(null)
 
@@ -233,7 +234,7 @@ function Sidebar() {
 
   const isHomeRoute = location.pathname === '/'
   const isProjectsRoute = location.pathname === '/proyectos'
-  const isTicketsRoute = location.pathname.startsWith('/tickets')
+  const isFeedbackRoute = location.pathname.startsWith('/feedback')
 
   const isAdsRoute = location.pathname.startsWith('/ads')
   const isTareasRoute = location.pathname.startsWith('/tareas')
@@ -668,24 +669,37 @@ function Sidebar() {
         </div>
       </nav>
 
-      {/* Soporte Técnico — fijado al fondo, encima del perfil */}
-      {canR('tickets') && (
-        <div className="px-3 py-3 border-t border-[#ece9df]">
+      {/* Soporte Técnico oculto por ahora (buzón anónimo lo reemplaza). Para reactivarlo:
+          quitar `hidden: true` de la entrada 'tickets' en src/config/modules.js y restaurar
+          aquí el <Link to="/tickets"> que usaba TICKET_ICON + canR('tickets'). La ruta y el
+          módulo siguen intactos, solo el acceso por Sidebar/Inicio está oculto. */}
+
+      {/* Buzón anónimo — fijado al fondo, encima del perfil */}
+      <div className="px-3 py-3 border-t border-[#ece9df] space-y-1.5">
+        <button
+          onClick={() => setFeedbackOpen(true)}
+          className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all text-left bg-[#FFB800] text-[#111] hover:brightness-95"
+        >
+          <span className="flex-shrink-0 text-[#111]">{MEGAPHONE_ICON}</span>
+          <span className="flex-1">
+            Sugerencias y errores
+            <span className="block text-[11px] font-normal text-[#5c4d00]">Anónimo</span>
+          </span>
+        </button>
+        {userProfile?.admin && (
           <Link
-            to="/tickets"
-            className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all text-left ${
-              isTicketsRoute
-                ? 'bg-[#FFB800] text-[#111]'
-                : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+            to="/feedback"
+            className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[13px] font-medium transition-all text-left ${
+              isFeedbackRoute
+                ? 'bg-[#f5f3eb] text-[#111]'
+                : 'text-[#999] hover:bg-[#f5f3eb] hover:text-[#111]'
             }`}
           >
-            <span className={`flex-shrink-0 ${isTicketsRoute ? 'text-[#111]' : 'text-[#666]'}`}>
-              {TICKET_ICON}
-            </span>
-            <span className="flex-1">Soporte Técnico</span>
+            Buzón anónimo (admin)
           </Link>
-        </div>
-      )}
+        )}
+      </div>
+      <FeedbackModal show={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
 
       {/* User menu */}
       <div className="px-4 pb-5 pt-3 border-t border-[#ece9df] relative" ref={menuRef}>
