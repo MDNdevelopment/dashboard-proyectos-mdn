@@ -305,7 +305,7 @@ describe('AudiovisualView', () => {
       expect(screen.getByText('Edición de piezas')).toBeInTheDocument()
     })
     // Editable: 'editor-1' está en recurso_ids de p4 (ver MOCK_PAUTAS).
-    expect(screen.getByPlaceholderText('Buscar empleado por nombre…')).toBeInTheDocument()
+    expect(screen.getByText('+ Agregar editor')).toBeInTheDocument()
     // Pero no tiene audiovisual.coordina: no ve los botones de agendar/declinar.
     expect(screen.queryByText('Agendar')).not.toBeInTheDocument()
     expect(screen.queryByText('Declinar')).not.toBeInTheDocument()

@@ -16,6 +16,8 @@ import {
   piezasPorFormato,
   setPiezaFormatoCount,
   defaultPiezaName,
+  planPiezaRemoval,
+  distributePiezas,
   pautaErrorMessage,
 } from '../../utils/audiovisual'
 import { createPiezas, deletePiezas, updatePieza } from './avPautasApi'
@@ -23,6 +25,7 @@ import Avatar from '../Avatar'
 import AttendeePicker from '../reuniones/AttendeePicker'
 import ExtraBadge from './ExtraBadge'
 import StatusPill from '../common/StatusPill'
+import Stepper from '../common/Stepper'
 
 // Misma paleta de status que los puntos del calendario (AvCalendar.jsx → DOT_COLOR),
 // pero como pill de texto+fondo para el header del modal.
@@ -200,8 +203,17 @@ function PiezasSection({
   onPiezaDeleted,
 }) {
   const [error, setError] = useState(null)
+  const [warning, setWarning] = useState(null)
+  // El picker de editores arranca cerrado — con la pauta ya repartida, mostrarlo siempre
+  // desplegado es ruido; se abre con el botón "+ Agregar editor" cuando hace falta.
+  const [pickerOpen, setPickerOpen] = useState(false)
+  // Editores agregados en esta sesión que todavía no tienen ninguna pieza — no se
+  // persisten en BD (no hay tabla de "editores de la pauta"): un editor sin piezas no es
+  // información que valga la pena guardar. Se muestran igual para que el coordinador les
+  // reparta cantidad con el stepper de su bloque sin tener que recordarlos.
+  const [extraEditorIds, setExtraEditorIds] = useState([])
   const grouped = piezasByEditor(piezas)
-  const editorIds = [...grouped.keys()].filter(Boolean)
+  const editorIds = [...new Set([...grouped.keys(), ...extraEditorIds])].filter(Boolean)
   const sinAsignar = grouped.get(null) ?? []
   const asignadas = piezas.length
   // Formatos marcados en la pauta -> se captura el desglose por formato; si no hay
@@ -218,17 +230,19 @@ function PiezasSection({
   // vacío — solo cambia cuando el coordinador realmente carga los conteos por formato.
   const totales = Number(pauta.piezas_totales) || 0
   const totalEditadas = Number(pauta.piezas_editadas) || 0
-  const desalineado = asignadas !== totales
+  const faltantes = Math.max(0, totales - asignadas)
+  const pct = totales ? Math.min(100, Math.round((asignadas / totales) * 100)) : 0
 
-  async function handleSalieronChange(code, value) {
+  async function handleSalieronChange(code, delta) {
     setError(null)
-    const next = setPiezaFormatoCount(pauta, code, 'salieron', value)
+    const next = setPiezaFormatoCount(pauta, code, 'salieron', breakdown[code].salieron + delta)
     const { error: err } = (await onFields(pauta, { piezas_por_formato: next })) ?? {}
     if (err) setError(pautaErrorMessage(err))
   }
 
   async function handleEditorsChange(nextIds) {
     setError(null)
+    setWarning(null)
     // Editor quitado del picker: sus piezas quedan sin editor (nunca se borran solas).
     const removed = editorIds.filter((id) => !nextIds.includes(id))
     if (removed.length) {
@@ -243,72 +257,62 @@ function PiezasSection({
       }
       results.forEach((r) => r.data && onPiezaChanged(r.data))
     }
-    // Editor agregado: se le crea 1 pieza de entrada (si no, el bloque del editor no tendría
-    // nada que agrupar — la lista de editores visibles se deriva de las piezas mismas — y el
-    // picker lo "olvidaría" en el próximo render). El coordinador ajusta la cantidad después
-    // con el input "piezas asignadas" de su bloque.
+    // Editor agregado: no crea ninguna pieza — solo entra a la lista visible, con un
+    // bloque vacío, hasta que el coordinador le reparta cantidad con el stepper.
     const added = nextIds.filter((id) => !editorIds.includes(id))
-    if (added.length) {
-      const startIndex = piezas.length
-      const results = await Promise.all(
-        added.map((editorId, i) =>
-          createPiezas(
-            companyId,
-            pauta.id,
-            editorId,
-            [defaultPiezaName(startIndex + i)],
-            startIndex + i,
-            singleFormat,
-          ),
-        ),
-      )
-      const failed = results.find((r) => r.error)
-      if (failed) {
-        setError(`No se pudo asignar el editor. ${pautaErrorMessage(failed.error)}`)
-        return
-      }
-      results.forEach((r) => (r.data ?? []).forEach((pz) => onPiezaChanged(pz)))
-    }
+    setExtraEditorIds((prev) => [...prev.filter((id) => !removed.includes(id)), ...added])
   }
 
-  async function handleAssignedChange(editorId, nextCount) {
+  async function createForEditor(editorId, count) {
+    const startIndex = piezas.length
+    const nombres = Array.from({ length: count }, (_, i) => defaultPiezaName(startIndex + i))
+    return createPiezas(companyId, pauta.id, editorId, nombres, startIndex, singleFormat)
+  }
+
+  async function handleAssignedChange(editorId, delta) {
     setError(null)
+    setWarning(null)
     const current = grouped.get(editorId) ?? []
-    const diff = nextCount - current.length
-    if (diff > 0) {
-      const startIndex = piezas.length
-      const nombres = Array.from({ length: diff }, (_, i) => defaultPiezaName(startIndex + i))
-      const { data, error: err } = await createPiezas(
-        companyId,
-        pauta.id,
-        editorId,
-        nombres,
-        startIndex,
-        singleFormat,
-      )
+    if (delta > 0) {
+      // Nunca se reparten más piezas de las que "salieron" — el stepper ya llega
+      // deshabilitado a este límite, esto es el resguardo si igual se dispara.
+      const allowed = Math.min(delta, faltantes)
+      if (allowed <= 0) return
+      const { data, error: err } = await createForEditor(editorId, allowed)
       if (err) {
         setError(`No se pudieron crear las piezas. ${pautaErrorMessage(err)}`)
         return
       }
       ;(data ?? []).forEach((pz) => onPiezaChanged(pz))
-    } else if (diff < 0) {
-      // Solo se borran piezas 'pendiente', empezando por el final del grupo — nunca se
-      // pierde trabajo ya iniciado en silencio.
-      const removable = current.filter((pz) => pz.status === 'pendiente')
-      const toRemove = removable.slice(removable.length + diff)
-      if (toRemove.length < -diff) {
-        window.alert(
-          'Algunas piezas de este editor ya tienen avance — quítalas manualmente antes de reducir la cantidad.',
+    } else if (delta < 0) {
+      const { toDelete, blocked } = planPiezaRemoval(current, -delta)
+      if (toDelete.length) {
+        const { error: err } = await deletePiezas(toDelete)
+        if (err) {
+          setError(`No se pudieron quitar las piezas. ${pautaErrorMessage(err)}`)
+          return
+        }
+        toDelete.forEach((id) => onPiezaDeleted(id))
+      }
+      if (blocked.length) {
+        setWarning(
+          `Quedan ${blocked.length} pieza${blocked.length === 1 ? '' : 's'} con avance en este bloque — quítala${blocked.length === 1 ? '' : 's'} con la ✕ si de verdad quieres eliminarla${blocked.length === 1 ? '' : 's'}.`,
         )
-        return
       }
-      const ids = toRemove.map((pz) => pz.id)
-      const { error: err } = await deletePiezas(ids)
+    }
+  }
+
+  async function handleAutoDistribute() {
+    setError(null)
+    setWarning(null)
+    const plan = distributePiezas(faltantes, editorIds, grouped)
+    for (const { editorId, count } of plan) {
+      const { data, error: err } = await createForEditor(editorId, count)
       if (err) {
-        setError(`No se pudieron quitar las piezas. ${pautaErrorMessage(err)}`)
+        setError(`No se pudieron repartir las piezas. ${pautaErrorMessage(err)}`)
         return
       }
-      ids.forEach((id) => onPiezaDeleted(id))
+      data?.forEach((pz) => onPiezaChanged(pz))
     }
   }
 
@@ -323,6 +327,11 @@ function PiezasSection({
           {error}
         </div>
       )}
+      {warning && (
+        <div className="mb-3 px-3 py-2 rounded-lg bg-[#fdf4de] text-[#9a7400] text-[12.5px]">
+          {warning}
+        </div>
+      )}
 
       {usaFormatos ? (
         <div className="mb-3">
@@ -334,17 +343,14 @@ function PiezasSection({
               <div key={code} className="flex items-center gap-3">
                 <span className="text-[13px] text-[#333] flex-1">{FORMAT_LABELS[code]}</span>
                 {canEditPiezas ? (
-                  <label className="flex items-center gap-1.5">
+                  <span className="flex items-center gap-1.5">
                     <span className="text-[11px] text-[#999]">Salieron</span>
-                    <input
-                      type="number"
-                      min="0"
-                      className="input-base input-compact text-center"
-                      style={{ width: '4rem' }}
-                      defaultValue={breakdown[code].salieron}
-                      onBlur={(e) => handleSalieronChange(code, e.target.value)}
+                    <Stepper
+                      value={breakdown[code].salieron}
+                      onChange={(delta) => handleSalieronChange(code, delta)}
+                      label={`salieron de ${FORMAT_LABELS[code]}`}
                     />
-                  </label>
+                  </span>
                 ) : (
                   <span className="text-[12px] text-[#999]">
                     Salieron <strong className="text-[#333]">{breakdown[code].salieron}</strong>
@@ -370,22 +376,19 @@ function PiezasSection({
         </div>
       ) : (
         <div className="mb-3">
-          <label className="block text-[11.5px] font-mono uppercase tracking-wide text-[#999] mb-1">
+          <p className="text-[11.5px] font-mono uppercase tracking-wide text-[#999] mb-1">
             Piezas totales
-          </label>
+          </p>
           {canEditPiezas ? (
-            <input
-              type="number"
-              min="0"
-              className="input-base input-compact text-center"
-              style={{ width: '5rem' }}
-              defaultValue={totales}
-              onBlur={async (e) => {
+            <Stepper
+              value={totales}
+              onChange={async (delta) => {
                 setError(null)
                 const { error: err } =
-                  (await onFields(pauta, { piezas_totales: Number(e.target.value) || 0 })) ?? {}
+                  (await onFields(pauta, { piezas_totales: Math.max(0, totales + delta) })) ?? {}
                 if (err) setError(pautaErrorMessage(err))
               }}
+              label="piezas totales"
             />
           ) : (
             <span className="font-mono text-[14px] font-semibold">{totales}</span>
@@ -393,29 +396,65 @@ function PiezasSection({
         </div>
       )}
 
-      {desalineado && (
-        <div className="mb-3 px-3 py-2 rounded-lg bg-[#fdf4de] text-[12.5px] text-[#9a7400] font-medium">
-          {asignadas} de {totales} piezas repartidas — ajusta la cantidad por editor para que
-          cuadre.
+      {totales > 0 && (
+        <div className="mb-3">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[12px] text-[#666]">
+              {asignadas} de {totales} piezas repartidas{faltantes > 0 && ` · faltan ${faltantes}`}
+            </span>
+            {canEditPiezas && faltantes > 0 && editorIds.length > 0 && (
+              <button
+                type="button"
+                onClick={handleAutoDistribute}
+                className="text-[11.5px] font-semibold text-[#2563eb] hover:underline"
+              >
+                Repartir automáticamente
+              </button>
+            )}
+          </div>
+          <div className="h-1.5 rounded-full bg-[#f0eee5] overflow-hidden">
+            <div
+              className="h-full rounded-full bg-[#1f8a43] transition-all"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
         </div>
       )}
 
       {canEditPiezas && (
         <div className="mb-4">
-          <label className="block text-[11.5px] font-mono uppercase tracking-wide text-[#999] mb-1">
-            Editores
-          </label>
-          <AttendeePicker
-            employees={audiovisualUsers}
-            selectedIds={editorIds}
-            onChange={handleEditorsChange}
-            hideQuickGroups
-          />
+          <div className="flex items-center justify-between mb-1.5">
+            <p className="text-[13px] font-mono font-bold uppercase tracking-wide text-[#444]">
+              Editores
+            </p>
+            <button
+              type="button"
+              onClick={() => setPickerOpen((v) => !v)}
+              aria-label={pickerOpen ? 'Cerrar selector de editores' : 'Agregar editor'}
+              className="text-[11.5px] font-semibold text-[#2563eb] hover:underline"
+            >
+              {pickerOpen ? 'Cerrar' : '+ Agregar editor'}
+            </button>
+          </div>
+          {pickerOpen ? (
+            <AttendeePicker
+              employees={audiovisualUsers}
+              selectedIds={editorIds}
+              onChange={handleEditorsChange}
+              hideQuickGroups
+            />
+          ) : (
+            editorIds.length === 0 && (
+              <p className="text-[13px] text-[#bbb]">Aún no se han agregado editores.</p>
+            )
+          )}
         </div>
       )}
 
       <div className="space-y-4">
-        {editorIds.length === 0 && sinAsignar.length === 0 && (
+        {/* Solo lectura: el bloque "Editores" de arriba (con su propio mensaje vacío) no se
+            renderiza sin canEditPiezas, así que este es el único aviso que vería ese lector. */}
+        {!canEditPiezas && editorIds.length === 0 && sinAsignar.length === 0 && (
           <p className="text-[13px] text-[#bbb]">Sin editores asignados todavía.</p>
         )}
         {editorIds.map((editorId) => (
@@ -425,7 +464,8 @@ function PiezasSection({
             piezas={grouped.get(editorId) ?? []}
             canEditPiezas={canEditPiezas}
             formatOptions={activeFormats}
-            onAssignedChange={(n) => handleAssignedChange(editorId, n)}
+            maxAssigned={(grouped.get(editorId) ?? []).length + faltantes}
+            onAssignedChange={(delta) => handleAssignedChange(editorId, delta)}
             onPiezaChanged={onPiezaChanged}
             onPiezaDeleted={onPiezaDeleted}
             onError={setError}
@@ -452,6 +492,7 @@ function EditorChecklist({
   piezas,
   canEditPiezas,
   formatOptions,
+  maxAssigned,
   onAssignedChange,
   onPiezaChanged,
   onPiezaDeleted,
@@ -475,14 +516,11 @@ function EditorChecklist({
           {listas}/{total} listas
         </span>
         {canEditPiezas && editor && onAssignedChange && (
-          <input
-            type="number"
-            min="0"
-            title="Piezas asignadas a este editor"
-            className="input-base input-compact text-center flex-shrink-0"
-            style={{ width: '3.5rem' }}
-            defaultValue={piezas.length}
-            onBlur={(e) => onAssignedChange(Math.max(0, Number(e.target.value) || 0))}
+          <Stepper
+            value={piezas.length}
+            onChange={onAssignedChange}
+            max={maxAssigned}
+            label={`piezas de ${editor.first_name ?? 'este editor'}`}
           />
         )}
       </div>

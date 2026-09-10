@@ -11,11 +11,12 @@ import PautaDetailModal from '../components/pautas/PautaDetailModal'
 
 const mockCreatePiezas = vi.fn().mockResolvedValue({ data: [], error: null })
 const mockUpdatePieza = vi.fn().mockResolvedValue({ data: null, error: null })
+const mockDeletePiezas = vi.fn().mockResolvedValue({ data: null, error: null })
 
 vi.mock('../components/pautas/avPautasApi', () => ({
   createPiezas: (...a) => mockCreatePiezas(...a),
   updatePieza: (...a) => mockUpdatePieza(...a),
-  deletePiezas: vi.fn().mockResolvedValue({ data: null, error: null }),
+  deletePiezas: (...a) => mockDeletePiezas(...a),
 }))
 
 const EMOJIS = ['⏩', '📅', '⏱️', '📍', '👥', '🎬']
@@ -171,31 +172,59 @@ describe('PautaDetailModal', () => {
     expect(screen.queryByPlaceholderText('Buscar empleado por nombre…')).not.toBeInTheDocument()
   })
 
-  it('asignar un editor sin piezas previas le crea una pieza de entrada (regresión: antes desaparecía del picker)', async () => {
-    mockCreatePiezas.mockResolvedValueOnce({
-      data: [
-        {
-          id: 'pz-new',
-          pauta_id: 'p1',
-          editor_user_id: 'u1',
-          nombre: 'Video #1',
-          status: 'pendiente',
-          position: 0,
-        },
-      ],
-      error: null,
-    })
+  it('sin canEditPiezas y sin editores, muestra "Sin editores asignados todavía" (el bloque "Editores" no se renderiza)', () => {
+    render(
+      <PautaDetailModal
+        {...baseProps({
+          pauta: pauta({ status: 'realizada', piezas_totales: 1 }),
+          piezas: [],
+          canEditPiezas: false,
+        })}
+      />,
+    )
+    expect(screen.queryByText('Editores')).not.toBeInTheDocument()
+    expect(screen.getByText('Sin editores asignados todavía.')).toBeInTheDocument()
+  })
+
+  it('el picker de editores arranca cerrado: muestra "Aún no se han agregado editores" y se abre con el botón', () => {
     render(
       <PautaDetailModal
         {...baseProps({ pauta: pauta({ status: 'realizada', piezas_totales: 1 }), piezas: [] })}
       />,
     )
+    expect(screen.getByText('Editores')).toBeInTheDocument()
+    expect(screen.getByText('Aún no se han agregado editores.')).toBeInTheDocument()
+    // Un solo mensaje de "vacío" — no se duplica con el de la lista de checklists de abajo.
+    expect(screen.queryByText('Sin editores asignados todavía.')).not.toBeInTheDocument()
+    expect(screen.queryByPlaceholderText('Buscar empleado por nombre…')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('+ Agregar editor'))
+    expect(screen.getByPlaceholderText('Buscar empleado por nombre…')).toBeInTheDocument()
+    expect(screen.queryByText('Aún no se han agregado editores.')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByLabelText('Cerrar selector de editores'))
+    expect(screen.queryByPlaceholderText('Buscar empleado por nombre…')).not.toBeInTheDocument()
+  })
+
+  it('asignar un editor sin piezas previas NO crea ninguna pieza automáticamente (se reparte con el stepper)', async () => {
+    render(
+      <PautaDetailModal
+        {...baseProps({ pauta: pauta({ status: 'realizada', piezas_totales: 1 }), piezas: [] })}
+      />,
+    )
+    expect(screen.getByText('Aún no se han agregado editores.')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('+ Agregar editor'))
     fireEvent.change(screen.getByPlaceholderText('Buscar empleado por nombre…'), {
       target: { value: 'Lizdania' },
     })
     fireEvent.click(screen.getByText('Lizdania Andrade'))
+    expect(mockCreatePiezas).not.toHaveBeenCalled()
+    // El editor entra a la lista con un bloque vacío, listo para repartirle piezas.
+    expect(screen.getByText('Sin piezas asignadas.')).toBeInTheDocument()
+
     // La pauta base tiene un único formato marcado ('V'), así que se autoasigna sin
     // pedirlo pieza por pieza.
+    fireEvent.click(screen.getByLabelText('Agregar piezas de Lizdania'))
     expect(mockCreatePiezas).toHaveBeenCalledWith('c1', 'p1', 'u1', ['Video #1'], 0, 'V')
   })
 
@@ -209,11 +238,13 @@ describe('PautaDetailModal', () => {
         {...baseProps({ pauta: pauta({ status: 'realizada', piezas_totales: 1 }), piezas: [] })}
       />,
     )
+    fireEvent.click(screen.getByText('+ Agregar editor'))
     fireEvent.change(screen.getByPlaceholderText('Buscar empleado por nombre…'), {
       target: { value: 'Lizdania' },
     })
     fireEvent.click(screen.getByText('Lizdania Andrade'))
-    expect(await screen.findByText(/No se pudo asignar el editor/)).toBeInTheDocument()
+    fireEvent.click(screen.getByLabelText('Agregar piezas de Lizdania'))
+    expect(await screen.findByText(/No se pudieron crear las piezas/)).toBeInTheDocument()
   })
 
   it('si onFields (piezas totales) devuelve error, lo muestra traducido en vez de fallar en silencio', async () => {
@@ -229,9 +260,9 @@ describe('PautaDetailModal', () => {
         })}
       />,
     )
-    const input = document.querySelector('input[type="number"]')
-    fireEvent.change(input, { target: { value: '5' } })
-    fireEvent.blur(input)
+    // La pauta base marca el formato 'V', así que el control es "Salieron" de ese
+    // formato (el camino legacy de "Piezas totales" solo aparece sin formatos marcados).
+    fireEvent.click(screen.getByLabelText('Agregar salieron de Video de marca'))
 
     expect(onFields).toHaveBeenCalled()
     expect(
@@ -251,12 +282,14 @@ describe('PautaDetailModal', () => {
       expect(screen.getByText('Reel')).toBeInTheDocument()
       expect(screen.getByText('Foto')).toBeInTheDocument()
       expect(screen.queryByText('Video de marca')).not.toBeInTheDocument()
-      // Un input "Salieron" por formato (2); "Editadas" ya no es un input — lo deriva
-      // el checklist de piezas por formato.
-      expect(document.querySelectorAll('input[type="number"]').length).toBe(2)
+      // Un stepper "Salieron" por formato (2); "Editadas" ya no es editable — lo deriva
+      // el checklist de piezas por formato, así que no tiene botones +/−.
+      expect(screen.getByLabelText('Agregar salieron de Reel')).toBeInTheDocument()
+      expect(screen.getByLabelText('Agregar salieron de Foto')).toBeInTheDocument()
+      expect(screen.queryByLabelText(/editadas/i)).not.toBeInTheDocument()
     })
 
-    it('escribir en "Salieron" de Foto llama a onFields con el piezas_por_formato correcto', () => {
+    it('el stepper "Salieron" de Foto llama a onFields con el piezas_por_formato correcto', () => {
       const onFields = vi.fn().mockResolvedValue({ error: null })
       render(
         <PautaDetailModal
@@ -264,16 +297,16 @@ describe('PautaDetailModal', () => {
             pauta: pauta({
               status: 'realizada',
               formats: ['R', 'F'],
-              piezas_por_formato: { R: { salieron: 3, editadas: 2 } },
+              piezas_por_formato: {
+                R: { salieron: 3, editadas: 2 },
+                F: { salieron: 4, editadas: 0 },
+              },
             }),
             onFields,
           })}
         />,
       )
-      const salieronInputs = document.querySelectorAll('input[type="number"]')
-      // Orden fijo V/R/F: con formats=['R','F'] el primer input es "Salieron" de Reel,
-      // el segundo es "Salieron" de Foto.
-      fireEvent.blur(salieronInputs[1], { target: { value: '5' } })
+      fireEvent.click(screen.getByLabelText('Agregar salieron de Foto'))
       expect(onFields).toHaveBeenCalledWith(expect.objectContaining({ id: 'p1' }), {
         piezas_por_formato: { R: { salieron: 3, editadas: 2 }, F: { salieron: 5, editadas: 0 } },
       })
@@ -292,8 +325,9 @@ describe('PautaDetailModal', () => {
         />,
       )
       expect(screen.getByText('3')).toBeInTheDocument()
-      // No hay ningún input para "Editadas": solo el de "Salieron".
-      expect(document.querySelectorAll('input[type="number"]').length).toBe(1)
+      // No hay ningún control editable para "Editadas": solo el stepper de "Salieron".
+      expect(screen.getByLabelText('Agregar salieron de Foto')).toBeInTheDocument()
+      expect(screen.queryByLabelText(/editadas/i)).not.toBeInTheDocument()
     })
 
     it('muestra el total ya sincronizado por el trigger de BD, no una suma recalculada en cliente', () => {
@@ -324,7 +358,7 @@ describe('PautaDetailModal', () => {
       )
       expect(screen.getByText('Piezas totales')).toBeInTheDocument()
       expect(screen.queryByText('Piezas por formato')).not.toBeInTheDocument()
-      expect(document.querySelectorAll('input[type="number"]').length).toBe(1)
+      expect(screen.getByLabelText('Agregar piezas totales')).toBeInTheDocument()
     })
   })
 
@@ -413,6 +447,166 @@ describe('PautaDetailModal', () => {
       // "Reel" aparece también en el bloque "Piezas por formato" — basta con confirmar
       // que la etiqueta de la pieza (no un <select>) está presente.
       expect(screen.getAllByText('Reel').length).toBeGreaterThan(0)
+    })
+  })
+
+  describe('reparto de piezas (steppers y reasignación)', () => {
+    it('el stepper "+" de un editor crea una pieza para él', () => {
+      mockCreatePiezas.mockResolvedValueOnce({
+        data: [{ id: 'pz-new', editor_user_id: 'u1', nombre: 'Video #1', status: 'pendiente' }],
+        error: null,
+      })
+      const piezas = [
+        { id: 'pz1', editor_user_id: 'u1', nombre: 'Video #1', status: 'pendiente', position: 0 },
+      ]
+      render(
+        <PautaDetailModal
+          {...baseProps({
+            pauta: pauta({ status: 'realizada', piezas_totales: 2 }),
+            piezas,
+          })}
+        />,
+      )
+      fireEvent.click(screen.getByLabelText('Agregar piezas de Lizdania'))
+      expect(mockCreatePiezas).toHaveBeenCalledWith('c1', 'p1', 'u1', ['Video #2'], 1, 'V')
+    })
+
+    it('el stepper "+" se deshabilita cuando ya se repartieron todas las piezas que salieron', () => {
+      mockCreatePiezas.mockClear()
+      const piezas = [
+        { id: 'pz1', editor_user_id: 'u1', nombre: 'Video #1', status: 'pendiente', position: 0 },
+      ]
+      render(
+        <PautaDetailModal
+          {...baseProps({
+            // piezas_totales: 1 y ya hay 1 pieza repartida → no queda nada por repartir.
+            pauta: pauta({ status: 'realizada', piezas_totales: 1 }),
+            piezas,
+          })}
+        />,
+      )
+      const stepper = screen.getByLabelText('Agregar piezas de Lizdania')
+      expect(stepper).toBeDisabled()
+      fireEvent.click(stepper)
+      // Un botón disabled no dispara su onClick — esto confirma que ni siquiera se intenta.
+      expect(mockCreatePiezas).not.toHaveBeenCalled()
+    })
+
+    it('el "+" de dos editores comparte el mismo tope: sin faltantes, ambos quedan deshabilitados', () => {
+      const piezas = [
+        { id: 'pz1', editor_user_id: 'u1', nombre: 'Video #1', status: 'pendiente', position: 0 },
+        { id: 'pz2', editor_user_id: 'u2', nombre: 'Video #1', status: 'pendiente', position: 1 },
+      ]
+      render(
+        <PautaDetailModal
+          {...baseProps({
+            // 2 asignadas, totales 2 → nada por repartir, sin importar entre cuántos editores.
+            pauta: pauta({ status: 'realizada', piezas_totales: 2 }),
+            piezas,
+          })}
+        />,
+      )
+      expect(screen.getByLabelText('Agregar piezas de Lizdania')).toBeDisabled()
+      expect(screen.getByLabelText('Agregar piezas de Georgina')).toBeDisabled()
+      // El "−" sigue disponible: bajar la cantidad no está limitado por el total.
+      expect(screen.getByLabelText('Quitar piezas de Lizdania')).not.toBeDisabled()
+    })
+
+    it('con piezas por repartir, el "+" clampea la creación a lo que realmente falta (resguardo del handler)', () => {
+      mockCreatePiezas.mockClear()
+      const piezas = [
+        { id: 'pz1', editor_user_id: 'u1', nombre: 'Video #1', status: 'pendiente', position: 0 },
+      ]
+      render(
+        <PautaDetailModal
+          {...baseProps({
+            // 1 asignada, totales 2 → queda 1 por repartir.
+            pauta: pauta({ status: 'realizada', piezas_totales: 2 }),
+            piezas,
+          })}
+        />,
+      )
+      const stepper = screen.getByLabelText('Agregar piezas de Lizdania')
+      expect(stepper).not.toBeDisabled()
+      fireEvent.click(stepper)
+      // Crea exactamente 1 pieza (lo que faltaba), no más.
+      expect(mockCreatePiezas).toHaveBeenCalledTimes(1)
+      expect(mockCreatePiezas).toHaveBeenCalledWith('c1', 'p1', 'u1', ['Video #2'], 1, 'V')
+    })
+
+    it('el stepper "−" de un editor borra la pieza pendiente más reciente', () => {
+      const piezas = [
+        { id: 'pz1', editor_user_id: 'u1', nombre: 'Video #1', status: 'listo', position: 0 },
+        { id: 'pz2', editor_user_id: 'u1', nombre: 'Video #2', status: 'pendiente', position: 1 },
+      ]
+      render(
+        <PautaDetailModal
+          {...baseProps({
+            pauta: pauta({ status: 'realizada', piezas_totales: 2 }),
+            piezas,
+          })}
+        />,
+      )
+      fireEvent.click(screen.getByLabelText('Quitar piezas de Lizdania'))
+      expect(mockDeletePiezas).toHaveBeenCalledWith(['pz2'])
+    })
+
+    it('el stepper "−" con piezas ya avanzadas muestra un aviso en línea en vez de un alert del navegador', () => {
+      const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
+      const piezas = [
+        { id: 'pz1', editor_user_id: 'u1', nombre: 'Video #1', status: 'listo', position: 0 },
+      ]
+      render(
+        <PautaDetailModal
+          {...baseProps({
+            pauta: pauta({ status: 'realizada', piezas_totales: 1 }),
+            piezas,
+          })}
+        />,
+      )
+      fireEvent.click(screen.getByLabelText('Quitar piezas de Lizdania'))
+      expect(alertSpy).not.toHaveBeenCalled()
+      expect(screen.getByText(/1 pieza con avance en este bloque/)).toBeInTheDocument()
+      // La pieza con avance sigue ahí — nunca se borra en silencio.
+      expect(mockDeletePiezas).not.toHaveBeenCalledWith(['pz1'])
+      alertSpy.mockRestore()
+    })
+
+    it('"Repartir automáticamente" crea exactamente las piezas faltantes', () => {
+      mockCreatePiezas.mockResolvedValueOnce({
+        data: [{ id: 'pz-a', editor_user_id: 'u1', nombre: 'Video #1', status: 'pendiente' }],
+        error: null,
+      })
+      const piezas = [
+        { id: 'pz0', editor_user_id: 'u2', nombre: 'Video #1', status: 'pendiente', position: 0 },
+      ]
+      render(
+        <PautaDetailModal
+          {...baseProps({
+            pauta: pauta({ status: 'realizada', piezas_totales: 2, recurso_ids: ['u2'] }),
+            piezas,
+          })}
+        />,
+      )
+      fireEvent.click(screen.getByText('Repartir automáticamente'))
+      // Único editor visible ('u2', el que ya tiene una pieza) recibe la 1 que falta.
+      expect(mockCreatePiezas).toHaveBeenCalledWith('c1', 'p1', 'u2', ['Video #2'], 1, 'V')
+    })
+
+    it('la pieza NO repite un selector de editor — ya está agrupada bajo la tarjeta de su editor', () => {
+      const piezas = [
+        { id: 'pz1', editor_user_id: 'u1', nombre: 'Video #1', status: 'pendiente', position: 0 },
+        { id: 'pz2', editor_user_id: 'u2', nombre: 'Video #1', status: 'pendiente', position: 1 },
+      ]
+      render(
+        <PautaDetailModal
+          {...baseProps({
+            pauta: pauta({ status: 'realizada', piezas_totales: 2 }),
+            piezas,
+          })}
+        />,
+      )
+      expect(screen.queryByLabelText(/^Editor de /)).not.toBeInTheDocument()
     })
   })
 })

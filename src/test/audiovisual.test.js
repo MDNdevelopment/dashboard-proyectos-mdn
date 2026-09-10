@@ -29,6 +29,8 @@ import {
   defaultPiezaName,
   piezasPorFormato,
   setPiezaFormatoCount,
+  planPiezaRemoval,
+  distributePiezas,
   sumPiezasPorFormato,
   formatoBreakdownLabel,
   isExternalId,
@@ -582,6 +584,75 @@ describe('piezasByEditor', () => {
     const piezas = [{ id: 'a', editor_user_id: null, position: 0 }]
     const grouped = piezasByEditor(piezas)
     expect(grouped.get(null).map((p) => p.id)).toEqual(['a'])
+  })
+})
+
+describe('planPiezaRemoval', () => {
+  it('borra solo piezas "pendiente", empezando por el final del grupo', () => {
+    const piezas = [
+      { id: 'a', status: 'pendiente' },
+      { id: 'b', status: 'pendiente' },
+      { id: 'c', status: 'pendiente' },
+    ]
+    const { toDelete, blocked } = planPiezaRemoval(piezas, 2)
+    expect(toDelete).toEqual(['b', 'c'])
+    expect(blocked).toEqual([])
+  })
+
+  it('cuando faltan piezas "pendiente" para cubrir la cantidad, reporta las bloqueadas sin borrarlas', () => {
+    const piezas = [
+      { id: 'a', status: 'listo' },
+      { id: 'b', status: 'pendiente' },
+    ]
+    const { toDelete, blocked } = planPiezaRemoval(piezas, 2)
+    expect(toDelete).toEqual(['b'])
+    expect(blocked.map((p) => p.id)).toEqual(['a'])
+  })
+
+  it('sin piezas "pendiente", no borra nada y bloquea todas las pedidas', () => {
+    const piezas = [
+      { id: 'a', status: 'en_edicion' },
+      { id: 'b', status: 'listo' },
+    ]
+    const { toDelete, blocked } = planPiezaRemoval(piezas, 1)
+    expect(toDelete).toEqual([])
+    expect(blocked.map((p) => p.id)).toEqual(['a'])
+  })
+
+  it('cantidad 0 o lista vacía no borra ni bloquea nada', () => {
+    expect(planPiezaRemoval([], 3)).toEqual({ toDelete: [], blocked: [] })
+    expect(planPiezaRemoval([{ id: 'a', status: 'pendiente' }], 0)).toEqual({
+      toDelete: [],
+      blocked: [],
+    })
+  })
+})
+
+describe('distributePiezas', () => {
+  it('reparte por turnos empezando por quien menos piezas tiene', () => {
+    const grouped = piezasByEditor([
+      { id: 'a', editor_user_id: 'u1', position: 0 },
+      { id: 'b', editor_user_id: 'u1', position: 1 },
+    ])
+    const plan = distributePiezas(3, ['u1', 'u2'], grouped)
+    // u1 ya tiene 2, u2 tiene 0 → primero se empareja u2 antes de volver a sumarle a u1.
+    expect(plan).toEqual([
+      { editorId: 'u1', count: 1 },
+      { editorId: 'u2', count: 2 },
+    ])
+  })
+
+  it('sin editores, no reparte nada', () => {
+    expect(distributePiezas(3, [], new Map())).toEqual([])
+  })
+
+  it('sin faltantes, no reparte nada', () => {
+    expect(distributePiezas(0, ['u1'], new Map())).toEqual([])
+  })
+
+  it('un solo editor recibe todo el faltante', () => {
+    const plan = distributePiezas(4, ['u1'], new Map())
+    expect(plan).toEqual([{ editorId: 'u1', count: 4 }])
   })
 })
 

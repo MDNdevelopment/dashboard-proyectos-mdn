@@ -218,6 +218,7 @@ export const CHANGELOG = [
       'Al crear una pauta en Audiovisual ahora puedes marcarla como "Extra" (fuera del plan mensual); queda identificada en Solicitudes, Agenda, Realizadas y el calendario.',
       'Si te asignas una tarea a ti mismo (al crearla o al editarla), ya no recibes el correo ni la notificación avisándote de tu propia asignación.',
       'Ahora cualquier empleado puede crear un CNP (Contenido No Planificado), sin importar su nivel de acceso.',
+      'Rediseñado el reparto de piezas en las pautas realizadas de Audiovisual: ahora se ajusta la cantidad con botones + y −, se ve cuántas piezas faltan por repartir (con un botón para repartirlas automáticamente entre los editores), la lista para agregar editores permanece oculta hasta que se necesita, y ya no se puede asignar a los editores más piezas para editar que las que realmente salieron.',
     ],
   },
   {

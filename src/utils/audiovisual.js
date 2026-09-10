@@ -696,6 +696,49 @@ export function setPiezaFormatoCount(pauta, code, key, value) {
   return next
 }
 
+/**
+ * Decide qué piezas borrar al bajar la cantidad de un editor con el stepper `−`. Solo se
+ * tocan piezas 'pendiente' (nunca trabajo con avance), empezando por el final del grupo
+ * para no reordenar las que sí se conservan. Si no alcanzan las 'pendiente' para cubrir
+ * `cantidad`, `toDelete` trae las que sí se pueden borrar y `blocked` las que impiden
+ * llegar al número pedido — el llamador decide cómo avisarlo (nunca se borra en silencio
+ * una pieza con avance).
+ * @param {Array} piezasDelEditor — piezas de un solo editor, en el orden mostrado
+ * @param {number} cantidad — piezas a quitar (entero positivo)
+ * @returns {{ toDelete: string[], blocked: Array }}
+ */
+export function planPiezaRemoval(piezasDelEditor, cantidad) {
+  const lista = piezasDelEditor ?? []
+  const removable = lista.filter((pz) => pz.status === 'pendiente')
+  const toDelete = removable.slice(Math.max(0, removable.length - cantidad))
+  const blocked = lista
+    .filter((pz) => pz.status !== 'pendiente')
+    .slice(0, cantidad - toDelete.length)
+  return { toDelete: toDelete.map((pz) => pz.id), blocked }
+}
+
+/**
+ * Reparte `faltantes` piezas nuevas entre `editorIds`, una por turno empezando por quien
+ * menos piezas tiene ya asignadas — así "Repartir automáticamente" empareja las cargas en
+ * vez de amontonar todo en el primer editor de la lista. Sin editores, no reparte nada
+ * (el llamador debe pedir agregar uno primero).
+ * @param {number} faltantes — piezas por crear (`totales - asignadas`, ya positivo)
+ * @param {string[]} editorIds
+ * @param {Map<string, Array>} grouped — piezasByEditor(piezas), para partir de la carga real
+ * @returns {{ editorId: string, count: number }[]}
+ */
+export function distributePiezas(faltantes, editorIds, grouped) {
+  if (!editorIds?.length || faltantes <= 0) return []
+  const counts = new Map(editorIds.map((id) => [id, (grouped?.get(id) ?? []).length]))
+  for (let i = 0; i < faltantes; i++) {
+    const minId = editorIds.reduce((a, b) => (counts.get(b) < counts.get(a) ? b : a))
+    counts.set(minId, counts.get(minId) + 1)
+  }
+  return editorIds
+    .map((id) => ({ editorId: id, count: counts.get(id) - (grouped?.get(id) ?? []).length }))
+    .filter((e) => e.count > 0)
+}
+
 /** Suma `salieron`/`editadas` de un objeto `piezas_por_formato` (ya acotado o crudo). */
 export function sumPiezasPorFormato(obj) {
   return Object.values(obj ?? {}).reduce(
