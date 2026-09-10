@@ -210,6 +210,7 @@ export const CHANGELOG = [
       'El equipo de Audiovisual ya puede asignar editores y gestionar las piezas de las pautas realizadas (checklist de estado, formato y desglose de piezas), sin necesidad de pedírselo a la coordinadora. Agendar, declinar o marcar una pauta como realizada sigue siendo exclusivo de la coordinadora.',
       'Corregido: en el Monitor de uso, si alguien ajeno al equipo (por ejemplo, dirección) cargaba CNP, tareas u otras actividades a nombre de una línea, no se contaba en el total de esa línea. Ahora toda la actividad cargada a un equipo cuenta para su monitor de uso, sea o no quien la cargó parte formal del equipo. Además, ese apoyo externo ahora aparece como filas más de la tabla de detalle (con la etiqueta "Apoyo externo"), en vez de un texto aparte.',
       'MAPPI ahora también responde sobre tickets de soporte, leads, vacaciones, Contenido No Planificado, Chequeo de publicación y desempeño promedio por equipo/departamento/cargo, además de tareas, reuniones y pautas con más filtros que antes (por persona, cliente, estado y rango de fechas). Cuando una pregunta todavía se le escapa, ya no improvisa una respuesta: avisa que quedó registrada, y en Empresa → MAPPI se puede ver el listado de preguntas sin responder ordenadas por frecuencia.',
+      'Katherine ahora también puede aprobar la impresión de los CNP, junto con Paola y Stephanie.',
     ],
   },
   {
