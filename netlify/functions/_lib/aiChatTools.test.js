@@ -15,6 +15,7 @@ import {
   resumenPautas,
   pautasDelDia,
   resolveAudiovisualEmployee,
+  resolvePerson,
   diasCargaAlta,
   resolveClient,
   listarCargos,
@@ -22,6 +23,17 @@ import {
   fichaCliente,
   clientesDeLinea,
   inversionAds,
+  consultarTareas,
+  consultarReuniones,
+  consultarPautas,
+  consultarPersonal,
+  consultarClientes,
+  consultarTickets,
+  consultarLeads,
+  consultarCnp,
+  consultarChequeo,
+  desempenoAgregado,
+  noPuedoResponder,
   executeTool,
   TOOL_DECLARATIONS,
 } from './aiChatTools.js'
@@ -1212,8 +1224,8 @@ describe('executeTool', () => {
 })
 
 describe('TOOL_DECLARATIONS', () => {
-  it('declara las 18 herramientas con nombre y parámetros', () => {
-    expect(TOOL_DECLARATIONS).toHaveLength(18)
+  it('declara las 17 herramientas con nombre y parámetros', () => {
+    expect(TOOL_DECLARATIONS).toHaveLength(17)
     TOOL_DECLARATIONS.forEach((t) => {
       expect(t.name).toBeTruthy()
       expect(t.description).toBeTruthy()
@@ -1235,5 +1247,485 @@ describe('TOOL_DECLARATIONS', () => {
       egresos: 200,
       diferencia: 300,
     })
+  })
+})
+
+describe('resolvePerson', () => {
+  it('resuelve contra el directorio completo (no solo Audiovisual)', () => {
+    const { user } = resolvePerson('Marta', DATASET_DIR.users)
+    expect(user.user_id).toBe('u3')
+  })
+
+  it('devuelve error legible si no existe', () => {
+    expect(resolvePerson('Nadie', DATASET_DIR.users).error).toMatch(/No se encontró a "Nadie"/)
+  })
+})
+
+describe('consultarTareas', () => {
+  it('sin filtros de criticidad/detalle, da el mismo panorama que resumenTareas', () => {
+    const dataset = {
+      lines: LINES,
+      tasks: [
+        task({ id: '1', status: 'En proceso' }),
+        task({ id: '2', status: 'Paralizado', blocked_reason: 'Falta brief' }),
+        task({ id: '3', status: 'Terminado' }),
+      ],
+    }
+    const res = consultarTareas({}, dataset)
+    expect(res.linea).toBe('Toda la empresa')
+    expect(res.tareas_activas).toBe(2)
+    expect(res.bloqueadas).toBe(1)
+  })
+
+  it('con criticidad "bloqueadas", da el listado con motivo (igual que tareasCriticas)', () => {
+    const dataset = {
+      lines: LINES,
+      users: USERS,
+      tasks: [
+        task({
+          id: '1',
+          status: 'Paralizado',
+          blocked_reason: 'Esperando aprobación',
+          assignee_ids: ['u1'],
+        }),
+      ],
+    }
+    const res = consultarTareas({ criticidad: 'bloqueadas' }, dataset)
+    expect(res.total).toBe(1)
+    expect(res.tareas[0].motivo).toBe('Esperando aprobación')
+  })
+
+  it('filtra por persona (responsable)', () => {
+    const dataset = {
+      lines: LINES,
+      users: USERS,
+      tasks: [task({ id: '1', assignee_ids: ['u1'] }), task({ id: '2', assignee_ids: ['u2'] })],
+    }
+    const res = consultarTareas({ persona: 'Ana' }, dataset)
+    expect(res.tareas_activas).toBe(1)
+  })
+
+  it('filtra por cliente', () => {
+    const dataset = {
+      lines: LINES,
+      clients: DATASET_DIR.clients,
+      tasks: [task({ id: '1', client_id: 'c1' }), task({ id: '2', client_id: 'c2' })],
+    }
+    const res = consultarTareas({ cliente: 'jugos los angeles' }, dataset)
+    expect(res.tareas_activas).toBe(1)
+  })
+
+  it('propaga error de persona no resuelta', () => {
+    const dataset = { lines: LINES, users: USERS, tasks: [] }
+    expect(consultarTareas({ persona: 'Nadie' }, dataset).error).toBeDefined()
+  })
+
+  it('con detalle true, devuelve el listado plano', () => {
+    const dataset = { lines: LINES, tasks: [task({ id: '1', description: 'Hacer X' })] }
+    const res = consultarTareas({ detalle: true }, dataset)
+    expect(res.tareas[0].tarea).toBe('Hacer X')
+  })
+})
+
+describe('consultarReuniones', () => {
+  it('sin persona, agrega igual que resumenReuniones', () => {
+    const dataset = {
+      lines: LINES,
+      meetings: [
+        meeting({ id: '1', status: 'realizada' }),
+        meeting({ id: '2', status: 'programada' }),
+      ],
+    }
+    const res = consultarReuniones({}, dataset)
+    expect(res.linea).toBe('Toda la empresa')
+    expect(res.total).toBe(2)
+    expect(res.realizadas).toBe(1)
+  })
+
+  it('con persona "yo", usa dataset.callerUserId y da el listado de próximas (igual que misReuniones)', () => {
+    const inDays = (n) => new Date(Date.now() + n * 24 * 60 * 60 * 1000).toISOString()
+    const dataset = {
+      lines: LINES,
+      callerUserId: 'u1',
+      meetings: [
+        meeting({ id: '1', attendee_ids: ['u1'], starts_at: inDays(1) }),
+        meeting({ id: '2', attendee_ids: ['u2'], starts_at: inDays(1) }),
+      ],
+    }
+    const res = consultarReuniones({ persona: 'yo' }, dataset)
+    expect(res.total).toBe(1)
+    expect(res.persona).toBe('tú')
+  })
+
+  it('error si "yo" sin callerUserId en el dataset', () => {
+    expect(
+      consultarReuniones({ persona: 'yo' }, { lines: LINES, meetings: [] }).error,
+    ).toBeDefined()
+  })
+
+  it('con persona por nombre, filtra por esa persona (no solo el caller)', () => {
+    // estado explícito para no caer en el default "próximas programadas" (pensado para
+    // "mis reuniones" sin más contexto) y poder comprobar el filtro de persona aislado.
+    const dataset = {
+      lines: LINES,
+      users: USERS,
+      meetings: [
+        meeting({ id: '1', attendee_ids: ['u1'], status: 'realizada' }),
+        meeting({ id: '2', attendee_ids: ['u2'], status: 'realizada' }),
+      ],
+    }
+    const res = consultarReuniones({ persona: 'Ana', estado: 'realizada' }, dataset)
+    expect(res.total).toBe(1)
+  })
+
+  it('filtra por cliente', () => {
+    const dataset = {
+      lines: LINES,
+      clients: DATASET_DIR.clients,
+      meetings: [
+        meeting({ id: '1', client_name: 'Jugos Los Ángeles' }),
+        meeting({ id: '2', client_name: 'Otro' }),
+      ],
+    }
+    const res = consultarReuniones({ cliente: 'jugos los angeles' }, dataset)
+    expect(res.total).toBe(1)
+  })
+})
+
+describe('consultarPautas', () => {
+  const hoy = dateStrInCurrentMonth(10)
+
+  it('sin agrupar y con un solo día, da la agenda del día (igual que pautasDelDia)', () => {
+    const dataset = {
+      lines: LINES,
+      pautas: [
+        pauta({
+          id: '1',
+          status: 'programada',
+          pauta_date: hoy,
+          salida: '14:00',
+          client_name: 'B',
+        }),
+        pauta({ id: '2', status: 'realizada', pauta_date: hoy, salida: '09:00', client_name: 'A' }),
+      ],
+    }
+    const res = consultarPautas({ desde: hoy, hasta: hoy }, dataset)
+    expect(res.fecha).toBe(hoy)
+    expect(res.pautas.map((p) => p.cliente)).toEqual(['A', 'B'])
+  })
+
+  it('sin agrupar y con rango completo del mes, agrega por estado (igual que resumenPautas)', () => {
+    const dataset = {
+      lines: LINES,
+      pautas: [
+        pauta({ id: '1', status: 'solicitada' }),
+        pauta({ id: '2', status: 'realizada', piezas_totales: 5, piezas_editadas: 3 }),
+      ],
+    }
+    const res = consultarPautas({}, dataset)
+    expect(res.por_estado).toEqual({ solicitada: 1, realizada: 1 })
+    expect(res.piezas_totales).toBe(5)
+  })
+
+  it('agrupar_por "dia" con minimo_por_dia (igual que diasCargaAlta)', () => {
+    const PAST_YEAR = CUR_YEAR - 1
+    const dataset = {
+      users: AV_USERS,
+      pautas: [1, 2, 3].map((n) =>
+        pauta({
+          id: String(n),
+          status: 'realizada',
+          pauta_date: `${PAST_YEAR}-01-05`,
+          recurso_ids: ['a1'],
+        }),
+      ),
+    }
+    const res = consultarPautas(
+      {
+        persona: 'Lizdania',
+        agrupar_por: 'dia',
+        desde: `${PAST_YEAR}-01-01`,
+        hasta: `${PAST_YEAR}-01-31`,
+      },
+      dataset,
+    )
+    expect(res.total_dias).toBe(1)
+    expect(res.dias[0].cantidad).toBe(3)
+  })
+
+  it('agrupar_por "cliente" cuenta pautas agendadas por cliente', () => {
+    const dataset = {
+      lines: LINES,
+      pautas: [
+        pauta({ id: '1', status: 'programada', client_name: 'A' }),
+        pauta({ id: '2', status: 'realizada', client_name: 'A' }),
+        pauta({ id: '3', status: 'programada', client_name: 'B' }),
+      ],
+    }
+    const res = consultarPautas({ agrupar_por: 'cliente' }, dataset)
+    expect(res.clientes).toEqual([
+      { cliente: 'A', cantidad: 2 },
+      { cliente: 'B', cantidad: 1 },
+    ])
+  })
+
+  it('propaga error de línea no resuelta', () => {
+    expect(consultarPautas({ linea: 'Zzz' }, { lines: LINES, pautas: [] }).error).toBeDefined()
+  })
+})
+
+describe('consultarPersonal', () => {
+  it('sin filtros, equivale a buscarEmpleados sin filtros', () => {
+    const res = consultarPersonal({}, DATASET_DIR)
+    expect(res.total).toBe(4)
+  })
+
+  it('filtra por nombre', () => {
+    const res = consultarPersonal({ nombre: 'Marta' }, DATASET_DIR)
+    expect(res.empleados).toHaveLength(1)
+    expect(res.empleados[0].nombre).toBe('Marta Ruiz')
+  })
+
+  it('filtra por cargo (match parcial)', () => {
+    const res = consultarPersonal({ cargo: 'community' }, DATASET_DIR)
+    expect(res.empleados.map((e) => e.nombre)).toEqual(['Luis Gómez'])
+  })
+
+  it('filtra por en_vacaciones', () => {
+    const dataset = {
+      ...DATASET_DIR,
+      vacations: [
+        {
+          user_id: 'u1',
+          status: 'aprobada',
+          start_date: '2000-01-01',
+          end_date: '2999-01-01',
+        },
+      ],
+    }
+    const res = consultarPersonal({ en_vacaciones: true }, dataset)
+    expect(res.empleados.map((e) => e.nombre)).toEqual(['Ana Pérez'])
+  })
+
+  it('devuelve error con el catálogo si el cargo no existe', () => {
+    expect(consultarPersonal({ cargo: 'inexistente' }, DATASET_DIR).error).toMatch(
+      /No se encontró el cargo/,
+    )
+  })
+})
+
+describe('consultarClientes', () => {
+  it('con cliente, da la ficha (igual que fichaCliente)', () => {
+    const res = consultarClientes({ cliente: 'jugos los angeles' }, DATASET_DIR)
+    expect(res.linea).toBe('Team Bianca')
+  })
+
+  it('con cliente e incluir_ads, suma la inversión', () => {
+    const res = consultarClientes({ cliente: 'jugos los angeles', incluir_ads: true }, DATASET_DIR)
+    expect(res.inversion_ads.total_invertido).toBe(200)
+  })
+
+  it('con linea (sin cliente), da la cartera (igual que clientesDeLinea)', () => {
+    const res = consultarClientes({ linea: 'Team Bianca' }, DATASET_DIR)
+    expect(res.total).toBe(1)
+  })
+
+  it('sin cliente ni linea pero con incluir_ads, da el ranking (igual que inversionAds)', () => {
+    const res = consultarClientes({ incluir_ads: true }, DATASET_DIR)
+    expect(res.ranking[0].cliente).toBe('Jugos Los Ángeles')
+  })
+
+  it('sin cliente, linea ni incluir_ads, pide un filtro', () => {
+    expect(consultarClientes({}, DATASET_DIR).error).toMatch(/Indica un cliente o una línea/)
+  })
+})
+
+describe('consultarTickets', () => {
+  const dataset = {
+    users: USERS,
+    tickets: [
+      {
+        id: 1,
+        title: 'Falla VPN',
+        status: 'abierto',
+        priority: 'alta',
+        category: 'Redes',
+        requester_id: 'u1',
+      },
+      {
+        id: 2,
+        title: 'Reset password',
+        status: 'cerrado',
+        priority: 'baja',
+        category: 'Accesos',
+        requester_id: 'u2',
+      },
+    ],
+  }
+
+  it('filtra por estado', () => {
+    const res = consultarTickets({ estado: 'abierto' }, dataset)
+    expect(res.total).toBe(1)
+    expect(res.tickets[0].titulo).toBe('Falla VPN')
+  })
+
+  it('filtra por persona (solicitante)', () => {
+    const res = consultarTickets({ persona: 'Ana' }, dataset)
+    expect(res.total).toBe(1)
+  })
+
+  it('sin filtros, cuenta por estado', () => {
+    const res = consultarTickets({}, dataset)
+    expect(res.por_estado).toEqual({ abierto: 1, cerrado: 1 })
+  })
+})
+
+describe('consultarLeads', () => {
+  it('filtra por estado y cuenta por estado', () => {
+    const dataset = {
+      leads: [
+        { id: 1, nombre: 'Empresa A', status: 'pendiente', created_at: '2026-01-01' },
+        { id: 2, nombre: 'Empresa B', status: 'contactado', created_at: '2026-01-02' },
+      ],
+    }
+    const res = consultarLeads({ estado: 'pendiente' }, dataset)
+    expect(res.total).toBe(1)
+    expect(res.leads[0].nombre).toBe('Empresa A')
+  })
+})
+
+describe('consultarCnp', () => {
+  it('filtra por línea y estado', () => {
+    const dataset = {
+      lines: LINES,
+      clients: DATASET_DIR.clients,
+      cnpRequests: [
+        { id: 'a', line_id: 'l1', status: 'pendiente', title: 'Post especial' },
+        { id: 'b', line_id: 'l2', status: 'pendiente', title: 'Otro' },
+      ],
+    }
+    const res = consultarCnp({ linea: 'Alfa' }, dataset)
+    expect(res.total).toBe(1)
+    expect(res.solicitudes[0].titulo).toBe('Post especial')
+  })
+})
+
+describe('consultarChequeo', () => {
+  const hoyKey = dateStrInCurrentMonth(NOW.getDate())
+
+  it('filtra por cliente y deriva el estado desde last_published_at (sin columna "status")', () => {
+    const dataset = {
+      clients: DATASET_DIR.clients,
+      publicationChecks: [
+        {
+          id: 'p1',
+          client_id: 'c1',
+          network: 'Instagram',
+          content_type: 'publicaciones',
+          period_year: CUR_YEAR,
+          period_month: CUR_MONTH,
+          period_week: 1,
+          last_published_at: hoyKey, // hoy -> 'normal'
+        },
+        {
+          id: 'p2',
+          client_id: 'c2',
+          network: 'Instagram',
+          content_type: 'publicaciones',
+          period_year: CUR_YEAR,
+          period_month: CUR_MONTH,
+          period_week: 1,
+          last_published_at: null, // sin fecha -> 'vacio'
+        },
+      ],
+    }
+    const res = consultarChequeo({ cliente: 'jugos los angeles' }, dataset)
+    expect(res.total).toBe(1)
+    expect(res.por_estado).toEqual({ normal: 1 })
+    expect(res.chequeos[0].estado).toBe('normal')
+  })
+
+  it('filtra por período usando period_year/period_month (no year/month)', () => {
+    const dataset = {
+      clients: DATASET_DIR.clients,
+      publicationChecks: [
+        {
+          id: 'p1',
+          client_id: 'c1',
+          network: 'Instagram',
+          content_type: 'publicaciones',
+          period_year: CUR_YEAR,
+          period_month: CUR_MONTH,
+          period_week: 1,
+          last_published_at: null,
+        },
+        {
+          id: 'p2',
+          client_id: 'c1',
+          network: 'Instagram',
+          content_type: 'publicaciones',
+          period_year: CUR_YEAR - 1,
+          period_month: CUR_MONTH,
+          period_week: 1,
+          last_published_at: null,
+        },
+      ],
+    }
+    const res = consultarChequeo({}, dataset)
+    expect(res.total).toBe(1)
+  })
+})
+
+describe('desempenoAgregado', () => {
+  const summaryDataset = {
+    departments: DEPARTMENTS,
+    positions: POSITIONS,
+    users: USERS_DIR,
+    lines: DATASET_DIR.lines,
+    evaluationSummary: [
+      {
+        target_employee: 'u1',
+        department_id: 1,
+        period_start: '2026-06-01',
+        average_total_rate: 4,
+      },
+      {
+        target_employee: 'u2',
+        department_id: 1,
+        period_start: '2026-06-01',
+        average_total_rate: 3,
+      },
+      {
+        target_employee: 'u4',
+        department_id: 1,
+        period_start: '2026-06-01',
+        average_total_rate: 5,
+      },
+    ],
+  }
+
+  it('promedia un grupo de 3+ personas por departamento', () => {
+    const res = desempenoAgregado({ departamento: 'Redes' }, summaryDataset)
+    expect(res.personas_incluidas).toBe(3)
+    expect(res.promedio_nota).toBe(4)
+  })
+
+  it('rechaza grupos de menos de 3 personas (no expone notas individuales)', () => {
+    const res = desempenoAgregado({ cargo: 'Diseñador' }, summaryDataset)
+    expect(res.error).toMatch(/menos de 3 personas/)
+    expect(res.promedio_nota).toBeUndefined()
+  })
+
+  it('nunca incluye nombres ni notas por persona en la respuesta', () => {
+    const res = desempenoAgregado({ departamento: 'Redes' }, summaryDataset)
+    expect(JSON.stringify(res)).not.toMatch(/Ana|Luis|Carla/)
+  })
+})
+
+describe('noPuedoResponder', () => {
+  it('devuelve un mensaje controlado, no un error', () => {
+    const res = noPuedoResponder({ tema: 'presupuesto anual' })
+    expect(res.mensaje).toMatch(/Ya quedó registrado/)
+    expect(res.tema).toBe('presupuesto anual')
   })
 })

@@ -31,14 +31,50 @@ const TABLES = {
   metric_clients: [{ id: 'c1', line_id: 'l1', name: 'Jugos Los Ángeles' }],
   metric_line_members: [{ line_id: 'l1', user_id: 'u1', is_lead: true }],
   paid_campaigns: [{ id: 'ad1', client_id: 'c1', amount: 200 }],
+  support_tickets: [{ id: 1, title: 'Ticket x', status: 'abierto' }],
+  leads: [{ id: 1, nombre: 'Lead x', status: 'pendiente' }],
+  vacations: [{ id: 1, user_id: 'u1', status: 'aprobada' }],
+  cnp_requests: [{ id: 'cnp1', line_id: 'l1', status: 'pendiente' }],
+  publication_checks: [
+    { id: 'pc1', client_id: 'c1', network: 'Instagram', last_published_at: '2026-06-01' },
+  ],
+  av_pauta_piezas: [{ id: 'pz1', pauta_id: 'p1', editor_user_id: 'u1', status: 'pendiente' }],
+  task_comments: [{ id: 'tc1', task_id: 't1' }],
+  // target_employee debe coincidir con un user_id ya cargado (u1) para que sobreviva el
+  // filtro en memoria contra `users` (la vista no tiene company_id, ver aiChatData.js).
+  employee_evaluation_summary: [
+    { target_employee: 'u1', department_id: 1, period_start: '2026-06-01', average_total_rate: 4 },
+  ],
 }
+
+const ALL_TABLE_NAMES = [
+  'metric_lines',
+  'metric_reports',
+  'tasks',
+  'users',
+  'meetings',
+  'av_pautas',
+  'positions',
+  'departments',
+  'metric_clients',
+  'metric_line_members',
+  'paid_campaigns',
+  'support_tickets',
+  'leads',
+  'vacations',
+  'cnp_requests',
+  'publication_checks',
+  'av_pauta_piezas',
+  'task_comments',
+  'employee_evaluation_summary',
+]
 
 describe('loadMetricsDataset', () => {
   beforeEach(() => {
     fromMock.mockReset()
   })
 
-  it('carga todas las tablas (métricas, tareas, personal y clientes) filtradas por company_id', async () => {
+  it('carga todas las tablas (métricas, tareas, personal, clientes y módulos ampliados) filtradas por company_id', async () => {
     fromMock.mockImplementation((table) => makeQuery(TABLES[table] ?? []))
 
     const res = await loadMetricsDataset('c1')
@@ -55,24 +91,35 @@ describe('loadMetricsDataset', () => {
     expect(res.departments).toEqual(TABLES.departments)
     expect(res.clients).toEqual(TABLES.metric_clients)
     expect(res.campaigns).toEqual(TABLES.paid_campaigns)
+    expect(res.tickets).toEqual(TABLES.support_tickets)
+    expect(res.leads).toEqual(TABLES.leads)
+    expect(res.vacations).toEqual(TABLES.vacations)
+    expect(res.cnpRequests).toEqual(TABLES.cnp_requests)
+    expect(res.publicationChecks).toEqual(TABLES.publication_checks)
+    expect(res.pautaPiezas).toEqual(TABLES.av_pauta_piezas)
+    expect(res.taskComments).toEqual(TABLES.task_comments)
+    expect(res.evaluationSummary).toEqual(TABLES.employee_evaluation_summary)
     const currentYear = new Date().getFullYear()
     expect(res.availableYears).toEqual({ min: currentYear - 1, max: currentYear })
 
-    for (const table of [
-      'metric_lines',
-      'metric_reports',
-      'tasks',
-      'users',
-      'meetings',
-      'av_pautas',
-      'positions',
-      'departments',
-      'metric_clients',
-      'metric_line_members',
-      'paid_campaigns',
-    ]) {
+    for (const table of ALL_TABLE_NAMES) {
       expect(fromMock).toHaveBeenCalledWith(table)
     }
+  })
+
+  it('descarta filas de employee_evaluation_summary de empleados fuera de la empresa (la vista no tiene company_id)', async () => {
+    fromMock.mockImplementation((table) => {
+      if (table === 'employee_evaluation_summary') {
+        return makeQuery([
+          ...TABLES.employee_evaluation_summary,
+          { target_employee: 'otra-empresa', department_id: 1, average_total_rate: 5 },
+        ])
+      }
+      return makeQuery(TABLES[table] ?? [])
+    })
+
+    const res = await loadMetricsDataset('c1')
+    expect(res.evaluationSummary).toEqual(TABLES.employee_evaluation_summary)
   })
 
   it('no consulta datos sensibles (sueldo ni contacto privado del cliente)', async () => {
@@ -103,6 +150,14 @@ describe('loadMetricsDataset', () => {
       departments: [],
       clients: [],
       campaigns: [],
+      tickets: [],
+      leads: [],
+      vacations: [],
+      cnpRequests: [],
+      publicationChecks: [],
+      pautaPiezas: [],
+      taskComments: [],
+      evaluationSummary: [],
       availableYears: { min: currentYear - 1, max: currentYear },
     })
     expect(fromMock).not.toHaveBeenCalledWith('metric_line_members')

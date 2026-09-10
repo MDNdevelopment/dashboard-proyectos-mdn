@@ -188,6 +188,14 @@ createRoot(document.getElementById('root')).render(
                 </RequireModule>
               }
             />
+            <Route
+              path="/empresa/mappi"
+              element={
+                <RequireModule moduleKey="empresa">
+                  <EmpresaPage />
+                </RequireModule>
+              }
+            />
 
             {/* Evaluaciones — flujo manual retirado en F6 (ver ARQUITECTURA.md §2.7):
                 /evaluaciones/resumen y /evaluaciones/perfil-v2 → /evaluaciones;

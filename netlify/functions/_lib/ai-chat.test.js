@@ -3,10 +3,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const fetchMock = vi.fn()
 const requireAdminMock = vi.fn()
 const loadMetricsDatasetMock = vi.fn()
+const logChatInteractionMock = vi.fn()
 
 vi.stubGlobal('fetch', fetchMock)
 vi.mock('./requireAdmin.js', () => ({ requireAdmin: requireAdminMock }))
 vi.mock('./aiChatData.js', () => ({ loadMetricsDataset: loadMetricsDatasetMock }))
+vi.mock('./aiChatLog.js', () => ({
+  logChatInteraction: (...args) => logChatInteractionMock(...args),
+}))
 
 const { handler } = await import('../ai-chat.js')
 
@@ -221,5 +225,114 @@ describe('ai-chat.js handler', () => {
     const payload = JSON.parse(res.body)
     expect(payload.reply).toMatch(/tardando más de lo normal/)
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  describe('registro de la interacción (mappi_chat_logs)', () => {
+    it('registra outcome "respondida" en el happy path sin tool calls', async () => {
+      fetchMock.mockResolvedValue(okResponse({ choices: [{ message: { content: 'Todo bien.' } }] }))
+      await handler(makeEvent({ messages: [{ role: 'user', text: '¿Cómo va la empresa?' }] }))
+
+      expect(logChatInteractionMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          companyId: 'c1',
+          userId: 'u1',
+          question: '¿Cómo va la empresa?',
+          reply: 'Todo bien.',
+          toolsUsed: [],
+          outcome: 'respondida',
+        }),
+      )
+    })
+
+    it('registra outcome "sin_cobertura" cuando el modelo llama a no_puedo_responder', async () => {
+      const assistantMessage = {
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: 'call-1',
+            type: 'function',
+            function: { name: 'no_puedo_responder', arguments: '{"tema":"presupuesto"}' },
+          },
+        ],
+      }
+      fetchMock
+        .mockResolvedValueOnce(okResponse({ choices: [{ message: assistantMessage }] }))
+        .mockResolvedValueOnce(
+          okResponse({ choices: [{ message: { content: 'Eso todavía no lo manejo.' } }] }),
+        )
+
+      await handler(
+        makeEvent({ messages: [{ role: 'user', text: '¿Cuál es el presupuesto anual?' }] }),
+      )
+
+      expect(logChatInteractionMock).toHaveBeenCalledWith(
+        expect.objectContaining({ outcome: 'sin_cobertura', toolsUsed: ['no_puedo_responder'] }),
+      )
+    })
+
+    it('registra outcome "error" cuando alguna tool devuelve {error}', async () => {
+      fetchMock
+        .mockResolvedValueOnce(
+          okResponse({
+            choices: [
+              {
+                message: {
+                  role: 'assistant',
+                  tool_calls: [
+                    {
+                      id: 'call-1',
+                      type: 'function',
+                      function: { name: 'score_de_linea', arguments: '{"linea":"Zzz"}' },
+                    },
+                  ],
+                },
+              },
+            ],
+          }),
+        )
+        .mockResolvedValueOnce(
+          okResponse({ choices: [{ message: { content: 'No encontré esa línea.' } }] }),
+        )
+
+      await handler(makeEvent({ messages: [{ role: 'user', text: '¿Cómo va Zzz?' }] }))
+
+      expect(logChatInteractionMock).toHaveBeenCalledWith(
+        expect.objectContaining({ outcome: 'error' }),
+      )
+    })
+
+    it('registra outcome "timeout" cuando se excede el presupuesto de tiempo', async () => {
+      let now = 0
+      vi.spyOn(Date, 'now').mockImplementation(() => now)
+      const assistantMessage = {
+        role: 'assistant',
+        tool_calls: [
+          { id: 'call-1', type: 'function', function: { name: 'listar_lineas', arguments: '{}' } },
+        ],
+      }
+      fetchMock.mockImplementation(async () => {
+        now += 25000
+        return okResponse({ choices: [{ message: assistantMessage }] })
+      })
+
+      await handler(makeEvent({ messages: [{ role: 'user', text: 'hola' }] }))
+
+      expect(logChatInteractionMock).toHaveBeenCalledWith(
+        expect.objectContaining({ outcome: 'timeout' }),
+      )
+    })
+
+    it('un fallo al registrar el log no rompe la respuesta al usuario', async () => {
+      logChatInteractionMock.mockRejectedValueOnce(new Error('insert falló'))
+      fetchMock.mockResolvedValue(okResponse({ choices: [{ message: { content: 'Todo bien.' } }] }))
+
+      const res = await handler(
+        makeEvent({ messages: [{ role: 'user', text: '¿Cómo va la empresa?' }] }),
+      )
+      // logChatInteraction en producción nunca lanza (ver aiChatLog.js): este test cubre el
+      // caso defensivo de que, si lo hiciera, el handler no debe romperse por eso.
+      expect(res.statusCode).toBe(200)
+    })
   })
 })

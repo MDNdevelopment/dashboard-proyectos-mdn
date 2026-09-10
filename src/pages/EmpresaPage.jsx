@@ -9,6 +9,7 @@ import LinesView from '../components/empresa/LinesView'
 import PermisosView from '../components/empresa/PermisosView'
 import ScoreProfilesPanel from '../components/empresa/ScoreProfilesPanel'
 import CriteriaByPositionPanel from '../components/empresa/CriteriaByPositionPanel'
+import MappiLogsView from '../components/empresa/MappiLogsView'
 
 // `capability` opcional: por defecto un tab se gatea con `empresa.<key>`, pero
 // "Perfiles de Desempeño" pertenece conceptualmente a Evaluaciones (mismo esquema de
@@ -28,6 +29,7 @@ const ALL_TABS = [
     capability: 'evaluaciones.perfiles.manage',
   },
   { key: 'permisos', label: 'Permisos', path: '/empresa/permisos' },
+  { key: 'mappi', label: 'MAPPI', path: '/empresa/mappi' },
 ]
 
 function tabCapability(key) {
@@ -42,6 +44,7 @@ function pathToKey(pathname) {
   if (pathname.startsWith('/empresa/desempeno-perfiles')) return 'desempeno-perfiles'
   if (pathname.startsWith('/empresa/lineas')) return 'lineas'
   if (pathname.startsWith('/empresa/permisos')) return 'permisos'
+  if (pathname.startsWith('/empresa/mappi')) return 'mappi'
   return 'general'
 }
 
@@ -145,6 +148,10 @@ export default function EmpresaPage() {
 
         {activeKey === 'permisos' && can('empresa.permisos') && (
           <PermisosView companyId={userProfile.company_id} />
+        )}
+
+        {activeKey === 'mappi' && can('empresa.mappi') && (
+          <MappiLogsView companyId={userProfile.company_id} />
         )}
       </div>
     </main>
