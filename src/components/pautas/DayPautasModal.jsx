@@ -8,6 +8,7 @@ import {
   resourceNames,
   grillaStatus,
 } from '../../utils/audiovisual'
+import ExtraBadge from './ExtraBadge'
 import WhatsAppTextPanel from './WhatsAppTextPanel'
 
 const DOT_COLOR = {
@@ -135,8 +136,9 @@ function PautaRow({ pauta, usersById, onClick }) {
           className={`w-[8px] h-[8px] rounded-full flex-shrink-0 mt-1.5 ${DOT_COLOR[pauta.status]}`}
         />
         <div className="min-w-0 flex-1">
-          <p className="text-[13.5px] font-semibold text-[#222] truncate">
+          <p className="flex items-center gap-1.5 text-[13.5px] font-semibold text-[#222] truncate">
             {pauta.client_name ?? 'Sin cliente'}
+            <ExtraBadge pauta={pauta} />
           </p>
           <p className="text-[12px] text-[#777] truncate">
             ({codes}: {rec}){pauta.salida ? ` · ${formatTime12(pauta.salida)}` : ''}

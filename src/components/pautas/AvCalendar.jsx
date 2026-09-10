@@ -181,12 +181,15 @@ function PautaPill({ pauta, onClick }) {
       onKeyDown={(e) => {
         if (e.key === 'Enter') onClick(pauta)
       }}
-      title={`${pauta.salida ?? ''} · ${pauta.client_name ?? 'sin cliente'}`}
+      title={`${pauta.extra ? 'Extra · ' : ''}${pauta.salida ?? ''} · ${pauta.client_name ?? 'sin cliente'}`}
       className={`flex items-center gap-1 rounded px-1.5 py-1 border bg-[#faf9f5] text-[11px] font-medium text-[#333] truncate cursor-pointer hover:bg-[#f0ede3] transition-colors ${border}`}
     >
       <span className={`w-[6px] h-[6px] rounded-full flex-shrink-0 ${DOT_COLOR[pauta.status]}`} />
       {pauta.salida && <span className="font-mono text-[10.5px]">{pauta.salida.slice(0, 5)}</span>}
       <span className="truncate">{pauta.client_name ?? 'sin cliente'}</span>
+      {pauta.extra && (
+        <span className="flex-shrink-0 text-[9px] font-mono font-bold text-[#b9440e]">E</span>
+      )}
     </div>
   )
 }

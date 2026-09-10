@@ -261,7 +261,13 @@ function Sidebar() {
     <aside className="w-[260px] flex-shrink-0 bg-white border-r border-[#e0ddd4] flex flex-col h-full">
       {/* Brand */}
       <div className="px-5 pt-6 pb-5 border-b border-[#ece9df]">
-        <MDNLogo size={72} />
+        <Link
+          to="/"
+          aria-label="Ir a Inicio"
+          className="inline-block hover:opacity-80 transition-opacity"
+        >
+          <MDNLogo size={72} />
+        </Link>
       </div>
 
       {/* Navigation */}

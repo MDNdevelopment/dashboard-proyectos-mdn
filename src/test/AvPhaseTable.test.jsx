@@ -895,8 +895,8 @@ describe('AvPhaseTable — Agenda: la fila no se pierde al editar fecha/hora', (
     }
     renderTable({ initialPhase: 'agenda', editMode: 'coordina', pautas: [pauta] })
 
-    const dateInput = screen.getByDisplayValue('2026-09-04')
-    fireEvent.change(dateInput, { target: { value: '2026-09-10' } })
+    const dateInput = screen.getByDisplayValue('04/09/2026')
+    fireEvent.change(dateInput, { target: { value: '10/09/2026' } })
 
     await waitFor(() => expect(mockUpdatePauta).toHaveBeenCalled())
     await waitFor(() => expect(dateInput.closest('tr')).toHaveClass('bg-[#FFF9E8]'))
@@ -983,12 +983,12 @@ describe('AvPhaseTable — Agenda: la fila no se pierde al editar fecha/hora', (
       pautas: [pauta],
     })
 
-    const dateInput = screen.getByDisplayValue('2026-09-04')
-    fireEvent.change(dateInput, { target: { value: '2026-09-10' } })
+    const dateInput = screen.getByDisplayValue('04/09/2026')
+    fireEvent.change(dateInput, { target: { value: '10/09/2026' } })
 
     // El remonte forzado (revertTick) hace que el input vuelva a mostrar la fecha original,
     // ya que el conflicto bloqueante impidió el guardado.
-    await waitFor(() => expect(screen.getByDisplayValue('2026-09-04')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByDisplayValue('04/09/2026')).toBeInTheDocument())
     expect(mockUpdatePauta).not.toHaveBeenCalled()
   })
 })

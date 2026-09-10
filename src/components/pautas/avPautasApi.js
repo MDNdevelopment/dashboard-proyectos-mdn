@@ -236,6 +236,7 @@ function sanitizeFields(fields) {
     'place',
     'requirements',
     'has_model',
+    'extra',
     'pauta_date',
     'salida',
     'llegada',
@@ -261,6 +262,7 @@ function sanitizeFields(fields) {
   }
   // Los booleanos/arrays/números no deben pisarse por el `=== ''` de arriba.
   if ('has_model' in fields) out.has_model = Boolean(fields.has_model)
+  if ('extra' in fields) out.extra = Boolean(fields.extra)
   if ('submitted' in fields) out.submitted = Boolean(fields.submitted)
   if ('formats' in fields) out.formats = fields.formats ?? []
   if ('attendee_ids' in fields) out.attendee_ids = fields.attendee_ids ?? []

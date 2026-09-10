@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Outlet, useSearchParams, useLocation } from 'react-router-dom'
+import { Outlet, useSearchParams, useLocation, Link } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { useAuth } from '../context/AuthContext'
 import Sidebar from './Sidebar'
@@ -174,7 +174,13 @@ export default function AppLayout() {
               </svg>
             </button>
             <div className="flex-1 flex justify-center">
-              <MDNLogo size={44} />
+              <Link
+                to="/"
+                aria-label="Ir a Inicio"
+                className="inline-block hover:opacity-80 transition-opacity"
+              >
+                <MDNLogo size={44} />
+              </Link>
             </div>
             <NotificationBell />
           </div>

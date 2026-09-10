@@ -98,6 +98,7 @@ const MOCK_PAUTAS = [
     salida: null,
     llegada: null,
     formats: [],
+    recurso_ids: ['editor-1'],
     graba_user_id: null,
     graba_other: null,
     edita_user_id: null,
@@ -284,7 +285,7 @@ describe('AudiovisualView', () => {
     expect(screen.queryByText('Agendar')).not.toBeInTheDocument()
   })
 
-  it('con audiovisual.piezas (sin coordina) puede editar piezas de una pauta realizada, pero no agendar/declinar', async () => {
+  it('recurso asignado a la pauta (sin coordina) puede editar sus piezas, pero no agendar/declinar', async () => {
     renderView({
       userProfile: {
         user_id: 'editor-1',
@@ -293,6 +294,8 @@ describe('AudiovisualView', () => {
         admin: false,
         department_id: 2,
       },
+      // audiovisual.piezas ya no otorga edición por sí sola: solo deja ver todas
+      // las líneas (canViewAll). La edición depende de recurso_ids en la pauta.
       can: (key) => key === 'audiovisual.piezas',
       lines: [],
       // Deeplink directo a la pauta 'realizada' (p4), igual que abrir desde la campanita.
@@ -301,11 +304,31 @@ describe('AudiovisualView', () => {
     await waitFor(() => {
       expect(screen.getByText('Edición de piezas')).toBeInTheDocument()
     })
-    // Editable: el picker de editores está disponible dentro de la sección de piezas.
+    // Editable: 'editor-1' está en recurso_ids de p4 (ver MOCK_PAUTAS).
     expect(screen.getByPlaceholderText('Buscar empleado por nombre…')).toBeInTheDocument()
     // Pero no tiene audiovisual.coordina: no ve los botones de agendar/declinar.
     expect(screen.queryByText('Agendar')).not.toBeInTheDocument()
     expect(screen.queryByText('Declinar')).not.toBeInTheDocument()
+  })
+
+  it('depto Audiovisual sin ser el recurso asignado NO puede editar piezas de una pauta realizada', async () => {
+    renderView({
+      userProfile: {
+        user_id: 'otro-editor',
+        company_id: 'co-1',
+        access_level: 1,
+        admin: false,
+        department_id: 2,
+      },
+      can: (key) => key === 'audiovisual.piezas',
+      lines: [],
+      initialEntries: ['/tareas/pautas?pautaId=p4'],
+    })
+    await waitFor(() => {
+      expect(screen.getByText('Edición de piezas')).toBeInTheDocument()
+    })
+    // No editable: 'otro-editor' no está en recurso_ids de p4.
+    expect(screen.queryByPlaceholderText('Buscar empleado por nombre…')).not.toBeInTheDocument()
   })
 })
 

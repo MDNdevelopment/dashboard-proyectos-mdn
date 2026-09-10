@@ -21,6 +21,7 @@ import {
 import { createPiezas, deletePiezas, updatePieza } from './avPautasApi'
 import Avatar from '../Avatar'
 import AttendeePicker from '../reuniones/AttendeePicker'
+import ExtraBadge from './ExtraBadge'
 import StatusPill from '../common/StatusPill'
 
 // Misma paleta de status que los puntos del calendario (AvCalendar.jsx → DOT_COLOR),
@@ -40,9 +41,9 @@ const STATUS_BADGE = {
  * Cuando la pauta está 'realizada', además de la info de siempre se muestra la sección de
  * edición: piezas totales, editores asignados (AttendeePicker, igual que
  * recursos/asistentes en AvPhaseTable) y, debajo de cada uno, su checklist de piezas —
- * nombre editable + selector de estado (StatusPill). Editable por `canEditPiezas`
- * (audiovisual.coordina O audiovisual.piezas — depto Audiovisual completo, no solo la
- * coordinadora; ver AudiovisualView.jsx).
+ * nombre editable + selector de estado (StatusPill). Editable por `canEditPiezas`,
+ * ya resuelto por pauta antes de llegar aquí (canEditPiezasForPauta en
+ * utils/audiovisual.js: quien coordina, o el recurso asignado a esta pauta).
  *
  * Piezas totales/editadas tiene dos caminos según si la pauta marcó formatos (V/R/F):
  * - Con formatos: "salieron" por formato es manual (input); "editadas" por formato es
@@ -89,8 +90,9 @@ export default function PautaDetailModal({
         {/* Header */}
         <div className="px-6 py-5 border-b border-[#eeebe0] flex items-start justify-between flex-shrink-0">
           <div>
-            <h2 className="text-[18px] font-semibold text-[#111] tracking-[-0.01em]">
+            <h2 className="flex items-center gap-2 text-[18px] font-semibold text-[#111] tracking-[-0.01em]">
               {pauta.client_name ?? '—'}
+              <ExtraBadge pauta={pauta} />
             </h2>
             <span
               className="inline-block mt-1.5 px-2 py-0.5 rounded-full text-[11px] font-mono font-semibold uppercase tracking-wide"

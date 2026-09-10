@@ -12,6 +12,7 @@ import {
   isOutOfMonth,
   externalAsUser,
   externalUsersForRole,
+  canEditPiezasForPauta,
 } from '../../utils/audiovisual'
 import AvCalendar from './AvCalendar'
 import AvPhaseTable from './AvPhaseTable'
@@ -38,12 +39,6 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
   const canManage = can('audiovisual.manage')
   const canCoordinate = can('audiovisual.coordina')
   const editMode = avEditMode({ canCoordinate, canManage })
-  // Edición de piezas y asignación de editores en pautas 'realizada': el depto
-  // Audiovisual completo, no solo la coordinadora. `canCoordinate` la incluye por
-  // composición (no se duplica la regla de Lizdania en la fila de audiovisual.piezas).
-  // No afecta a `editMode`: agendar/declinar/editar fecha-recurso siguen exclusivos
-  // de audiovisual.coordina.
-  const canEditPiezas = canCoordinate || can('audiovisual.piezas')
   // "Ver todo" (todas las líneas) es una capability aparte de "coordina" (agendar/
   // declinar/marcar realizada): antes cualquier coordinador del depto Audiovisual veía
   // todas las líneas; ahora eso queda acotado a dirección (nivel≥4), admin, o quien
@@ -433,7 +428,11 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
           usersById={usersById}
           audiovisualUsers={editorOptions}
           piezas={piezas.filter((pz) => pz.pauta_id === detailPauta.id)}
-          canEditPiezas={canEditPiezas}
+          canEditPiezas={canEditPiezasForPauta({
+            canCoordinate,
+            userId: userProfile?.user_id,
+            pauta: detailPauta,
+          })}
           companyId={companyId}
           onFields={handlePautaFields}
           onPiezaChanged={handlePiezaChanged}

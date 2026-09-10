@@ -193,6 +193,23 @@ export function resourceNames(pauta, usersById) {
 }
 
 /**
+ * Determina si `userId` puede editar la lista de piezas de una pauta realizada:
+ * quien coordina (admin o Lizdania, vía `audiovisual.coordina`) o el recurso que
+ * grabó esa pauta (`recurso_ids`). Reemplaza el booleano global que antes abría la
+ * edición a todo el depto Audiovisual — ver commit 19e5bbc.
+ * @param {object} params
+ * @param {boolean} params.canCoordinate  — resultado de `can('audiovisual.coordina')`
+ * @param {string|null|undefined} params.userId  — user_id del usuario actual
+ * @param {object|null|undefined} params.pauta
+ * @returns {boolean}
+ */
+export function canEditPiezasForPauta({ canCoordinate, userId, pauta }) {
+  if (canCoordinate) return true
+  if (!userId || !pauta) return false
+  return (pauta.recurso_ids ?? []).includes(userId)
+}
+
+/**
  * Nombres únicos de los editores asignados a las piezas de una pauta (`editor_user_id`,
  * empleados o recursos externos con rol `edicion`) — complemento de `resourceNames`, que
  * solo resuelve quién graba (`recurso_ids`). Usa `piezasByEditor` para agrupar y descarta

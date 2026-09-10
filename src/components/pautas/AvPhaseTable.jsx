@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import AttendeePicker from '../reuniones/AttendeePicker'
 import ConfirmDeleteDialog from '../common/ConfirmDeleteDialog'
+import DateInput from '../common/DateInput'
+import ExtraBadge from './ExtraBadge'
 import ResourceWarningDialog from './ResourceWarningDialog'
 import {
   createPauta,
@@ -699,8 +701,11 @@ function SolicitudRow({
               ))}
             </select>
           ) : (
-            <div className="text-[14px] font-medium text-[#222]">
-              {p.client_name || <span className="text-[#bbb]">sin cliente</span>}
+            <div className="flex items-center gap-1.5">
+              <div className="text-[14px] font-medium text-[#222]">
+                {p.client_name || <span className="text-[#bbb]">sin cliente</span>}
+              </div>
+              <ExtraBadge pauta={p} />
             </div>
           )}
         </td>
@@ -725,12 +730,12 @@ function SolicitudRow({
         <td className="px-2 py-1.5 min-w-[130px]">
           {editableBrief ? (
             <>
-              <input
+              <DateInput
                 key={`date-${revertTick}`}
-                type="date"
-                className="input-base input-compact"
-                defaultValue={p.pauta_date ?? ''}
-                onBlur={(e) => onFields(p, { pauta_date: e.target.value || null })}
+                value={p.pauta_date ?? ''}
+                onChange={(iso) => onFields(p, { pauta_date: iso || null })}
+                clearable={false}
+                className="input-compact"
               />
               <input
                 key={`salida-${revertTick}`}
@@ -739,6 +744,14 @@ function SolicitudRow({
                 defaultValue={p.salida ?? ''}
                 onBlur={(e) => onFields(p, { salida: e.target.value || null })}
               />
+              <label className="flex items-center gap-1 mt-1 text-[11.5px] text-[#888] cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={Boolean(p.extra)}
+                  onChange={(e) => onFields(p, { extra: e.target.checked })}
+                />
+                Extra
+              </label>
             </>
           ) : (
             <span className="text-[13px] text-[#333]">{formatDayShort(p.pauta_date)}</span>
@@ -922,6 +935,7 @@ function makeDraft() {
     piezas_desc: '',
     requirements: '',
     attendee_ids: [],
+    extra: false,
   }
 }
 
@@ -975,11 +989,11 @@ function DraftSolicitudRow({
           />
         </td>
         <td className="px-2 py-1.5 min-w-[130px]">
-          <input
-            type="date"
-            className="input-base input-compact"
+          <DateInput
             value={draft.pauta_date ?? ''}
-            onChange={(e) => onChange('pauta_date', e.target.value || null)}
+            onChange={(iso) => onChange('pauta_date', iso || null)}
+            clearable={false}
+            className="input-compact"
           />
           <input
             type="time"
@@ -987,6 +1001,14 @@ function DraftSolicitudRow({
             value={draft.salida ?? ''}
             onChange={(e) => onChange('salida', e.target.value || null)}
           />
+          <label className="flex items-center gap-1 mt-1 text-[11.5px] text-[#888] cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={Boolean(draft.extra)}
+              onChange={(e) => onChange('extra', e.target.checked)}
+            />
+            Extra
+          </label>
         </td>
         <td className="px-2 py-1.5">
           <FormatToggle
@@ -1198,7 +1220,10 @@ function AgendaRow({
         className={`border-b border-[#f2efe6] align-top ${highlighted ? 'bg-[#FFF9E8] ring-1 ring-inset ring-[#FFB800] transition-colors duration-500' : ''}`}
       >
         <td className="px-2 py-1.5 min-w-[170px]">
-          <div className="text-[14px] font-medium text-[#222]">{p.client_name || '—'}</div>
+          <div className="flex items-center gap-1.5">
+            <div className="text-[14px] font-medium text-[#222]">{p.client_name || '—'}</div>
+            <ExtraBadge pauta={p} />
+          </div>
           <div className="text-[11.5px] text-[#a29b8c] mt-0.5">{p.tema}</div>
           {(p.link || p.piezas_desc) && (
             <div
@@ -1214,12 +1239,12 @@ function AgendaRow({
         </td>
         <td className="px-2 py-1.5 min-w-[120px]">
           {canCoordinate ? (
-            <input
+            <DateInput
               key={`date-${revertTick}`}
-              type="date"
-              className="input-base input-compact"
-              defaultValue={p.pauta_date ?? ''}
-              onChange={(e) => onFields(p, { pauta_date: e.target.value || null })}
+              value={p.pauta_date ?? ''}
+              onChange={(iso) => onFields(p, { pauta_date: iso || null })}
+              clearable={false}
+              className="input-compact"
             />
           ) : (
             <span className="text-[13px]">
@@ -1403,7 +1428,10 @@ function RealizadasTable({
               className="border-b border-[#f2efe6] align-top cursor-pointer hover:bg-[#faf9f5] transition-colors"
             >
               <td className="px-2 py-1.5 min-w-[170px]">
-                <div className="text-[14px] font-medium text-[#222]">{p.client_name || '—'}</div>
+                <div className="flex items-center gap-1.5">
+                  <div className="text-[14px] font-medium text-[#222]">{p.client_name || '—'}</div>
+                  <ExtraBadge pauta={p} />
+                </div>
                 <div className="text-[11.5px] text-[#a29b8c] mt-0.5">
                   {p.tema} · {formatCodes(p)}
                 </div>

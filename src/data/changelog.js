@@ -212,6 +212,11 @@ export const CHANGELOG = [
       'MAPPI ahora también responde sobre tickets de soporte, leads, vacaciones, Contenido No Planificado, Chequeo de publicación y desempeño promedio por equipo/departamento/cargo, además de tareas, reuniones y pautas con más filtros que antes (por persona, cliente, estado y rango de fechas). Cuando una pregunta todavía se le escapa, ya no improvisa una respuesta: avisa que quedó registrada, y en Empresa → MAPPI se puede ver el listado de preguntas sin responder ordenadas por frecuencia.',
       'Katherine ahora también puede aprobar la impresión de los CNP, junto con Paola y Stephanie.',
       'Nuevo botón amarillo "Sugerencias y errores" en el menú lateral: cualquiera puede enviar una recomendación o reportar un error de forma totalmente anónima, sin dejar rastro de quién lo escribió (ni siquiera el administrador puede saberlo). Por ahora reemplaza el acceso a Soporte Técnico.',
+      'El logo de MDN del menú lateral y del encabezado ahora te lleva al Inicio con un clic.',
+      'Las fechas de las pautas de Audiovisual ahora se escriben y se ven siempre en formato día/mes/año, sin importar el idioma o la configuración regional del navegador.',
+      'La lista de piezas de una pauta realizada de Audiovisual ahora solo la puede modificar la coordinación (Lizdania o un administrador) o la persona asignada como recurso de esa pauta en particular — antes podía modificarla cualquiera del equipo de Audiovisual.',
+      'Al crear una pauta en Audiovisual ahora puedes marcarla como "Extra" (fuera del plan mensual); queda identificada en Solicitudes, Agenda, Realizadas y el calendario.',
+      'Si te asignas una tarea a ti mismo (al crearla o al editarla), ya no recibes el correo ni la notificación avisándote de tu propia asignación.',
     ],
   },
   {

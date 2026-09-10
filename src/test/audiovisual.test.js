@@ -6,6 +6,7 @@ import {
   formatTime12,
   resourceName,
   resourceNames,
+  canEditPiezasForPauta,
   requesterName,
   pautasInScope,
   pautasInMonth,
@@ -182,6 +183,53 @@ describe('resourceNames', () => {
   it('ignora ids que no resuelven a ningún empleado', () => {
     const p = pauta({ recurso_ids: ['u1', 'u9'] })
     expect(resourceNames(p, usersById)).toEqual(['Lizdania Pérez'])
+  })
+})
+
+describe('canEditPiezasForPauta', () => {
+  it('quien coordina puede editar, aunque no sea el recurso asignado', () => {
+    const p = pauta({ recurso_ids: ['otro'] })
+    expect(canEditPiezasForPauta({ canCoordinate: true, userId: 'yo', pauta: p })).toBe(true)
+  })
+
+  it('el recurso asignado a la pauta puede editar', () => {
+    const p = pauta({ recurso_ids: ['yo', 'otro'] })
+    expect(canEditPiezasForPauta({ canCoordinate: false, userId: 'yo', pauta: p })).toBe(true)
+  })
+
+  it('un usuario del depto que no es el recurso asignado no puede editar', () => {
+    const p = pauta({ recurso_ids: ['otro'] })
+    expect(canEditPiezasForPauta({ canCoordinate: false, userId: 'yo', pauta: p })).toBe(false)
+  })
+
+  it('sin recurso_ids (vacío o ausente) → false para quien no coordina', () => {
+    expect(
+      canEditPiezasForPauta({
+        canCoordinate: false,
+        userId: 'yo',
+        pauta: pauta({ recurso_ids: [] }),
+      }),
+    ).toBe(false)
+    expect(
+      canEditPiezasForPauta({
+        canCoordinate: false,
+        userId: 'yo',
+        pauta: pauta({ recurso_ids: undefined }),
+      }),
+    ).toBe(false)
+  })
+
+  it('recurso externo (ext:) no otorga permiso a ningún empleado real', () => {
+    // auth.uid() de un empleado nunca coincide con el prefijo 'ext:', así que
+    // un recurso externo asignado no habilita a nadie a editar piezas.
+    const p = pauta({ recurso_ids: ['ext:abc123'] })
+    expect(canEditPiezasForPauta({ canCoordinate: false, userId: 'yo', pauta: p })).toBe(false)
+  })
+
+  it('sin userId o sin pauta → false', () => {
+    const p = pauta({ recurso_ids: ['yo'] })
+    expect(canEditPiezasForPauta({ canCoordinate: false, userId: null, pauta: p })).toBe(false)
+    expect(canEditPiezasForPauta({ canCoordinate: false, userId: 'yo', pauta: null })).toBe(false)
   })
 })
 

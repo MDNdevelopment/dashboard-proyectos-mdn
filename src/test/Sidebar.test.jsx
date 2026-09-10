@@ -49,6 +49,15 @@ describe('Sidebar — módulo Proyectos', () => {
   })
 })
 
+describe('Sidebar — logo', () => {
+  it('el logo MDN es un enlace a Inicio (/)', () => {
+    renderSidebar(USER)
+    const logoLink = screen.getByRole('link', { name: /ir a inicio/i })
+    expect(logoLink).toHaveAttribute('href', '/')
+    expect(logoLink.querySelector('img')).toBeInTheDocument()
+  })
+})
+
 describe('Sidebar — Inicio', () => {
   it('muestra el enlace directo Inicio como primer ítem', () => {
     renderSidebar(USER)
