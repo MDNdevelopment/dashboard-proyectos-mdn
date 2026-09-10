@@ -217,6 +217,7 @@ export const CHANGELOG = [
       'La lista de piezas de una pauta realizada de Audiovisual ahora solo la puede modificar la coordinación (Lizdania o un administrador) o la persona asignada como recurso de esa pauta en particular — antes podía modificarla cualquiera del equipo de Audiovisual.',
       'Al crear una pauta en Audiovisual ahora puedes marcarla como "Extra" (fuera del plan mensual); queda identificada en Solicitudes, Agenda, Realizadas y el calendario.',
       'Si te asignas una tarea a ti mismo (al crearla o al editarla), ya no recibes el correo ni la notificación avisándote de tu propia asignación.',
+      'Ahora cualquier empleado puede crear un CNP (Contenido No Planificado), sin importar su nivel de acceso.',
     ],
   },
   {
