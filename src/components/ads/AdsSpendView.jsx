@@ -37,6 +37,7 @@ const AdsSpendView = forwardRef(function AdsSpendView(
   { companyId, canManage, lineScope = null, periodo },
   ref,
 ) {
+  const today = new Date()
   const [ads, setAds] = useState([])
   const [clients, setClients] = useState([])
   const [responsables, setResponsables] = useState([])
@@ -245,9 +246,14 @@ const AdsSpendView = forwardRef(function AdsSpendView(
             Limpiar
           </button>
         )}
+
         <button
           onClick={handleExportExcel}
-          disabled={generatingExcel}
+          disabled={
+            generatingExcel ||
+            periodo.month > today.getMonth() + 1 ||
+            periodo.year > today.getFullYear()
+          }
           className="px-3 py-1.5 rounded-lg border border-[#e0ddd4] text-[14px] font-medium text-[#555] hover:bg-[#f5f3eb] transition-colors flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {generatingExcel ? (
