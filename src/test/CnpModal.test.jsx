@@ -182,6 +182,34 @@ describe('CnpModal — cantidad de piezas (crear)', () => {
     ])
   })
 
+  it('con línea "Independientes" (is_general), cualquier empleado es seleccionable aunque pertenezca a otra línea real', async () => {
+    const user = userEvent.setup()
+    render(
+      <CnpModal
+        cnp={null}
+        teams={[
+          { id: 'line-georgina', name: 'Georgina', member_user_ids: ['u1'] },
+          { id: 'line-indep', name: 'Independientes', is_general: true, member_user_ids: [] },
+        ]}
+        defaultTeamId="line-indep"
+        clients={[{ id: 'client-1', name: 'Punto Fit', line_id: 'line-georgina' }]}
+        users={[
+          { user_id: 'u1', first_name: 'Luis', last_name: 'Fajardo' },
+          { user_id: 'u2', first_name: 'Katherine', last_name: 'Mora' },
+        ]}
+        onClose={vi.fn()}
+        onCreated={vi.fn()}
+        onUpdated={vi.fn()}
+      />,
+    )
+
+    await user.click(screen.getByText('Asignar diseñador...'))
+    // Luis pertenece a la línea real "Georgina", pero el CNP es de "Independientes":
+    // debe poder seleccionarse igual, sin restricción de línea.
+    expect(await screen.findByText('Luis Fajardo')).toBeInTheDocument()
+    expect(screen.getByText('Katherine Mora')).toBeInTheDocument()
+  })
+
   it('con 1 pieza se ve el contenido general; con 2+ se oculta y aparece uno por pieza', async () => {
     renderNewModal()
 

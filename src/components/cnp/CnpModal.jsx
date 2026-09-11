@@ -32,6 +32,16 @@ function newRef() {
   return { id: crypto.randomUUID(), url: '', note: '' }
 }
 
+// En CNP, si la línea es "Independientes" o "Alta gerencia" (líneas generales/derivadas),
+// cualquier recurso de la empresa debe poder asignarse como responsable — a diferencia de
+// Tareas/Clientes, donde assignableUsers() restringe a la línea real seleccionada.
+function assignableUsersForCnp(users, team, allLines, currentUserId) {
+  if (team?.is_general || team?.is_management) {
+    return { members: users.filter((u) => !u.deleted_at), crossLine: [] }
+  }
+  return assignableUsers(users, team, allLines, currentUserId)
+}
+
 export default function CnpModal({
   cnp = null,
   teams = [],
@@ -132,7 +142,7 @@ export default function CnpModal({
 
   const selectedTeam = teams.find((t) => t.id === form.line_id)
   const teamMembers = flattenAssignable(
-    assignableUsers(users, selectedTeam, allLines, form.assignee_id),
+    assignableUsersForCnp(users, selectedTeam, allLines, form.assignee_id),
   )
 
   const lineClients = selectedTeam?.is_general
@@ -318,7 +328,7 @@ export default function CnpModal({
                   // Al cambiar de línea, resetear cliente y responsable si ya no es
                   // asignable en la línea nueva (miembro o del pool "Independientes") —
                   // mismo patrón que TaskModal.
-                  const { members, crossLine } = assignableUsers(users, newTeam, allLines)
+                  const { members, crossLine } = assignableUsersForCnp(users, newTeam, allLines)
                   const stillAssignable = new Set([...members, ...crossLine].map((u) => u.user_id))
                   setForm((f) => ({
                     ...f,
