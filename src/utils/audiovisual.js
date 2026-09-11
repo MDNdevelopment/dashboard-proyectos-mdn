@@ -585,11 +585,11 @@ export function aggregateByResource(pautas, usersById, piezasByPauta) {
     const piezas = piezasByPauta?.get(p.id)
     if (piezas?.length) {
       piezas
-        .filter((pz) => pz.status === 'listo')
+        .filter((pz) => pz.status !== 'cancelado')
         .forEach((pz) => {
           const editor = pz.editor_user_id ? usersById.get(pz.editor_user_id) : null
           const name = editor ? `${editor.first_name ?? ''} ${editor.last_name ?? ''}`.trim() : null
-          add(name, 'edita', 1)
+          add(name, 'edita', piezaListas(pz))
         })
     } else {
       add(resourceName(p, 'edita', usersById), 'edita', Number(p.piezas_editadas) || 0)
@@ -614,21 +614,39 @@ export function sumPiezasForLine(pautas) {
 // ─── Checklist de piezas por editor (av_pauta_piezas) ──────────────────────
 
 /**
- * Progreso del checklist de una pauta: piezas 'listo' sobre el total de piezas activas
- * (las canceladas no cuentan ni para el numerador ni para el denominador — no son trabajo
- * pendiente ni trabajo hecho).
+ * Cuántas unidades representa una fila del checklist: 1 para una pieza normal (video/reel/
+ * foto suelta), `cantidad` para un lote (ej. "Fotos" repartidas a un editor). Único lugar
+ * donde vive la dualidad fila/lote — el resto del código pregunta por unidades, no por
+ * filas.
+ */
+export function piezaUnidades(pz) {
+  return pz?.es_lote ? Number(pz.cantidad) || 1 : 1
+}
+
+/** Cuántas de las unidades de una fila ya están terminadas (ver `piezaUnidades`). */
+export function piezaListas(pz) {
+  if (!pz) return 0
+  return pz.es_lote ? Number(pz.listas) || 0 : pz.status === 'listo' ? 1 : 0
+}
+
+/**
+ * Progreso del checklist de una pauta: unidades terminadas sobre el total de unidades
+ * activas (las canceladas no cuentan ni para el numerador ni para el denominador — no son
+ * trabajo pendiente ni trabajo hecho). Un lote de 50 fotos con 32 listas cuenta como 50/32,
+ * no como 1 fila.
  * @param {Array} piezas — piezas de UNA pauta
  * @returns {{total:number, listas:number, canceladas:number, pct:number}}
  */
 export function piezasProgress(piezas) {
   const activas = (piezas ?? []).filter((pz) => pz.status !== 'cancelado')
-  const listas = activas.filter((pz) => pz.status === 'listo').length
+  const total = activas.reduce((sum, pz) => sum + piezaUnidades(pz), 0)
+  const listas = activas.reduce((sum, pz) => sum + piezaListas(pz), 0)
   const canceladas = (piezas ?? []).length - activas.length
   return {
-    total: activas.length,
+    total,
     listas,
     canceladas,
-    pct: activas.length ? Math.round((listas / activas.length) * 100) : 0,
+    pct: total ? Math.round((listas / total) * 100) : 0,
   }
 }
 
@@ -653,6 +671,14 @@ export function piezasByEditor(piezas) {
 /** Nombre por defecto de una pieza nueva, 1-indexado — editable después por el coordinador. */
 export function defaultPiezaName(index) {
   return `Video #${index + 1}`
+}
+
+/** Código de formato que siempre se reparte como lote (ver createLotePieza en avPautasApi.js). */
+export const FOTO_FORMAT = 'F'
+
+/** Nombre fijo del lote de fotos de un editor — no es editable, a diferencia de una pieza. */
+export function defaultLoteName() {
+  return 'Fotos'
 }
 
 // ─── Piezas por formato (Video/Reel/Foto) de una pauta 'realizada' ─────────
@@ -729,13 +755,14 @@ export function planPiezaRemoval(piezasDelEditor, cantidad) {
  */
 export function distributePiezas(faltantes, editorIds, grouped) {
   if (!editorIds?.length || faltantes <= 0) return []
-  const counts = new Map(editorIds.map((id) => [id, (grouped?.get(id) ?? []).length]))
+  const unitsOf = (id) => (grouped?.get(id) ?? []).reduce((sum, pz) => sum + piezaUnidades(pz), 0)
+  const counts = new Map(editorIds.map((id) => [id, unitsOf(id)]))
   for (let i = 0; i < faltantes; i++) {
     const minId = editorIds.reduce((a, b) => (counts.get(b) < counts.get(a) ? b : a))
     counts.set(minId, counts.get(minId) + 1)
   }
   return editorIds
-    .map((id) => ({ editorId: id, count: counts.get(id) - (grouped?.get(id) ?? []).length }))
+    .map((id) => ({ editorId: id, count: counts.get(id) - unitsOf(id) }))
     .filter((e) => e.count > 0)
 }
 

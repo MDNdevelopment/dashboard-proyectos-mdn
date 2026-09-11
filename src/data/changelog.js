@@ -220,6 +220,7 @@ export const CHANGELOG = [
       'Ahora cualquier empleado puede crear un CNP (Contenido No Planificado), sin importar su nivel de acceso.',
       'Rediseñado el reparto de piezas en las pautas realizadas de Audiovisual: ahora se ajusta la cantidad con botones + y −, se ve cuántas piezas faltan por repartir (con un botón para repartirlas automáticamente entre los editores), la lista para agregar editores permanece oculta hasta que se necesita, y ya no se puede asignar a los editores más piezas para editar que las que realmente salieron.',
       'Corregido: al crear o editar un CNP en la línea "Independientes" o "Alta gerencia", ya no se puede asignar como responsable únicamente a quienes no tienen equipo. Ahora se puede elegir a cualquier persona de la empresa.',
+      'En las pautas de Audiovisual, las fotos ya no generan una lista interminable con un ítem por foto: ahora se registran como un bloque por editor, con cuántas se le asignaron y cuántas lleva listas (con un botón para marcarlas todas de una vez). Video y Reel siguen con su lista de piezas de siempre.',
     ],
   },
   {

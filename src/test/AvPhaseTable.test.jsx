@@ -708,6 +708,26 @@ describe('AvPhaseTable — Realizadas: columna única "Piezas" + fila clickeable
     expect(screen.getByText('1/2')).toBeInTheDocument()
   })
 
+  it('con un lote de fotos, el progreso cuenta unidades (listas/cantidad), no filas', () => {
+    const piezas = [
+      {
+        id: 'lote1',
+        pauta_id: 'p1',
+        es_lote: true,
+        cantidad: 50,
+        listas: 32,
+        status: 'en_edicion',
+      },
+    ]
+    renderTable({
+      initialPhase: 'realizadas',
+      editMode: 'coordina',
+      pautas: [{ ...PAUTA_REALIZADA, piezas_totales: 50 }],
+      piezas,
+    })
+    expect(screen.getByText('32/50')).toBeInTheDocument()
+  })
+
   it('sin piezas cargadas todavía, cae al total manual de la pauta ("0/N")', () => {
     renderTable({ initialPhase: 'realizadas', editMode: 'coordina', pautas: [PAUTA_REALIZADA] })
     expect(screen.getByText('0/4')).toBeInTheDocument()

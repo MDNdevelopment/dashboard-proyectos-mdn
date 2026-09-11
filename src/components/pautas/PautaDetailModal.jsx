@@ -6,6 +6,7 @@ import {
   PIEZA_STATUS_ORDER,
   FORMAT_KEYS,
   FORMAT_LABELS,
+  FOTO_FORMAT,
   formatCodes,
   formatTime12,
   formatDayShort,
@@ -13,6 +14,7 @@ import {
   grillaStatus,
   piezasProgress,
   piezasByEditor,
+  piezaUnidades,
   piezasPorFormato,
   setPiezaFormatoCount,
   defaultPiezaName,
@@ -20,7 +22,7 @@ import {
   distributePiezas,
   pautaErrorMessage,
 } from '../../utils/audiovisual'
-import { createPiezas, deletePiezas, updatePieza } from './avPautasApi'
+import { createPiezas, createLotePieza, deletePiezas, updatePieza } from './avPautasApi'
 import Avatar from '../Avatar'
 import AttendeePicker from '../reuniones/AttendeePicker'
 import ExtraBadge from './ExtraBadge'
@@ -215,7 +217,9 @@ function PiezasSection({
   const grouped = piezasByEditor(piezas)
   const editorIds = [...new Set([...grouped.keys(), ...extraEditorIds])].filter(Boolean)
   const sinAsignar = grouped.get(null) ?? []
-  const asignadas = piezas.length
+  // Las fotos no cuentan una fila por unidad (van en lote): sumar piezaUnidades en vez de
+  // piezas.length es lo que hace que "50 fotos repartidas" no dependa de 50 filas.
+  const asignadas = piezas.reduce((sum, pz) => sum + piezaUnidades(pz), 0)
   // Formatos marcados en la pauta -> se captura el desglose por formato; si no hay
   // formatos (pautas anteriores a FormatToggle) se conserva el input único de siempre.
   const activeFormats = FORMAT_KEYS.filter((code) => (pauta.formats ?? []).includes(code))
@@ -223,6 +227,10 @@ function PiezasSection({
   // Con un solo formato marcado no hace falta elegirlo pieza por pieza: toda pieza nueva
   // se etiqueta con ese formato automáticamente.
   const singleFormat = activeFormats.length === 1 ? activeFormats[0] : null
+  const tieneFoto = activeFormats.includes(FOTO_FORMAT)
+  // El stepper genérico (checklist pieza por pieza) es para video/reel; si Foto es el
+  // único formato activo, todo el trabajo vive en el lote y el genérico no pinta nada.
+  const tieneTrabajoPorPieza = !usaFormatos || activeFormats.some((c) => c !== FOTO_FORMAT)
   const breakdown = piezasPorFormato(pauta)
   // El total SIEMPRE se lee de las columnas ya sincronizadas por el trigger de BD (en
   // vez de sumar `breakdown` en cliente): así una pauta que ya tenía piezas_totales
@@ -269,10 +277,108 @@ function PiezasSection({
     return createPiezas(companyId, pauta.id, editorId, nombres, startIndex, singleFormat)
   }
 
+  function loteOf(editorId) {
+    return (grouped.get(editorId) ?? []).find((pz) => pz.es_lote) ?? null
+  }
+
+  /** Sube/crece la cantidad del lote de fotos de un editor, consumiendo el pool `faltantes`
+   * compartido — igual criterio que handleAssignedChange, pero nunca borra la fila: solo
+   * ajusta `cantidad`, y nunca por debajo de `listas` (fotos ya entregadas). */
+  async function handleLoteAssignedChange(editorId, delta) {
+    setError(null)
+    setWarning(null)
+    const lote = loteOf(editorId)
+    if (delta > 0) {
+      const allowed = Math.min(delta, faltantes)
+      if (allowed <= 0) return
+      if (!lote) {
+        const { data, error: err } = await createLotePieza(
+          companyId,
+          pauta.id,
+          editorId,
+          allowed,
+          piezas.length,
+        )
+        if (err) {
+          setError(`No se pudo crear el lote de fotos. ${pautaErrorMessage(err)}`)
+          return
+        }
+        if (data) onPiezaChanged(data)
+      } else {
+        const { data, error: err } = await updatePieza(lote.id, {
+          cantidad: lote.cantidad + allowed,
+        })
+        if (err) {
+          setError(`No se pudo actualizar el lote de fotos. ${pautaErrorMessage(err)}`)
+          return
+        }
+        if (data) onPiezaChanged(data)
+      }
+    } else if (delta < 0 && lote) {
+      const next = Math.max(lote.listas, lote.cantidad + delta)
+      if (next === lote.cantidad) {
+        setWarning('No se puede bajar de las fotos ya marcadas como listas en este lote.')
+        return
+      }
+      const { data, error: err } = await updatePieza(lote.id, { cantidad: next })
+      if (err) {
+        setError(`No se pudo actualizar el lote de fotos. ${pautaErrorMessage(err)}`)
+        return
+      }
+      if (data) onPiezaChanged(data)
+    }
+  }
+
+  /** Avanza/retrocede cuántas fotos del lote de un editor ya están listas. */
+  async function handleLoteListasChange(editorId, delta) {
+    setError(null)
+    const lote = loteOf(editorId)
+    if (!lote) return
+    const next = Math.min(lote.cantidad, Math.max(0, lote.listas + delta))
+    if (next === lote.listas) return
+    const { data, error: err } = await updatePieza(lote.id, { listas: next })
+    if (err) {
+      setError(`No se pudo actualizar el lote de fotos. ${pautaErrorMessage(err)}`)
+      return
+    }
+    if (data) onPiezaChanged(data)
+  }
+
+  async function handleLoteComplete(editorId) {
+    setError(null)
+    const lote = loteOf(editorId)
+    if (!lote || lote.listas === lote.cantidad) return
+    const { data, error: err } = await updatePieza(lote.id, { listas: lote.cantidad })
+    if (err) {
+      setError(`No se pudo actualizar el lote de fotos. ${pautaErrorMessage(err)}`)
+      return
+    }
+    if (data) onPiezaChanged(data)
+  }
+
+  async function handleLoteDelete(editorId) {
+    setError(null)
+    setWarning(null)
+    const lote = loteOf(editorId)
+    if (!lote) return
+    if (lote.listas > 0) {
+      setWarning(
+        'El lote de fotos tiene entregas marcadas como listas — bájalas a 0 antes de quitarlo.',
+      )
+      return
+    }
+    const { error: err } = await deletePiezas([lote.id])
+    if (err) {
+      setError(`No se pudo quitar el lote de fotos. ${pautaErrorMessage(err)}`)
+      return
+    }
+    onPiezaDeleted(lote.id)
+  }
+
   async function handleAssignedChange(editorId, delta) {
     setError(null)
     setWarning(null)
-    const current = grouped.get(editorId) ?? []
+    const current = (grouped.get(editorId) ?? []).filter((pz) => !pz.es_lote)
     if (delta > 0) {
       // Nunca se reparten más piezas de las que "salieron" — el stepper ya llega
       // deshabilitado a este límite, esto es el resguardo si igual se dispara.
@@ -306,6 +412,21 @@ function PiezasSection({
     setError(null)
     setWarning(null)
     const plan = distributePiezas(faltantes, editorIds, grouped)
+    // Pauta 100% Foto: reparte creciendo el lote de cada editor en vez de crear N filas.
+    if (tieneFoto && !tieneTrabajoPorPieza) {
+      for (const { editorId, count } of plan) {
+        const lote = loteOf(editorId)
+        const result = lote
+          ? await updatePieza(lote.id, { cantidad: lote.cantidad + count })
+          : await createLotePieza(companyId, pauta.id, editorId, count, piezas.length)
+        if (result.error) {
+          setError(`No se pudo repartir el lote de fotos. ${pautaErrorMessage(result.error)}`)
+          return
+        }
+        if (result.data) onPiezaChanged(result.data)
+      }
+      return
+    }
     for (const { editorId, count } of plan) {
       const { data, error: err } = await createForEditor(editorId, count)
       if (err) {
@@ -464,8 +585,17 @@ function PiezasSection({
             piezas={grouped.get(editorId) ?? []}
             canEditPiezas={canEditPiezas}
             formatOptions={activeFormats}
-            maxAssigned={(grouped.get(editorId) ?? []).length + faltantes}
+            tieneFoto={tieneFoto}
+            tieneTrabajoPorPieza={tieneTrabajoPorPieza}
+            maxAssigned={
+              (grouped.get(editorId) ?? []).filter((pz) => !pz.es_lote).length + faltantes
+            }
+            maxLoteAssigned={(loteOf(editorId)?.cantidad ?? 0) + faltantes}
             onAssignedChange={(delta) => handleAssignedChange(editorId, delta)}
+            onLoteAssignedChange={(delta) => handleLoteAssignedChange(editorId, delta)}
+            onLoteListasChange={(delta) => handleLoteListasChange(editorId, delta)}
+            onLoteComplete={() => handleLoteComplete(editorId)}
+            onLoteDelete={() => handleLoteDelete(editorId)}
             onPiezaChanged={onPiezaChanged}
             onPiezaDeleted={onPiezaDeleted}
             onError={setError}
@@ -477,6 +607,8 @@ function PiezasSection({
             piezas={sinAsignar}
             canEditPiezas={canEditPiezas}
             formatOptions={activeFormats}
+            tieneFoto={tieneFoto}
+            tieneTrabajoPorPieza={tieneTrabajoPorPieza}
             onPiezaChanged={onPiezaChanged}
             onPiezaDeleted={onPiezaDeleted}
             onError={setError}
@@ -492,13 +624,29 @@ function EditorChecklist({
   piezas,
   canEditPiezas,
   formatOptions,
+  tieneFoto,
+  tieneTrabajoPorPieza,
   maxAssigned,
+  maxLoteAssigned,
   onAssignedChange,
+  onLoteAssignedChange,
+  onLoteListasChange,
+  onLoteComplete,
+  onLoteDelete,
   onPiezaChanged,
   onPiezaDeleted,
   onError,
 }) {
+  // Las fotos viven en una sola fila lote (`es_lote`); el resto del checklist (video/reel)
+  // sigue siendo una fila por pieza. `piezasProgress` ya suma unidades, no filas.
+  const normal = piezas.filter((pz) => !pz.es_lote)
+  const lote = piezas.find((pz) => pz.es_lote) ?? null
   const { total, listas } = piezasProgress(piezas)
+  // Un editor sin lote todavía puede recibir uno con el stepper de LoteRow — se muestra la
+  // fila si la pauta tiene Foto activa Y hay un editor real a quien asignarle (para poder
+  // repartirle), o si ya existe un lote huérfano que gestionar (p. ej. se quitó al editor
+  // de la sección de arriba pero sus fotos siguen ahí).
+  const showLoteRow = Boolean(lote) || (tieneFoto && Boolean(editor))
   return (
     <div className="border border-[#ece9df] rounded-xl px-3 py-3">
       <div className="flex items-center gap-2.5 mb-2.5">
@@ -515,9 +663,9 @@ function EditorChecklist({
         <span className="text-[12px] font-mono text-[#888]">
           {listas}/{total} listas
         </span>
-        {canEditPiezas && editor && onAssignedChange && (
+        {canEditPiezas && editor && onAssignedChange && tieneTrabajoPorPieza && (
           <Stepper
-            value={piezas.length}
+            value={normal.length}
             onChange={onAssignedChange}
             max={maxAssigned}
             label={`piezas de ${editor.first_name ?? 'este editor'}`}
@@ -525,11 +673,11 @@ function EditorChecklist({
         )}
       </div>
 
-      {piezas.length === 0 ? (
+      {normal.length === 0 && !showLoteRow ? (
         <p className="text-[12.5px] text-[#bbb]">Sin piezas asignadas.</p>
       ) : (
         <ul className="space-y-1.5">
-          {piezas.map((pz) => (
+          {normal.map((pz) => (
             <PiezaRow
               key={pz.id}
               pieza={pz}
@@ -540,9 +688,98 @@ function EditorChecklist({
               onError={onError}
             />
           ))}
+          {showLoteRow && (
+            <LoteRow
+              lote={lote}
+              editorName={editor?.first_name ?? 'este editor'}
+              canEditPiezas={canEditPiezas && Boolean(editor) && Boolean(onLoteAssignedChange)}
+              maxAssigned={maxLoteAssigned}
+              onAssignedChange={onLoteAssignedChange}
+              onListasChange={onLoteListasChange}
+              onComplete={onLoteComplete}
+              onDelete={onLoteDelete}
+            />
+          )}
         </ul>
       )}
     </div>
+  )
+}
+
+/** Fila de lote (hoy solo Fotos): en vez de nombre + estado por unidad, dos contadores —
+ * cuántas se asignaron y cuántas de esas ya están listas. */
+function LoteRow({
+  lote,
+  editorName,
+  canEditPiezas,
+  maxAssigned,
+  onAssignedChange,
+  onListasChange,
+  onComplete,
+  onDelete,
+}) {
+  const cantidad = lote?.cantidad ?? 0
+  const listasCount = lote?.listas ?? 0
+  return (
+    <li className="flex items-center gap-2 flex-wrap">
+      <span className="text-[13px] text-[#333] flex-1 min-w-[70px]">📷 Fotos</span>
+      {canEditPiezas ? (
+        <>
+          <span className="flex items-center gap-1.5">
+            <span className="text-[11px] text-[#999]">Asignadas</span>
+            <Stepper
+              value={cantidad}
+              onChange={onAssignedChange}
+              max={maxAssigned}
+              label={`fotos asignadas a ${editorName}`}
+            />
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="text-[11px] text-[#999]">Listas</span>
+            <Stepper
+              value={listasCount}
+              onChange={onListasChange}
+              max={cantidad}
+              disabled={cantidad === 0}
+              label={`fotos listas de ${editorName}`}
+            />
+          </span>
+          {cantidad > 0 && listasCount < cantidad && (
+            <button
+              type="button"
+              onClick={onComplete}
+              className="text-[11px] font-semibold text-[#2563eb] hover:underline"
+            >
+              ✓ completar todas
+            </button>
+          )}
+          {cantidad > 0 && (
+            <button
+              type="button"
+              onClick={onDelete}
+              aria-label={`Quitar lote de fotos de ${editorName}`}
+              className="w-6 h-6 flex items-center justify-center rounded-lg text-[#bbb] hover:text-red-400 hover:bg-red-50 transition-colors flex-shrink-0"
+            >
+              <svg
+                width="10"
+                height="10"
+                viewBox="0 0 10 10"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              >
+                <path d="M1 1l8 8M9 1L1 9" />
+              </svg>
+            </button>
+          )}
+        </>
+      ) : (
+        <span className="text-[12px] text-[#999]">
+          <strong className="text-[#333]">{listasCount}</strong>/{cantidad} listas
+        </span>
+      )}
+    </li>
   )
 }
 

@@ -25,8 +25,11 @@ import {
   generateDayAgendaText,
   piezasProgress,
   piezasByEditor,
+  piezaUnidades,
+  piezaListas,
   editorNames,
   defaultPiezaName,
+  defaultLoteName,
   piezasPorFormato,
   setPiezaFormatoCount,
   planPiezaRemoval,
@@ -536,6 +539,25 @@ describe('aggregateByResource', () => {
     expect(result).toContainEqual({ name: 'Nadia', graba: 0, edita: 1 })
   })
 
+  it('un lote de fotos aporta sus unidades `listas`, no 1 por fila', () => {
+    const pautas = [
+      pauta({
+        id: 'p1',
+        status: 'realizada',
+        recurso_ids: ['u1'],
+        piezas_totales: 50,
+      }),
+    ]
+    const piezasByPauta = new Map([
+      [
+        'p1',
+        [{ editor_user_id: 'u2', es_lote: true, cantidad: 50, listas: 32, status: 'en_edicion' }],
+      ],
+    ])
+    const result = aggregateByResource(pautas, usersById, piezasByPauta)
+    expect(result).toContainEqual({ name: 'Nadia', graba: 0, edita: 32 })
+  })
+
   it('pautas sin piezas en el checklist caen al camino legacy (edita_user_id/piezas_editadas)', () => {
     const pautas = [
       pauta({
@@ -552,6 +574,20 @@ describe('aggregateByResource', () => {
   })
 })
 
+describe('piezaUnidades / piezaListas', () => {
+  it('una pieza normal siempre vale 1 unidad, lista solo si status="listo"', () => {
+    expect(piezaUnidades({ status: 'pendiente' })).toBe(1)
+    expect(piezaListas({ status: 'listo' })).toBe(1)
+    expect(piezaListas({ status: 'en_edicion' })).toBe(0)
+  })
+
+  it('un lote vale `cantidad` unidades y `listas` de ellas terminadas', () => {
+    const lote = { es_lote: true, cantidad: 50, listas: 32 }
+    expect(piezaUnidades(lote)).toBe(50)
+    expect(piezaListas(lote)).toBe(32)
+  })
+})
+
 describe('piezasProgress', () => {
   it('cuenta listas sobre el total de piezas activas (excluye canceladas)', () => {
     const piezas = [
@@ -565,6 +601,14 @@ describe('piezasProgress', () => {
 
   it('sin piezas, devuelve todo en cero', () => {
     expect(piezasProgress([])).toEqual({ total: 0, listas: 0, canceladas: 0, pct: 0 })
+  })
+
+  it('un lote de 50 fotos con 32 listas cuenta como 50/32, no como 1 fila', () => {
+    const piezas = [
+      { status: 'pendiente' },
+      { es_lote: true, cantidad: 50, listas: 32, status: 'en_edicion' },
+    ]
+    expect(piezasProgress(piezas)).toEqual({ total: 51, listas: 32, canceladas: 0, pct: 63 })
   })
 })
 
@@ -654,6 +698,16 @@ describe('distributePiezas', () => {
     const plan = distributePiezas(4, ['u1'], new Map())
     expect(plan).toEqual([{ editorId: 'u1', count: 4 }])
   })
+
+  it('parte de unidades ya asignadas, no de filas — un lote de 50 cuenta como 50', () => {
+    const grouped = new Map([
+      ['u1', [{ es_lote: true, cantidad: 50, listas: 0 }]],
+      ['u2', []],
+    ])
+    const plan = distributePiezas(10, ['u1', 'u2'], grouped)
+    // u1 ya tiene 50 unidades (aunque sea 1 sola fila) → todo el faltante va a u2.
+    expect(plan).toEqual([{ editorId: 'u2', count: 10 }])
+  })
 })
 
 describe('editorNames', () => {
@@ -689,6 +743,12 @@ describe('defaultPiezaName', () => {
   it('genera nombres "Video #N" 1-indexados', () => {
     expect(defaultPiezaName(0)).toBe('Video #1')
     expect(defaultPiezaName(4)).toBe('Video #5')
+  })
+})
+
+describe('defaultLoteName', () => {
+  it('siempre es "Fotos" — el lote no tiene nombre editable', () => {
+    expect(defaultLoteName()).toBe('Fotos')
   })
 })
 

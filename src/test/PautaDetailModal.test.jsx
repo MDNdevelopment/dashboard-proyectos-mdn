@@ -10,11 +10,13 @@ import { vi } from 'vitest'
 import PautaDetailModal from '../components/pautas/PautaDetailModal'
 
 const mockCreatePiezas = vi.fn().mockResolvedValue({ data: [], error: null })
+const mockCreateLotePieza = vi.fn().mockResolvedValue({ data: null, error: null })
 const mockUpdatePieza = vi.fn().mockResolvedValue({ data: null, error: null })
 const mockDeletePiezas = vi.fn().mockResolvedValue({ data: null, error: null })
 
 vi.mock('../components/pautas/avPautasApi', () => ({
   createPiezas: (...a) => mockCreatePiezas(...a),
+  createLotePieza: (...a) => mockCreateLotePieza(...a),
   updatePieza: (...a) => mockUpdatePieza(...a),
   deletePiezas: (...a) => mockDeletePiezas(...a),
 }))
@@ -607,6 +609,144 @@ describe('PautaDetailModal', () => {
         />,
       )
       expect(screen.queryByLabelText(/^Editor de /)).not.toBeInTheDocument()
+    })
+  })
+
+  describe('piezas en lote (Fotos)', () => {
+    it('una pauta solo-Foto con 50 fotos repartidas muestra un único bloque "Fotos", no 50 filas', () => {
+      const piezas = [
+        {
+          id: 'lote1',
+          editor_user_id: 'u1',
+          nombre: 'Fotos',
+          status: 'en_edicion',
+          position: 0,
+          es_lote: true,
+          cantidad: 50,
+          listas: 32,
+        },
+      ]
+      render(
+        <PautaDetailModal
+          {...baseProps({
+            pauta: pauta({ status: 'realizada', formats: ['F'], piezas_totales: 50 }),
+            piezas,
+          })}
+        />,
+      )
+      expect(screen.getByText('📷 Fotos')).toBeInTheDocument()
+      expect(screen.queryByText('Video #1')).not.toBeInTheDocument()
+      expect(screen.queryByText('Video #50')).not.toBeInTheDocument()
+      expect(screen.getByText('32/50 listas')).toBeInTheDocument()
+    })
+
+    it('el stepper "asignadas" del lote actualiza `cantidad` con una sola llamada', () => {
+      mockUpdatePieza.mockClear()
+      const piezas = [
+        {
+          id: 'lote1',
+          editor_user_id: 'u1',
+          nombre: 'Fotos',
+          status: 'pendiente',
+          position: 0,
+          es_lote: true,
+          cantidad: 10,
+          listas: 0,
+        },
+      ]
+      render(
+        <PautaDetailModal
+          {...baseProps({
+            // 10 asignadas, totales 20 → quedan 10 por repartir.
+            pauta: pauta({ status: 'realizada', formats: ['F'], piezas_totales: 20 }),
+            piezas,
+          })}
+        />,
+      )
+      fireEvent.click(screen.getByLabelText('Agregar fotos asignadas a Lizdania'))
+      expect(mockUpdatePieza).toHaveBeenCalledTimes(1)
+      expect(mockUpdatePieza).toHaveBeenCalledWith('lote1', { cantidad: 11 })
+    })
+
+    it('"completar todas" deja `listas` igual a `cantidad`', () => {
+      mockUpdatePieza.mockClear()
+      const piezas = [
+        {
+          id: 'lote1',
+          editor_user_id: 'u1',
+          nombre: 'Fotos',
+          status: 'en_edicion',
+          position: 0,
+          es_lote: true,
+          cantidad: 5,
+          listas: 2,
+        },
+      ]
+      render(
+        <PautaDetailModal
+          {...baseProps({
+            pauta: pauta({ status: 'realizada', formats: ['F'], piezas_totales: 5 }),
+            piezas,
+          })}
+        />,
+      )
+      fireEvent.click(screen.getByText('✓ completar todas'))
+      expect(mockUpdatePieza).toHaveBeenCalledWith('lote1', { listas: 5 })
+    })
+
+    it('bajar "asignadas" por debajo de lo ya listo no se permite — muestra aviso en vez de reducir', () => {
+      mockUpdatePieza.mockClear()
+      const piezas = [
+        {
+          id: 'lote1',
+          editor_user_id: 'u1',
+          nombre: 'Fotos',
+          status: 'listo',
+          position: 0,
+          es_lote: true,
+          cantidad: 5,
+          listas: 5,
+        },
+      ]
+      render(
+        <PautaDetailModal
+          {...baseProps({
+            pauta: pauta({ status: 'realizada', formats: ['F'], piezas_totales: 5 }),
+            piezas,
+          })}
+        />,
+      )
+      fireEvent.click(screen.getByLabelText('Quitar fotos asignadas a Lizdania'))
+      expect(mockUpdatePieza).not.toHaveBeenCalled()
+      expect(
+        screen.getByText('No se puede bajar de las fotos ya marcadas como listas en este lote.'),
+      ).toBeInTheDocument()
+    })
+
+    it('una pauta mixta Video+Foto muestra el checklist de video y además el bloque de Fotos', () => {
+      const piezas = [
+        { id: 'pz1', editor_user_id: 'u1', nombre: 'Video #1', status: 'pendiente', position: 0 },
+        {
+          id: 'lote1',
+          editor_user_id: 'u1',
+          nombre: 'Fotos',
+          status: 'pendiente',
+          position: 1,
+          es_lote: true,
+          cantidad: 3,
+          listas: 0,
+        },
+      ]
+      render(
+        <PautaDetailModal
+          {...baseProps({
+            pauta: pauta({ status: 'realizada', formats: ['V', 'F'], piezas_totales: 5 }),
+            piezas,
+          })}
+        />,
+      )
+      expect(screen.getByDisplayValue('Video #1')).toBeInTheDocument()
+      expect(screen.getByText('📷 Fotos')).toBeInTheDocument()
     })
   })
 })

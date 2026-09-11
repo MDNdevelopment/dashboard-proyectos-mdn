@@ -5,7 +5,7 @@
  * components/reuniones/meetingsApi.js.
  */
 import { supabase } from '../../supabase'
-import { sumPiezasForLine } from '../../utils/audiovisual'
+import { sumPiezasForLine, defaultLoteName, FOTO_FORMAT } from '../../utils/audiovisual'
 
 // ─── Lectura ──────────────────────────────────────────────────────────────────
 
@@ -205,6 +205,28 @@ export async function createPiezas(
   return supabase.from('av_pauta_piezas').insert(rows).select()
 }
 
+/**
+ * Inserta el lote de fotos de un editor — una sola fila que representa `cantidad` unidades
+ * (`es_lote: true`, formato fijo 'F'), en vez de una fila por foto. El trigger de BD
+ * (av_pauta_piezas_sync_lote) deriva `status` a partir de `listas`/`cantidad`.
+ */
+export async function createLotePieza(companyId, pautaId, editorUserId, cantidad, position = 0) {
+  return supabase
+    .from('av_pauta_piezas')
+    .insert({
+      company_id: companyId,
+      pauta_id: pautaId,
+      editor_user_id: editorUserId,
+      nombre: defaultLoteName(),
+      position,
+      formato: FOTO_FORMAT,
+      es_lote: true,
+      cantidad,
+    })
+    .select()
+    .single()
+}
+
 export async function updatePieza(piezaId, fields) {
   const updates = { ...sanitizePiezaFields(fields), updated_at: new Date().toISOString() }
   return supabase.from('av_pauta_piezas').update(updates).eq('id', piezaId).select().single()
@@ -216,7 +238,16 @@ export async function deletePiezas(ids) {
 }
 
 function sanitizePiezaFields(fields) {
-  const allowed = ['editor_user_id', 'nombre', 'status', 'position', 'formato']
+  const allowed = [
+    'editor_user_id',
+    'nombre',
+    'status',
+    'position',
+    'formato',
+    'es_lote',
+    'cantidad',
+    'listas',
+  ]
   const out = {}
   for (const key of allowed) {
     if (key in fields) out[key] = fields[key] === '' ? null : fields[key]
