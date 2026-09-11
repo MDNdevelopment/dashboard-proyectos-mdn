@@ -39,8 +39,13 @@ export default function TaskModal({
   const { userProfile } = useAuth()
   const isEdit = task != null
 
-  // Level-1 users (not privileged) are always an assignee; they can add others but not remove themselves.
   const privileged = userProfile?.access_level >= 2 || userProfile?.admin === true
+  // Nivel 1 creando una tarea nueva siempre queda como created_by, vía que el RLS de INSERT
+  // ya acepta (migración 20260917000000_tasks_insert_created_by.sql) — así que nunca hace
+  // falta bloquearlo ahí. Editando una tarea existente, solo queda bloqueado si NO fue quien
+  // la creó: ahí `assignee_ids`/`support_id` son las únicas vías que le da el RLS de UPDATE,
+  // y quitarse dejaría el guardado rechazado por la base de datos.
+  const isCreator = isEdit ? task?.created_by === userProfile?.user_id : true
 
   const [form, setForm] = useState(() => {
     if (isEdit) {
@@ -61,7 +66,8 @@ export default function TaskModal({
         checklist: task.checklist ?? [],
       }
     }
-    // For new tasks, level-1 users are always an assignee (locked).
+    // Para tareas nuevas, nivel 1 arranca preseleccionado como responsable (caso común: la
+    // va a hacer él mismo) pero ya no queda bloqueado — puede quitarse, ver `isCreator` arriba.
     return {
       ...EMPTY,
       team_id: defaultTeamId ?? teams[0]?.id ?? '',
@@ -204,8 +210,10 @@ export default function TaskModal({
     onClose()
   }
 
-  // IDs bloqueados: nivel-1 no puede quitarse a sí mismo
-  const lockedAssigneeIds = privileged ? [] : userProfile?.user_id ? [userProfile.user_id] : []
+  // IDs bloqueados: nivel-1 no puede quitarse a sí mismo, salvo que sea quien creó la tarea
+  // (ver comentario de `isCreator` arriba).
+  const lockedAssigneeIds =
+    !privileged && !isCreator && userProfile?.user_id ? [userProfile.user_id] : []
 
   const { done: checkDone, total: checkTotal } = checklistProgress(form.checklist)
 

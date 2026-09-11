@@ -200,6 +200,44 @@ describe('BaseView — filtro de apoyo de dirección', () => {
   })
 })
 
+describe('BaseView — orden de columnas al hacer click en el header', () => {
+  const SORT_TASKS = [
+    makeTask({ id: 's1', description: 'Tarea Z', client: 'Zeta', request_date: '2026-01-01' }),
+    makeTask({ id: 's2', description: 'Tarea A', client: 'Alfa', request_date: '2026-01-03' }),
+    makeTask({ id: 's3', description: 'Tarea M', client: 'Medio', request_date: '2026-01-02' }),
+  ]
+
+  it('por defecto ordena por Solicitud, más reciente primero', () => {
+    renderBase(SORT_TASKS)
+    const rows = screen.getAllByRole('row').slice(1)
+    expect(within(rows[0]).getByText('Alfa')).toBeInTheDocument()
+  })
+
+  it('click en "Cliente" ordena alfabéticamente ascendente; un segundo click invierte el orden', async () => {
+    const user = userEvent.setup()
+    renderBase(SORT_TASKS)
+
+    await user.click(screen.getByText('Cliente'))
+    let rows = screen.getAllByRole('row').slice(1)
+    expect(within(rows[0]).getByText('Alfa')).toBeInTheDocument()
+    expect(within(rows[2]).getByText('Zeta')).toBeInTheDocument()
+
+    await user.click(screen.getByText('Cliente'))
+    rows = screen.getAllByRole('row').slice(1)
+    expect(within(rows[0]).getByText('Zeta')).toBeInTheDocument()
+    expect(within(rows[2]).getByText('Alfa')).toBeInTheDocument()
+  })
+
+  it('click en "Solicitud" ordena por fecha ascendente', async () => {
+    const user = userEvent.setup()
+    renderBase(SORT_TASKS)
+    await user.click(screen.getByText('Solicitud'))
+    const rows = screen.getAllByRole('row').slice(1)
+    expect(within(rows[0]).getByText('Zeta')).toBeInTheDocument()
+    expect(within(rows[2]).getByText('Alfa')).toBeInTheDocument()
+  })
+})
+
 describe('BaseView — filtro por mes (monthIdx)', () => {
   // Enero 2026 = 2026*12 + 0 ; Marzo 2026 = 2026*12 + 2
   const JAN_2026 = 2026 * 12 + 0

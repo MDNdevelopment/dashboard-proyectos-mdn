@@ -248,6 +248,68 @@ function DirectionFilter({ directionUsers, selectedIds, onChange }) {
   )
 }
 
+/** Valor comparable de una tarea para una columna ordenable de la tabla de abajo. */
+function sortValue(t, key, teams, usersMap) {
+  switch (key) {
+    case 'line':
+      return (teams.find((tm) => tm.id === t.team_id)?.name ?? '').toLowerCase()
+    case 'client':
+      return (t.client ?? '').toLowerCase()
+    case 'description':
+      return (t.description ?? '').toLowerCase()
+    case 'status':
+      // Orden de flujo de trabajo (ESTADOS), no alfabético — "Pendiente" antes de "Terminado".
+      return ESTADOS.indexOf(t.status)
+    case 'assignee': {
+      const resps = (t.assignee_ids ?? (t.assignee_id ? [t.assignee_id] : []))
+        .map((id) => usersMap.get(id))
+        .filter(Boolean)
+      return resps.length ? `${resps[0].first_name} ${resps[0].last_name}`.toLowerCase() : ''
+    }
+    case 'support': {
+      const u = usersMap.get(t.support_id)
+      return u ? `${u.first_name} ${u.last_name}`.toLowerCase() : ''
+    }
+    case 'request_date':
+      return t.request_date ?? ''
+    case 'due_date':
+      return t.due_date ?? ''
+    default:
+      return ''
+  }
+}
+
+function SortIcon({ sortKey, sortAsc, colKey }) {
+  const active = sortKey === colKey
+  return (
+    <svg
+      width="8"
+      height="8"
+      viewBox="0 0 8 8"
+      fill="none"
+      className={`inline ml-1 flex-shrink-0 ${active ? 'opacity-100' : 'opacity-30'}`}
+    >
+      {sortAsc && active ? (
+        <path d="M4 1L7 6H1L4 1Z" fill="currentColor" />
+      ) : (
+        <path d="M4 7L1 2H7L4 7Z" fill="currentColor" />
+      )}
+    </svg>
+  )
+}
+
+function SortableTh({ sortKey, activeKey, sortAsc, onSort, className = '', children }) {
+  return (
+    <th
+      onClick={() => onSort(sortKey)}
+      className={`px-4 py-3 text-[12.5px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] cursor-pointer select-none hover:text-[#555] transition-colors ${className}`}
+    >
+      {children}
+      <SortIcon sortKey={activeKey} sortAsc={sortAsc} colKey={sortKey} />
+    </th>
+  )
+}
+
 // --- Main component ---
 
 export default function BaseView({
@@ -289,6 +351,10 @@ export default function BaseView({
   const [fLine, setFLine] = useState('') // team_id | '' (solo en modo allLines)
   // Oculta tareas Terminado; precargable desde Home (nivel 4) vía ?hideDone=1
   const [hideCompleted, setHideCompleted] = useState(() => searchParams.get('hideDone') === '1')
+  // Orden por columna al hacer click en el header — default replica el orden anterior
+  // (más reciente primero), antes fijo vía `.sort()` sin control del usuario.
+  const [sortKey, setSortKey] = useState('request_date')
+  const [sortAsc, setSortAsc] = useState(false)
 
   // Tareas del team seleccionado, o de todas las líneas visibles en modo "Todos",
   // acotadas al mes seleccionado (activas en el mes: incluye arrastradas y en curso)
@@ -318,34 +384,48 @@ export default function BaseView({
       `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`),
     )
 
-  const filtered = baseTasks
-    .filter((t) => {
-      const sq = q.toLowerCase()
-      if (
-        sq &&
-        !(
-          (t.client ?? '').toLowerCase().includes(sq) ||
-          (t.description ?? '').toLowerCase().includes(sq)
-        )
+  const filtered = baseTasks.filter((t) => {
+    const sq = q.toLowerCase()
+    if (
+      sq &&
+      !(
+        (t.client ?? '').toLowerCase().includes(sq) ||
+        (t.description ?? '').toLowerCase().includes(sq)
       )
-        return false
-      if (fStatus && t.status !== fStatus) return false
-      if (fClient && t.client !== fClient) return false
-      if (fSupportIds.length > 0 && !fSupportIds.includes(t.support_id)) return false
-      if (fAlert === 'late' && !isLate(t)) return false
-      if (fAlert === 'drag' && !isDragged(t)) return false
-      if (fAlert === 'cont' && !isContinuous(t)) return false
-      if (fAlert === 'ok' && (isLate(t) || isDragged(t))) return false
-      if (
-        fAssignee &&
-        !(t.assignee_ids ?? (t.assignee_id ? [t.assignee_id] : [])).includes(fAssignee)
-      )
-        return false
-      if (fClientId && t.client_id !== fClientId) return false
-      if (hideCompleted && isClosed(t)) return false
-      return true
-    })
-    .sort((a, b) => (b.request_date ?? '').localeCompare(a.request_date ?? ''))
+    )
+      return false
+    if (fStatus && t.status !== fStatus) return false
+    if (fClient && t.client !== fClient) return false
+    if (fSupportIds.length > 0 && !fSupportIds.includes(t.support_id)) return false
+    if (fAlert === 'late' && !isLate(t)) return false
+    if (fAlert === 'drag' && !isDragged(t)) return false
+    if (fAlert === 'cont' && !isContinuous(t)) return false
+    if (fAlert === 'ok' && (isLate(t) || isDragged(t))) return false
+    if (
+      fAssignee &&
+      !(t.assignee_ids ?? (t.assignee_id ? [t.assignee_id] : [])).includes(fAssignee)
+    )
+      return false
+    if (fClientId && t.client_id !== fClientId) return false
+    if (hideCompleted && isClosed(t)) return false
+    return true
+  })
+
+  const sorted = [...filtered].sort((a, b) => {
+    const va = sortValue(a, sortKey, teams, usersMap)
+    const vb = sortValue(b, sortKey, teams, usersMap)
+    if (va < vb) return sortAsc ? -1 : 1
+    if (va > vb) return sortAsc ? 1 : -1
+    return 0
+  })
+
+  function handleSort(key) {
+    if (sortKey === key) setSortAsc((a) => !a)
+    else {
+      setSortKey(key)
+      setSortAsc(true)
+    }
+  }
 
   const hasFilters =
     q ||
@@ -545,36 +625,77 @@ export default function BaseView({
               <thead>
                 <tr className="border-b border-[#ece9df] text-left bg-[#faf9f5]">
                   {allLines && (
-                    <th className="px-4 py-3 text-[12.5px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">
+                    <SortableTh
+                      sortKey="line"
+                      activeKey={sortKey}
+                      sortAsc={sortAsc}
+                      onSort={handleSort}
+                    >
                       Línea
-                    </th>
+                    </SortableTh>
                   )}
-                  <th className="px-4 py-3 text-[12.5px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">
+                  <SortableTh
+                    sortKey="client"
+                    activeKey={sortKey}
+                    sortAsc={sortAsc}
+                    onSort={handleSort}
+                  >
                     Cliente
-                  </th>
-                  <th className="px-4 py-3 text-[12.5px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] max-w-[220px]">
+                  </SortableTh>
+                  <SortableTh
+                    sortKey="description"
+                    activeKey={sortKey}
+                    sortAsc={sortAsc}
+                    onSort={handleSort}
+                    className="max-w-[220px]"
+                  >
                     Tarea
-                  </th>
-                  <th className="px-4 py-3 text-[12.5px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">
+                  </SortableTh>
+                  <SortableTh
+                    sortKey="status"
+                    activeKey={sortKey}
+                    sortAsc={sortAsc}
+                    onSort={handleSort}
+                  >
                     Estatus
-                  </th>
-                  <th className="px-4 py-3 text-[12.5px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">
+                  </SortableTh>
+                  <SortableTh
+                    sortKey="assignee"
+                    activeKey={sortKey}
+                    sortAsc={sortAsc}
+                    onSort={handleSort}
+                  >
                     Responsable
-                  </th>
-                  <th className="px-4 py-3 text-[12.5px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">
+                  </SortableTh>
+                  <SortableTh
+                    sortKey="support"
+                    activeKey={sortKey}
+                    sortAsc={sortAsc}
+                    onSort={handleSort}
+                  >
                     Apoyo
-                  </th>
-                  <th className="px-4 py-3 text-[12.5px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">
+                  </SortableTh>
+                  <SortableTh
+                    sortKey="request_date"
+                    activeKey={sortKey}
+                    sortAsc={sortAsc}
+                    onSort={handleSort}
+                  >
                     Solicitud
-                  </th>
-                  <th className="px-4 py-3 text-[12.5px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">
+                  </SortableTh>
+                  <SortableTh
+                    sortKey="due_date"
+                    activeKey={sortKey}
+                    sortAsc={sortAsc}
+                    onSort={handleSort}
+                  >
                     Entrega
-                  </th>
+                  </SortableTh>
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((t) => {
+                {sorted.map((t) => {
                   const resps = (t.assignee_ids ?? (t.assignee_id ? [t.assignee_id] : []))
                     .map((id) => usersMap.get(id))
                     .filter(Boolean)

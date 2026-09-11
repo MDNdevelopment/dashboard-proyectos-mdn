@@ -15,7 +15,7 @@ export default function EmployeeFichaContent({ employee, line, onClose }) {
   const navigate = useNavigate()
   const { can = () => true, userProfile } = useAuth()
 
-  if (!canViewEmployeeFicha(userProfile, employee.user_id)) {
+  if (!canViewEmployeeFicha(userProfile, employee.user_id, can('empresa.empleados.sensible'))) {
     return (
       <div className="flex-1 flex items-center justify-center px-6 py-16">
         <p className="text-[13.5px] text-[#bbb] text-center">

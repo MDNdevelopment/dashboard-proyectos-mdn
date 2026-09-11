@@ -512,7 +512,7 @@ describe('LineFichaModal — visibilidad de la ficha de empleado (nivel 1-2 vs p
   it('nivel 2 sobre OTRO miembro: la tarjeta no abre la ficha (queda deshabilitada)', async () => {
     vi.mocked(useAuth).mockReturnValue({
       userProfile: { user_id: 'u-3', company_id: 'co-1', access_level: 2, admin: false },
-      can: () => true,
+      can: () => false, // sin la capacidad RRHH 'empresa.empleados.sensible'
       signOut: vi.fn(),
     })
     await renderFicha()
@@ -550,12 +550,24 @@ describe('LineFichaModal — visibilidad de la ficha de empleado (nivel 1-2 vs p
   it('en vista Lista, la fila de otro miembro también queda deshabilitada para nivel 2', async () => {
     vi.mocked(useAuth).mockReturnValue({
       userProfile: { user_id: 'u-3', company_id: 'co-1', access_level: 2, admin: false },
-      can: () => true,
+      can: () => false, // sin la capacidad RRHH 'empresa.empleados.sensible'
       signOut: vi.fn(),
     })
     await renderFicha()
     await userEvent.click(screen.getAllByRole('button', { name: 'Lista' })[0])
     expect(screen.getByTitle('María González')).toBeDisabled()
+  })
+
+  it('nivel 2 con la capacidad RRHH "empresa.empleados.sensible": puede ver la ficha de otro miembro (caso Sofía Lauretta)', async () => {
+    vi.mocked(useAuth).mockReturnValue({
+      userProfile: { user_id: 'u-3', company_id: 'co-1', access_level: 2, admin: false },
+      can: (key) => key === 'empresa.empleados.sensible',
+      signOut: vi.fn(),
+    })
+    await renderFicha()
+    await userEvent.click(screen.getByTitle('Ver información de María González'))
+    expect(screen.getByText('maria@mdn.com')).toBeInTheDocument()
+    expect(screen.getByText('Nivel de acceso')).toBeInTheDocument()
   })
 })
 

@@ -238,7 +238,11 @@ export default function LineFichaModal({
                         const isRemoving = removingId === u.user_id
                         const isLeader = line.lead_user_id === u.user_id
                         const isTogglingLeader = togglingLeaderId === u.user_id
-                        const visible = canViewEmployeeFicha(userProfile, u.user_id)
+                        const visible = canViewEmployeeFicha(
+                          userProfile,
+                          u.user_id,
+                          can('empresa.empleados.sensible'),
+                        )
                         const avatar = (
                           <span
                             className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 overflow-hidden"
@@ -343,7 +347,11 @@ export default function LineFichaModal({
                     <EntityGridList
                       items={members.map((u) => {
                         const name = `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim()
-                        const visible = canViewEmployeeFicha(userProfile, u.user_id)
+                        const visible = canViewEmployeeFicha(
+                          userProfile,
+                          u.user_id,
+                          can('empresa.empleados.sensible'),
+                        )
                         return {
                           id: u.user_id,
                           name,

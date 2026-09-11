@@ -65,17 +65,20 @@ export function isFinancePrivileged(userProfile, hasCapability = false) {
 /**
  * ¿Puede este usuario ver la ficha de un empleado (correo, teléfono, fecha de
  * ingreso, cumpleaños, nivel de acceso)?
- * Nivel de acceso ≥ 3 o admin → la ficha de cualquiera.
- * Nivel 1-2 → únicamente la propia.
+ * Nivel de acceso ≥ 3, admin, o capacidad granular 'empresa.empleados.sensible'
+ * (caso RRHH: ver la ficha de cualquiera sin ser admin/nivel alto) → cualquiera.
+ * Nivel 1-2 sin la capacidad → únicamente la propia.
  *
  * @param {object|null} userProfile — objeto del contexto Auth
  * @param {string|undefined} targetUserId — user_id del empleado cuya ficha se quiere ver
+ * @param {boolean} [hasCapability] — resultado de can('empresa.empleados.sensible')
  * @returns {boolean}
  */
-export function canViewEmployeeFicha(userProfile, targetUserId) {
+export function canViewEmployeeFicha(userProfile, targetUserId, hasCapability = false) {
   if (!userProfile) return false
   if (userProfile.admin === true) return true
   if ((userProfile.access_level ?? 0) >= 3) return true
+  if (hasCapability) return true
   return !!targetUserId && userProfile.user_id === targetUserId
 }
 

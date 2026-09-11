@@ -4,6 +4,67 @@ import { ESTADOS, COL_META, cnpPieceCount, cnpPiecesDelivered } from './constant
 import { fmtShort, isLate } from '../tareas/constants'
 import { Avatar } from '../tareas/UserPickerSingle'
 
+/** Rango de "Impreso" para que el orden tenga sentido: sin impresión < pendiente < aprobado. */
+const PRINT_ORDER = { none: 0, pending: 1, approved: 2 }
+
+/** Valor comparable de un CNP para una columna ordenable de la tabla de abajo. */
+function sortValue(c, key, clientsById, usersMap) {
+  switch (key) {
+    case 'client':
+      return (clientsById.get(c.client_id)?.name ?? '').toLowerCase()
+    case 'title':
+      return (c.title ?? '').toLowerCase()
+    case 'pieces': {
+      const total = cnpPieceCount(c)
+      return total ? cnpPiecesDelivered(c) / total : 0
+    }
+    case 'assignee': {
+      const u = usersMap.get(c.assignee_id)
+      return u ? `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim().toLowerCase() : ''
+    }
+    case 'print':
+      return PRINT_ORDER[c.is_print ? (c.print_approved_at ? 'approved' : 'pending') : 'none']
+    case 'created_at':
+      return c.created_at ?? ''
+    case 'status':
+      // Orden de flujo de trabajo (ESTADOS), no alfabético.
+      return ESTADOS.indexOf(c.status)
+    default:
+      return ''
+  }
+}
+
+function SortIcon({ sortKey, sortAsc, colKey }) {
+  const active = sortKey === colKey
+  return (
+    <svg
+      width="8"
+      height="8"
+      viewBox="0 0 8 8"
+      fill="none"
+      className={`inline ml-1 flex-shrink-0 ${active ? 'opacity-100' : 'opacity-30'}`}
+    >
+      {sortAsc && active ? (
+        <path d="M4 1L7 6H1L4 1Z" fill="currentColor" />
+      ) : (
+        <path d="M4 7L1 2H7L4 7Z" fill="currentColor" />
+      )}
+    </svg>
+  )
+}
+
+function SortableTh({ sortKey, activeKey, sortAsc, onSort, children }) {
+  return (
+    <th
+      onClick={() => onSort(sortKey)}
+      className="px-4 py-2.5 cursor-pointer select-none hover:text-[#555] transition-colors"
+    >
+      {children}
+      <SortIcon sortKey={activeKey} sortAsc={sortAsc} colKey={sortKey} />
+    </th>
+  )
+}
+
 /**
  * Tabla base de CNP: la lista completa, filtrable por estado/cliente/impreso/alerta
  * y buscable por título. Modelada sobre BaseView.jsx de Gestión de Tareas, sin la
@@ -27,6 +88,10 @@ export default function CnpBaseView({
   )
   const [printFilter, setPrintFilter] = useState(() => initialFilter?.print ?? 'all')
   const [alertFilter, setAlertFilter] = useState(() => initialFilter?.alert ?? '')
+  // Orden por columna al hacer click en el header — default: más reciente primero, igual
+  // al orden que ya traía `cnps` (created_at desc, ver cnp_requests_company_line_idx).
+  const [sortKey, setSortKey] = useState('created_at')
+  const [sortAsc, setSortAsc] = useState(false)
 
   const clientOptions = [...new Set(cnps.map((c) => c.client_id).filter(Boolean))]
     .map((id) => ({ id, name: clientsById.get(id)?.name ?? 'Sin cliente' }))
@@ -46,6 +111,22 @@ export default function CnpBaseView({
     }
     return true
   })
+
+  const sorted = [...filtered].sort((a, b) => {
+    const va = sortValue(a, sortKey, clientsById, usersMap)
+    const vb = sortValue(b, sortKey, clientsById, usersMap)
+    if (va < vb) return sortAsc ? -1 : 1
+    if (va > vb) return sortAsc ? 1 : -1
+    return 0
+  })
+
+  function handleSort(key) {
+    if (sortKey === key) setSortAsc((a) => !a)
+    else {
+      setSortKey(key)
+      setSortAsc(true)
+    }
+  }
 
   const hasFilters = search || statusFilter || clientFilter || printFilter !== 'all' || alertFilter
   const activeClientName = clientFilter ? (clientsById.get(clientFilter)?.name ?? null) : null
@@ -161,17 +242,66 @@ export default function CnpBaseView({
             <table className="w-full text-[14.5px]">
               <thead>
                 <tr className="border-b border-[#ece9df] text-left bg-[#faf9f5] text-[12.5px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">
-                  <th className="px-4 py-2.5">Cliente</th>
-                  <th className="px-4 py-2.5">Título</th>
-                  <th className="px-4 py-2.5">Piezas</th>
-                  <th className="px-4 py-2.5">Responsable</th>
-                  <th className="px-4 py-2.5">Impreso</th>
-                  <th className="px-4 py-2.5">Solicitado</th>
-                  <th className="px-4 py-2.5">Estado</th>
+                  <SortableTh
+                    sortKey="client"
+                    activeKey={sortKey}
+                    sortAsc={sortAsc}
+                    onSort={handleSort}
+                  >
+                    Cliente
+                  </SortableTh>
+                  <SortableTh
+                    sortKey="title"
+                    activeKey={sortKey}
+                    sortAsc={sortAsc}
+                    onSort={handleSort}
+                  >
+                    Título
+                  </SortableTh>
+                  <SortableTh
+                    sortKey="pieces"
+                    activeKey={sortKey}
+                    sortAsc={sortAsc}
+                    onSort={handleSort}
+                  >
+                    Piezas
+                  </SortableTh>
+                  <SortableTh
+                    sortKey="assignee"
+                    activeKey={sortKey}
+                    sortAsc={sortAsc}
+                    onSort={handleSort}
+                  >
+                    Responsable
+                  </SortableTh>
+                  <SortableTh
+                    sortKey="print"
+                    activeKey={sortKey}
+                    sortAsc={sortAsc}
+                    onSort={handleSort}
+                  >
+                    Impreso
+                  </SortableTh>
+                  <SortableTh
+                    sortKey="created_at"
+                    activeKey={sortKey}
+                    sortAsc={sortAsc}
+                    onSort={handleSort}
+                  >
+                    Solicitado
+                  </SortableTh>
+                  <SortableTh
+                    sortKey="status"
+                    activeKey={sortKey}
+                    sortAsc={sortAsc}
+                    onSort={handleSort}
+                  >
+                    Estado
+                  </SortableTh>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((c) => {
+                {sorted.map((c) => {
                   const meta = COL_META[c.status]
                   const assignee = usersMap.get(c.assignee_id)
                   const printPending = c.is_print && !c.print_approved_at
