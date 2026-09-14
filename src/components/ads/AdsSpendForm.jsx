@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { STATUSES, OBJECTIVES, RESULT_FIELDS } from './constants'
-import { loadClients } from '../metricas/metricsApi'
+import { useScopedClients } from '../../hooks/useScopedClients'
 import {
   createAd,
   updateAd,
@@ -74,21 +74,13 @@ export default function AdsSpendForm({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
 
-  const [clients, setClients] = useState([])
-  const [loadingClients, setLoadingClients] = useState(true)
+  const { clients, loading: loadingClients } = useScopedClients(
+    companyId,
+    userProfile,
+    ad?.client_id,
+  )
 
   const [responsables, setResponsables] = useState([])
-
-  useEffect(() => {
-    if (!companyId) {
-      setLoadingClients(false)
-      return
-    }
-    loadClients(companyId).then(({ data }) => {
-      setClients(data ?? [])
-      setLoadingClients(false)
-    })
-  }, [companyId])
 
   useEffect(() => {
     if (!companyId) return

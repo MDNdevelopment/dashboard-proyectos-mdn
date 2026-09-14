@@ -224,6 +224,7 @@ export const CHANGELOG = [
       'En las pautas de Audiovisual, las fotos ya no generan una lista interminable con un ítem por foto: ahora se registran como un bloque por editor, con cuántas se le asignaron y cuántas lleva listas (con un botón para marcarlas todas de una vez). Video y Reel siguen con su lista de piezas de siempre.',
       'En Gestión de Tareas y en CNP, ahora se puede ordenar la tabla haciendo click en el nombre de cualquier columna (Cliente, Tarea/Título, Estatus, Responsable, fechas, etc.); un segundo click invierte el orden.',
       'Corregido: al crear una tarea, un empleado nivel 1 quedaba forzado como responsable sin poder quitarse. Ahora sí puede quitarse, tanto al crear la tarea como al editar una que él mismo creó (si la tarea fue creada por otra persona, sigue sin poder quitarse a sí mismo de los responsables).',
+      'Al crear una campaña o un Ad, el selector de cliente ahora muestra solo las cuentas de tu línea. Quienes no pertenecen a una línea (independientes y alta gerencia) y la dirección siguen viendo todas las cuentas.',
     ],
   },
   {

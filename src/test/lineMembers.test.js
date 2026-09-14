@@ -6,6 +6,7 @@ import {
   visibleLinesForUser,
   userViewsAllLines,
   withDerivedGeneralMembers,
+  clientsForUser,
 } from '../utils/lineMembers'
 
 const LINES = [
@@ -280,5 +281,64 @@ describe('withDerivedGeneralMembers', () => {
       const result = withDerivedGeneralMembers(lines, users)
       expect(result.find((l) => l.id === 'line-management').member_user_ids).not.toContain('u-dir2')
     })
+  })
+})
+
+describe('clientsForUser', () => {
+  const REAL_LINES = [
+    { id: 'line-1', member_user_ids: ['u-jefa1'] },
+    { id: 'line-2', member_user_ids: ['u-jefa2'] },
+  ]
+  const CLIENTS = [
+    { id: 'c-1', line_id: 'line-1' },
+    { id: 'c-2', line_id: 'line-2' },
+    { id: 'c-3', line_id: null },
+  ]
+
+  it('miembro de una línea ve los clientes de esa línea + los sin línea, no los de otra', () => {
+    const result = clientsForUser(CLIENTS, REAL_LINES, { user_id: 'u-jefa1', access_level: 2 })
+    expect(result.map((c) => c.id).sort()).toEqual(['c-1', 'c-3'])
+  })
+
+  it('usuario sin línea real (independiente) ve todos los clientes', () => {
+    const result = clientsForUser(CLIENTS, REAL_LINES, {
+      user_id: 'u-independiente',
+      access_level: 2,
+    })
+    expect(result.map((c) => c.id).sort()).toEqual(['c-1', 'c-2', 'c-3'])
+  })
+
+  it('alta gerencia sin línea real ve todos los clientes', () => {
+    const result = clientsForUser(CLIENTS, REAL_LINES, { user_id: 'u-dir', access_level: 4 })
+    expect(result.map((c) => c.id).sort()).toEqual(['c-1', 'c-2', 'c-3'])
+  })
+
+  it('nivel 4 con línea asignada ve todos los clientes (userViewsAllLines gana)', () => {
+    const result = clientsForUser(CLIENTS, REAL_LINES, { user_id: 'u-jefa1', access_level: 4 })
+    expect(result.map((c) => c.id).sort()).toEqual(['c-1', 'c-2', 'c-3'])
+  })
+
+  it('tasks_view_all=true en nivel 2 con línea ve todos los clientes', () => {
+    const result = clientsForUser(CLIENTS, REAL_LINES, {
+      user_id: 'u-jefa1',
+      access_level: 2,
+      tasks_view_all: true,
+    })
+    expect(result.map((c) => c.id).sort()).toEqual(['c-1', 'c-2', 'c-3'])
+  })
+
+  it('conserva currentClientId aunque sea de otra línea (edición)', () => {
+    const result = clientsForUser(
+      CLIENTS,
+      REAL_LINES,
+      { user_id: 'u-jefa1', access_level: 2 },
+      'c-2',
+    )
+    expect(result.map((c) => c.id).sort()).toEqual(['c-1', 'c-2', 'c-3'])
+  })
+
+  it('clients vacío o nulo devuelve []', () => {
+    expect(clientsForUser([], REAL_LINES, { user_id: 'u-jefa1' })).toEqual([])
+    expect(clientsForUser(null, REAL_LINES, { user_id: 'u-jefa1' })).toEqual([])
   })
 })

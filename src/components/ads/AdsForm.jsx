@@ -3,8 +3,8 @@ import { supabase } from '../../supabase'
 import { useAuth } from '../../context/AuthContext'
 import { STATUSES, PRIORITIES } from './constants'
 import UserPickerSingle from '../tareas/UserPickerSingle'
-import { loadClients } from '../metricas/metricsApi'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
+import { useScopedClients } from '../../hooks/useScopedClients'
 import DateInput from '../common/DateInput'
 import CampaignChecklist from './CampaignChecklist'
 
@@ -36,8 +36,11 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
   const [users, setUsers] = useState([])
   const [loadingUsers, setLoadingUsers] = useState(true)
 
-  const [clients, setClients] = useState([])
-  const [loadingClients, setLoadingClients] = useState(true)
+  const { clients, loading: loadingClients } = useScopedClients(
+    userProfile?.company_id,
+    userProfile,
+    campaign?.client_id,
+  )
 
   // Cargar usuarios con avatar/nivel (necesario para UserPickerSingle)
   useEffect(() => {
@@ -56,18 +59,6 @@ export default function AdsForm({ campaign, onClose, onCreated, onUpdated }) {
         setUsers(data ?? [])
         setLoadingUsers(false)
       })
-  }, [userProfile?.company_id])
-
-  // Cargar todos los clientes de la empresa (sin filtro de línea)
-  useEffect(() => {
-    if (!userProfile?.company_id) {
-      setLoadingClients(false)
-      return
-    }
-    loadClients(userProfile.company_id).then(({ data }) => {
-      setClients(data ?? [])
-      setLoadingClients(false)
-    })
   }, [userProfile?.company_id])
 
   function set(key, val) {

@@ -28,8 +28,22 @@ vi.mock('../supabase', () => ({
           eq: vi.fn().mockReturnThis(),
           order: vi.fn().mockResolvedValue({
             data: [
-              { user_id: 'u1', first_name: 'Ana', last_name: 'García', avatar_url: null, access_level: 2, position: null },
-              { user_id: 'u2', first_name: 'Carlos', last_name: 'López', avatar_url: null, access_level: 1, position: null },
+              {
+                user_id: 'u1',
+                first_name: 'Ana',
+                last_name: 'García',
+                avatar_url: null,
+                access_level: 2,
+                position: null,
+              },
+              {
+                user_id: 'u2',
+                first_name: 'Carlos',
+                last_name: 'López',
+                avatar_url: null,
+                access_level: 1,
+                position: null,
+              },
             ],
             error: null,
           }),
@@ -59,12 +73,34 @@ vi.mock('../supabase', () => ({
   },
 }))
 
-// loadClients devuelve la lista de clientes de la empresa
+// loadClients devuelve la lista de clientes de la empresa; loadLines, sus líneas.
+// userProfile (abajo) no tiene línea propia ni access_level >= 4, así que
+// useScopedClients() lo trata como "sin línea real" (Independiente) y no filtra —
+// mismo comportamiento que antes de introducir el scoping por línea.
 vi.mock('../components/metricas/metricsApi', () => ({
   loadClients: vi.fn().mockResolvedValue({
     data: [
       { id: 'c-1', name: 'Banco Exterior', logo_url: null, line_id: 'line-1', company_id: 'co-1' },
-      { id: 'c-2', name: 'Pepsi',          logo_url: null, line_id: 'line-2', company_id: 'co-1' },
+      { id: 'c-2', name: 'Pepsi', logo_url: null, line_id: 'line-2', company_id: 'co-1' },
+    ],
+    error: null,
+  }),
+  loadLines: vi.fn().mockResolvedValue({
+    data: [
+      {
+        id: 'line-1',
+        name: 'Team A',
+        is_general: false,
+        is_management: false,
+        member_user_ids: [],
+      },
+      {
+        id: 'line-2',
+        name: 'Team B',
+        is_general: false,
+        is_management: false,
+        member_user_ids: [],
+      },
     ],
     error: null,
   }),
@@ -92,7 +128,7 @@ function renderForm(props = {}) {
       onCreated={() => {}}
       onUpdated={() => {}}
       {...props}
-    />
+    />,
   )
 }
 
@@ -101,7 +137,13 @@ describe('AdsForm — cliente y responsable', () => {
     useAuth.mockReturnValue({ userProfile })
     vi.clearAllMocks()
     mockInsert.mockResolvedValue({
-      data: { id: 'new-id', name: 'Test', client: 'Banco Exterior', client_id: 'c-1', assignee: 'u1' },
+      data: {
+        id: 'new-id',
+        name: 'Test',
+        client: 'Banco Exterior',
+        client_id: 'c-1',
+        assignee: 'u1',
+      },
       error: null,
     })
   })
@@ -120,12 +162,40 @@ describe('AdsForm — cliente y responsable', () => {
     expect(screen.queryByPlaceholderText('Cliente o marca')).not.toBeInTheDocument()
   })
 
-  it('lista todos los clientes de la empresa en el desplegable', async () => {
+  it('lista todos los clientes de la empresa en el desplegable cuando el usuario no tiene línea propia', async () => {
     renderForm()
     await waitFor(() => {
       expect(screen.getByRole('option', { name: 'Banco Exterior' })).toBeInTheDocument()
     })
     expect(screen.getByRole('option', { name: 'Pepsi' })).toBeInTheDocument()
+  })
+
+  it('un usuario con línea propia solo ve los clientes de su línea en el desplegable', async () => {
+    const { loadLines } = await import('../components/metricas/metricsApi')
+    loadLines.mockResolvedValueOnce({
+      data: [
+        {
+          id: 'line-1',
+          name: 'Team A',
+          is_general: false,
+          is_management: false,
+          member_user_ids: ['creator-uuid'],
+        },
+        {
+          id: 'line-2',
+          name: 'Team B',
+          is_general: false,
+          is_management: false,
+          member_user_ids: [],
+        },
+      ],
+      error: null,
+    })
+    renderForm()
+    await waitFor(() => {
+      expect(screen.getByRole('option', { name: 'Banco Exterior' })).toBeInTheDocument()
+    })
+    expect(screen.queryByRole('option', { name: 'Pepsi' })).not.toBeInTheDocument()
   })
 
   // ── Campo Responsable ────────────────────────────────────────────────────────
@@ -176,8 +246,8 @@ describe('AdsForm — cliente y responsable', () => {
 
     // Seleccionar cliente por select (todos los combobox: [0] Cliente, luego Prioridad, Estado)
     const selects = screen.getAllByRole('combobox')
-    const clientSelect = selects.find(s =>
-      Array.from(s.options ?? []).some(o => o.text === '— Seleccionar cliente —')
+    const clientSelect = selects.find((s) =>
+      Array.from(s.options ?? []).some((o) => o.text === '— Seleccionar cliente —'),
     )
     await user.selectOptions(clientSelect, 'c-1')
 
@@ -212,8 +282,8 @@ describe('AdsForm — cliente y responsable', () => {
 
     // Cliente
     const selects = screen.getAllByRole('combobox')
-    const clientSelect = selects.find(s =>
-      Array.from(s.options ?? []).some(o => o.text === '— Seleccionar cliente —')
+    const clientSelect = selects.find((s) =>
+      Array.from(s.options ?? []).some((o) => o.text === '— Seleccionar cliente —'),
     )
     await user.selectOptions(clientSelect, 'c-1')
 

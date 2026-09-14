@@ -26,11 +26,32 @@ vi.mock('../components/ads/campaignSpendApi', async () => {
   }
 })
 
+// userProfile (abajo) no tiene línea propia ni access_level >= 4, así que
+// useScopedClients() lo trata como "sin línea real" (Independiente) y no filtra.
 vi.mock('../components/metricas/metricsApi', () => ({
   loadClients: vi.fn().mockResolvedValue({
     data: [
-      { id: 'c-1', name: 'Banco Exterior', campaign_budget: 100 },
-      { id: 'c-2', name: 'Pepsi', campaign_budget: null },
+      { id: 'c-1', name: 'Banco Exterior', campaign_budget: 100, line_id: 'line-1' },
+      { id: 'c-2', name: 'Pepsi', campaign_budget: null, line_id: 'line-2' },
+    ],
+    error: null,
+  }),
+  loadLines: vi.fn().mockResolvedValue({
+    data: [
+      {
+        id: 'line-1',
+        name: 'Team A',
+        is_general: false,
+        is_management: false,
+        member_user_ids: [],
+      },
+      {
+        id: 'line-2',
+        name: 'Team B',
+        is_general: false,
+        is_management: false,
+        member_user_ids: [],
+      },
     ],
     error: null,
   }),
@@ -102,6 +123,34 @@ describe('AdsSpendForm', () => {
       )
     })
     expect(onCreated).toHaveBeenCalled()
+  })
+
+  it('un usuario con línea propia solo ve los clientes de su línea en el desplegable', async () => {
+    const { loadLines } = await import('../components/metricas/metricsApi')
+    loadLines.mockResolvedValueOnce({
+      data: [
+        {
+          id: 'line-1',
+          name: 'Team A',
+          is_general: false,
+          is_management: false,
+          member_user_ids: ['u-1'],
+        },
+        {
+          id: 'line-2',
+          name: 'Team B',
+          is_general: false,
+          is_management: false,
+          member_user_ids: [],
+        },
+      ],
+      error: null,
+    })
+    renderForm()
+    await waitFor(() => {
+      expect(screen.getByRole('option', { name: 'Banco Exterior' })).toBeInTheDocument()
+    })
+    expect(screen.queryByRole('option', { name: 'Pepsi' })).not.toBeInTheDocument()
   })
 
   it('el selector de Responsable solo lista las opciones de loadAdsResponsables (no toda la plantilla)', async () => {

@@ -92,6 +92,36 @@ export function visibleLinesForUser(lines, userProfile, opts) {
 }
 
 /**
+ * Clientes que un usuario puede elegir en un selector (p. ej. Ads → Nueva campaña/Ad),
+ * según su línea:
+ * - userViewsAllLines() (nivel ≥4, admin, tasks_view_all) → todos los clientes.
+ * - Sin línea real (Independientes / Alta gerencia, no aparece en ninguna `lines`) →
+ *   todos los clientes (mismo criterio que assignableUsersForCnp en CnpModal.jsx).
+ * - Con línea(s) real(es) → clientes de esas líneas + los clientes sin línea propia
+ *   (`line_id` null, transversales).
+ * `currentClientId` se incluye siempre aunque quede fuera de las reglas anteriores, para
+ * no romper la edición de un registro histórico cuyo cliente es de otra línea (mismo
+ * criterio que el `currentUserId` de `assignableUsers()` en lineFilters.js).
+ *
+ * @param {Array} clients - metric_clients (con line_id)
+ * @param {Array} lines - líneas REALES de la empresa (sin is_general/is_management),
+ *   con member_user_ids
+ * @param {object|null} userProfile - Perfil del usuario (de useAuth)
+ * @param {string|null} [currentClientId]
+ * @returns {Array}
+ */
+export function clientsForUser(clients, lines, userProfile, currentClientId = null) {
+  if (!clients) return []
+  if (userViewsAllLines(userProfile)) return clients
+
+  const myLines = visibleLinesForUser(lines, userProfile)
+  if (myLines.length === 0) return clients // sin línea real → Independiente/Alta gerencia
+
+  const myLineIds = new Set(myLines.map((l) => l.id))
+  return clients.filter((c) => !c.line_id || myLineIds.has(c.line_id) || c.id === currentClientId)
+}
+
+/**
  * Rellena member_user_ids de "Independientes" (is_general) y "Alta Gerencia"
  * (is_management) con los empleados que no pertenecen a ninguna línea real, repartidos
  * por nivel de acceso: dirección (access_level >= 4) va a Alta Gerencia, el resto a
