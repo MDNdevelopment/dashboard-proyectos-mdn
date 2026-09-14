@@ -193,6 +193,14 @@ createRoot(document.getElementById('root')).render(
               }
             />
             <Route
+              path="/empresa/accesos"
+              element={
+                <RequireModule moduleKey="empresa">
+                  <EmpresaPage />
+                </RequireModule>
+              }
+            />
+            <Route
               path="/empresa/permisos"
               element={
                 <RequireModule moduleKey="empresa">

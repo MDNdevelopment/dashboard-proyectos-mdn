@@ -103,6 +103,7 @@ export const MODULES = [
       { key: 'clientes', label: 'Clientes' },
       { key: 'lineas', label: 'Líneas' },
       { key: 'permisos', label: 'Permisos' },
+      { key: 'accesos', label: 'Accesos' },
     ],
     manageActions: [
       { key: 'empresa.clientes.manage', label: 'Modificar clientes' },
@@ -116,6 +117,10 @@ export const MODULES = [
       {
         key: 'empresa.calendario.ver_todo',
         label: 'Ver el calendario de toda la empresa (Inicio)',
+      },
+      {
+        key: 'empresa.permisos.manage',
+        label: 'Registrar / editar / eliminar permisos, ausencias y reposos',
       },
     ],
   },

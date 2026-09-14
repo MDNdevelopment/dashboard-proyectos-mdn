@@ -7,6 +7,7 @@ import QuestionsView from '../components/empresa/QuestionsView'
 import ClientsView from '../components/empresa/ClientsView'
 import LinesView from '../components/empresa/LinesView'
 import PermisosView from '../components/empresa/PermisosView'
+import PermisosRrhhView from '../components/empresa/PermisosRrhhView'
 import ScoreProfilesPanel from '../components/empresa/ScoreProfilesPanel'
 import CriteriaByPositionPanel from '../components/empresa/CriteriaByPositionPanel'
 import MappiLogsView from '../components/empresa/MappiLogsView'
@@ -15,6 +16,11 @@ import MappiLogsView from '../components/empresa/MappiLogsView'
 // "Perfiles de Desempeño" pertenece conceptualmente a Evaluaciones (mismo esquema de
 // capabilities que el resto de ese módulo, ver ARQUITECTURA.md §2.7) aunque su UI vive
 // en Empresa junto a los otros ajustes de configuración organizacional.
+//
+// Nota histórica: "Permisos" (capability `empresa.permisos`) era antes el nombre de la
+// pestaña de configuración de accesos por módulo. Se renombró a "Accesos" (capability
+// nueva `empresa.accesos`) para liberar el nombre "Permisos" a la sección de RRHH
+// (registro de permisos/ausencias/reposos de colaboradores, ver ARQUITECTURA.md §2.6).
 const ALL_TABS = [
   { key: 'general', label: 'Inicio', path: '/empresa' },
   { key: 'lineas', label: 'Líneas', path: '/empresa/lineas' },
@@ -29,6 +35,7 @@ const ALL_TABS = [
     capability: 'evaluaciones.perfiles.manage',
   },
   { key: 'permisos', label: 'Permisos', path: '/empresa/permisos' },
+  { key: 'accesos', label: 'Accesos', path: '/empresa/accesos' },
   { key: 'mappi', label: 'MAPPI', path: '/empresa/mappi' },
 ]
 
@@ -43,6 +50,7 @@ function pathToKey(pathname) {
   if (pathname.startsWith('/empresa/clientes')) return 'clientes'
   if (pathname.startsWith('/empresa/desempeno-perfiles')) return 'desempeno-perfiles'
   if (pathname.startsWith('/empresa/lineas')) return 'lineas'
+  if (pathname.startsWith('/empresa/accesos')) return 'accesos'
   if (pathname.startsWith('/empresa/permisos')) return 'permisos'
   if (pathname.startsWith('/empresa/mappi')) return 'mappi'
   return 'general'
@@ -147,6 +155,10 @@ export default function EmpresaPage() {
         )}
 
         {activeKey === 'permisos' && can('empresa.permisos') && (
+          <PermisosRrhhView companyId={userProfile.company_id} />
+        )}
+
+        {activeKey === 'accesos' && can('empresa.accesos') && (
           <PermisosView companyId={userProfile.company_id} />
         )}
 

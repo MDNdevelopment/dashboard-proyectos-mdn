@@ -225,6 +225,9 @@ export const CHANGELOG = [
       'En Gestión de Tareas y en CNP, ahora se puede ordenar la tabla haciendo click en el nombre de cualquier columna (Cliente, Tarea/Título, Estatus, Responsable, fechas, etc.); un segundo click invierte el orden.',
       'Corregido: al crear una tarea, un empleado nivel 1 quedaba forzado como responsable sin poder quitarse. Ahora sí puede quitarse, tanto al crear la tarea como al editar una que él mismo creó (si la tarea fue creada por otra persona, sigue sin poder quitarse a sí mismo de los responsables).',
       'Al crear una campaña o un Ad, el selector de cliente ahora muestra solo las cuentas de tu línea. Quienes no pertenecen a una línea (independientes y alta gerencia) y la dirección siguen viendo todas las cuentas.',
+      'Nuevo: sección "Permisos" en Empresa para registrar permisos, ausencias y reposos médicos del equipo, con un reporte de cuántos tuvo cada persona en el mes. También queda visible en la ficha de cada empleado.',
+      'La pestaña de configuración de accesos por módulo ahora se llama "Accesos", para no confundirla con la nueva sección de Permisos.',
+      'En "Permisos" de Empresa, ahora también se pueden registrar llegadas tarde y salidas temprano, con la hora exacta.',
     ],
   },
   {
