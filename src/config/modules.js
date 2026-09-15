@@ -183,6 +183,25 @@ export const MODULES = [
     tabs: [],
     manageActions: [{ key: 'leads.manage', label: 'Cambiar estado de leads' }],
   },
+  {
+    key: 'finanzas',
+    label: 'Finanzas',
+    routePrefix: '/finanzas',
+    description: 'Facturación real de la agencia, cobranza y reparto en partidas',
+    tabs: [
+      { key: 'dashboard', label: 'Dashboard' },
+      { key: 'facturacion', label: 'Facturación' },
+      { key: 'clientes', label: 'Clientes' },
+      { key: 'distribucion', label: 'Distribución' },
+      { key: 'porcobrar', label: 'Por cobrar' },
+    ],
+    manageActions: [
+      { key: 'finanzas.facturacion.manage', label: 'Crear / editar / eliminar facturación' },
+      { key: 'finanzas.cobros.manage', label: 'Registrar / quitar cobros y abonos' },
+      { key: 'finanzas.distribucion.manage', label: 'Registrar distribuciones y pagos de partida' },
+      { key: 'finanzas.cerrar_mes', label: 'Cerrar el mes y abrir el siguiente' },
+    ],
+  },
 ]
 
 /** Mapa rápido key → módulo */

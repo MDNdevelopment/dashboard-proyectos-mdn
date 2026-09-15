@@ -26,6 +26,7 @@ import MetricasPage from './pages/MetricasPage.jsx'
 import MonitorUsoPage from './pages/MonitorUsoPage.jsx'
 import ReunionesPage from './pages/ReunionesPage.jsx'
 import LeadsPage from './pages/LeadsPage.jsx'
+import FinanzasPage from './pages/FinanzasPage.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -318,6 +319,56 @@ createRoot(document.getElementById('root')).render(
               element={
                 <RequireModule moduleKey="leads">
                   <LeadsPage />
+                </RequireModule>
+              }
+            />
+
+            {/* Finanzas */}
+            <Route
+              path="/finanzas"
+              element={
+                <RequireModule moduleKey="finanzas">
+                  <FinanzasPage />
+                </RequireModule>
+              }
+            />
+            <Route
+              path="/finanzas/facturacion"
+              element={
+                <RequireModule moduleKey="finanzas">
+                  <FinanzasPage />
+                </RequireModule>
+              }
+            />
+            <Route
+              path="/finanzas/clientes"
+              element={
+                <RequireModule moduleKey="finanzas">
+                  <FinanzasPage />
+                </RequireModule>
+              }
+            />
+            <Route
+              path="/finanzas/distribucion"
+              element={
+                <RequireModule moduleKey="finanzas">
+                  <FinanzasPage />
+                </RequireModule>
+              }
+            />
+            <Route
+              path="/finanzas/distribucion/:partida"
+              element={
+                <RequireModule moduleKey="finanzas">
+                  <FinanzasPage />
+                </RequireModule>
+              }
+            />
+            <Route
+              path="/finanzas/por-cobrar"
+              element={
+                <RequireModule moduleKey="finanzas">
+                  <FinanzasPage />
                 </RequireModule>
               }
             />

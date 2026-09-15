@@ -96,6 +96,23 @@ const ADS_ICON = (
     <path d="M8 2v12M2 5l6 3 6-3" strokeLinecap="round" />
   </svg>
 )
+const FINANZAS_ICON = (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.7"
+  >
+    <circle cx="8" cy="8" r="6.3" />
+    <path
+      d="M8 4.4v7.2M6 10.2c0 .9.9 1.6 2 1.6s2-.7 2-1.6-.9-1.4-2-1.6-2-.7-2-1.6.9-1.6 2-1.6 2 .7 2 1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+)
 const TASKS_ICON = (
   <svg
     width="14"
@@ -251,6 +268,7 @@ function Sidebar() {
   const isMetricasRoute = location.pathname.startsWith('/reportes')
   const isMonitorUsoRoute = location.pathname.startsWith('/monitor-uso')
   const isReunionesRoute = location.pathname.startsWith('/reuniones')
+  const isFinanzasRoute = location.pathname.startsWith('/finanzas')
   const isEvalRoute = location.pathname.startsWith('/evaluaciones')
   const evalDesempenoActive = location.pathname === '/evaluaciones'
   const evalMiDesempenoActive = location.pathname === '/evaluaciones/mi-desempeno'
@@ -507,6 +525,23 @@ function Sidebar() {
                 {ADS_ICON}
               </span>
               <span className="flex-1">Campañas</span>
+            </Link>
+          )}
+
+          {/* Finanzas — botón directo */}
+          {canR('finanzas') && (
+            <Link
+              to="/finanzas"
+              className={`flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-[15px] font-medium transition-all ${
+                isFinanzasRoute
+                  ? 'bg-[#FFB800] text-[#111]'
+                  : 'text-[#444] hover:bg-[#f5f3eb] hover:text-[#111]'
+              }`}
+            >
+              <span className={`flex-shrink-0 ${isFinanzasRoute ? 'text-[#111]' : 'text-[#666]'}`}>
+                {FINANZAS_ICON}
+              </span>
+              <span className="flex-1">Finanzas</span>
             </Link>
           )}
 
