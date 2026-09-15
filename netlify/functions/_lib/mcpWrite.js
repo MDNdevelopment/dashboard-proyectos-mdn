@@ -5,11 +5,16 @@ const { Pool } = pg
 let pool
 
 /**
- * Pool de conexión al rol Postgres `mcp_writer` (ver migración
- * supabase/migrations/*_mcp_writer_role.sql). Ese rol solo tiene GRANT INSERT
- * en `public.tasks` — ninguna otra tabla, ni UPDATE/DELETE siquiera ahí — así
- * que aunque esta capa de validación tuviera un hueco, la base física no deja
- * hacer nada más que insertar tareas.
+ * Pool de conexión al rol Postgres `mcp_writer` (ver migraciones
+ * supabase/migrations/*_mcp_writer_role.sql y *_mcp_writer_returning_select.sql).
+ * Ese rol tiene GRANT INSERT en `public.tasks` — ninguna otra tabla, ni
+ * UPDATE/DELETE siquiera ahí — así que aunque esta capa de validación tuviera
+ * un hueco, la base física no deja hacer nada más que insertar tareas.
+ * ADEMÁS tiene GRANT SELECT a nivel de columna, solo sobre las 8 columnas del
+ * RETURNING de abajo: Postgres exige privilegio SELECT sobre las columnas que
+ * un INSERT...RETURNING devuelve, no basta con INSERT — si agregas una
+ * columna nueva al RETURNING, agrégala también al GRANT SELECT de la
+ * migración o vuelve a romperse con "permission denied for table tasks".
  */
 function getPool() {
   if (!pool) {
