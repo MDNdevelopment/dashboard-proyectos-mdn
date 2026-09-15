@@ -1,4 +1,5 @@
 import { runReadOnlyQuery, listTables } from './_lib/db.js'
+import { createTask } from './_lib/mcpWrite.js'
 import { verifyToken } from './_lib/oauthCrypto.js'
 
 const json = (statusCode, body, extraHeaders = {}) => ({
@@ -18,16 +19,22 @@ function getOrigin(event) {
  * netlify/functions/oauth.js (flujo OAuth 2.1 + PKCE con Dynamic Client
  * Registration, el único modelo de auth que hoy soporta el conector remoto
  * de Claude). El token es auto-verificable (HMAC + expiración), sin sesión
- * ni tabla de tokens que mantener.
+ * ni tabla de tokens que mantener. Devuelve el payload (o null si no es
+ * válido) para que el handler pueda leer el `role` embebido.
  */
-export function checkBearerToken(event) {
+export function verifyBearerToken(event) {
   const header = event.headers?.authorization ?? event.headers?.Authorization ?? ''
   const token = header.startsWith('Bearer ') ? header.slice(7) : ''
   const payload = verifyToken(token)
-  return payload?.type === 'access'
+  return payload?.type === 'access' ? payload : null
 }
 
-const TOOLS = [
+// Compat: algunos callers solo necesitan saber si el token es válido.
+export function checkBearerToken(event) {
+  return verifyBearerToken(event) != null
+}
+
+const READER_TOOLS = [
   {
     name: 'list_tables',
     description:
@@ -53,7 +60,53 @@ const TOOLS = [
   },
 ]
 
-async function callTool(name, args) {
+// Solo se anuncia/permite cuando el access_token trae role='writer' (hoy, exclusivo
+// del director — ver netlify/functions/oauth.js). Alcance deliberadamente angosto:
+// crear tareas, nada más (no editar, no borrar, no finanzas).
+const WRITER_TOOLS = [
+  {
+    name: 'create_task',
+    description:
+      'Crea una tarea nueva en el módulo de Tareas, asignada a uno o más responsables. Antes de llamarla, resuelve con query_database el team_id (línea, metric_lines.id), los assignee_ids (users.user_id de personas activas), created_by (el user_id de quién te está hablando ahora mismo, resuelto contra users — solo un pequeño grupo de personas autorizadas puede usarla, y el server rechaza cualquier otro id) y, si aplica, el client_id (metric_clients.id) — nunca inventes esos IDs.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        team_id: {
+          type: 'string',
+          description: 'uuid de metric_lines: la línea a la que queda asociada la tarea',
+        },
+        assignee_ids: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'user_id(s) del/los responsable(s), al menos uno',
+        },
+        description: { type: 'string', description: 'Qué hay que hacer, redactado claro' },
+        created_by: {
+          type: 'string',
+          description:
+            'user_id (users.user_id) de la persona que está pidiendo crear la tarea ahora mismo — debe estar en la lista de personas autorizadas a usar esta herramienta',
+        },
+        client_id: {
+          type: 'string',
+          description: 'uuid de metric_clients, si la tarea es de una marca',
+        },
+        client: { type: 'string', description: 'Nombre de la marca (snapshot), si aplica' },
+        due_date: {
+          type: 'string',
+          description: 'Fecha de entrega en formato YYYY-MM-DD, si se indicó',
+        },
+        source: {
+          type: 'string',
+          description: 'De dónde vino el pedido (ej. "Pedido por voz")',
+        },
+      },
+      required: ['team_id', 'assignee_ids', 'description', 'created_by'],
+      additionalProperties: false,
+    },
+  },
+]
+
+async function callTool(name, args, role) {
   if (name === 'list_tables') {
     const rows = await listTables()
     return { content: [{ type: 'text', text: JSON.stringify(rows, null, 2) }] }
@@ -62,6 +115,13 @@ async function callTool(name, args) {
     if (!args?.sql) throw new Error('sql es requerido')
     const { rows, rowCount } = await runReadOnlyQuery(args.sql, args.limit)
     return { content: [{ type: 'text', text: JSON.stringify({ rowCount, rows }, null, 2) }] }
+  }
+  if (name === 'create_task') {
+    // Defensa en profundidad: aunque tools/list no la haya anunciado a un
+    // reader, tools/call la rechaza igual si el token no es de escritura.
+    if (role !== 'writer') throw new Error('Esta herramienta requiere permisos de escritura')
+    const task = await createTask(args ?? {})
+    return { content: [{ type: 'text', text: JSON.stringify(task, null, 2) }] }
   }
   throw new Error(`Unknown tool: ${name}`)
 }
@@ -78,7 +138,8 @@ const rpcError = (id, code, message) => ({ jsonrpc: '2.0', id, error: { code, me
  */
 export const handler = async (event) => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Method Not Allowed' })
-  if (!checkBearerToken(event)) {
+  const tokenPayload = verifyBearerToken(event)
+  if (!tokenPayload) {
     const origin = getOrigin(event)
     return json(
       401,
@@ -88,6 +149,7 @@ export const handler = async (event) => {
       },
     )
   }
+  const role = tokenPayload.role === 'writer' ? 'writer' : 'reader'
 
   let body
   try {
@@ -120,13 +182,14 @@ export const handler = async (event) => {
     }
 
     if (method === 'tools/list') {
-      return json(200, rpcResult(id, { tools: TOOLS }))
+      const tools = role === 'writer' ? [...READER_TOOLS, ...WRITER_TOOLS] : READER_TOOLS
+      return json(200, rpcResult(id, { tools }))
     }
 
     if (method === 'tools/call') {
       const { name, arguments: args } = params ?? {}
       try {
-        const result = await callTool(name, args)
+        const result = await callTool(name, args, role)
         return json(200, rpcResult(id, result))
       } catch (err) {
         // Los errores de ejecución de una tool van como resultado con isError,

@@ -3,6 +3,7 @@ import { createHash } from 'crypto'
 
 process.env.MCP_OAUTH_SIGNING_SECRET = 'test-signing-secret'
 process.env.MCP_URL_SECRET = 'the-shared-passphrase'
+process.env.MCP_WRITER_SECRET = 'the-director-passphrase'
 
 const { handler } = await import('../oauth.js')
 const { verifyToken } = await import('./oauthCrypto.js')
@@ -52,6 +53,7 @@ describe('oauth.js handler', () => {
   beforeEach(() => {
     process.env.MCP_OAUTH_SIGNING_SECRET = 'test-signing-secret'
     process.env.MCP_URL_SECRET = 'the-shared-passphrase'
+    process.env.MCP_WRITER_SECRET = 'the-director-passphrase'
   })
 
   it('responde 204 con headers CORS a OPTIONS', async () => {
@@ -235,12 +237,39 @@ describe('oauth.js handler', () => {
       expect(location.origin + location.pathname).toBe('https://claude.ai/cb')
       expect(location.searchParams.get('state')).toBe('xyz')
       expect(location.searchParams.get('code')).toBeTruthy()
-      expect(verifyToken(location.searchParams.get('code'))).toMatchObject({ type: 'code' })
+      expect(verifyToken(location.searchParams.get('code'))).toMatchObject({
+        type: 'code',
+        role: 'reader',
+      })
+    })
+
+    it('POST con la contraseña de escritura (MCP_WRITER_SECRET) emite un code con role=writer', async () => {
+      const client = await registerClient('https://claude.ai/cb')
+      const { codeChallenge } = pkcePair()
+      const res = await handler(
+        makeEvent({
+          method: 'POST',
+          path: '/oauth/authorize',
+          contentType: 'application/x-www-form-urlencoded',
+          body: {
+            client_id: client.client_id,
+            redirect_uri: 'https://claude.ai/cb',
+            code_challenge: codeChallenge,
+            passphrase: 'the-director-passphrase',
+          },
+        }),
+      )
+      expect(res.statusCode).toBe(302)
+      const code = new URL(res.headers.Location).searchParams.get('code')
+      expect(verifyToken(code)).toMatchObject({ type: 'code', role: 'writer' })
     })
   })
 
   describe('/oauth/token', () => {
-    async function getAuthorizationCode(redirectUri = 'https://claude.ai/cb') {
+    async function getAuthorizationCode(
+      redirectUri = 'https://claude.ai/cb',
+      passphrase = 'the-shared-passphrase',
+    ) {
       const client = await registerClient(redirectUri)
       const { codeVerifier, codeChallenge } = pkcePair()
       const authRes = await handler(
@@ -252,7 +281,7 @@ describe('oauth.js handler', () => {
             client_id: client.client_id,
             redirect_uri: redirectUri,
             code_challenge: codeChallenge,
-            passphrase: 'the-shared-passphrase',
+            passphrase,
           },
         }),
       )
@@ -347,7 +376,30 @@ describe('oauth.js handler', () => {
       const parsed = JSON.parse(res.body)
       expect(res.statusCode).toBe(200)
       expect(parsed.token_type).toBe('Bearer')
-      expect(verifyToken(parsed.access_token)).toMatchObject({ type: 'access' })
+      expect(verifyToken(parsed.access_token)).toMatchObject({ type: 'access', role: 'reader' })
+    })
+
+    it('propaga role=writer del code al access_token cuando se autorizó con la contraseña de escritura', async () => {
+      const { client, code, codeVerifier, redirectUri } = await getAuthorizationCode(
+        'https://claude.ai/cb',
+        'the-director-passphrase',
+      )
+      const res = await handler(
+        makeEvent({
+          method: 'POST',
+          path: '/oauth/token',
+          contentType: 'application/x-www-form-urlencoded',
+          body: {
+            grant_type: 'authorization_code',
+            code,
+            redirect_uri: redirectUri,
+            client_id: client.client_id,
+            code_verifier: codeVerifier,
+          },
+        }),
+      )
+      const parsed = JSON.parse(res.body)
+      expect(verifyToken(parsed.access_token)).toMatchObject({ type: 'access', role: 'writer' })
     })
   })
 })

@@ -5,14 +5,23 @@ vi.mock('./db.js', () => ({
   listTables: vi.fn(),
 }))
 
+vi.mock('./mcpWrite.js', () => ({
+  createTask: vi.fn(),
+}))
+
 process.env.MCP_OAUTH_SIGNING_SECRET = 'test-signing-secret'
 
 const { runReadOnlyQuery, listTables } = await import('./db.js')
+const { createTask } = await import('./mcpWrite.js')
 const { handler, checkBearerToken } = await import('../mcp.js')
 const { issueToken } = await import('./oauthCrypto.js')
 
 function accessToken(overrides = {}) {
   return issueToken({ type: 'access', exp: Date.now() + 60_000, ...overrides })
+}
+
+function writerToken() {
+  return accessToken({ role: 'writer' })
 }
 
 function makeEvent({ method = 'POST', path = '/mcp', token = accessToken(), body } = {}) {
@@ -79,11 +88,20 @@ describe('mcp.js handler', () => {
     expect(parsed.result.capabilities).toEqual({ tools: {} })
   })
 
-  it('responde tools/list con las dos tools', async () => {
+  it('responde tools/list con las dos tools de lectura para un token reader', async () => {
     const res = await handler(makeEvent({ body: { jsonrpc: '2.0', id: 2, method: 'tools/list' } }))
     const parsed = JSON.parse(res.body)
     const names = parsed.result.tools.map((t) => t.name)
     expect(names).toEqual(['list_tables', 'query_database'])
+  })
+
+  it('responde tools/list con create_task incluida para un token writer', async () => {
+    const res = await handler(
+      makeEvent({ token: writerToken(), body: { jsonrpc: '2.0', id: 2, method: 'tools/list' } }),
+    )
+    const parsed = JSON.parse(res.body)
+    const names = parsed.result.tools.map((t) => t.name)
+    expect(names).toEqual(['list_tables', 'query_database', 'create_task'])
   })
 
   it('tools/call list_tables delega en listTables()', async () => {
@@ -141,6 +159,63 @@ describe('mcp.js handler', () => {
     expect(res.statusCode).toBe(200)
     expect(parsed.result.isError).toBe(true)
     expect(parsed.result.content[0].text).toMatch(/SELECT/)
+  })
+
+  it('tools/call create_task con token writer delega en createTask()', async () => {
+    createTask.mockResolvedValue({ id: 'task-1', status: 'Pendiente' })
+    const args = { team_id: 'team-1', assignee_ids: ['user-1'], description: 'Hacer algo' }
+    const res = await handler(
+      makeEvent({
+        token: writerToken(),
+        body: {
+          jsonrpc: '2.0',
+          id: 8,
+          method: 'tools/call',
+          params: { name: 'create_task', arguments: args },
+        },
+      }),
+    )
+    const parsed = JSON.parse(res.body)
+    expect(createTask).toHaveBeenCalledWith(args)
+    expect(parsed.result.content[0].text).toContain('Pendiente')
+  })
+
+  it('tools/call create_task con token reader (sin role writer) devuelve isError:true y no llama a createTask', async () => {
+    const res = await handler(
+      makeEvent({
+        body: {
+          jsonrpc: '2.0',
+          id: 9,
+          method: 'tools/call',
+          params: {
+            name: 'create_task',
+            arguments: { team_id: 'x', assignee_ids: ['y'], description: 'z' },
+          },
+        },
+      }),
+    )
+    const parsed = JSON.parse(res.body)
+    expect(createTask).not.toHaveBeenCalled()
+    expect(parsed.result.isError).toBe(true)
+    expect(parsed.result.content[0].text).toMatch(/escritura/)
+  })
+
+  it('tools/call create_task propaga errores de validación como isError:true', async () => {
+    createTask.mockRejectedValue(new Error('team_id es requerido'))
+    const res = await handler(
+      makeEvent({
+        token: writerToken(),
+        body: {
+          jsonrpc: '2.0',
+          id: 10,
+          method: 'tools/call',
+          params: { name: 'create_task', arguments: { assignee_ids: ['y'], description: 'z' } },
+        },
+      }),
+    )
+    const parsed = JSON.parse(res.body)
+    expect(parsed.result.isError).toBe(true)
+    expect(parsed.result.content[0].text).toMatch(/team_id/)
   })
 
   it('tools/call con nombre de tool desconocido devuelve isError:true', async () => {

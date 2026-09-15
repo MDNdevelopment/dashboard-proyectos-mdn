@@ -171,6 +171,18 @@ function authorizeGet(event) {
   return renderAuthorizeForm({ clientId, redirectUri, state, codeChallenge })
 }
 
+/**
+ * Dos contraseñas, dos roles — sin cuentas de usuario ni segundo login:
+ * MCP_URL_SECRET (todo el equipo) da role='reader'; MCP_WRITER_SECRET (solo el
+ * director) da role='writer'. El role queda embebido en el `code` y viaja al
+ * `access_token` en el canje — ver tokenEndpoint más abajo.
+ */
+function roleForPassphrase(passphrase) {
+  if (secureCompare(passphrase, process.env.MCP_WRITER_SECRET ?? '')) return 'writer'
+  if (secureCompare(passphrase, process.env.MCP_URL_SECRET ?? '')) return 'reader'
+  return null
+}
+
 function authorizePost(event) {
   const body = parseBody(event)
   const {
@@ -184,7 +196,8 @@ function authorizePost(event) {
   const { error } = validateClientAndRedirect({ clientId, redirectUri })
   if (error) return json(400, { error: 'invalid_request', error_description: error })
 
-  if (!secureCompare(passphrase, process.env.MCP_URL_SECRET ?? '')) {
+  const role = roleForPassphrase(passphrase)
+  if (!role) {
     return renderAuthorizeForm({
       clientId,
       redirectUri,
@@ -199,6 +212,7 @@ function authorizePost(event) {
     client_id: clientId,
     redirect_uri: redirectUri,
     code_challenge: codeChallenge,
+    role,
     exp: Date.now() + CODE_TTL_MS,
   })
 
@@ -242,7 +256,11 @@ function tokenEndpoint(event) {
     })
   }
 
-  const accessToken = issueToken({ type: 'access', exp: Date.now() + ACCESS_TOKEN_TTL_MS })
+  const accessToken = issueToken({
+    type: 'access',
+    role: codePayload.role === 'writer' ? 'writer' : 'reader',
+    exp: Date.now() + ACCESS_TOKEN_TTL_MS,
+  })
 
   return json(200, {
     access_token: accessToken,
