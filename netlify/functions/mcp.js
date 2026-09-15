@@ -67,7 +67,7 @@ const WRITER_TOOLS = [
   {
     name: 'create_task',
     description:
-      'Crea una tarea nueva en el módulo de Tareas, asignada a uno o más responsables. Antes de llamarla, resuelve con query_database el team_id (línea, metric_lines.id), los assignee_ids (users.user_id de personas activas), created_by (el user_id de quién te está hablando ahora mismo, resuelto contra users — solo un pequeño grupo de personas autorizadas puede usarla, y el server rechaza cualquier otro id) y, si aplica, el client_id (metric_clients.id) — nunca inventes esos IDs.',
+      'Crea una tarea nueva en el módulo de Tareas, asignada a uno o más responsables, a nombre de quien está usando esta conexión ahora mismo (tu identidad la determina el servidor por tu propia contraseña, no la mandas tú). Antes de llamarla, resuelve con query_database el team_id (línea, metric_lines.id), los assignee_ids (users.user_id de personas activas) y, si aplica, el client_id (metric_clients.id) — nunca inventes esos IDs.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -81,11 +81,6 @@ const WRITER_TOOLS = [
           description: 'user_id(s) del/los responsable(s), al menos uno',
         },
         description: { type: 'string', description: 'Qué hay que hacer, redactado claro' },
-        created_by: {
-          type: 'string',
-          description:
-            'user_id (users.user_id) de la persona que está pidiendo crear la tarea ahora mismo — debe estar en la lista de personas autorizadas a usar esta herramienta',
-        },
         client_id: {
           type: 'string',
           description: 'uuid de metric_clients, si la tarea es de una marca',
@@ -100,13 +95,13 @@ const WRITER_TOOLS = [
           description: 'De dónde vino el pedido (ej. "Pedido por voz")',
         },
       },
-      required: ['team_id', 'assignee_ids', 'description', 'created_by'],
+      required: ['team_id', 'assignee_ids', 'description'],
       additionalProperties: false,
     },
   },
 ]
 
-async function callTool(name, args, role) {
+async function callTool(name, args, role, writerUserId) {
   if (name === 'list_tables') {
     const rows = await listTables()
     return { content: [{ type: 'text', text: JSON.stringify(rows, null, 2) }] }
@@ -120,7 +115,10 @@ async function callTool(name, args, role) {
     // Defensa en profundidad: aunque tools/list no la haya anunciado a un
     // reader, tools/call la rechaza igual si el token no es de escritura.
     if (role !== 'writer') throw new Error('Esta herramienta requiere permisos de escritura')
-    const task = await createTask(args ?? {})
+    // created_by NUNCA viene de args (ni del modelo): lo resuelve el server a
+    // partir de qué contraseña individual se usó para autenticarse — ver
+    // oauth.js → resolveAuth(). Si args trajera un created_by, se ignora.
+    const task = await createTask({ ...(args ?? {}), created_by: writerUserId })
     return { content: [{ type: 'text', text: JSON.stringify(task, null, 2) }] }
   }
   throw new Error(`Unknown tool: ${name}`)
@@ -150,6 +148,7 @@ export const handler = async (event) => {
     )
   }
   const role = tokenPayload.role === 'writer' ? 'writer' : 'reader'
+  const writerUserId = role === 'writer' ? tokenPayload.userId : undefined
 
   let body
   try {
@@ -189,7 +188,7 @@ export const handler = async (event) => {
     if (method === 'tools/call') {
       const { name, arguments: args } = params ?? {}
       try {
-        const result = await callTool(name, args, role)
+        const result = await callTool(name, args, role, writerUserId)
         return json(200, rpcResult(id, result))
       } catch (err) {
         // Los errores de ejecución de una tool van como resultado con isError,

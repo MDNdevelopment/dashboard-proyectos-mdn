@@ -36,26 +36,15 @@ function assertNonEmptyString(value, field) {
 }
 
 /**
- * Allowlist de quién puede figurar como autor de una tarea creada por el MCP
- * de escritura — todos comparten la misma contraseña de escritura (role
- * 'writer'), así que no hay forma criptográfica de saber cuál de ellos está
- * escribiendo. `created_by` sí viene del modelo (a diferencia de
- * `company_id`), pero se valida contra esta lista fija: solo puede ser uno de
- * los user_id aquí, nunca un uuid arbitrario inventado o de otra persona.
- */
-function allowedWriterIds() {
-  return (process.env.MCP_WRITER_USER_IDS ?? '')
-    .split(',')
-    .map((id) => id.trim())
-    .filter(Boolean)
-}
-
-/**
  * Crea una tarea desde el MCP de escritura. `company_id` nunca viene del
  * modelo — se fija aquí desde MCP_COMPANY_ID, así que no se puede falsear por
- * prompt injection ni por un argumento mal pasado. `created_by` sí es un
- * argumento, pero se valida contra `allowedWriterIds()` (ver arriba).
- * `status` siempre nace en 'Pendiente'.
+ * prompt injection ni por un argumento mal pasado. `created_by` tampoco es un
+ * argumento del modelo: lo resuelve mcp.js a partir de CON QUÉ contraseña
+ * individual se autenticó quien está llamando (ver oauth.js →
+ * resolveAuth()/MCP_WRITERS) y lo pasa aquí ya fijo — cada persona autorizada
+ * a escribir tiene su propia contraseña, así que el autor queda determinado
+ * por el servidor, nunca por lo que el modelo diga. `status` siempre nace en
+ * 'Pendiente'.
  */
 export async function createTask({
   team_id: teamId,
@@ -74,13 +63,6 @@ export async function createTask({
     throw new TaskValidationError('assignee_ids debe ser un array con al menos un responsable')
   }
   const cleanAssignees = assigneeIds.map((id, i) => assertNonEmptyString(id, `assignee_ids[${i}]`))
-
-  const allowed = allowedWriterIds()
-  if (!allowed.includes(createdBy)) {
-    throw new TaskValidationError(
-      'created_by no está autorizado a crear tareas por este medio — resuélvelo contra users y usa un user_id de la lista permitida',
-    )
-  }
 
   const companyId = process.env.MCP_COMPANY_ID
   if (!companyId) throw new Error('MCP_COMPANY_ID no configurada')

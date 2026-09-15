@@ -20,7 +20,6 @@ describe('createTask', () => {
     queryMock.mockReset()
     process.env.SUPABASE_WRITER_DB_URL = 'postgres://mcp_writer:x@localhost:5432/postgres'
     process.env.MCP_COMPANY_ID = 'company-1'
-    process.env.MCP_WRITER_USER_IDS = 'writer-1, writer-2'
     vi.resetModules()
     ;({ createTask, TaskValidationError } = await import('./mcpWrite.js'))
   })
@@ -54,19 +53,7 @@ describe('createTask', () => {
     expect(connectMock).not.toHaveBeenCalled()
   })
 
-  it('rechaza un created_by que no está en la allowlist (MCP_WRITER_USER_IDS)', async () => {
-    await expect(
-      createTask({
-        team_id: 't1',
-        assignee_ids: ['u1'],
-        description: 'x',
-        created_by: 'alguien-no-autorizado',
-      }),
-    ).rejects.toThrow(TaskValidationError)
-    expect(connectMock).not.toHaveBeenCalled()
-  })
-
-  it('acepta cualquier created_by presente en la allowlist', async () => {
+  it('acepta cualquier created_by no vacío (la validación de quién puede escribir vive en oauth.js/mcp.js, no aquí)', async () => {
     queryMock.mockResolvedValue({ rows: [{ id: 'task-1' }] })
     await createTask({
       team_id: 't1',
@@ -78,7 +65,7 @@ describe('createTask', () => {
     expect(params[8]).toBe('writer-2')
   })
 
-  it('inserta con company_id fijo desde env var (nunca desde los args) y el created_by validado', async () => {
+  it('inserta con company_id fijo desde env var (nunca desde los args) y el created_by recibido', async () => {
     queryMock.mockResolvedValue({ rows: [{ id: 'task-1', status: 'Pendiente' }] })
 
     await createTask({

@@ -20,8 +20,8 @@ function accessToken(overrides = {}) {
   return issueToken({ type: 'access', exp: Date.now() + 60_000, ...overrides })
 }
 
-function writerToken() {
-  return accessToken({ role: 'writer' })
+function writerToken(userId = 'writer-uid-1') {
+  return accessToken({ role: 'writer', userId })
 }
 
 function makeEvent({ method = 'POST', path = '/mcp', token = accessToken(), body } = {}) {
@@ -161,12 +161,12 @@ describe('mcp.js handler', () => {
     expect(parsed.result.content[0].text).toMatch(/SELECT/)
   })
 
-  it('tools/call create_task con token writer delega en createTask()', async () => {
+  it('tools/call create_task con token writer delega en createTask() con el created_by resuelto del token', async () => {
     createTask.mockResolvedValue({ id: 'task-1', status: 'Pendiente' })
     const args = { team_id: 'team-1', assignee_ids: ['user-1'], description: 'Hacer algo' }
     const res = await handler(
       makeEvent({
-        token: writerToken(),
+        token: writerToken('writer-uid-1'),
         body: {
           jsonrpc: '2.0',
           id: 8,
@@ -176,8 +176,30 @@ describe('mcp.js handler', () => {
       }),
     )
     const parsed = JSON.parse(res.body)
-    expect(createTask).toHaveBeenCalledWith(args)
+    expect(createTask).toHaveBeenCalledWith({ ...args, created_by: 'writer-uid-1' })
     expect(parsed.result.content[0].text).toContain('Pendiente')
+  })
+
+  it('tools/call create_task ignora un created_by que venga en los argumentos del modelo, usa el del token', async () => {
+    createTask.mockResolvedValue({ id: 'task-1' })
+    const args = {
+      team_id: 'team-1',
+      assignee_ids: ['user-1'],
+      description: 'Hacer algo',
+      created_by: 'alguien-que-el-modelo-inventó',
+    }
+    await handler(
+      makeEvent({
+        token: writerToken('writer-uid-2'),
+        body: {
+          jsonrpc: '2.0',
+          id: 11,
+          method: 'tools/call',
+          params: { name: 'create_task', arguments: args },
+        },
+      }),
+    )
+    expect(createTask).toHaveBeenCalledWith(expect.objectContaining({ created_by: 'writer-uid-2' }))
   })
 
   it('tools/call create_task con token reader (sin role writer) devuelve isError:true y no llama a createTask', async () => {

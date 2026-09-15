@@ -172,14 +172,38 @@ function authorizeGet(event) {
 }
 
 /**
- * Dos contraseñas, dos roles — sin cuentas de usuario ni segundo login:
- * MCP_URL_SECRET (todo el equipo) da role='reader'; MCP_WRITER_SECRET (solo el
- * director) da role='writer'. El role queda embebido en el `code` y viaja al
- * `access_token` en el canje — ver tokenEndpoint más abajo.
+ * Escritores con contraseña individual — sin cuentas de usuario ni segundo
+ * login: MCP_WRITERS es un JSON `[{ "secret": "...", "user_id": "...",
+ * "name": "..." }, ...]`, una entrada por persona autorizada a escribir. Cada
+ * quien usa SU propia contraseña, así que al acertarla ya sabemos exactamente
+ * quién es — no hace falta que el modelo adivine un `created_by` (eso era
+ * imposible de verificar cuando todos compartían una sola contraseña).
+ * `MCP_URL_SECRET` (todo el equipo) sigue dando `role: 'reader'`.
  */
-function roleForPassphrase(passphrase) {
-  if (secureCompare(passphrase, process.env.MCP_WRITER_SECRET ?? '')) return 'writer'
-  if (secureCompare(passphrase, process.env.MCP_URL_SECRET ?? '')) return 'reader'
+function parseWriters() {
+  try {
+    const list = JSON.parse(process.env.MCP_WRITERS ?? '[]')
+    return Array.isArray(list) ? list : []
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Resuelve una contraseña a `{ role: 'reader' }`, `{ role: 'writer', userId,
+ * name }` o `null` si no coincide con nada. El `role`/`userId` quedan
+ * embebidos en el `code` y viajan al `access_token` en el canje — ver
+ * tokenEndpoint más abajo.
+ */
+function resolveAuth(passphrase) {
+  for (const writer of parseWriters()) {
+    if (secureCompare(passphrase, writer.secret ?? '')) {
+      return { role: 'writer', userId: writer.user_id, name: writer.name }
+    }
+  }
+  if (secureCompare(passphrase, process.env.MCP_URL_SECRET ?? '')) {
+    return { role: 'reader' }
+  }
   return null
 }
 
@@ -196,8 +220,8 @@ function authorizePost(event) {
   const { error } = validateClientAndRedirect({ clientId, redirectUri })
   if (error) return json(400, { error: 'invalid_request', error_description: error })
 
-  const role = roleForPassphrase(passphrase)
-  if (!role) {
+  const auth = resolveAuth(passphrase)
+  if (!auth) {
     return renderAuthorizeForm({
       clientId,
       redirectUri,
@@ -212,7 +236,8 @@ function authorizePost(event) {
     client_id: clientId,
     redirect_uri: redirectUri,
     code_challenge: codeChallenge,
-    role,
+    role: auth.role,
+    userId: auth.userId,
     exp: Date.now() + CODE_TTL_MS,
   })
 
@@ -259,6 +284,7 @@ function tokenEndpoint(event) {
   const accessToken = issueToken({
     type: 'access',
     role: codePayload.role === 'writer' ? 'writer' : 'reader',
+    userId: codePayload.role === 'writer' ? codePayload.userId : undefined,
     exp: Date.now() + ACCESS_TOKEN_TTL_MS,
   })
 
