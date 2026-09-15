@@ -126,6 +126,81 @@ const MODULE_ICON = {
       <polyline points="1 12 5 7 8 10 11 5 15 8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   ),
+  reuniones: (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+    >
+      <rect x="1.5" y="2.5" width="13" height="12" rx="1.5" />
+      <path d="M1.5 6h13" strokeLinecap="round" />
+      <path d="M5 1v3M11 1v3" strokeLinecap="round" />
+    </svg>
+  ),
+  cnp: (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+    >
+      <path
+        d="M9 1 2.5 9.5H7L6.5 15 13.5 6.5H9L9 1Z"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
+  ),
+  monitor_uso: (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+    >
+      <path d="M2 12.5a6 6 0 0 1 12 0" strokeLinecap="round" />
+      <path d="M8 12.5 10.8 7" strokeLinecap="round" />
+      <circle cx="8" cy="12.5" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  ),
+  leads: (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+    >
+      <circle cx="6" cy="5.5" r="2.5" />
+      <path d="M1 14c0-2.8 2.2-5 5-5s5 2.2 5 5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M12 4.5v4M14 6.5h-4" strokeLinecap="round" />
+    </svg>
+  ),
+  finanzas: (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+    >
+      <circle cx="8" cy="8" r="6.5" />
+      <path
+        d="M8 4.5v7M10 6.2c0-.9-.9-1.7-2-1.7s-2 .7-2 1.6c0 2.1 4 1 4 3.1 0 .9-.9 1.6-2 1.6s-2-.7-2-1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  ),
 }
 
 const ICON_ASSIGNED = (
@@ -477,7 +552,9 @@ export default function HomePage() {
     ((userProfile?.first_name?.[0] ?? '') + (userProfile?.last_name?.[0] ?? '')).toUpperCase() ||
     '?'
 
-  const quickAccessModules = MODULES.filter((m) => !m.hidden && can(m.key))
+  const quickAccessModules = MODULES.filter((m) => !m.hidden && can(m.key)).sort((a, b) =>
+    a.key === 'reuniones' ? -1 : b.key === 'reuniones' ? 1 : 0,
+  )
 
   // Salud de la empresa del mes cerrado más reciente, promediada entre todas las líneas.
   const health = lines.length
