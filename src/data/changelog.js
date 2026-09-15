@@ -230,6 +230,7 @@ export const CHANGELOG = [
       'En "Permisos" de Empresa, ahora también se pueden registrar llegadas tarde y salidas temprano, con la hora exacta.',
       'Nuevo módulo "Finanzas": factura el mes, registra cobros y abonos, reparte lo cobrado en Gastos operativos / Socios / Ganancia y registra los pagos contra cada partida, con cierre de mes. Por ahora solo lo ve la dirección, pero es configurable desde Empresa → Accesos igual que el resto de módulos.',
       'La conexión de Claude a la base de datos ahora permite que un pequeño grupo autorizado, además de consultar, le pida por voz o texto que cree tareas directamente ("asígnale a X una tarea de Y para el jueves"). El resto del equipo sigue teniendo solo consulta, como antes.',
+      'Corregido: al crear o editar un CNP, el equipo de Diseño ahora aparece siempre como responsable posible, sin importar qué línea esté seleccionada.',
     ],
   },
   {

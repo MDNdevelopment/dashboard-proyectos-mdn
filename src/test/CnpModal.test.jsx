@@ -210,6 +210,38 @@ describe('CnpModal — cantidad de piezas (crear)', () => {
     expect(screen.getByText('Katherine Mora')).toBeInTheDocument()
   })
 
+  it('los diseñadores (department_id 3) son seleccionables aunque el team seleccionado sea otro', async () => {
+    const user = userEvent.setup()
+    render(
+      <CnpModal
+        cnp={null}
+        teams={[
+          { id: 'line-georgina', name: 'Georgina', member_user_ids: ['u1'] },
+          { id: 'line-katherine', name: 'Katherine', member_user_ids: ['u2'] },
+        ]}
+        defaultTeamId="line-georgina"
+        clients={[{ id: 'client-1', name: 'Punto Fit', line_id: 'line-georgina' }]}
+        users={[
+          { user_id: 'u1', first_name: 'Jesús', last_name: 'García' },
+          {
+            user_id: 'u2',
+            first_name: 'Ana',
+            last_name: 'Torres',
+            department_id: 3,
+          },
+        ]}
+        onClose={vi.fn()}
+        onCreated={vi.fn()}
+        onUpdated={vi.fn()}
+      />,
+    )
+
+    await user.click(screen.getByText('Asignar diseñador...'))
+    // Ana es diseñadora (department_id 3) pero pertenece al team "Katherine", distinto
+    // del seleccionado ("Georgina"): debe poder asignarse igual, sin restricción de línea.
+    expect(await screen.findByText('Ana Torres')).toBeInTheDocument()
+  })
+
   it('con 1 pieza se ve el contenido general; con 2+ se oculta y aparece uno por pieza', async () => {
     renderNewModal()
 

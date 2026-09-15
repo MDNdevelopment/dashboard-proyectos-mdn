@@ -32,14 +32,26 @@ function newRef() {
   return { id: crypto.randomUUID(), url: '', note: '' }
 }
 
+// department_id 3 = Diseño (ver departments en Supabase). El equipo de Diseño trabaja
+// piezas de CNP de cualquier línea, así que debe poder asignarse sin importar el team
+// seleccionado — igual que el pool "Independientes", pero sin depender de no tener línea.
+const DEPARTMENT_ID_DISENO = 3
+
 // En CNP, si la línea es "Independientes" o "Alta gerencia" (líneas generales/derivadas),
 // cualquier recurso de la empresa debe poder asignarse como responsable — a diferencia de
 // Tareas/Clientes, donde assignableUsers() restringe a la línea real seleccionada.
 function assignableUsersForCnp(users, team, allLines, currentUserId) {
-  if (team?.is_general || team?.is_management) {
-    return { members: users.filter((u) => !u.deleted_at), crossLine: [] }
-  }
-  return assignableUsers(users, team, allLines, currentUserId)
+  const base =
+    team?.is_general || team?.is_management
+      ? { members: users.filter((u) => !u.deleted_at), crossLine: [] }
+      : assignableUsers(users, team, allLines, currentUserId)
+
+  const presentIds = new Set([...base.members, ...base.crossLine].map((u) => u.user_id))
+  const missingDesigners = users.filter(
+    (u) => u.department_id === DEPARTMENT_ID_DISENO && !u.deleted_at && !presentIds.has(u.user_id),
+  )
+
+  return { members: [...base.members, ...missingDesigners], crossLine: base.crossLine }
 }
 
 export default function CnpModal({

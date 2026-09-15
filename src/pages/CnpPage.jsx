@@ -93,7 +93,7 @@ export default function CnpPage() {
       supabase
         .from('users')
         .select(
-          'user_id, first_name, last_name, avatar_url, access_level, deleted_at, position:positions(position_name)',
+          'user_id, first_name, last_name, avatar_url, access_level, deleted_at, department_id, position:positions(position_name)',
         )
         .eq('company_id', companyId)
         .order('first_name'),
