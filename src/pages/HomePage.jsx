@@ -730,7 +730,7 @@ export default function HomePage() {
                   accent={myLateCnps.length > 0 ? '#E14848' : '#111'}
                   icon={ICON_CNP}
                   iconColor={myLateCnps.length > 0 ? '#E14848' : '#FFB800'}
-                  to={`/cnp?view=base&assignee=${myUserId}`}
+                  to={`/cnp?view=base&team=__mine__&assignee=${myUserId}`}
                   linkLabel="Ver mis CNP"
                 />
               )}

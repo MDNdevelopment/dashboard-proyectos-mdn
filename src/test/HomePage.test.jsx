@@ -334,12 +334,12 @@ describe('HomePage — CNP asignados', () => {
     })
   })
 
-  it('la card "CNP asignados" es un enlace clickeable a Base de CNP filtrado por responsable', async () => {
+  it('la card "CNP asignados" es un enlace clickeable a Base de CNP en el scope "Mis CNP" filtrado por responsable', async () => {
     renderPage({ access_level: 1 })
     await waitFor(() => {
       expect(screen.getByRole('link', { name: /cnp asignados/i })).toHaveAttribute(
         'href',
-        '/cnp?view=base&assignee=u1',
+        '/cnp?view=base&team=__mine__&assignee=u1',
       )
     })
   })

@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { vi } from 'vitest'
 import { makeQuery, makeChannel } from './helpers/supabaseMock'
 
-const { LINE, CLIENT, USER, CNP_ROW, insertPayloadHolder } = vi.hoisted(() => ({
+const { LINE, CLIENT, USER, CNP_ROW, cnpRowsHolder, insertPayloadHolder } = vi.hoisted(() => ({
   LINE: { id: 'line-1', name: 'Georgina', member_user_ids: ['u1'], is_general: false },
   CLIENT: { id: 'client-1', name: 'Punto Fit', line_id: 'line-1' },
   USER: {
@@ -37,6 +37,9 @@ const { LINE, CLIENT, USER, CNP_ROW, insertPayloadHolder } = vi.hoisted(() => ({
     created_at: new Date().toISOString(),
     deleted_at: null,
   },
+  // Mutable para que los tests de "Mis CNP" puedan añadir filas de otra línea sin
+  // afectar a los demás tests (se resetea en beforeEach).
+  cnpRowsHolder: { current: null },
   insertPayloadHolder: { current: null },
 }))
 
@@ -48,7 +51,7 @@ vi.mock('../supabase', () => {
       removeChannel: vi.fn(),
       from: vi.fn((table) => {
         if (table === 'cnp_requests') {
-          const q = makeQuery([CNP_ROW])
+          const q = makeQuery(cnpRowsHolder.current ?? [CNP_ROW])
           q.insert = vi.fn((payload) => {
             insertPayloadHolder.current = payload
             return q
@@ -96,6 +99,7 @@ describe('CnpPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     insertPayloadHolder.current = null
+    cnpRowsHolder.current = null
   })
 
   it('renders the page title', async () => {
@@ -239,5 +243,59 @@ describe('CnpPage', () => {
     // La celda de la tabla de Base y el chip de filtro activo muestran ambos "Punto Fit".
     expect(await screen.findAllByText('Punto Fit')).not.toHaveLength(0)
     expect(screen.getByText('Creatina con sello de calidad')).toBeInTheDocument()
+  })
+
+  describe('"Mis CNP" — CNP asignados de una línea que el usuario no ve', () => {
+    const FOREIGN_CNP = {
+      ...CNP_ROW,
+      id: 'cnp-2',
+      line_id: 'line-2',
+      client_id: 'client-2',
+      title: 'Bellezza · Post de feria',
+      assignee_id: 'u1',
+    }
+
+    it('el chip "Mis CNP" muestra los CNP asignados de cualquier línea; el chip de línea solo los de la línea propia', async () => {
+      const user = userEvent.setup()
+      cnpRowsHolder.current = [CNP_ROW, FOREIGN_CNP]
+      renderPage()
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /mis cnp/i })).toBeInTheDocument()
+      })
+      // El chip de la línea propia (Georgina) no debe incluir el CNP de línea ajena, aunque
+      // esté asignado al mismo usuario — así los KPIs de la línea no se contaminan.
+      await user.click(screen.getByRole('button', { name: 'Base' }))
+      expect(screen.getByText('Creatina con sello de calidad')).toBeInTheDocument()
+      expect(screen.queryByText('Bellezza · Post de feria')).not.toBeInTheDocument()
+
+      // "Mis CNP" sí incluye el de línea ajena (y también el de la línea propia, porque
+      // sigue siendo suyo).
+      await user.click(screen.getByRole('button', { name: /mis cnp/i }))
+      expect(await screen.findByText('Bellezza · Post de feria')).toBeInTheDocument()
+      expect(screen.getByText('Creatina con sello de calidad')).toBeInTheDocument()
+    })
+
+    it('no muestra el chip "Mis CNP" cuando el usuario no tiene ningún CNP asignado', async () => {
+      cnpRowsHolder.current = [{ ...CNP_ROW, assignee_id: 'otro-user' }]
+      renderPage()
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Georgina' })).toBeInTheDocument()
+      })
+      expect(screen.queryByRole('button', { name: /mis cnp/i })).not.toBeInTheDocument()
+    })
+
+    it('un usuario sin línea real pero con CNP asignados arranca directamente en "Mis CNP"', async () => {
+      // Sin líneas propias (no aparece en member_user_ids de LINE) y sin ser nivel 4/admin
+      // (no ve "Todos") — el único CNP visible es el asignado a él en otra línea.
+      cnpRowsHolder.current = [{ ...FOREIGN_CNP, assignee_id: 'u2' }]
+      renderPage(null, { user_id: 'u2', access_level: 2, admin: false })
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /mis cnp/i })).toHaveClass('bg-[#FFB800]')
+      })
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Base' }))
+      expect(await screen.findByText('Bellezza · Post de feria')).toBeInTheDocument()
+    })
   })
 })

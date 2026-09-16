@@ -303,3 +303,61 @@ describe('CnpModal — cantidad de piezas (crear)', () => {
     ])
   })
 })
+
+describe('CnpModal — CNP de una línea ajena (scope "Mis CNP")', () => {
+  // El CNP es de "line-indep" (Bellezza), pero el usuario logueado solo pertenece a
+  // "line-1" (Georgina) — `teams` (líneas visibles) no incluye "line-indep", así que
+  // hay que resolverla desde `allLines` (todas las líneas de la empresa).
+  const FOREIGN_CNP = { ...CNP, line_id: 'line-indep', client_id: 'client-2' }
+  const ALL_LINES = [
+    { id: 'line-1', name: 'Georgina', member_user_ids: ['u1'] },
+    { id: 'line-indep', name: 'Independientes', is_general: true, member_user_ids: [] },
+  ]
+  const CLIENTS = [
+    { id: 'client-1', name: 'Punto Fit', line_id: 'line-1' },
+    { id: 'client-2', name: 'Bellezza', line_id: 'line-indep' },
+  ]
+  const USERS = [{ user_id: 'u1', first_name: 'Luis', last_name: 'Fajardo' }]
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  function renderForeign({ isAssignee = true } = {}) {
+    useAuth.mockReturnValue({
+      userProfile: { user_id: isAssignee ? 'u1' : 'reviewer-1', company_id: 'co-1' },
+      can: () => true,
+    })
+    return render(
+      <CnpModal
+        cnp={FOREIGN_CNP}
+        teams={[{ id: 'line-1', name: 'Georgina', member_user_ids: ['u1'] }]}
+        allLines={ALL_LINES}
+        clients={CLIENTS}
+        users={USERS}
+        onClose={vi.fn()}
+        onCreated={vi.fn()}
+        onUpdated={vi.fn()}
+      />,
+    )
+  }
+
+  it('muestra el nombre de la línea ajena (resuelta desde allLines) y la deja deshabilitada', async () => {
+    renderForeign()
+    const lineSelect = screen.getByLabelText('Línea *')
+    expect(lineSelect).toHaveValue('line-indep')
+    expect(lineSelect).toBeDisabled()
+    expect(screen.getByText('Independientes')).toBeInTheDocument()
+  })
+
+  it('muestra el cliente del CNP (Bellezza) ya seleccionado en el select de Cliente', async () => {
+    renderForeign()
+    expect(screen.getByDisplayValue('Bellezza')).toBeInTheDocument()
+  })
+
+  it('el responsable queda fijo (no editable) cuando el único acceso del usuario es ser el asignado', async () => {
+    renderForeign({ isAssignee: true })
+    expect(screen.getByText('Luis Fajardo')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /asignar diseñador/i })).not.toBeInTheDocument()
+  })
+})

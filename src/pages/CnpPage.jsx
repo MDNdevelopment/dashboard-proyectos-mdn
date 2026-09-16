@@ -6,11 +6,16 @@ import CnpDashboardView from '../components/cnp/CnpDashboardView'
 import CnpBaseView from '../components/cnp/CnpBaseView'
 import CnpModal from '../components/cnp/CnpModal'
 import { loadLines, loadClients } from '../components/metricas/metricsApi'
-import { currentMonthIndex } from '../components/tareas/constants'
+import { currentMonthIndex, isClosed } from '../components/tareas/constants'
 import { MONTHS } from '../components/metricas/constants'
 import { visibleLinesForUser, withDerivedGeneralMembers } from '../utils/lineMembers'
 
 const ALL_TEAMS = '__all__'
+// Pseudo-scope "Mis CNP": un jefe de otra línea puede asignarle un CNP a un diseñador que
+// no pertenece a esa línea (p. ej. Diseño trabaja piezas de cualquier línea, ver
+// assignableUsersForCnp en CnpModal.jsx). Sin este chip esos CNP quedaban invisibles: el
+// recorte por línea de `scopedCnps` no tiene en cuenta el `assignee_id`.
+const MY_CNP = '__mine__'
 const CURRENT_YEAR = Math.floor(currentMonthIndex() / 12)
 const YEARS = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2, CURRENT_YEAR - 3]
 
@@ -114,7 +119,16 @@ export default function CnpPage() {
     setAllUsers(users)
     setUsersMap(new Map(users.map((u) => [u.user_id, u])))
 
-    setActiveTeamId((prev) => prev ?? (canViewAll ? ALL_TEAMS : (fetchedTeams[0]?.id ?? null)))
+    setActiveTeamId((prev) => {
+      if (prev) return prev
+      if (canViewAll) return ALL_TEAMS
+      if (fetchedTeams[0]) return fetchedTeams[0].id
+      // Sin línea real visible: si igual tiene CNP asignados de otras líneas, arrancar en
+      // "Mis CNP" en vez de dejar la pantalla vacía (ver mensaje "No hay líneas creadas").
+      const myId = userProfile.user_id
+      const hasOwnCnps = (cnpRes.data ?? []).some((c) => c.assignee_id === myId)
+      return hasOwnCnps ? MY_CNP : null
+    })
     setLoading(false)
   }, [userProfile?.company_id, canViewAll])
 
@@ -211,10 +225,16 @@ export default function CnpPage() {
     })
   }
 
+  const isMine = activeTeamId === MY_CNP
+  const myUserId = userProfile?.user_id
+  const myCnps = myUserId ? cnps.filter((c) => c.assignee_id === myUserId) : []
+  const myOpenCnpsCount = myCnps.filter((c) => !isClosed(c)).length
   const visibleLineIds = new Set(teams.map((t) => t.id))
-  const scopedCnps = isAll
-    ? cnps.filter((c) => visibleLineIds.has(c.line_id))
-    : cnps.filter((c) => c.line_id === activeTeamId)
+  const scopedCnps = isMine
+    ? myCnps
+    : isAll
+      ? cnps.filter((c) => visibleLineIds.has(c.line_id))
+      : cnps.filter((c) => c.line_id === activeTeamId)
 
   return (
     <>
@@ -250,7 +270,7 @@ export default function CnpPage() {
           </div>
 
           <div className="flex flex-col gap-3 mb-6">
-            {(teams.length > 0 || canViewAll) && (
+            {(teams.length > 0 || canViewAll || myCnps.length > 0) && (
               <div className="flex flex-wrap gap-1.5 items-center">
                 {canViewAll && (
                   <button
@@ -277,6 +297,18 @@ export default function CnpPage() {
                     {t.name}
                   </button>
                 ))}
+                {myCnps.length > 0 && (
+                  <button
+                    onClick={() => setActiveTeamId(MY_CNP)}
+                    className={`px-3 py-1 rounded-full text-[14.5px] font-semibold transition-all ${
+                      isMine
+                        ? 'bg-[#FFB800] text-[#111]'
+                        : 'bg-white border border-[#e0ddd4] text-[#555] hover:border-[#FFB800] hover:text-[#111]'
+                    }`}
+                  >
+                    Mis CNP{myOpenCnpsCount > 0 ? ` · ${myOpenCnpsCount}` : ''}
+                  </button>
+                )}
               </div>
             )}
             <div className="flex flex-col sm:flex-row sm:items-center gap-2">
@@ -330,7 +362,7 @@ export default function CnpPage() {
             </div>
           </div>
 
-          {!loading && teams.length === 0 && !canViewAll && (
+          {!loading && teams.length === 0 && !canViewAll && myCnps.length === 0 && (
             <div className="bg-white rounded-xl border border-[#e0ddd4] p-10 text-center mb-4">
               <p className="text-[17px] font-semibold text-[#888] mb-1">No hay líneas creadas</p>
               <p className="text-[15px] text-[#bbb]">
@@ -350,7 +382,7 @@ export default function CnpPage() {
                   cnps={scopedCnps}
                   clientsById={clientsById}
                   monthIdx={monthIdx}
-                  teamName={isAll ? null : activeTeam?.name}
+                  teamName={isMine ? 'Mis CNP' : isAll ? null : activeTeam?.name}
                   onNavigateToBase={goToBaseWithFilter}
                 />
               )}
@@ -374,7 +406,7 @@ export default function CnpPage() {
           cnp={cnpModal === undefined ? null : cnpModal}
           teams={teams}
           allLines={allLines}
-          defaultTeamId={isAll ? null : activeTeamId}
+          defaultTeamId={isAll || isMine ? null : activeTeamId}
           clients={clients}
           users={allUsers}
           onClose={closeCnpModal}

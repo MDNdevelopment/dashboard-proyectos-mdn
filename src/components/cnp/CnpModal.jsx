@@ -12,6 +12,7 @@ import {
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import UserPickerSingle from '../tareas/UserPickerSingle'
 import { assignableUsers, flattenAssignable } from '../../utils/lineFilters'
+import { userViewsAllLines } from '../../utils/lineMembers'
 import DateInput from '../common/DateInput'
 
 const EMPTY = {
@@ -152,7 +153,21 @@ export default function CnpModal({
     set('pieces', rest.length <= 1 ? [] : rest)
   }
 
-  const selectedTeam = teams.find((t) => t.id === form.line_id)
+  // Un CNP puede llegar aquí desde el scope "Mis CNP" (CnpPage.jsx) con una línea que el
+  // usuario actual no ve (p. ej. un diseñador de Georgina abriendo un CNP de
+  // Independientes asignado por otra línea) — `teams` no la contiene. Se busca en
+  // `allLines` para no dejar el select de Línea vacío ni romper el pool de responsables.
+  const isForeignLine = isEdit && form.line_id && !teams.some((t) => t.id === form.line_id)
+  const selectedTeam = isForeignLine
+    ? allLines.find((l) => l.id === form.line_id)
+    : teams.find((t) => t.id === form.line_id)
+  const lineOptions = isForeignLine && selectedTeam ? [selectedTeam, ...teams] : teams
+  // RLS (cnp_requests_update) solo deja editar un CNP de línea ajena si el usuario es el
+  // propio `assignee_id` — y el `with check` exige que siga siéndolo tras el guardado. Si
+  // dejáramos reasignarlo, el UPDATE se rechazaría en el servidor (el usuario perdería el
+  // acceso a media operación). Quien sí ve todas las líneas puede reasignar con normalidad.
+  const canReassignForeign = userViewsAllLines(userProfile)
+  const usersById = new Map(users.map((u) => [u.user_id, u]))
   const teamMembers = flattenAssignable(
     assignableUsersForCnp(users, selectedTeam, allLines, form.assignee_id),
   )
@@ -350,14 +365,20 @@ export default function CnpModal({
                   }))
                 }}
                 required
+                disabled={isForeignLine}
               >
                 <option value="">Seleccionar línea...</option>
-                {teams.map((t) => (
+                {lineOptions.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.name}
                   </option>
                 ))}
               </select>
+              {isForeignLine && (
+                <p className="text-[12.5px] text-[#bbb] mt-1">
+                  Este CNP es de otra línea — no puedes moverlo de línea, solo trabajarlo.
+                </p>
+              )}
             </div>
 
             <div>
@@ -490,14 +511,25 @@ export default function CnpModal({
               <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
                 Responsable *
               </label>
-              <UserPickerSingle
-                users={teamMembers}
-                selectedId={form.assignee_id}
-                onChange={(id) => set('assignee_id', id)}
-                placeholder="Asignar diseñador..."
-                clearable={false}
-              />
-              {teamMembers.length === 0 && (
+              {isForeignLine && !canReassignForeign ? (
+                // El acceso de este usuario a un CNP de línea ajena viene de ser él mismo
+                // el responsable (RLS: assignee_id = auth.uid()). Reasignarlo le haría
+                // perder ese acceso en el mismo UPDATE — se muestra fijo en vez de editable.
+                <div className="input-base flex items-center gap-2 bg-[#faf9f5] text-[#555]">
+                  {usersById.get(form.assignee_id)
+                    ? `${usersById.get(form.assignee_id).first_name} ${usersById.get(form.assignee_id).last_name}`
+                    : 'Sin datos'}
+                </div>
+              ) : (
+                <UserPickerSingle
+                  users={teamMembers}
+                  selectedId={form.assignee_id}
+                  onChange={(id) => set('assignee_id', id)}
+                  placeholder="Asignar diseñador..."
+                  clearable={false}
+                />
+              )}
+              {!isForeignLine && teamMembers.length === 0 && (
                 <p className="text-[12.5px] text-[#bbb] mt-1">
                   No hay miembros en esta línea. Agrégalos en <strong>Empresa → Líneas</strong>.
                 </p>
