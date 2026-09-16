@@ -4,6 +4,7 @@ import {
   teamMonthStats,
   taskInMonth,
   isClosed,
+  isClosedInMonth,
   isBlocked,
   isLate,
   fmtShort,
@@ -34,7 +35,7 @@ export default function TeamView({
   const all = tasks.filter((t) => t.team_id === team.id)
   const monthTasks = all.filter((t) => taskInMonth(t, monthIdx))
   const total = monthTasks.length
-  const closed = monthTasks.filter(isClosed).length
+  const closed = monthTasks.filter((t) => isClosedInMonth(t, monthIdx)).length
   const pct = total ? Math.round((closed / total) * 100) : 0
   const blocked = all.filter(isBlocked).length
   const late = all.filter(isLate).length
@@ -51,9 +52,9 @@ export default function TeamView({
 
   const counts = ESTADOS.map((e) => ({
     e,
-    n: all.filter((t) => t.status === e).length,
+    n: monthTasks.filter((t) => t.status === e).length,
   }))
-  const tot = all.length
+  const tot = monthTasks.length
 
   const clients = [...new Set(monthTasks.map((t) => t.client).filter(Boolean))].sort()
 
@@ -178,7 +179,7 @@ export default function TeamView({
                 {(clients.length > 0 ? clients : ['(sin cliente)']).map((cl) => {
                   const ct = monthTasks.filter((t) => (t.client || '(sin cliente)') === cl)
                   const tt = ct.length
-                  const cer = ct.filter(isClosed).length
+                  const cer = ct.filter((t) => isClosedInMonth(t, monthIdx)).length
                   const pp = tt ? Math.round((cer / tt) * 100) : 0
                   const lg = lightOf(pp, tt)
                   return (

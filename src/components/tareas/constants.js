@@ -2,11 +2,11 @@
 export const ESTADOS = ['En proceso', 'Por revisar', 'Paralizado', 'Pendiente', 'Terminado']
 
 export const COL_META = {
-  'En proceso':  { color: '#FFB800', textColor: '#111' },
+  'En proceso': { color: '#FFB800', textColor: '#111' },
   'Por revisar': { color: '#3B6FE0', textColor: '#fff' },
-  'Paralizado':  { color: '#E14848', textColor: '#fff' },
-  'Pendiente':   { color: '#F0871F', textColor: '#fff' },
-  'Terminado':   { color: '#16A34A', textColor: '#fff' },
+  Paralizado: { color: '#E14848', textColor: '#fff' },
+  Pendiente: { color: '#F0871F', textColor: '#fff' },
+  Terminado: { color: '#16A34A', textColor: '#fff' },
 }
 
 // ─── Date helpers ────────────────────────────────────────────────────────────
@@ -46,7 +46,10 @@ export function currentMonthIndex() {
 export function fmtMonth(idx) {
   const year = Math.floor(idx / 12)
   const month = idx % 12
-  const label = new Date(year, month, 1).toLocaleDateString('es-VE', { month: 'long', year: 'numeric' })
+  const label = new Date(year, month, 1).toLocaleDateString('es-VE', {
+    month: 'long',
+    year: 'numeric',
+  })
   return label.charAt(0).toUpperCase() + label.slice(1)
 }
 
@@ -97,6 +100,17 @@ export function fmtShort(s) {
 // ─── Task state helpers ──────────────────────────────────────────────────────
 export function isClosed(task) {
   return task.status === 'Terminado'
+}
+
+/**
+ * Returns true if the task was actually closed during the given month
+ * (closed_date falls in that exact month), as opposed to taskInMonth's
+ * overlap rule which keeps a closed task "active" in every month between
+ * request_date and closed_date. Use this for "completadas este mes" counts
+ * so a single task isn't counted as completed in more than one month.
+ */
+export function isClosedInMonth(task, monthIdx) {
+  return isClosed(task) && taskEndMonth(task) === monthIdx
 }
 
 export function isLate(task) {
@@ -151,9 +165,9 @@ export function taskLight(task) {
  */
 export function lightOf(pct, total) {
   if (!total) return { label: 'Sin mov.', color: '#bbb', cls: 'none' }
-  if (pct >= 90) return { label: 'Verde',    color: '#16A34A', cls: 'green' }
+  if (pct >= 90) return { label: 'Verde', color: '#16A34A', cls: 'green' }
   if (pct >= 70) return { label: 'Amarillo', color: '#FFB800', cls: 'yellow' }
-  return           { label: 'Rojo',      color: '#E14848', cls: 'red' }
+  return { label: 'Rojo', color: '#E14848', cls: 'red' }
 }
 
 // ─── Team name validation ────────────────────────────────────────────────────
@@ -182,13 +196,21 @@ export function validateTeamName(name, currentName) {
  * @param {number} monthIdx   monthIndex value to scope to
  */
 export function teamMonthStats(teamId, allTasks, monthIdx) {
-  const all = allTasks.filter(t => t.team_id === teamId)
-  const tasks = all.filter(t => taskInMonth(t, monthIdx))
+  const all = allTasks.filter((t) => t.team_id === teamId)
+  const tasks = all.filter((t) => taskInMonth(t, monthIdx))
   const total = tasks.length
-  const closed = tasks.filter(isClosed).length
+  const closed = tasks.filter((t) => isClosedInMonth(t, monthIdx)).length
   const pct = total ? Math.round((closed / total) * 100) : 0
   const blocked = all.filter(isBlocked).length
   const late = all.filter(isLate).length
-  const support = all.filter(t => t.support_id && !isClosed(t)).length
-  return { teamId, total, cerradas: closed, pct, bloqueados: blocked, retrasados: late, apoyo: support }
+  const support = all.filter((t) => t.support_id && !isClosed(t)).length
+  return {
+    teamId,
+    total,
+    cerradas: closed,
+    pct,
+    bloqueados: blocked,
+    retrasados: late,
+    apoyo: support,
+  }
 }

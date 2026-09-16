@@ -1,4 +1,4 @@
-import { fmtMonth, lightOf, teamMonthStats, ESTADOS, COL_META } from './constants'
+import { fmtMonth, lightOf, teamMonthStats, taskInMonth, ESTADOS, COL_META } from './constants'
 import KpiCard from './KpiCard'
 
 const TEAM_PALETTES = [
@@ -118,7 +118,9 @@ export default function PanoramaView({ teams, tasks, monthIdx, onSelectTeam, onN
           {ranked.map((s, i) => {
             const lg = lightOf(s.pct, s.total)
             const isLead = withMov.length > 0 && i === 0 && s.total > 0
-            const teamTasks = tasks.filter((t) => t.team_id === s.team.id)
+            const teamTasks = tasks
+              .filter((t) => t.team_id === s.team.id)
+              .filter((t) => taskInMonth(t, monthIdx))
             const tot = teamTasks.length
             const counts = ESTADOS.map((e) => ({
               e,

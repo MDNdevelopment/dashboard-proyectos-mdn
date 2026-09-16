@@ -9,6 +9,7 @@ import {
   taskStartMonth,
   taskEndMonth,
   taskInMonth,
+  isClosedInMonth,
   fmtShort,
   isClosed,
   isLate,
@@ -214,17 +215,21 @@ describe('taskEndMonth', () => {
   })
 
   it('returns the month index of closed_date for a closed task', () => {
-    expect(taskEndMonth({ status: 'Terminado', closed_date: '2026-08-10', request_date: '2026-06-01' })).toBe(2026 * 12 + 7)
+    expect(
+      taskEndMonth({ status: 'Terminado', closed_date: '2026-08-10', request_date: '2026-06-01' }),
+    ).toBe(2026 * 12 + 7)
   })
 
   it('falls back to start month when closed but closed_date is missing', () => {
-    expect(taskEndMonth({ status: 'Terminado', closed_date: null, request_date: '2026-06-01' })).toBe(2026 * 12 + 5)
+    expect(
+      taskEndMonth({ status: 'Terminado', closed_date: null, request_date: '2026-06-01' }),
+    ).toBe(2026 * 12 + 5)
   })
 })
 
 // ─── taskInMonth ─────────────────────────────────────────────────────────────
 describe('taskInMonth', () => {
-  const JUN = 2026 * 12 + 5  // June 2026
+  const JUN = 2026 * 12 + 5 // June 2026
   const JUL = JUN + 1
   const AUG = JUN + 2
   const MAY = JUN - 1
@@ -276,6 +281,30 @@ describe('taskInMonth', () => {
   })
 })
 
+// ─── isClosedInMonth ─────────────────────────────────────────────────────────
+describe('isClosedInMonth', () => {
+  const JUN = 2026 * 12 + 5 // June 2026
+  const JUL = JUN + 1
+  const AUG = JUN + 2
+
+  it('returns true only for the exact month the task was closed in', () => {
+    const task = { status: 'Terminado', request_date: '2026-06-01', closed_date: '2026-08-15' }
+    expect(isClosedInMonth(task, JUN)).toBe(false)
+    expect(isClosedInMonth(task, JUL)).toBe(false)
+    expect(isClosedInMonth(task, AUG)).toBe(true)
+  })
+
+  it('returns false for an open task', () => {
+    const task = { status: 'En proceso', request_date: '2026-06-01', closed_date: null }
+    expect(isClosedInMonth(task, JUN)).toBe(false)
+  })
+
+  it('returns true for a task started and closed in the same month', () => {
+    const task = { status: 'Terminado', request_date: '2026-06-01', closed_date: '2026-06-20' }
+    expect(isClosedInMonth(task, JUN)).toBe(true)
+  })
+})
+
 // ─── lightOf ─────────────────────────────────────────────────────────────────
 describe('lightOf', () => {
   it('returns none when total is 0', () => {
@@ -302,7 +331,7 @@ describe('lightOf', () => {
 // ─── taskLight ───────────────────────────────────────────────────────────────
 describe('taskLight', () => {
   const future = '2099-12-31'
-  const past   = '2020-01-01'
+  const past = '2020-01-01'
 
   it('returns red for Paralizado status', () => {
     expect(taskLight({ status: 'Paralizado', due_date: future })).toBe('red')
@@ -341,7 +370,7 @@ describe('taskLight', () => {
 // ─── teamMonthStats ──────────────────────────────────────────────────────────
 describe('teamMonthStats', () => {
   const TEAM_ID = 'team-1'
-  const JUN = 2026 * 12 + 5  // June 2026
+  const JUN = 2026 * 12 + 5 // June 2026
 
   // task-1: started and closed in June
   // task-2: started in June, Paralizado, not closed, with support — also appears in Jun
@@ -349,11 +378,51 @@ describe('teamMonthStats', () => {
   // task-4: different team — must not count
   // task-5: started in July — must NOT appear in June
   const tasks = [
-    { id: '1', team_id: TEAM_ID, status: 'Terminado',  request_date: '2026-06-01', closed_date: '2026-06-15', due_date: '2099-12-31', support_id: null },
-    { id: '2', team_id: TEAM_ID, status: 'Paralizado', request_date: '2026-06-10', closed_date: null,          due_date: '2099-12-31', support_id: 'u1' },
-    { id: '3', team_id: TEAM_ID, status: 'En proceso', request_date: '2026-06-20', closed_date: null,          due_date: '2020-01-01', support_id: null },
-    { id: '4', team_id: 'other', status: 'Terminado',  request_date: '2026-06-01', closed_date: '2026-06-30',  due_date: null,         support_id: null },
-    { id: '5', team_id: TEAM_ID, status: 'Pendiente',  request_date: '2026-07-01', closed_date: null,          due_date: '2099-12-31', support_id: null },
+    {
+      id: '1',
+      team_id: TEAM_ID,
+      status: 'Terminado',
+      request_date: '2026-06-01',
+      closed_date: '2026-06-15',
+      due_date: '2099-12-31',
+      support_id: null,
+    },
+    {
+      id: '2',
+      team_id: TEAM_ID,
+      status: 'Paralizado',
+      request_date: '2026-06-10',
+      closed_date: null,
+      due_date: '2099-12-31',
+      support_id: 'u1',
+    },
+    {
+      id: '3',
+      team_id: TEAM_ID,
+      status: 'En proceso',
+      request_date: '2026-06-20',
+      closed_date: null,
+      due_date: '2020-01-01',
+      support_id: null,
+    },
+    {
+      id: '4',
+      team_id: 'other',
+      status: 'Terminado',
+      request_date: '2026-06-01',
+      closed_date: '2026-06-30',
+      due_date: null,
+      support_id: null,
+    },
+    {
+      id: '5',
+      team_id: TEAM_ID,
+      status: 'Pendiente',
+      request_date: '2026-07-01',
+      closed_date: null,
+      due_date: '2099-12-31',
+      support_id: null,
+    },
   ]
 
   it('only counts tasks for the given team', () => {
@@ -361,8 +430,30 @@ describe('teamMonthStats', () => {
     expect(teamMonthStats(TEAM_ID, tasks, JUN).total).toBe(3)
   })
 
-  it('cerradas counts Terminado tasks active in the month', () => {
+  it('cerradas counts Terminado tasks actually closed in that month', () => {
     expect(teamMonthStats(TEAM_ID, tasks, JUN).cerradas).toBe(1)
+  })
+
+  it('a task spanning multiple months is only counted as cerrada in its closed_date month, not every month it overlaps', () => {
+    // task-6: opened in June, closed in August → total (active) counts it in Jun/Jul/Aug,
+    // but cerradas must only count it in August.
+    const spanning = [
+      ...tasks,
+      {
+        id: '6',
+        team_id: TEAM_ID,
+        status: 'Terminado',
+        request_date: '2026-06-01',
+        closed_date: '2026-08-10',
+        due_date: null,
+        support_id: null,
+      },
+    ]
+    const JUL = JUN + 1
+    const AUG = JUN + 2
+    expect(teamMonthStats(TEAM_ID, spanning, JUN).cerradas).toBe(1) // task-1 only, task-6 not yet closed
+    expect(teamMonthStats(TEAM_ID, spanning, JUL).cerradas).toBe(0) // task-6 still not closed in July
+    expect(teamMonthStats(TEAM_ID, spanning, AUG).cerradas).toBe(1) // task-6 closed in August
   })
 
   it('pct is correct', () => {
@@ -391,7 +482,7 @@ describe('teamMonthStats', () => {
   it('task starting in July does NOT appear in June stats', () => {
     // In June: tasks 1,2,3 qualify; task-5 (July start) does not
     const s = teamMonthStats(TEAM_ID, tasks, JUN)
-    expect(s.total).toBe(3)  // same as the first test — task-5 excluded from June
+    expect(s.total).toBe(3) // same as the first test — task-5 excluded from June
   })
 })
 
