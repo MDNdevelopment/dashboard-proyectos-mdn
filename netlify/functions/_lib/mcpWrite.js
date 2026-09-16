@@ -6,17 +6,19 @@ let pool
 
 /**
  * Pool de conexión al rol Postgres `mcp_writer` (ver migraciones
- * supabase/migrations/*_mcp_writer_role.sql y *_mcp_writer_returning_select.sql).
- * Ese rol tiene GRANT INSERT en `public.tasks` — ninguna otra tabla, ni
- * UPDATE/DELETE siquiera ahí — así que aunque esta capa de validación tuviera
- * un hueco, la base física no deja hacer nada más que insertar tareas.
- * ADEMÁS tiene GRANT SELECT a nivel de columna, solo sobre las 8 columnas del
- * RETURNING de abajo: Postgres exige privilegio SELECT sobre las columnas que
- * un INSERT...RETURNING devuelve, no basta con INSERT — si agregas una
- * columna nueva al RETURNING, agrégala también al GRANT SELECT de la
- * migración o vuelve a romperse con "permission denied for table tasks".
+ * supabase/migrations/*_mcp_writer_role.sql y *_mcp_writer_returning_select.sql,
+ * y *_mcp_writer_meetings_cnp.sql para los GRANT de meetings/cnp_requests).
+ * El rol solo tiene GRANT INSERT/UPDATE/DELETE en las tablas puntuales que cada
+ * migración le otorga explícitamente — así que aunque esta capa de validación
+ * tuviera un hueco, la base física no deja hacer nada más que eso.
+ * ADEMÁS tiene GRANT SELECT (a nivel de columna en `tasks`, de tabla completa en
+ * `meetings`/`cnp_requests` — ver la migración de estas dos): Postgres exige
+ * privilegio SELECT sobre las columnas que un RETURNING/WHERE toca, no basta con
+ * INSERT/UPDATE — si agregas una columna nueva a un RETURNING de `tasks`,
+ * agrégala también al GRANT SELECT de esa migración o vuelve a romperse con
+ * "permission denied for table".
  */
-function getPool() {
+export function getWriterPool() {
   if (!pool) {
     if (!process.env.SUPABASE_WRITER_DB_URL) {
       throw new Error('SUPABASE_WRITER_DB_URL no configurada')
@@ -31,13 +33,45 @@ function getPool() {
   return pool
 }
 
-export class TaskValidationError extends Error {}
+export class ValidationError extends Error {}
+// Alias retrocompatible: el nombre histórico de este error en mcpWrite.js/mcpWrite.test.js.
+export const TaskValidationError = ValidationError
 
-function assertNonEmptyString(value, field) {
+export function assertNonEmptyString(value, field) {
   if (typeof value !== 'string' || !value.trim()) {
-    throw new TaskValidationError(`${field} es requerido`)
+    throw new ValidationError(`${field} es requerido`)
   }
   return value.trim()
+}
+
+export function requiredCompanyId() {
+  const companyId = process.env.MCP_COMPANY_ID
+  if (!companyId) throw new Error('MCP_COMPANY_ID no configurada')
+  return companyId
+}
+
+/**
+ * Arma la lista de asignaciones `"col" = $n` de un UPDATE parcial a partir de un
+ * whitelist de columnas escribibles — los NOMBRES de columna siempre vienen del
+ * array `allowedColumns` (literal en el código de cada tool, nunca de `patch`),
+ * los VALORES siempre van parametrizados. Evita dos problemas a la vez: una tool
+ * por campo (infla tools/list) y un SET armado concatenando claves del modelo
+ * (inyección SQL). `patch` es un objeto `{ columna: valor }`; solo se incluyen
+ * las claves presentes (permite patches parciales — omitir una clave dejar esa
+ * columna intacta). `startIndex` es el número de parámetro `$n` inicial (1-based).
+ * @returns {{ clauses: string[], values: any[] }}
+ */
+export function buildSet(patch, allowedColumns, startIndex = 1) {
+  const clauses = []
+  const values = []
+  let i = startIndex
+  for (const col of allowedColumns) {
+    if (!(col in patch)) continue
+    clauses.push(`${col} = $${i}`)
+    values.push(patch[col])
+    i += 1
+  }
+  return { clauses, values }
 }
 
 /**
@@ -65,14 +99,13 @@ export async function createTask({
   assertNonEmptyString(description, 'description')
   assertNonEmptyString(createdBy, 'created_by')
   if (!Array.isArray(assigneeIds) || assigneeIds.length === 0) {
-    throw new TaskValidationError('assignee_ids debe ser un array con al menos un responsable')
+    throw new ValidationError('assignee_ids debe ser un array con al menos un responsable')
   }
   const cleanAssignees = assigneeIds.map((id, i) => assertNonEmptyString(id, `assignee_ids[${i}]`))
 
-  const companyId = process.env.MCP_COMPANY_ID
-  if (!companyId) throw new Error('MCP_COMPANY_ID no configurada')
+  const companyId = requiredCompanyId()
 
-  const client_ = await getPool().connect()
+  const client_ = await getWriterPool().connect()
   try {
     const result = await client_.query(
       `insert into public.tasks

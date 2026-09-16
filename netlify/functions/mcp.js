@@ -1,5 +1,7 @@
 import { runReadOnlyQuery, listTables } from './_lib/db.js'
 import { createTask } from './_lib/mcpWrite.js'
+import { createMeeting, updateMeeting, deleteMeeting } from './_lib/mcpWriteMeetings.js'
+import { createCnp, updateCnp, softDeleteCnp } from './_lib/mcpWriteCnp.js'
 import { verifyToken } from './_lib/oauthCrypto.js'
 
 const json = (statusCode, body, extraHeaders = {}) => ({
@@ -99,6 +101,153 @@ const WRITER_TOOLS = [
       additionalProperties: false,
     },
   },
+  {
+    name: 'create_meeting',
+    description:
+      'Agenda una reunión nueva en el módulo de Reuniones, a nombre de quien está usando esta conexión ahora mismo. Antes de llamarla, resuelve con query_database los client_ids (metric_clients.id, si aplica) y los attendee_ids (users.user_id de personas activas) — nunca inventes esos IDs. Notifica automáticamente por app y correo a los participantes agregados.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'Asunto de la reunión' },
+        starts_at: { type: 'string', description: 'Fecha y hora de inicio, ISO 8601' },
+        ends_at: { type: 'string', description: 'Fecha y hora de fin, ISO 8601, si se indicó' },
+        modality: {
+          type: 'string',
+          enum: ['presencial', 'videollamada'],
+          description: "Modalidad (default 'presencial')",
+        },
+        location: { type: 'string', description: 'Lugar físico, si es presencial' },
+        meeting_url: { type: 'string', description: 'Link de la videollamada, si es videollamada' },
+        notes: { type: 'string' },
+        attendee_ids: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'user_id(s) de los participantes',
+        },
+        client_ids: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'uuid(s) de metric_clients, si la reunión es con una o varias marcas',
+        },
+      },
+      required: ['title', 'starts_at'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'update_meeting',
+    description:
+      'Edita una reunión existente (patch parcial: solo se cambian los campos que se envían). También sirve para reagendar (cambiar starts_at), marcar realizada/cancelar/desmarcar (campo status) y agregar la minuta. Resuelve el id con query_database primero.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'uuid de la reunión (meetings.id)' },
+        title: { type: 'string' },
+        starts_at: {
+          type: 'string',
+          description:
+            'ISO 8601; reagendar una reunión ya marcada realizada la vuelve a programada, salvo que se envíe status explícito',
+        },
+        ends_at: { type: 'string' },
+        modality: { type: 'string', enum: ['presencial', 'videollamada'] },
+        location: { type: 'string' },
+        meeting_url: { type: 'string' },
+        notes: { type: 'string' },
+        attendee_ids: { type: 'array', items: { type: 'string' } },
+        client_ids: { type: 'array', items: { type: 'string' } },
+        status: { type: 'string', enum: ['programada', 'realizada', 'cancelada'] },
+        minuta_url: { type: 'string', description: 'Link de Google Drive con la minuta' },
+        minuta_text: { type: 'string', description: 'Resumen corto de la reunión' },
+      },
+      required: ['id'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'delete_meeting',
+    description:
+      'Elimina una reunión definitivamente (borrado duro, no se puede deshacer). Resuelve el id con query_database primero.',
+    inputSchema: {
+      type: 'object',
+      properties: { id: { type: 'string', description: 'uuid de la reunión (meetings.id)' } },
+      required: ['id'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'create_cnp',
+    description:
+      'Crea una solicitud de Contenido No Planificado (CNP), a nombre de quien está usando esta conexión ahora mismo. Antes de llamarla, resuelve con query_database el client_id (metric_clients.id), el line_id (metric_lines.id) y el assignee_id (users.user_id), si aplican — nunca inventes esos IDs. Nace en estado Pendiente.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        client_id: { type: 'string', description: 'uuid de metric_clients' },
+        title: { type: 'string', description: 'Qué se pidió' },
+        line_id: { type: 'string', description: 'uuid de metric_lines' },
+        content: { type: 'string', description: 'Copy/contenido redactado del pedido' },
+        assignee_id: { type: 'string', description: 'user_id del responsable' },
+        refs: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: { url: { type: 'string' }, note: { type: 'string' } },
+          },
+          description: 'Referencias visuales (lista de {url, note})',
+        },
+        notes: { type: 'string' },
+        due_date: { type: 'string', description: 'Fecha límite, YYYY-MM-DD' },
+        is_print: {
+          type: 'boolean',
+          description: 'true si requiere impresión (activa el doble check antes de poder cerrarse)',
+        },
+      },
+      required: ['client_id', 'title'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'update_cnp',
+    description:
+      'Edita un CNP existente (patch parcial) y/o cambia su estado. Un CNP marcado is_print no puede pasar a Terminado sin la revisión del equipo y la aprobación de impresión — esos dos checks solo se hacen desde el dashboard (personas autorizadas específicas), esta tool los rechaza con el motivo si intentas cerrarlo sin ellos. Resuelve el id con query_database primero.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'uuid del CNP (cnp_requests.id)' },
+        line_id: { type: 'string' },
+        client_id: { type: 'string' },
+        title: { type: 'string' },
+        content: { type: 'string' },
+        assignee_id: { type: 'string' },
+        refs: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: { url: { type: 'string' }, note: { type: 'string' } },
+          },
+        },
+        notes: { type: 'string' },
+        due_date: { type: 'string' },
+        is_print: { type: 'boolean' },
+        status: {
+          type: 'string',
+          enum: ['Pendiente', 'En proceso', 'Por revisar', 'Paralizado', 'Terminado'],
+        },
+      },
+      required: ['id'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'delete_cnp',
+    description:
+      'Elimina un CNP (borrado lógico, recuperable desde la base de datos pero ya no aparece en la app). Resuelve el id con query_database primero.',
+    inputSchema: {
+      type: 'object',
+      properties: { id: { type: 'string', description: 'uuid del CNP (cnp_requests.id)' } },
+      required: ['id'],
+      additionalProperties: false,
+    },
+  },
 ]
 
 async function callTool(name, args, role, writerUserId) {
@@ -111,15 +260,45 @@ async function callTool(name, args, role, writerUserId) {
     const { rows, rowCount } = await runReadOnlyQuery(args.sql, args.limit)
     return { content: [{ type: 'text', text: JSON.stringify({ rowCount, rows }, null, 2) }] }
   }
+  // create_task/create_meeting/create_cnp: created_by NUNCA viene de args (ni del
+  // modelo) — lo resuelve el server a partir de qué contraseña individual se usó
+  // para autenticarse (ver oauth.js → resolveAuth()). Si args trajera un
+  // created_by, se ignora (el spread va antes). update_*/delete_*: no hay autor
+  // que fijar, pero repiten el mismo guard de role por defensa en profundidad.
   if (name === 'create_task') {
-    // Defensa en profundidad: aunque tools/list no la haya anunciado a un
-    // reader, tools/call la rechaza igual si el token no es de escritura.
     if (role !== 'writer') throw new Error('Esta herramienta requiere permisos de escritura')
-    // created_by NUNCA viene de args (ni del modelo): lo resuelve el server a
-    // partir de qué contraseña individual se usó para autenticarse — ver
-    // oauth.js → resolveAuth(). Si args trajera un created_by, se ignora.
     const task = await createTask({ ...(args ?? {}), created_by: writerUserId })
     return { content: [{ type: 'text', text: JSON.stringify(task, null, 2) }] }
+  }
+  if (name === 'create_meeting') {
+    if (role !== 'writer') throw new Error('Esta herramienta requiere permisos de escritura')
+    const meeting = await createMeeting({ ...(args ?? {}), created_by: writerUserId })
+    return { content: [{ type: 'text', text: JSON.stringify(meeting, null, 2) }] }
+  }
+  if (name === 'update_meeting') {
+    if (role !== 'writer') throw new Error('Esta herramienta requiere permisos de escritura')
+    const meeting = await updateMeeting(args ?? {})
+    return { content: [{ type: 'text', text: JSON.stringify(meeting, null, 2) }] }
+  }
+  if (name === 'delete_meeting') {
+    if (role !== 'writer') throw new Error('Esta herramienta requiere permisos de escritura')
+    const deleted = await deleteMeeting(args ?? {})
+    return { content: [{ type: 'text', text: JSON.stringify(deleted, null, 2) }] }
+  }
+  if (name === 'create_cnp') {
+    if (role !== 'writer') throw new Error('Esta herramienta requiere permisos de escritura')
+    const cnp = await createCnp({ ...(args ?? {}), created_by: writerUserId })
+    return { content: [{ type: 'text', text: JSON.stringify(cnp, null, 2) }] }
+  }
+  if (name === 'update_cnp') {
+    if (role !== 'writer') throw new Error('Esta herramienta requiere permisos de escritura')
+    const cnp = await updateCnp(args ?? {})
+    return { content: [{ type: 'text', text: JSON.stringify(cnp, null, 2) }] }
+  }
+  if (name === 'delete_cnp') {
+    if (role !== 'writer') throw new Error('Esta herramienta requiere permisos de escritura')
+    const deleted = await softDeleteCnp(args ?? {})
+    return { content: [{ type: 'text', text: JSON.stringify(deleted, null, 2) }] }
   }
   throw new Error(`Unknown tool: ${name}`)
 }

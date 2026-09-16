@@ -68,6 +68,27 @@ export function autoPieceLabel(title, index) {
 }
 
 /**
+ * Regla de negocio: un CNP impreso no puede pasar a "Terminado" sin las dos
+ * aprobaciones (revisión del equipo + aprobación de impresión). Un CNP no impreso
+ * no tiene esta restricción. Pura (sin `supabase`) para poder reusarse tanto desde
+ * la UI (`cnpApi.js`) como desde el servidor MCP (`netlify/functions/_lib/mcpWriteCnp.js`).
+ */
+export function canCloseCnp(cnp) {
+  if (!cnp.is_print) return true
+  return Boolean(cnp.team_checked_at) && Boolean(cnp.print_approved_at)
+}
+
+/**
+ * Motivo legible de por qué un CNP impreso no puede cerrarse todavía (para mostrar
+ * en el select de estado / botón de cierre). Devuelve null si ya puede cerrarse.
+ */
+export function closeBlockedReason(cnp) {
+  if (canCloseCnp(cnp)) return null
+  if (!cnp.team_checked_at) return 'Falta la revisión del equipo'
+  return 'Falta la aprobación de impresión'
+}
+
+/**
  * Crece/recorta la lista de piezas a `count` elementos, preservando `done`/`label` de las
  * que ya existían (incluidas las editadas a mano) y generando las nuevas con
  * autoPieceLabel. count <= 1 devuelve [] (ver convención de cnpPieceCount).

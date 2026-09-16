@@ -81,6 +81,25 @@ export async function runReadOnlyQuery(sql, limit) {
   }
 }
 
+/**
+ * Ejecuta un SELECT parametrizado sobre el pool de solo lectura (`mcp_readonly`)
+ * para uso INTERNO del servidor — nunca se expone como tool. Lo usan las tools
+ * de escritura de meetings/cnp (mcpWriteMeetings.js, mcpWriteCnp.js) para
+ * resolver snapshots (nombre/línea de un cliente, fila actual de un CNP) antes
+ * de escribir con `mcp_writer`. A diferencia de runReadOnlyQuery, `sql` es
+ * siempre un literal del código (nunca texto libre del modelo), así que no
+ * necesita `assertReadOnlySelect` ni el envoltorio LIMIT.
+ */
+export async function runInternalQuery(sql, params = []) {
+  const client = await getPool().connect()
+  try {
+    const result = await client.query(sql, params)
+    return { rows: result.rows, rowCount: result.rowCount }
+  } finally {
+    client.release()
+  }
+}
+
 /** Lista tablas y columnas del schema public para que el modelo conozca el esquema disponible. */
 export async function listTables() {
   const client = await getPool().connect()

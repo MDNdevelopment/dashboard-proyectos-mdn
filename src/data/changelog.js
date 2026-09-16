@@ -234,6 +234,7 @@ export const CHANGELOG = [
       'La conexión de Claude a la base de datos ahora permite que un pequeño grupo autorizado, además de consultar, le pida por voz o texto que cree tareas directamente ("asígnale a X una tarea de Y para el jueves"). El resto del equipo sigue teniendo solo consulta, como antes.',
       'Corregido: al crear o editar un CNP, el equipo de Diseño ahora aparece siempre como responsable posible, sin importar qué línea esté seleccionada.',
       'Corregido: en Gestión de Tareas → Todos y en el dashboard por equipo, una tarea que se abría en un mes y se cerraba en otro se contaba como "completada" en cada uno de esos meses. Ahora una tarea cerrada solo cuenta como completada en el mes en que realmente se cerró.',
+      'El pequeño grupo autorizado a crear tareas por voz/texto desde la conexión de Claude ahora también puede agendar, editar, reagendar, marcar realizada/cancelar y eliminar reuniones, y crear, editar, cambiar de estado y eliminar Contenido No Planificado (CNP), directamente desde el chat.',
     ],
   },
   {

@@ -4,7 +4,9 @@
  * 20260901000000_create_cnp.sql).
  */
 import { supabase } from '../../supabase'
-import { cnpPieceCount, cnpPiecesDelivered } from './constants'
+import { cnpPieceCount, cnpPiecesDelivered, canCloseCnp, closeBlockedReason } from './constants'
+
+export { canCloseCnp, closeBlockedReason }
 
 /**
  * Carga los CNP de una empresa, opcionalmente acotados a una línea.
@@ -62,26 +64,6 @@ export async function setPrintApproval(id, approved, userId) {
     ? { print_approved_at: new Date().toISOString(), print_approved_by: userId }
     : { print_approved_at: null, print_approved_by: null }
   return supabase.from('cnp_requests').update(patch).eq('id', id).select().single()
-}
-
-/**
- * Regla de negocio: un CNP impreso no puede pasar a "Terminado" sin las dos
- * aprobaciones (revisión del equipo + aprobación de impresión). Un CNP no impreso
- * no tiene esta restricción.
- */
-export function canCloseCnp(cnp) {
-  if (!cnp.is_print) return true
-  return Boolean(cnp.team_checked_at) && Boolean(cnp.print_approved_at)
-}
-
-/**
- * Motivo legible de por qué un CNP impreso no puede cerrarse todavía (para mostrar
- * en el select de estado / botón de cierre). Devuelve null si ya puede cerrarse.
- */
-export function closeBlockedReason(cnp) {
-  if (canCloseCnp(cnp)) return null
-  if (!cnp.team_checked_at) return 'Falta la revisión del equipo'
-  return 'Falta la aprobación de impresión'
 }
 
 /**

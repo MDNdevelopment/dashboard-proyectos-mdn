@@ -9,10 +9,24 @@ vi.mock('./mcpWrite.js', () => ({
   createTask: vi.fn(),
 }))
 
+vi.mock('./mcpWriteMeetings.js', () => ({
+  createMeeting: vi.fn(),
+  updateMeeting: vi.fn(),
+  deleteMeeting: vi.fn(),
+}))
+
+vi.mock('./mcpWriteCnp.js', () => ({
+  createCnp: vi.fn(),
+  updateCnp: vi.fn(),
+  softDeleteCnp: vi.fn(),
+}))
+
 process.env.MCP_OAUTH_SIGNING_SECRET = 'test-signing-secret'
 
 const { runReadOnlyQuery, listTables } = await import('./db.js')
 const { createTask } = await import('./mcpWrite.js')
+const { createMeeting, updateMeeting, deleteMeeting } = await import('./mcpWriteMeetings.js')
+const { createCnp, updateCnp, softDeleteCnp } = await import('./mcpWriteCnp.js')
 const { handler, checkBearerToken } = await import('../mcp.js')
 const { issueToken } = await import('./oauthCrypto.js')
 
@@ -95,13 +109,23 @@ describe('mcp.js handler', () => {
     expect(names).toEqual(['list_tables', 'query_database'])
   })
 
-  it('responde tools/list con create_task incluida para un token writer', async () => {
+  it('responde tools/list con las 7 tools de escritura incluidas para un token writer', async () => {
     const res = await handler(
       makeEvent({ token: writerToken(), body: { jsonrpc: '2.0', id: 2, method: 'tools/list' } }),
     )
     const parsed = JSON.parse(res.body)
     const names = parsed.result.tools.map((t) => t.name)
-    expect(names).toEqual(['list_tables', 'query_database', 'create_task'])
+    expect(names).toEqual([
+      'list_tables',
+      'query_database',
+      'create_task',
+      'create_meeting',
+      'update_meeting',
+      'delete_meeting',
+      'create_cnp',
+      'update_cnp',
+      'delete_cnp',
+    ])
   })
 
   it('tools/call list_tables delega en listTables()', async () => {
@@ -238,6 +262,145 @@ describe('mcp.js handler', () => {
     const parsed = JSON.parse(res.body)
     expect(parsed.result.isError).toBe(true)
     expect(parsed.result.content[0].text).toMatch(/team_id/)
+  })
+
+  it('tools/call create_meeting con token writer delega en createMeeting() con el created_by resuelto del token', async () => {
+    createMeeting.mockResolvedValue({ id: 'meeting-1', status: 'programada' })
+    const args = { title: 'Kickoff', starts_at: '2026-10-01T14:00:00Z' }
+    const res = await handler(
+      makeEvent({
+        token: writerToken('writer-uid-1'),
+        body: {
+          jsonrpc: '2.0',
+          id: 12,
+          method: 'tools/call',
+          params: { name: 'create_meeting', arguments: args },
+        },
+      }),
+    )
+    const parsed = JSON.parse(res.body)
+    expect(createMeeting).toHaveBeenCalledWith({ ...args, created_by: 'writer-uid-1' })
+    expect(parsed.result.content[0].text).toContain('programada')
+  })
+
+  it('tools/call create_meeting con token reader devuelve isError:true y no llama a createMeeting', async () => {
+    const res = await handler(
+      makeEvent({
+        body: {
+          jsonrpc: '2.0',
+          id: 13,
+          method: 'tools/call',
+          params: { name: 'create_meeting', arguments: { title: 'x', starts_at: 'y' } },
+        },
+      }),
+    )
+    const parsed = JSON.parse(res.body)
+    expect(createMeeting).not.toHaveBeenCalled()
+    expect(parsed.result.isError).toBe(true)
+    expect(parsed.result.content[0].text).toMatch(/escritura/)
+  })
+
+  it('tools/call update_meeting delega en updateMeeting() sin inyectar created_by', async () => {
+    updateMeeting.mockResolvedValue({ id: 'meeting-1', status: 'cancelada' })
+    const args = { id: 'meeting-1', status: 'cancelada' }
+    await handler(
+      makeEvent({
+        token: writerToken('writer-uid-1'),
+        body: {
+          jsonrpc: '2.0',
+          id: 14,
+          method: 'tools/call',
+          params: { name: 'update_meeting', arguments: args },
+        },
+      }),
+    )
+    expect(updateMeeting).toHaveBeenCalledWith(args)
+  })
+
+  it('tools/call delete_meeting delega en deleteMeeting()', async () => {
+    deleteMeeting.mockResolvedValue({ id: 'meeting-1' })
+    await handler(
+      makeEvent({
+        token: writerToken(),
+        body: {
+          jsonrpc: '2.0',
+          id: 15,
+          method: 'tools/call',
+          params: { name: 'delete_meeting', arguments: { id: 'meeting-1' } },
+        },
+      }),
+    )
+    expect(deleteMeeting).toHaveBeenCalledWith({ id: 'meeting-1' })
+  })
+
+  it('tools/call create_cnp con token writer delega en createCnp() con el created_by resuelto del token', async () => {
+    createCnp.mockResolvedValue({ id: 'cnp-1', status: 'Pendiente' })
+    const args = { client_id: 'client-1', title: 'Post urgente' }
+    const res = await handler(
+      makeEvent({
+        token: writerToken('writer-uid-1'),
+        body: {
+          jsonrpc: '2.0',
+          id: 16,
+          method: 'tools/call',
+          params: { name: 'create_cnp', arguments: args },
+        },
+      }),
+    )
+    const parsed = JSON.parse(res.body)
+    expect(createCnp).toHaveBeenCalledWith({ ...args, created_by: 'writer-uid-1' })
+    expect(parsed.result.content[0].text).toContain('Pendiente')
+  })
+
+  it('tools/call create_cnp con token reader devuelve isError:true y no llama a createCnp', async () => {
+    const res = await handler(
+      makeEvent({
+        body: {
+          jsonrpc: '2.0',
+          id: 17,
+          method: 'tools/call',
+          params: { name: 'create_cnp', arguments: { client_id: 'x', title: 'y' } },
+        },
+      }),
+    )
+    const parsed = JSON.parse(res.body)
+    expect(createCnp).not.toHaveBeenCalled()
+    expect(parsed.result.isError).toBe(true)
+    expect(parsed.result.content[0].text).toMatch(/escritura/)
+  })
+
+  it('tools/call update_cnp propaga como isError:true el rechazo por doble check de impresión pendiente', async () => {
+    updateCnp.mockRejectedValue(new Error('Falta la aprobación de impresión'))
+    const res = await handler(
+      makeEvent({
+        token: writerToken(),
+        body: {
+          jsonrpc: '2.0',
+          id: 18,
+          method: 'tools/call',
+          params: { name: 'update_cnp', arguments: { id: 'cnp-1', status: 'Terminado' } },
+        },
+      }),
+    )
+    const parsed = JSON.parse(res.body)
+    expect(parsed.result.isError).toBe(true)
+    expect(parsed.result.content[0].text).toMatch(/impresión/)
+  })
+
+  it('tools/call delete_cnp delega en softDeleteCnp()', async () => {
+    softDeleteCnp.mockResolvedValue({ id: 'cnp-1' })
+    await handler(
+      makeEvent({
+        token: writerToken(),
+        body: {
+          jsonrpc: '2.0',
+          id: 19,
+          method: 'tools/call',
+          params: { name: 'delete_cnp', arguments: { id: 'cnp-1' } },
+        },
+      }),
+    )
+    expect(softDeleteCnp).toHaveBeenCalledWith({ id: 'cnp-1' })
   })
 
   it('tools/call con nombre de tool desconocido devuelve isError:true', async () => {
