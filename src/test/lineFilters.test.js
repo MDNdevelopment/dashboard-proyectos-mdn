@@ -104,6 +104,21 @@ describe('crossLineUserIds', () => {
     expect(ids).not.toContain('u-e')
   })
 
+  it('ignora la fila is_management al calcular el pool (no se auto-alimenta)', () => {
+    // Igual que is_general: si ya se corrió withDerivedGeneralMembers, la línea "Alta
+    // Gerencia" (is_management) tiene member_user_ids poblado con u-d. Si se contara como
+    // línea real, u-d (sin línea real, nivel de dirección) desaparecería del pool en la
+    // siguiente pasada — caso real: Juan Lauretta no podía ser asignado como responsable.
+    const MANAGEMENT = {
+      id: 'line-management',
+      name: 'Alta Gerencia',
+      is_management: true,
+      member_user_ids: ['u-d'],
+    }
+    const ids = crossLineUserIds(USERS, [LINE_1, LINE_2, MANAGEMENT])
+    expect(ids).toContain('u-d')
+  })
+
   it('regresión: con una lista de líneas incompleta, no se "traga" a miembros de líneas ausentes', () => {
     // Si a crossLineUserIds solo se le pasan las líneas VISIBLES para un usuario (no todas
     // las de la empresa), un miembro de una línea que ese usuario no ve parecería "sin línea".

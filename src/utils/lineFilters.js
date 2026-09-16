@@ -36,8 +36,15 @@ export function teamMemberUsers(users, team, currentUserId = null) {
  * @returns {string[]} user_ids sin línea real asignada
  */
 export function crossLineUserIds(users, allLines) {
+  // is_general e is_management son líneas virtuales derivadas (ver withDerivedGeneralMembers
+  // en lineMembers.js): su member_user_ids se calcula A PARTIR de crossLineUserIds, así que
+  // deben excluirse aquí también — si no, un usuario de Alta Gerencia (is_management) ya
+  // "resuelto" en una carga previa se cuenta como asignado a una línea real y desaparece del
+  // pool transversal en cualquier otro selector.
   const assignedIds = new Set(
-    (allLines ?? []).filter((l) => !l.is_general).flatMap((l) => l.member_user_ids ?? []),
+    (allLines ?? [])
+      .filter((l) => !l.is_general && !l.is_management)
+      .flatMap((l) => l.member_user_ids ?? []),
   )
   return (users ?? [])
     .filter((u) => !u.deleted_at && !assignedIds.has(u.user_id))
