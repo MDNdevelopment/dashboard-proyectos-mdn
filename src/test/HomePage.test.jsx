@@ -18,6 +18,7 @@ vi.mock('../supabase', () => ({
   supabase: createSupabaseMock({
     tables: {
       tasks: () => makeQuery(globalThis.__MOCK_TASKS_OVERRIDE__ ?? MOCK_TASKS),
+      cnp_requests: () => makeQuery(globalThis.__MOCK_CNPS_OVERRIDE__ ?? MOCK_CNPS),
       users: () => makeQuery(MOCK_EMPLOYEES),
       metric_clients: () => makeQuery(globalThis.__MOCK_CLIENTS_OVERRIDE__ ?? MOCK_CLIENTS),
       metric_lines: () => makeQuery(globalThis.__MOCK_METRIC_LINES__ ?? []),
@@ -79,6 +80,28 @@ const MOCK_TASKS = [
     company_id: 'co-1',
     assignee_ids: ['u1'],
     support_id: null,
+    status: 'Terminado',
+    due_date: TODAY_PAST,
+  },
+]
+const MOCK_CNPS = [
+  // Responsable = u1, activo, atrasado
+  { id: 'cnp1', company_id: 'co-1', assignee_id: 'u1', status: 'En proceso', due_date: TODAY_PAST },
+  // Responsable = u1, activo, no atrasado
+  {
+    id: 'cnp2',
+    company_id: 'co-1',
+    assignee_id: 'u1',
+    status: 'En proceso',
+    due_date: TODAY_FUTURE,
+  },
+  // De otro usuario, no debe contar para u1
+  { id: 'cnp3', company_id: 'co-1', assignee_id: 'u2', status: 'En proceso', due_date: TODAY_PAST },
+  // Terminado — no cuenta como activo ni atrasado aunque due_date esté vencido
+  {
+    id: 'cnp4',
+    company_id: 'co-1',
+    assignee_id: 'u1',
     status: 'Terminado',
     due_date: TODAY_PAST,
   },
@@ -290,6 +313,49 @@ describe('HomePage — Mis tareas (nivel 1)', () => {
         '/tareas?view=base&assignee=u1&fAlert=late',
       )
     })
+  })
+})
+
+describe('HomePage — CNP asignados', () => {
+  it('cuenta solo los CNP activos donde el usuario es responsable', async () => {
+    renderPage({ access_level: 1 })
+    // cnp1 y cnp2 son de u1 y están activos; cnp4 es de u1 pero está Terminado → no cuenta
+    await waitFor(() => {
+      const card = screen.getByText('CNP asignados').closest('div')
+      expect(within(card).getByText('2')).toBeInTheDocument()
+    })
+  })
+
+  it('muestra la cantidad de CNP atrasados como sub-etiqueta', async () => {
+    renderPage({ access_level: 1 })
+    // cnp1 está atrasado; cnp2 no; cnp4 está Terminado (excluido por isLate)
+    await waitFor(() => {
+      expect(screen.getByText('1 atrasado(s)')).toBeInTheDocument()
+    })
+  })
+
+  it('la card "CNP asignados" es un enlace clickeable a Base de CNP filtrado por responsable', async () => {
+    renderPage({ access_level: 1 })
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: /cnp asignados/i })).toHaveAttribute(
+        'href',
+        '/cnp?view=base&assignee=u1',
+      )
+    })
+  })
+
+  it('NO se muestra cuando can("cnp") es false', async () => {
+    useAuth.mockReturnValue({
+      userProfile: { user_id: 'u1', company_id: 'co-1', access_level: 1, first_name: 'Georgina' },
+      can: (key) => key !== 'cnp',
+    })
+    render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>,
+    )
+    await waitFor(() => expect(screen.getByText(/asignadas activas/i)).toBeInTheDocument())
+    expect(screen.queryByText(/cnp asignados/i)).not.toBeInTheDocument()
   })
 })
 

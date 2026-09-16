@@ -15,6 +15,7 @@ const CLIENTS_BY_ID = new Map([
 
 const USERS_MAP = new Map([
   ['u1', { user_id: 'u1', first_name: 'Ana', last_name: 'Gómez', avatar_url: null }],
+  ['u2', { user_id: 'u2', first_name: 'Beto', last_name: 'Ruiz', avatar_url: null }],
 ])
 
 function makeCnp(overrides) {
@@ -55,9 +56,9 @@ const CNPS = [
   }),
 ]
 
-function renderView(cnps = CNPS) {
+function renderView(cnps = CNPS, initialEntries = ['/']) {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={initialEntries}>
       <CnpBaseView
         cnps={cnps}
         clientsById={CLIENTS_BY_ID}
@@ -105,5 +106,28 @@ describe('CnpBaseView — orden de columnas al hacer click en el header', () => 
     await user.click(screen.getByText('Título'))
     const rows = screen.getAllByRole('row').slice(1)
     expect(within(rows[0]).getByText(/Tarea A/)).toBeInTheDocument()
+  })
+})
+
+describe('CnpBaseView — filtro por responsable', () => {
+  const CNPS_WITH_ASSIGNEE = [
+    makeCnp({ id: 'cnp-u1', client_id: 'c-zeta', title: 'De Ana', assignee_id: 'u1' }),
+    makeCnp({ id: 'cnp-u2', client_id: 'c-alfa', title: 'De Beto', assignee_id: 'u2' }),
+    makeCnp({ id: 'cnp-sin', client_id: 'c-medio', title: 'Sin responsable', assignee_id: null }),
+  ]
+
+  it('el filtro "Responsable" limita la tabla a los CNP de ese responsable', async () => {
+    const user = userEvent.setup()
+    renderView(CNPS_WITH_ASSIGNEE)
+    await user.selectOptions(screen.getByDisplayValue('Responsable: todos'), 'u1')
+    expect(screen.getByText('De Ana')).toBeInTheDocument()
+    expect(screen.queryByText('De Beto')).not.toBeInTheDocument()
+    expect(screen.queryByText('Sin responsable')).not.toBeInTheDocument()
+  })
+
+  it('lee el filtro inicial desde el query param ?assignee=', () => {
+    renderView(CNPS_WITH_ASSIGNEE, ['/?assignee=u2'])
+    expect(screen.getByText('De Beto')).toBeInTheDocument()
+    expect(screen.queryByText('De Ana')).not.toBeInTheDocument()
   })
 })

@@ -231,6 +231,18 @@ const ICON_LATE = (
     <path d="M5.5 1.5h5M3 3l1-1M13 3l-1-1" strokeLinecap="round" />
   </svg>
 )
+const ICON_CNP = (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.7"
+  >
+    <path d="M9 1 2.5 9.5H7L6.5 15 13.5 6.5H9L9 1Z" strokeLinejoin="round" strokeLinecap="round" />
+  </svg>
+)
 const ICON_SUPPORT = (
   <svg
     width="16"
@@ -391,6 +403,8 @@ export default function HomePage() {
 
   const [tasks, setTasks] = useState([])
   const [loadingTasks, setLoadingTasks] = useState(true)
+  const [cnps, setCnps] = useState([])
+  const [loadingCnps, setLoadingCnps] = useState(true)
   const [companyCounts, setCompanyCounts] = useState({ empleados: null })
   const [lines, setLines] = useState([])
   const [metricReports, setMetricReports] = useState([])
@@ -415,6 +429,7 @@ export default function HomePage() {
   // Nivel 3 no-admin: lidera una línea, ve tareas y salud de su línea (pero no el resumen de empresa).
   const isLineLead = userProfile?.access_level === 3 && !isDirector
   const showTareas = can('tareas')
+  const showCnp = can('cnp')
   const showReportes = can('reportes')
   const showEmpresa = can('empresa')
   const showEmpresaClientes = can('empresa.clientes')
@@ -441,6 +456,27 @@ export default function HomePage() {
       cancelled = true
     }
   }, [userProfile?.company_id, showTareas])
+
+  useEffect(() => {
+    if (!userProfile?.company_id || !showCnp) {
+      setLoadingCnps(false)
+      return
+    }
+    let cancelled = false
+    supabase
+      .from('cnp_requests')
+      .select('*')
+      .eq('company_id', userProfile.company_id)
+      .is('deleted_at', null)
+      .then(({ data, error }) => {
+        if (cancelled) return
+        setCnps(error ? [] : (data ?? []))
+        setLoadingCnps(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [userProfile?.company_id, showCnp])
 
   // Reuniones de la semana actual (lunes a domingo) — se filtran a "las mías" client-side,
   // mismo patrón que "Mis tareas".
@@ -520,6 +556,8 @@ export default function HomePage() {
   const activeTasks = tasks.filter((t) => !isClosed(t))
   const myTasks = activeTasks.filter((t) => (t.assignee_ids ?? []).includes(myUserId))
   const myLateTasks = myTasks.filter(isLate)
+  const myCnps = cnps.filter((c) => !isClosed(c) && c.assignee_id === myUserId)
+  const myLateCnps = myCnps.filter(isLate)
   const mySupportTasks = activeTasks.filter((t) => t.support_id === myUserId)
   const mySupportLateTasks = mySupportTasks.filter(isLate)
   const companyLateTasks = activeTasks.filter(isLate)
@@ -651,7 +689,7 @@ export default function HomePage() {
         )}
 
         {/* Mis tareas */}
-        {showTareas && (
+        {(showTareas || showCnp) && (
           <section className="mb-8 rise-in" style={{ animationDelay: '80ms' }}>
             <div className="flex items-center gap-2 mb-3">
               <span className="w-1.5 h-4 rounded-full bg-[#ccc]" aria-hidden="true" />
@@ -660,22 +698,42 @@ export default function HomePage() {
               </h2>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <KpiCard
-                label="Asignadas activas"
-                value={loadingTasks ? '—' : myTasks.length}
-                icon={ICON_ASSIGNED}
-                to={`/tareas?view=base&assignee=${myUserId}`}
-                linkLabel="Ver mis tareas"
-              />
-              <KpiCard
-                label="Atrasadas"
-                value={loadingTasks ? '—' : myLateTasks.length}
-                accent={myLateTasks.length > 0 ? '#E14848' : '#111'}
-                icon={ICON_LATE}
-                iconColor={myLateTasks.length > 0 ? '#E14848' : '#FFB800'}
-                to={`/tareas?view=base&assignee=${myUserId}&fAlert=late`}
-                linkLabel="Ver atrasadas"
-              />
+              {showTareas && (
+                <Fragment>
+                  <KpiCard
+                    label="Asignadas activas"
+                    value={loadingTasks ? '—' : myTasks.length}
+                    icon={ICON_ASSIGNED}
+                    to={`/tareas?view=base&assignee=${myUserId}`}
+                    linkLabel="Ver mis tareas"
+                  />
+                  <KpiCard
+                    label="Atrasadas"
+                    value={loadingTasks ? '—' : myLateTasks.length}
+                    accent={myLateTasks.length > 0 ? '#E14848' : '#111'}
+                    icon={ICON_LATE}
+                    iconColor={myLateTasks.length > 0 ? '#E14848' : '#FFB800'}
+                    to={`/tareas?view=base&assignee=${myUserId}&fAlert=late`}
+                    linkLabel="Ver atrasadas"
+                  />
+                </Fragment>
+              )}
+              {showCnp && (
+                <KpiCard
+                  label="CNP asignados"
+                  value={loadingCnps ? '—' : myCnps.length}
+                  sub={
+                    !loadingCnps && myLateCnps.length > 0
+                      ? `${myLateCnps.length} atrasado(s)`
+                      : undefined
+                  }
+                  accent={myLateCnps.length > 0 ? '#E14848' : '#111'}
+                  icon={ICON_CNP}
+                  iconColor={myLateCnps.length > 0 ? '#E14848' : '#FFB800'}
+                  to={`/cnp?view=base&assignee=${myUserId}`}
+                  linkLabel="Ver mis CNP"
+                />
+              )}
               {isDirector && (
                 <KpiCard
                   label="Apoyo de dirección"

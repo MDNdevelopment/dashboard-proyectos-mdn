@@ -12,6 +12,8 @@ export const CHANGELOG = [
     version: '1.2.0',
     title: 'Mejoras en Campañas y Empresa',
     changes: [
+      'En el Inicio, junto a "Mis tareas" ahora hay una card con tus CNP asignados y cuántos están atrasados; al hacer clic vas directo a la Base de CNP filtrada por tu nombre.',
+      'En CNP → Base ahora puedes filtrar por responsable, además de estado, cliente e impresión.',
       'MAPPI ahora sabe quién lleva cada cuenta (línea, jefa de línea, social media, diseñador y audiovisual asignados), puede buscar personas por cargo o departamento y responder cuánto se invierte en pauta pagada por cliente.',
       'Corregido: algunas respuestas de MAPPI aparecían con un espacio o salto de línea en blanco antes del texto.',
       'Campañas y Ads ahora se ven por línea de negocio: elige una línea arriba o "Todos". Las jefas de línea ven su línea por defecto.',

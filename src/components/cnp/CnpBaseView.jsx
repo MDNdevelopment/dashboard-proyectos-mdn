@@ -88,6 +88,9 @@ export default function CnpBaseView({
   )
   const [printFilter, setPrintFilter] = useState(() => initialFilter?.print ?? 'all')
   const [alertFilter, setAlertFilter] = useState(() => initialFilter?.alert ?? '')
+  const [assigneeFilter, setAssigneeFilter] = useState(
+    () => initialFilter?.assignee ?? searchParams.get('assignee') ?? '',
+  )
   // Orden por columna al hacer click en el header — default: más reciente primero, igual
   // al orden que ya traía `cnps` (created_at desc, ver cnp_requests_company_line_idx).
   const [sortKey, setSortKey] = useState('created_at')
@@ -97,9 +100,17 @@ export default function CnpBaseView({
     .map((id) => ({ id, name: clientsById.get(id)?.name ?? 'Sin cliente' }))
     .sort((a, b) => a.name.localeCompare(b.name))
 
+  const assigneeOptions = [...new Set(cnps.map((c) => c.assignee_id).filter(Boolean))]
+    .map((id) => {
+      const u = usersMap.get(id)
+      return { id, name: u ? `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() : 'Desconocido' }
+    })
+    .sort((a, b) => a.name.localeCompare(b.name))
+
   const filtered = cnps.filter((c) => {
     if (statusFilter !== 'all' && statusFilter && c.status !== statusFilter) return false
     if (clientFilter && c.client_id !== clientFilter) return false
+    if (assigneeFilter && c.assignee_id !== assigneeFilter) return false
     if (printFilter === 'print' && !c.is_print) return false
     if (printFilter === 'noprint' && c.is_print) return false
     if (printFilter === 'pending' && !(c.is_print && !c.print_approved_at)) return false
@@ -128,20 +139,22 @@ export default function CnpBaseView({
     }
   }
 
-  const hasFilters = search || statusFilter || clientFilter || printFilter !== 'all' || alertFilter
+  const hasFilters =
+    search || statusFilter || clientFilter || assigneeFilter || printFilter !== 'all' || alertFilter
   const activeClientName = clientFilter ? (clientsById.get(clientFilter)?.name ?? null) : null
 
   function clearFilters() {
     setSearch('')
     setStatusFilter('')
     setClientFilter('')
+    setAssigneeFilter('')
     setPrintFilter('all')
     setAlertFilter('')
   }
 
   return (
     <div className="space-y-1.5">
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
         <div className="relative col-span-2 sm:col-span-1">
           <svg
             className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#999] pointer-events-none"
@@ -183,6 +196,18 @@ export default function CnpBaseView({
           {clientOptions.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
+            </option>
+          ))}
+        </select>
+        <select
+          value={assigneeFilter}
+          onChange={(e) => setAssigneeFilter(e.target.value)}
+          className="input-base text-[14.5px] py-2"
+        >
+          <option value="">Responsable: todos</option>
+          {assigneeOptions.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name}
             </option>
           ))}
         </select>
