@@ -421,6 +421,19 @@ describe('AdsSpendView', () => {
     expect(arg.periodo).toEqual({ month: 7, year: 2026 })
   })
 
+  it('el botón "Excel" no se deshabilita para un periodo de un año anterior con mes numérico mayor al actual', async () => {
+    // Regresión: un periodo pasado como "Diciembre 2025" es anterior a hoy aunque su
+    // número de mes (12) sea mayor al mes actual — la comparación debe considerar
+    // mes y año juntos, no cada uno por separado.
+    const pastYear = new Date().getFullYear() - 1
+    renderView({ month: 12, year: pastYear })
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Excel/i })).toBeInTheDocument()
+    })
+
+    expect(screen.getByRole('button', { name: /Excel/i })).not.toBeDisabled()
+  })
+
   it('el botón "Presupuestos por cliente" abre el modal de resumen por cliente', async () => {
     const user = userEvent.setup()
     renderView({ month: 7, year: 2026 })

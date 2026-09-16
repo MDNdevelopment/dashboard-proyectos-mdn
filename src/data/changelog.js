@@ -238,6 +238,7 @@ export const CHANGELOG = [
       'Corregido: en Gestión de Tareas → Todos y en el dashboard por equipo, una tarea que se abría en un mes y se cerraba en otro se contaba como "completada" en cada uno de esos meses. Ahora una tarea cerrada solo cuenta como completada en el mes en que realmente se cerró.',
       'Corregido: cuando un CNP se le asignaba a un diseñador de otra línea (por ejemplo, un jefe de línea le manda un CNP a un diseñador de "Independientes"), a esa persona no le aparecía por ningún lado y, aunque lo encontrara, no podía guardar los cambios. Ahora aparece en un nuevo apartado "Mis CNP" y puede trabajarlo con normalidad (cambiar el estado, marcar piezas entregadas), sin importar de qué línea sea.',
       'El pequeño grupo autorizado a crear tareas por voz/texto desde la conexión de Claude ahora también puede agendar, editar, reagendar, marcar realizada/cancelar y eliminar reuniones, y crear, editar, cambiar de estado y eliminar Contenido No Planificado (CNP), directamente desde el chat.',
+      'Corregido: en Campañas → Ads, el botón "Excel" aparecía deshabilitado al elegir un mes de un año anterior si ese mes tenía un número mayor al mes actual (por ejemplo, diciembre de un año pasado). Ahora se habilita correctamente para cualquier periodo pasado.',
     ],
   },
   {
