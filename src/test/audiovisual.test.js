@@ -19,7 +19,7 @@ import {
   pautaErrorMessage,
   visibleSolicitudes,
   aggregatePiezasByLine,
-  aggregateByResource,
+  aggregateResourcePerformance,
   sumPiezasForLine,
   generateAgendaText,
   generateDayAgendaText,
@@ -28,7 +28,9 @@ import {
   piezaUnidades,
   piezaListas,
   editorNames,
-  defaultPiezaName,
+  piezaOrdinals,
+  piezaDisplayName,
+  nextPosition,
   defaultLoteName,
   piezasPorFormato,
   setPiezaFormatoCount,
@@ -469,18 +471,62 @@ describe('aggregatePiezasByLine', () => {
       }),
     ]
     const result = aggregatePiezasByLine(pautas, lines)
-    expect(result).toContainEqual({ lineId: 'l1', label: 'Georgina', totales: 8, editadas: 7 })
-    expect(result).toContainEqual({ lineId: 'l2', label: 'Sabrina', totales: 2, editadas: 1 })
+    expect(result).toContainEqual(
+      expect.objectContaining({ lineId: 'l1', label: 'Georgina', totales: 8, editadas: 7 }),
+    )
+    expect(result).toContainEqual(
+      expect.objectContaining({ lineId: 'l2', label: 'Sabrina', totales: 2, editadas: 1 }),
+    )
+  })
+
+  it('sin desglose por formato (piezas_por_formato vacío), todo el total cae en porGrupo.sinDesglose', () => {
+    const pautas = [
+      pauta({
+        id: 'p1',
+        line_id: 'l1',
+        status: 'realizada',
+        piezas_totales: 5,
+        piezas_editadas: 4,
+      }),
+    ]
+    const [entry] = aggregatePiezasByLine(pautas, lines)
+    expect(entry.porGrupo).toEqual({
+      av: { totales: 0, editadas: 0 },
+      foto: { totales: 0, editadas: 0 },
+      sinDesglose: { totales: 5, editadas: 4 },
+    })
+  })
+
+  it('con desglose por formato, reparte V/R en "av" y F en "foto", sin tocar totales/editadas', () => {
+    const pautas = [
+      pauta({
+        id: 'p1',
+        line_id: 'l1',
+        status: 'realizada',
+        formats: ['V', 'F'],
+        piezas_por_formato: { V: { salieron: 3, editadas: 2 }, F: { salieron: 40, editadas: 32 } },
+        piezas_totales: 43,
+        piezas_editadas: 34,
+      }),
+    ]
+    const [entry] = aggregatePiezasByLine(pautas, lines)
+    expect(entry.totales).toBe(43)
+    expect(entry.editadas).toBe(34)
+    expect(entry.porGrupo).toEqual({
+      av: { totales: 3, editadas: 2 },
+      foto: { totales: 40, editadas: 32 },
+      sinDesglose: { totales: 0, editadas: 0 },
+    })
   })
 })
 
-describe('aggregateByResource', () => {
+describe('aggregateResourcePerformance', () => {
   const usersById = new Map([
     ['u1', { first_name: 'Diego', last_name: '' }],
     ['u2', { first_name: 'Nadia', last_name: '' }],
   ])
 
-  it('atribuye piezas totales a quien graba y editadas a quien edita', () => {
+  it('sin reparto de grabación (legacy), atribuye el total completo a cada recurso y lo marca como estimado', () => {
     const pautas = [
       pauta({
         status: 'realizada',
@@ -497,21 +543,67 @@ describe('aggregateByResource', () => {
         piezas_editadas: 5,
       }),
     ]
-    const result = aggregateByResource(pautas, usersById)
-    expect(result).toContainEqual({ name: 'Diego', graba: 11, edita: 0 })
-    expect(result).toContainEqual({ name: 'Nadia', graba: 0, edita: 10 })
+    const result = aggregateResourcePerformance(pautas, usersById)
+    expect(result).toContainEqual(
+      expect.objectContaining({
+        name: 'Diego',
+        grabaSinDesglose: 11,
+        grabaEstimado: true,
+        graba: 11,
+        edita: 0,
+      }),
+    )
+    expect(result).toContainEqual(
+      expect.objectContaining({ name: 'Nadia', editaOtro: 10, graba: 0, edita: 10 }),
+    )
   })
 
-  it('con varios recursos en una misma pauta, atribuye el total completo a cada uno (sin repartir)', () => {
-    const pautas = [pauta({ status: 'realizada', recurso_ids: ['u1', 'u2'], piezas_totales: 8 })]
-    const result = aggregateByResource(pautas, usersById)
-    expect(result).toContainEqual({ name: 'Diego', graba: 8, edita: 0 })
-    expect(result).toContainEqual({ name: 'Nadia', graba: 8, edita: 0 })
+  it('con reparto por formato, cada recurso suma EXACTAMENTE lo repartido (nunca el total completo)', () => {
+    const pautas = [
+      pauta({
+        status: 'realizada',
+        recurso_ids: ['u1', 'u2'],
+        formats: ['V'],
+        piezas_por_formato: { V: { salieron: 10, editadas: 0 } },
+        grabacion_por_formato: { V: { u1: 6, u2: 4 } },
+        piezas_totales: 10,
+      }),
+    ]
+    const result = aggregateResourcePerformance(pautas, usersById)
+    expect(result).toContainEqual(
+      expect.objectContaining({ name: 'Diego', grabaAv: 6, grabaEstimado: false, graba: 6 }),
+    )
+    expect(result).toContainEqual(
+      expect.objectContaining({ name: 'Nadia', grabaAv: 4, grabaEstimado: false, graba: 4 }),
+    )
   })
 
   it('ignora pautas que no están realizadas', () => {
     const pautas = [pauta({ status: 'programada', recurso_ids: ['u1'], piezas_totales: 5 })]
-    expect(aggregateByResource(pautas, usersById)).toEqual([])
+    expect(aggregateResourcePerformance(pautas, usersById)).toEqual([])
+  })
+
+  it('sin reparto por persona pero con desglose por formato ("Salieron" cargado), estima video/foto en vez de un total ciego', () => {
+    const pautas = [
+      pauta({
+        status: 'realizada',
+        recurso_ids: ['u1'],
+        formats: ['V', 'F'],
+        piezas_por_formato: { V: { salieron: 3, editadas: 0 }, F: { salieron: 40, editadas: 0 } },
+        piezas_totales: 43,
+      }),
+    ]
+    const result = aggregateResourcePerformance(pautas, usersById)
+    expect(result).toContainEqual(
+      expect.objectContaining({
+        name: 'Diego',
+        grabaAv: 3,
+        grabaFoto: 40,
+        grabaSinDesglose: 0,
+        grabaEstimado: true,
+        graba: 43,
+      }),
+    )
   })
 
   it('con piezas en el checklist, atribuye la edición pieza por pieza a cada editor real (no al edita_user_id legacy)', () => {
@@ -534,9 +626,43 @@ describe('aggregateByResource', () => {
         ],
       ],
     ])
-    const result = aggregateByResource(pautas, usersById, piezasByPauta)
-    expect(result).toContainEqual({ name: 'Diego', graba: 3, edita: 1 })
-    expect(result).toContainEqual({ name: 'Nadia', graba: 0, edita: 1 })
+    const result = aggregateResourcePerformance(pautas, usersById, piezasByPauta)
+    expect(result).toContainEqual(
+      expect.objectContaining({ name: 'Diego', editaOtro: 1, edita: 1 }),
+    )
+    expect(result).toContainEqual(
+      expect.objectContaining({ name: 'Nadia', editaOtro: 1, edita: 1 }),
+    )
+  })
+
+  it('rutea la edición por el formato de la pieza (video/reel vs foto)', () => {
+    const pautas = [
+      pauta({ id: 'p1', status: 'realizada', formats: ['V', 'F'], piezas_totales: 2 }),
+    ]
+    const piezasByPauta = new Map([
+      [
+        'p1',
+        [
+          { editor_user_id: 'u1', status: 'listo', formato: 'V' },
+          { editor_user_id: 'u1', status: 'listo', formato: 'F' },
+        ],
+      ],
+    ])
+    const result = aggregateResourcePerformance(pautas, usersById, piezasByPauta)
+    expect(result).toContainEqual(
+      expect.objectContaining({ name: 'Diego', editaAv: 1, editaFoto: 1, edita: 2 }),
+    )
+  })
+
+  it('pieza sin formato en pauta de un único formato activo se imputa a ese grupo', () => {
+    const pautas = [pauta({ id: 'p1', status: 'realizada', formats: ['R'], piezas_totales: 1 })]
+    const piezasByPauta = new Map([
+      ['p1', [{ editor_user_id: 'u1', status: 'listo', formato: null }]],
+    ])
+    const result = aggregateResourcePerformance(pautas, usersById, piezasByPauta)
+    expect(result).toContainEqual(
+      expect.objectContaining({ name: 'Diego', editaAv: 1, editaOtro: 0 }),
+    )
   })
 
   it('un lote de fotos aporta sus unidades `listas`, no 1 por fila', () => {
@@ -551,11 +677,22 @@ describe('aggregateByResource', () => {
     const piezasByPauta = new Map([
       [
         'p1',
-        [{ editor_user_id: 'u2', es_lote: true, cantidad: 50, listas: 32, status: 'en_edicion' }],
+        [
+          {
+            editor_user_id: 'u2',
+            es_lote: true,
+            cantidad: 50,
+            listas: 32,
+            status: 'en_edicion',
+            formato: 'F',
+          },
+        ],
       ],
     ])
-    const result = aggregateByResource(pautas, usersById, piezasByPauta)
-    expect(result).toContainEqual({ name: 'Nadia', graba: 0, edita: 32 })
+    const result = aggregateResourcePerformance(pautas, usersById, piezasByPauta)
+    expect(result).toContainEqual(
+      expect.objectContaining({ name: 'Nadia', editaFoto: 32, edita: 32 }),
+    )
   })
 
   it('pautas sin piezas en el checklist caen al camino legacy (edita_user_id/piezas_editadas)', () => {
@@ -569,8 +706,40 @@ describe('aggregateByResource', () => {
         piezas_editadas: 5,
       }),
     ]
-    const result = aggregateByResource(pautas, usersById, new Map())
-    expect(result).toContainEqual({ name: 'Nadia', graba: 0, edita: 5 })
+    const result = aggregateResourcePerformance(pautas, usersById, new Map())
+    expect(result).toContainEqual(
+      expect.objectContaining({ name: 'Nadia', editaOtro: 5, edita: 5 }),
+    )
+  })
+
+  it('dos recursos homónimos no se fusionan (se agrupa por id, no por nombre)', () => {
+    const dupUsersById = new Map([
+      ['u1', { first_name: 'Diego', last_name: '' }],
+      ['u3', { first_name: 'Diego', last_name: '' }],
+    ])
+    const pautas = [
+      pauta({
+        id: 'p1',
+        status: 'realizada',
+        formats: ['V'],
+        piezas_por_formato: { V: { salieron: 5, editadas: 0 } },
+        grabacion_por_formato: { V: { u1: 2, u3: 3 } },
+        piezas_totales: 5,
+      }),
+    ]
+    const result = aggregateResourcePerformance(pautas, dupUsersById)
+    expect(result.filter((r) => r.name === 'Diego')).toHaveLength(2)
+    expect(result).toContainEqual(expect.objectContaining({ id: 'u1', grabaAv: 2 }))
+    expect(result).toContainEqual(expect.objectContaining({ id: 'u3', grabaAv: 3 }))
+  })
+
+  it('piezas canceladas no aportan a edición', () => {
+    const pautas = [pauta({ id: 'p1', status: 'realizada', formats: ['V'], piezas_totales: 1 })]
+    const piezasByPauta = new Map([
+      ['p1', [{ editor_user_id: 'u1', status: 'cancelado', formato: 'V' }]],
+    ])
+    const result = aggregateResourcePerformance(pautas, usersById, piezasByPauta)
+    expect(result).toEqual([])
   })
 })
 
@@ -739,10 +908,65 @@ describe('editorNames', () => {
   })
 })
 
-describe('defaultPiezaName', () => {
-  it('genera nombres "Video #N" 1-indexados', () => {
-    expect(defaultPiezaName(0)).toBe('Video #1')
-    expect(defaultPiezaName(4)).toBe('Video #5')
+describe('piezaOrdinals', () => {
+  it('numera 1..N por position, sin importar huecos', () => {
+    const piezas = [
+      { id: 'a', position: 0 },
+      { id: 'b', position: 5 },
+      { id: 'c', position: 9 },
+    ]
+    const ordinals = piezaOrdinals(piezas)
+    expect(ordinals.get('a')).toBe(1)
+    expect(ordinals.get('b')).toBe(2)
+    expect(ordinals.get('c')).toBe(3)
+  })
+
+  it('empate de position desempata por id (estable)', () => {
+    const piezas = [
+      { id: 'z', position: 0 },
+      { id: 'a', position: 0 },
+    ]
+    const ordinals = piezaOrdinals(piezas)
+    expect(ordinals.get('a')).toBe(1)
+    expect(ordinals.get('z')).toBe(2)
+  })
+
+  it('los lotes no numeran ni consumen número', () => {
+    const piezas = [
+      { id: 'a', position: 0 },
+      { id: 'lote', position: 1, es_lote: true },
+      { id: 'b', position: 2 },
+    ]
+    const ordinals = piezaOrdinals(piezas)
+    expect(ordinals.has('lote')).toBe(false)
+    expect(ordinals.get('a')).toBe(1)
+    expect(ordinals.get('b')).toBe(2)
+  })
+})
+
+describe('piezaDisplayName', () => {
+  it('el nombre manual siempre manda', () => {
+    expect(piezaDisplayName({ nombre: 'Toma dron' }, 3)).toBe('Toma dron')
+  })
+
+  it('sin nombre, deriva "Video #n" / "Reel #n" / "Foto #n" del formato', () => {
+    expect(piezaDisplayName({ nombre: '', formato: 'V' }, 1)).toBe('Video de marca #1')
+    expect(piezaDisplayName({ nombre: '', formato: 'R' }, 2)).toBe('Reel #2')
+    expect(piezaDisplayName({ nombre: '', formato: 'F' }, 3)).toBe('Foto #3')
+  })
+
+  it('sin nombre ni formato, deriva "Pieza #n"', () => {
+    expect(piezaDisplayName({ nombre: '' }, 4)).toBe('Pieza #4')
+  })
+})
+
+describe('nextPosition', () => {
+  it('max(position) + 1', () => {
+    expect(nextPosition([{ position: 0 }, { position: 5 }, { position: 2 }])).toBe(6)
+  })
+
+  it('sin piezas, empieza en 0', () => {
+    expect(nextPosition([])).toBe(0)
   })
 })
 
@@ -1070,11 +1294,13 @@ describe('recursos externos integrados en los helpers de resolución existentes'
     expect([...grouped.keys()]).toEqual(['ext:r1', 'u1'])
   })
 
-  it('aggregateByResource suma piezas de un editor externo por su nombre resuelto', () => {
+  it('aggregateResourcePerformance suma piezas de un editor externo por su nombre resuelto', () => {
     const pautas = [pauta({ status: 'realizada', recurso_ids: ['u1'], piezas_totales: 4 })]
     const piezasByPauta = new Map([['p1', [{ editor_user_id: 'ext:r1', status: 'listo' }]]])
-    const result = aggregateByResource(pautas, usersById, piezasByPauta)
-    expect(result).toContainEqual({ name: 'Alan Puentes', graba: 0, edita: 1 })
+    const result = aggregateResourcePerformance(pautas, usersById, piezasByPauta)
+    expect(result).toContainEqual(
+      expect.objectContaining({ name: 'Alan Puentes', editaOtro: 1, edita: 1 }),
+    )
   })
 })
 

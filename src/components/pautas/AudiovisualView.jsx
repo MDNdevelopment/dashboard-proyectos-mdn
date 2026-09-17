@@ -427,6 +427,7 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
           pauta={detailPauta}
           usersById={usersById}
           audiovisualUsers={editorOptions}
+          recursoUsers={recursoOptions}
           piezas={piezas.filter((pz) => pz.pauta_id === detailPauta.id)}
           canEditPiezas={canEditPiezasForPauta({
             canCoordinate,

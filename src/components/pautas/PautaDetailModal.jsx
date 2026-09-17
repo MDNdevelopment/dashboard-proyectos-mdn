@@ -6,6 +6,7 @@ import {
   PIEZA_STATUS_ORDER,
   FORMAT_KEYS,
   FORMAT_LABELS,
+  FORMAT_ICONS,
   FOTO_FORMAT,
   formatCodes,
   formatTime12,
@@ -17,17 +18,32 @@ import {
   piezaUnidades,
   piezasPorFormato,
   setPiezaFormatoCount,
-  defaultPiezaName,
+  grabacionPorFormato,
+  setGrabacionCount,
+  grabacionBalance,
+  syncRecursoIds,
+  piezaOrdinals,
+  piezaDisplayName,
+  nextPosition,
+  editorLabel,
+  unresolvedEditorUser,
   planPiezaRemoval,
   distributePiezas,
   pautaErrorMessage,
 } from '../../utils/audiovisual'
-import { createPiezas, createLotePieza, deletePiezas, updatePieza } from './avPautasApi'
+import {
+  createPiezas,
+  createLotePieza,
+  deletePiezas,
+  updatePieza,
+  reassignPiezas,
+} from './avPautasApi'
 import Avatar from '../Avatar'
 import AttendeePicker from '../reuniones/AttendeePicker'
 import ExtraBadge from './ExtraBadge'
 import StatusPill from '../common/StatusPill'
 import Stepper from '../common/Stepper'
+import RemoveEditorDialog from './RemoveEditorDialog'
 
 // Misma paleta de status que los puntos del calendario (AvCalendar.jsx → DOT_COLOR),
 // pero como pill de texto+fondo para el header del modal.
@@ -65,6 +81,7 @@ export default function PautaDetailModal({
   pauta,
   usersById,
   audiovisualUsers,
+  recursoUsers,
   piezas,
   canEditPiezas,
   companyId,
@@ -152,17 +169,26 @@ export default function PautaDetailModal({
           </div>
 
           {pauta.status === 'realizada' && (
-            <PiezasSection
-              pauta={pauta}
-              piezas={piezas}
-              audiovisualUsers={audiovisualUsers}
-              usersById={usersById}
-              canEditPiezas={canEditPiezas}
-              companyId={companyId}
-              onFields={onFields}
-              onPiezaChanged={onPiezaChanged}
-              onPiezaDeleted={onPiezaDeleted}
-            />
+            <>
+              <GrabacionSection
+                pauta={pauta}
+                recursoUsers={recursoUsers}
+                usersById={usersById}
+                canEditPiezas={canEditPiezas}
+                onFields={onFields}
+              />
+              <PiezasSection
+                pauta={pauta}
+                piezas={piezas}
+                audiovisualUsers={audiovisualUsers}
+                usersById={usersById}
+                canEditPiezas={canEditPiezas}
+                companyId={companyId}
+                onFields={onFields}
+                onPiezaChanged={onPiezaChanged}
+                onPiezaDeleted={onPiezaDeleted}
+              />
+            </>
           )}
         </div>
 
@@ -191,6 +217,175 @@ function DetailRow({ icon, text }) {
   )
 }
 
+// ─── Grabación por formato y por persona (solo pautas 'realizada') ─────────
+
+/**
+ * Quién grabó cuánto de cada formato — antes solo existía `recurso_ids` (una lista plana
+ * de "quién fue"), y el panel de rendimiento (AvAnalytics) le atribuía a cada recurso el
+ * total completo de la pauta. Acá se reparte de verdad, formato por formato, con un tope
+ * compartido contra "Salieron" (mismo patrón que `faltantes`/"Repartir automáticamente" de
+ * PiezasSection).
+ *
+ * "Salieron" se edita ACÁ (no en PiezasSection más abajo): es el dato que gobierna cuánto
+ * hay para repartir en esta sección, así que vivía "al revés" cuando estaba en la sección
+ * de edición — el coordinador tenía que bajar a cargar un número antes de poder usar el
+ * "+" de acá arriba. `piezas_por_formato` sigue siendo la fuente única (mismo campo,
+ * `setPiezaFormatoCount`); PiezasSection solo lo muestra de lectura junto a "Editadas".
+ */
+function GrabacionSection({ pauta, recursoUsers, usersById, canEditPiezas, onFields }) {
+  const [error, setError] = useState(null)
+  const [pickerFormat, setPickerFormat] = useState(null)
+  const activeFormats = FORMAT_KEYS.filter((code) => (pauta.formats ?? []).includes(code))
+  if (activeFormats.length === 0) return null
+
+  const breakdown = piezasPorFormato(pauta)
+  const reparto = grabacionPorFormato(pauta)
+  const balance = grabacionBalance(pauta)
+
+  async function handleSalieronChange(code, delta) {
+    setError(null)
+    const next = setPiezaFormatoCount(pauta, code, 'salieron', breakdown[code].salieron + delta)
+    const { error: err } = (await onFields(pauta, { piezas_por_formato: next })) ?? {}
+    if (err) setError(pautaErrorMessage(err))
+  }
+
+  async function handleCountChange(code, resourceId, value) {
+    setError(null)
+    const nextGrabacion = setGrabacionCount(pauta, code, resourceId, value)
+    const nextRecursoIds = syncRecursoIds(pauta, nextGrabacion)
+    const fields = { grabacion_por_formato: nextGrabacion }
+    if (nextRecursoIds) fields.recurso_ids = nextRecursoIds
+    const { error: err } = (await onFields(pauta, fields)) ?? {}
+    if (err) setError(pautaErrorMessage(err))
+  }
+
+  function addResource(code, resourceId) {
+    setPickerFormat(null)
+    if (!resourceId) return
+    // Sin cupo (nunca se cargó "Salieron" de este formato, o ya está todo repartido) no
+    // tiene sentido crear una fila que va a nacer topada en 0 y sin poder subir — mejor
+    // avisar la causa real que dejar un "+" deshabilitado sin explicación.
+    const { faltan = 0 } = balance[code] ?? {}
+    if (faltan <= 0) {
+      setError(`No hay piezas de ${FORMAT_LABELS[code]} por repartir — sube "Salieron" arriba.`)
+      return
+    }
+    const current = reparto[code]?.[resourceId] ?? 0
+    handleCountChange(code, resourceId, current + 1)
+  }
+
+  return (
+    <div className="border-t border-[#eeebe0] pt-4">
+      <p className="text-[12px] font-mono font-bold tracking-[0.14em] uppercase text-[#777] mb-3">
+        Captura por formato
+      </p>
+      {error && (
+        <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 text-red-700 text-[12.5px]">
+          {error}
+        </div>
+      )}
+      <div className="space-y-3">
+        {activeFormats.map((code) => {
+          // "Grabar/grabación" es solo para Video/Reel — una Foto no se graba, se toma. El
+          // resto de esta sección usa un verbo neutro ("captura"/"recurso") para Foto.
+          const esFoto = code === FOTO_FORMAT
+          const entries = Object.entries(reparto[code] ?? {})
+          const { salieron = 0, repartido = 0, faltan = 0 } = balance[code] ?? {}
+          return (
+            <div key={code}>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[13px] text-[#333] font-medium flex-1">
+                  {FORMAT_ICONS[code]} {FORMAT_LABELS[code]}
+                </span>
+                {canEditPiezas ? (
+                  <span className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-[#999]">Salieron</span>
+                    <Stepper
+                      value={salieron}
+                      onChange={(delta) => handleSalieronChange(code, delta)}
+                      label={`salieron de ${FORMAT_LABELS[code]}`}
+                    />
+                  </span>
+                ) : (
+                  <span className="text-[12px] text-[#999]">
+                    Salieron <strong className="text-[#333]">{salieron}</strong>
+                  </span>
+                )}
+              </div>
+              <div className="text-[11px] text-[#999] mb-1">
+                {salieron > 0 ? (
+                  <>
+                    {repartido} de {salieron} repartidas
+                    {faltan > 0 && ` · faltan ${faltan}`}
+                  </>
+                ) : (
+                  <span className="text-[#b98900]">
+                    Sube &quot;Salieron&quot; para poder repartir.
+                  </span>
+                )}
+              </div>
+              {entries.length === 0 && (
+                <p className="text-[12.5px] text-[#bbb] mb-1">
+                  {esFoto ? 'Sin recurso asignado.' : 'Sin grabador asignado.'}
+                </p>
+              )}
+              <ul className="space-y-1">
+                {entries.map(([resourceId, count]) => (
+                  <li key={resourceId} className="flex items-center gap-2">
+                    <span className="text-[13px] text-[#333] flex-1">
+                      {editorLabel(resourceId, usersById)}
+                    </span>
+                    {canEditPiezas ? (
+                      <Stepper
+                        value={count}
+                        onChange={(delta) => handleCountChange(code, resourceId, count + delta)}
+                        max={count + Math.max(faltan, 0)}
+                        label={`${esFoto ? 'capturadas' : 'grabadas'} de ${FORMAT_LABELS[code]} por ${editorLabel(resourceId, usersById)}`}
+                      />
+                    ) : (
+                      <span className="font-mono text-[13px] font-semibold">{count}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {canEditPiezas &&
+                (pickerFormat === code ? (
+                  <select
+                    autoFocus
+                    className="input-base input-compact mt-1"
+                    aria-label={`Agregar recurso de ${esFoto ? 'captura' : 'grabación'} de ${FORMAT_LABELS[code]}`}
+                    onChange={(e) => addResource(code, e.target.value)}
+                    onBlur={() => setPickerFormat(null)}
+                    defaultValue=""
+                  >
+                    <option value="" disabled>
+                      Elegir recurso…
+                    </option>
+                    {(recursoUsers ?? [])
+                      .filter((u) => !u.deleted_at && !(reparto[code] ?? {})[u.user_id])
+                      .map((u) => (
+                        <option key={u.user_id} value={u.user_id}>
+                          {u.first_name} {u.last_name}
+                        </option>
+                      ))}
+                  </select>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setPickerFormat(code)}
+                    className="text-[11.5px] font-semibold text-[#2563eb] hover:underline mt-1"
+                  >
+                    + agregar recurso
+                  </button>
+                ))}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ─── Edición de piezas (solo pautas 'realizada') ────────────────────────────
 
 function PiezasSection({
@@ -214,9 +409,17 @@ function PiezasSection({
   // información que valga la pena guardar. Se muestran igual para que el coordinador les
   // reparta cantidad con el stepper de su bloque sin tener que recordarlos.
   const [extraEditorIds, setExtraEditorIds] = useState([])
+  // Editor que se intentó quitar del picker y tiene piezas asignadas — se congela el
+  // cambio hasta que el coordinador decida qué hacer con ellas (RemoveEditorDialog). Antes
+  // se huerfanizaban en silencio y volver a agregar al editor no las recuperaba.
+  const [pendingRemoval, setPendingRemoval] = useState(null)
+  // Piezas huérfanas de un editor recién re-agregado (`prev_editor_user_id` coincide) — se
+  // ofrece devolvérselas en vez de dejarlas invisibles en el recuadro "Sin asignar".
+  const [reofrecer, setReofrecer] = useState(null)
   const grouped = piezasByEditor(piezas)
   const editorIds = [...new Set([...grouped.keys(), ...extraEditorIds])].filter(Boolean)
   const sinAsignar = grouped.get(null) ?? []
+  const ordinals = piezaOrdinals(piezas)
   // Las fotos no cuentan una fila por unidad (van en lote): sumar piezaUnidades en vez de
   // piezas.length es lo que hace que "50 fotos repartidas" no dependa de 50 filas.
   const asignadas = piezas.reduce((sum, pz) => sum + piezaUnidades(pz), 0)
@@ -241,40 +444,58 @@ function PiezasSection({
   const faltantes = Math.max(0, totales - asignadas)
   const pct = totales ? Math.min(100, Math.round((asignadas / totales) * 100)) : 0
 
-  async function handleSalieronChange(code, delta) {
-    setError(null)
-    const next = setPiezaFormatoCount(pauta, code, 'salieron', breakdown[code].salieron + delta)
-    const { error: err } = (await onFields(pauta, { piezas_por_formato: next })) ?? {}
-    if (err) setError(pautaErrorMessage(err))
-  }
-
   async function handleEditorsChange(nextIds) {
     setError(null)
     setWarning(null)
-    // Editor quitado del picker: sus piezas quedan sin editor (nunca se borran solas).
     const removed = editorIds.filter((id) => !nextIds.includes(id))
-    if (removed.length) {
-      const toOrphan = piezas.filter((pz) => removed.includes(pz.editor_user_id))
-      const results = await Promise.all(
-        toOrphan.map((pz) => updatePieza(pz.id, { editor_user_id: null })),
-      )
-      const failed = results.find((r) => r.error)
-      if (failed) {
-        setError(`No se pudo actualizar la pieza. ${pautaErrorMessage(failed.error)}`)
-        return
-      }
-      results.forEach((r) => r.data && onPiezaChanged(r.data))
-    }
-    // Editor agregado: no crea ninguna pieza — solo entra a la lista visible, con un
-    // bloque vacío, hasta que el coordinador le reparta cantidad con el stepper.
     const added = nextIds.filter((id) => !editorIds.includes(id))
+
+    // Un editor quitado que tiene piezas asignadas no se huerfaniza en silencio: se pide
+    // confirmación de qué hacer con ellas (RemoveEditorDialog) — antes desaparecía del
+    // picker y sus piezas quedaban en un recuadro "Sin asignar" sin aviso, y re-agregarlo
+    // no las recuperaba. Si se quitan varios editores con piezas de una vez, se resuelve
+    // uno a la vez (el picker se usa clic a clic en la práctica).
+    const removedWithPiezas = removed.find((id) => piezas.some((pz) => pz.editor_user_id === id))
+    if (removedWithPiezas) {
+      setPendingRemoval({ editorId: removedWithPiezas })
+      return
+    }
+
+    finishEditorsChange(removed, added)
+  }
+
+  /** Aplica la parte del cambio de editores que no requiere confirmación. */
+  function finishEditorsChange(removed, added) {
     setExtraEditorIds((prev) => [...prev.filter((id) => !removed.includes(id)), ...added])
+    // Re-agregar a un editor con piezas huérfanas suyas: se ofrece devolvérselas (banner)
+    // en vez de dejarlas invisibles en el recuadro "Sin asignar".
+    added.forEach((id) => {
+      const huerfanas = piezas.filter((pz) => !pz.editor_user_id && pz.prev_editor_user_id === id)
+      if (huerfanas.length) {
+        setReofrecer({
+          editorId: id,
+          ids: huerfanas.map((pz) => pz.id),
+          unidades: huerfanas.reduce((sum, pz) => sum + piezaUnidades(pz), 0),
+        })
+      }
+    })
+  }
+
+  async function handleConfirmRemoval(targetEditorId) {
+    const editorId = pendingRemoval.editorId
+    const ids = piezas.filter((pz) => pz.editor_user_id === editorId).map((pz) => pz.id)
+    const { data, error: err } = await reassignPiezas(ids, targetEditorId ?? null, editorId)
+    setPendingRemoval(null)
+    if (err) {
+      setError(`No se pudo actualizar la pieza. ${pautaErrorMessage(err)}`)
+      return
+    }
+    ;(data ?? []).forEach((pz) => onPiezaChanged(pz))
+    finishEditorsChange([editorId], [])
   }
 
   async function createForEditor(editorId, count) {
-    const startIndex = piezas.length
-    const nombres = Array.from({ length: count }, (_, i) => defaultPiezaName(startIndex + i))
-    return createPiezas(companyId, pauta.id, editorId, nombres, startIndex, singleFormat)
+    return createPiezas(companyId, pauta.id, editorId, count, nextPosition(piezas), singleFormat)
   }
 
   function loteOf(editorId) {
@@ -297,7 +518,7 @@ function PiezasSection({
           pauta.id,
           editorId,
           allowed,
-          piezas.length,
+          nextPosition(piezas),
         )
         if (err) {
           setError(`No se pudo crear el lote de fotos. ${pautaErrorMessage(err)}`)
@@ -418,7 +639,7 @@ function PiezasSection({
         const lote = loteOf(editorId)
         const result = lote
           ? await updatePieza(lote.id, { cantidad: lote.cantidad + count })
-          : await createLotePieza(companyId, pauta.id, editorId, count, piezas.length)
+          : await createLotePieza(companyId, pauta.id, editorId, count, nextPosition(piezas))
         if (result.error) {
           setError(`No se pudo repartir el lote de fotos. ${pautaErrorMessage(result.error)}`)
           return
@@ -463,20 +684,15 @@ function PiezasSection({
             {activeFormats.map((code) => (
               <div key={code} className="flex items-center gap-3">
                 <span className="text-[13px] text-[#333] flex-1">{FORMAT_LABELS[code]}</span>
-                {canEditPiezas ? (
-                  <span className="flex items-center gap-1.5">
-                    <span className="text-[11px] text-[#999]">Salieron</span>
-                    <Stepper
-                      value={breakdown[code].salieron}
-                      onChange={(delta) => handleSalieronChange(code, delta)}
-                      label={`salieron de ${FORMAT_LABELS[code]}`}
-                    />
-                  </span>
-                ) : (
-                  <span className="text-[12px] text-[#999]">
-                    Salieron <strong className="text-[#333]">{breakdown[code].salieron}</strong>
-                  </span>
-                )}
+                {/* "Salieron" es de solo lectura acá: se edita arriba, en "Captura por
+                    formato" (GrabacionSection) — ese es el dato que gobierna cuánto hay
+                    para repartir, así que vive junto al reparto, no acá abajo. */}
+                <span
+                  className="text-[12px] text-[#999]"
+                  title="Se edita arriba, en «Captura por formato»"
+                >
+                  Salieron <strong className="text-[#333]">{breakdown[code].salieron}</strong>
+                </span>
                 {/* Editadas es de solo lectura: la deriva el checklist de abajo (piezas de
                     este formato en 'Listo'), clampeada a "Salieron" por el trigger de BD. */}
                 <span
@@ -572,6 +788,30 @@ function PiezasSection({
         </div>
       )}
 
+      {reofrecer && (
+        <div className="mb-3 px-3 py-2 rounded-lg bg-[#e6f0ff] text-[#2563eb] text-[12.5px] flex items-center justify-between gap-2">
+          <span>
+            {editorLabel(reofrecer.editorId, usersById)} tenía {reofrecer.unidades} pieza
+            {reofrecer.unidades === 1 ? '' : 's'} sin asignar en esta pauta.
+          </span>
+          <button
+            type="button"
+            onClick={async () => {
+              const { data, error: err } = await reassignPiezas(reofrecer.ids, reofrecer.editorId)
+              if (err) {
+                setError(`No se pudo devolver la pieza. ${pautaErrorMessage(err)}`)
+                return
+              }
+              ;(data ?? []).forEach((pz) => onPiezaChanged(pz))
+              setReofrecer(null)
+            }}
+            className="font-semibold hover:underline flex-shrink-0"
+          >
+            Devolvérselas
+          </button>
+        </div>
+      )}
+
       <div className="space-y-4">
         {/* Solo lectura: el bloque "Editores" de arriba (con su propio mensaje vacío) no se
             renderiza sin canEditPiezas, así que este es el único aviso que vería ese lector. */}
@@ -581,8 +821,10 @@ function PiezasSection({
         {editorIds.map((editorId) => (
           <EditorChecklist
             key={editorId}
+            editorId={editorId}
             editor={usersById.get(editorId)}
             piezas={grouped.get(editorId) ?? []}
+            ordinals={ordinals}
             canEditPiezas={canEditPiezas}
             formatOptions={activeFormats}
             tieneFoto={tieneFoto}
@@ -603,8 +845,10 @@ function PiezasSection({
         ))}
         {sinAsignar.length > 0 && (
           <EditorChecklist
+            editorId={null}
             editor={null}
             piezas={sinAsignar}
+            ordinals={ordinals}
             canEditPiezas={canEditPiezas}
             formatOptions={activeFormats}
             tieneFoto={tieneFoto}
@@ -615,13 +859,30 @@ function PiezasSection({
           />
         )}
       </div>
+
+      {pendingRemoval && (
+        <RemoveEditorDialog
+          editorName={editorLabel(pendingRemoval.editorId, usersById)}
+          unidades={(grouped.get(pendingRemoval.editorId) ?? []).reduce(
+            (sum, pz) => sum + piezaUnidades(pz),
+            0,
+          )}
+          otherEditors={editorIds
+            .filter((id) => id !== pendingRemoval.editorId)
+            .map((id) => ({ id, name: editorLabel(id, usersById) }))}
+          onConfirm={handleConfirmRemoval}
+          onCancel={() => setPendingRemoval(null)}
+        />
+      )}
     </div>
   )
 }
 
 function EditorChecklist({
+  editorId,
   editor,
   piezas,
+  ordinals,
   canEditPiezas,
   formatOptions,
   tieneFoto,
@@ -642,20 +903,27 @@ function EditorChecklist({
   const normal = piezas.filter((pz) => !pz.es_lote)
   const lote = piezas.find((pz) => pz.es_lote) ?? null
   const { total, listas } = piezasProgress(piezas)
+  // Editor con id pero irresoluble en usersById (empleado de otra empresa, recurso externo
+  // archivado sin `external_resources` cargado, etc.): antes se pintaba igual que "Sin
+  // asignar" (`editor` llegaba `undefined`) y además el bloque quedaba mudo porque los
+  // gates de abajo comprobaban `Boolean(editor)`. Ahora comprueban `Boolean(editorId)`, así
+  // que sigue siendo operable — solo cambia la etiqueta.
+  const label = editorLabel(editorId, usersByIdFallback(editor, editorId))
+  // Etiqueta corta para los aria-label de los steppers (mismo criterio que antes: solo el
+  // primer nombre) — si el editor no resuelve, cae al mismo texto completo de `label`.
+  const shortLabel = editor?.first_name || label
   // Un editor sin lote todavía puede recibir uno con el stepper de LoteRow — se muestra la
   // fila si la pauta tiene Foto activa Y hay un editor real a quien asignarle (para poder
   // repartirle), o si ya existe un lote huérfano que gestionar (p. ej. se quitó al editor
   // de la sección de arriba pero sus fotos siguen ahí).
-  const showLoteRow = Boolean(lote) || (tieneFoto && Boolean(editor))
+  const showLoteRow = Boolean(lote) || (tieneFoto && Boolean(editorId))
   return (
     <div className="border border-[#ece9df] rounded-xl px-3 py-3">
       <div className="flex items-center gap-2.5 mb-2.5">
-        {editor ? (
+        {editorId ? (
           <>
-            <Avatar user={editor} size={24} />
-            <span className="text-[13.5px] font-semibold text-[#222] flex-1">
-              {editor.first_name} {editor.last_name}
-            </span>
+            <Avatar user={editor ?? unresolvedEditorUser(editorId)} size={24} />
+            <span className="text-[13.5px] font-semibold text-[#222] flex-1">{label}</span>
           </>
         ) : (
           <span className="text-[13.5px] font-semibold text-[#999] flex-1">Sin asignar</span>
@@ -663,12 +931,12 @@ function EditorChecklist({
         <span className="text-[12px] font-mono text-[#888]">
           {listas}/{total} listas
         </span>
-        {canEditPiezas && editor && onAssignedChange && tieneTrabajoPorPieza && (
+        {canEditPiezas && editorId && onAssignedChange && tieneTrabajoPorPieza && (
           <Stepper
             value={normal.length}
             onChange={onAssignedChange}
             max={maxAssigned}
-            label={`piezas de ${editor.first_name ?? 'este editor'}`}
+            label={`piezas de ${shortLabel}`}
           />
         )}
       </div>
@@ -681,6 +949,7 @@ function EditorChecklist({
             <PiezaRow
               key={pz.id}
               pieza={pz}
+              ordinal={ordinals?.get(pz.id)}
               canEditPiezas={canEditPiezas}
               formatOptions={formatOptions}
               onChanged={onPiezaChanged}
@@ -691,8 +960,8 @@ function EditorChecklist({
           {showLoteRow && (
             <LoteRow
               lote={lote}
-              editorName={editor?.first_name ?? 'este editor'}
-              canEditPiezas={canEditPiezas && Boolean(editor) && Boolean(onLoteAssignedChange)}
+              editorName={shortLabel}
+              canEditPiezas={canEditPiezas && Boolean(editorId) && Boolean(onLoteAssignedChange)}
               maxAssigned={maxLoteAssigned}
               onAssignedChange={onLoteAssignedChange}
               onListasChange={onLoteListasChange}
@@ -704,6 +973,12 @@ function EditorChecklist({
       )}
     </div>
   )
+}
+
+/** editorLabel espera un Map — se arma uno de una sola entrada cuando ya se resolvió `editor`
+ * en el llamador, para no tener que pasar `usersById` completo hasta acá. */
+function usersByIdFallback(editor, editorId) {
+  return editor && editorId ? new Map([[editorId, editor]]) : new Map()
 }
 
 /** Fila de lote (hoy solo Fotos): en vez de nombre + estado por unidad, dos contadores —
@@ -721,21 +996,54 @@ function LoteRow({
   const cantidad = lote?.cantidad ?? 0
   const listasCount = lote?.listas ?? 0
   return (
-    <li className="flex items-center gap-2 flex-wrap">
-      <span className="text-[13px] text-[#333] flex-1 min-w-[70px]">📷 Fotos</span>
+    <li className="flex flex-col gap-1">
+      <div className="flex items-center gap-2">
+        <span className="text-[13px] text-[#333] flex-1">📷 Fotos</span>
+        {canEditPiezas && cantidad > 0 && listasCount < cantidad && (
+          <button
+            type="button"
+            onClick={onComplete}
+            className="text-[11px] font-semibold text-[#2563eb] hover:underline"
+          >
+            ✓ completar todas
+          </button>
+        )}
+        {canEditPiezas && cantidad > 0 && (
+          <button
+            type="button"
+            onClick={onDelete}
+            aria-label={`Quitar lote de fotos de ${editorName}`}
+            className="w-6 h-6 flex items-center justify-center rounded-lg text-[#bbb] hover:text-red-400 hover:bg-red-50 transition-colors flex-shrink-0"
+          >
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 10 10"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            >
+              <path d="M1 1l8 8M9 1L1 9" />
+            </svg>
+          </button>
+        )}
+      </div>
       {canEditPiezas ? (
+        // Asignadas y Listas en filas separadas (no lado a lado): con los dos pares de
+        // botones −/+ pegados en una sola línea era fácil tocar el stepper equivocado.
         <>
-          <span className="flex items-center gap-1.5">
-            <span className="text-[11px] text-[#999]">Asignadas</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-[#999] w-16">Asignadas</span>
             <Stepper
               value={cantidad}
               onChange={onAssignedChange}
               max={maxAssigned}
               label={`fotos asignadas a ${editorName}`}
             />
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="text-[11px] text-[#999]">Listas</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-[#999] w-16">Listas</span>
             <Stepper
               value={listasCount}
               onChange={onListasChange}
@@ -743,36 +1051,7 @@ function LoteRow({
               disabled={cantidad === 0}
               label={`fotos listas de ${editorName}`}
             />
-          </span>
-          {cantidad > 0 && listasCount < cantidad && (
-            <button
-              type="button"
-              onClick={onComplete}
-              className="text-[11px] font-semibold text-[#2563eb] hover:underline"
-            >
-              ✓ completar todas
-            </button>
-          )}
-          {cantidad > 0 && (
-            <button
-              type="button"
-              onClick={onDelete}
-              aria-label={`Quitar lote de fotos de ${editorName}`}
-              className="w-6 h-6 flex items-center justify-center rounded-lg text-[#bbb] hover:text-red-400 hover:bg-red-50 transition-colors flex-shrink-0"
-            >
-              <svg
-                width="10"
-                height="10"
-                viewBox="0 0 10 10"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-              >
-                <path d="M1 1l8 8M9 1L1 9" />
-              </svg>
-            </button>
-          )}
+          </div>
         </>
       ) : (
         <span className="text-[12px] text-[#999]">
@@ -783,7 +1062,8 @@ function LoteRow({
   )
 }
 
-function PiezaRow({ pieza, canEditPiezas, formatOptions, onChanged, onDeleted, onError }) {
+function PiezaRow({ pieza, ordinal, canEditPiezas, formatOptions, onChanged, onDeleted, onError }) {
+  const displayName = piezaDisplayName(pieza, ordinal)
   async function handleStatusChange(next) {
     onError?.(null)
     const { data, error: err } = await updatePieza(pieza.id, { status: next })
@@ -821,9 +1101,10 @@ function PiezaRow({ pieza, canEditPiezas, formatOptions, onChanged, onDeleted, o
           type="text"
           className="input-base input-compact flex-1"
           defaultValue={pieza.nombre}
+          placeholder={displayName}
           onBlur={async (e) => {
             const nombre = e.target.value.trim()
-            if (nombre === pieza.nombre) return
+            if (nombre === (pieza.nombre ?? '')) return
             onError?.(null)
             const { data, error: err } = await updatePieza(pieza.id, { nombre })
             if (err) {
@@ -834,12 +1115,12 @@ function PiezaRow({ pieza, canEditPiezas, formatOptions, onChanged, onDeleted, o
           }}
         />
       ) : (
-        <span className="text-[13px] text-[#333] flex-1">{pieza.nombre}</span>
+        <span className="text-[13px] text-[#333] flex-1">{displayName}</span>
       )}
       {formatOptions?.length > 1 &&
         (canEditPiezas ? (
           <select
-            aria-label={`Formato de ${pieza.nombre}`}
+            aria-label={`Formato de ${displayName}`}
             className="input-base input-compact text-[12px] flex-shrink-0"
             style={{ width: '5.5rem' }}
             value={pieza.formato ?? ''}
@@ -869,7 +1150,7 @@ function PiezaRow({ pieza, canEditPiezas, formatOptions, onChanged, onDeleted, o
         <button
           type="button"
           onClick={handleDelete}
-          aria-label={`Quitar ${pieza.nombre}`}
+          aria-label={`Quitar ${displayName}`}
           className="w-6 h-6 flex items-center justify-center rounded-lg text-[#bbb] hover:text-red-400 hover:bg-red-50 transition-colors flex-shrink-0"
         >
           <svg

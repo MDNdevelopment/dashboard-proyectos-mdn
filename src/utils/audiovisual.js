@@ -16,6 +16,28 @@ export const FORMAT_LABELS = {
   F: 'Foto',
 }
 
+export const FORMAT_ICONS = {
+  V: '🎬',
+  R: '🎞️',
+  F: '📷',
+}
+
+/**
+ * Agrupación de formatos para el panel de rendimiento (AvAnalytics): Video y Reel se ven
+ * como "audiovisual" (misma disciplina de grabación/edición), Foto aparte — así 40 fotos
+ * nunca se suman con 3 videos en un mismo número.
+ */
+export const FORMAT_GROUPS = { av: ['V', 'R'], foto: ['F'] }
+
+export const FORMAT_GROUP_LABELS = { av: 'Video/Reel', foto: 'Foto' }
+
+/** 'V'|'R' → 'av', 'F' → 'foto', cualquier otro código o null → null. */
+export function formatGroupOf(code) {
+  if (FORMAT_GROUPS.av.includes(code)) return 'av'
+  if (FORMAT_GROUPS.foto.includes(code)) return 'foto'
+  return null
+}
+
 export const LIFECYCLE_LABELS = {
   solicitada: 'Solicitada',
   programada: 'Programada',
@@ -226,6 +248,25 @@ export function editorNames(piezas, usersById) {
     .map((u) => `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim())
     .filter(Boolean)
   return [...new Set(names)]
+}
+
+/**
+ * Etiqueta a mostrar de un `editor_user_id`: distingue "nadie asignado" de "asignado a
+ * alguien que ya no resuelve" — antes ambos casos se pintaban igual como "Sin asignar" y
+ * era imposible saber si el bloque tenía dueño o no.
+ * @param {string|null|undefined} editorId
+ * @param {Map<string,object>} usersById
+ */
+export function editorLabel(editorId, usersById) {
+  if (!editorId) return 'Sin asignar'
+  const u = usersById?.get(editorId)
+  if (!u) return isExternalId(editorId) ? 'Editor no disponible (externo)' : 'Editor no disponible'
+  return `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() || 'Editor no disponible'
+}
+
+/** Pseudo-usuario mínimo para pintar un Avatar cuando `editorId` no resuelve en `usersById`. */
+export function unresolvedEditorUser(editorId) {
+  return { user_id: editorId, first_name: '?', last_name: '', avatar_url: null }
 }
 
 /**
@@ -528,14 +569,27 @@ export function visibleSolicitudes(pautas, { canCoordinate }) {
 
 // ─── Analítica (piezas por línea / rendimiento por recurso) ────────────────
 
+/** true si `piezas_por_formato` trae datos reales (camino "formato"), no el legacy '{}'. */
+function hasFormatoBreakdown(pauta) {
+  return Object.keys(pauta.piezas_por_formato ?? {}).length > 0
+}
+
 /**
- * Agrega piezas totales/editadas de las pautas 'realizada' por línea.
+ * Agrega piezas totales/editadas de las pautas 'realizada' por línea. `totales`/`editadas`
+ * son la suma cruda de las columnas — NO cambian con el desglose por grupo, porque
+ * alimentan el indicador «6. Nº Piezas vs Piezas editadas» de Reportes → Operaciones
+ * (avPautasApi.countPiezasForLine) y ese número no debe moverse por este cambio.
+ * `porGrupo` es el desglose adicional Video/Reel vs Foto: pautas con desglose por formato
+ * reparten ahí; pautas legacy (sin `piezas_por_formato`) caen enteras en `sinDesglose`.
  * @param {Array} pautas
  * @param {Array<{id:string,name:string}>} lines
- * @returns {Array<{lineId:string, label:string, totales:number, editadas:number}>}
+ * @returns {Array<{lineId:string, label:string, totales:number, editadas:number,
+ *   porGrupo: {av:{totales:number,editadas:number}, foto:{totales:number,editadas:number},
+ *              sinDesglose:{totales:number,editadas:number}}}>}
  */
 export function aggregatePiezasByLine(pautas, lines) {
   const byLine = new Map()
+  const emptyGrupo = () => ({ totales: 0, editadas: 0 })
   pautas.forEach((p) => {
     if (p.status !== 'realizada' || !p.line_id) return
     if (!byLine.has(p.line_id)) {
@@ -545,57 +599,153 @@ export function aggregatePiezasByLine(pautas, lines) {
         label: line?.name ?? 'Sin línea',
         totales: 0,
         editadas: 0,
+        porGrupo: { av: emptyGrupo(), foto: emptyGrupo(), sinDesglose: emptyGrupo() },
       })
     }
     const entry = byLine.get(p.line_id)
     entry.totales += Number(p.piezas_totales) || 0
     entry.editadas += Number(p.piezas_editadas) || 0
+
+    if (hasFormatoBreakdown(p)) {
+      const breakdown = piezasPorFormato(p)
+      Object.entries(breakdown).forEach(([code, { salieron, editadas }]) => {
+        const group = formatGroupOf(code)
+        if (!group) return
+        entry.porGrupo[group].totales += salieron
+        entry.porGrupo[group].editadas += editadas
+      })
+    } else {
+      entry.porGrupo.sinDesglose.totales += Number(p.piezas_totales) || 0
+      entry.porGrupo.sinDesglose.editadas += Number(p.piezas_editadas) || 0
+    }
   })
   return [...byLine.values()]
 }
 
 /**
- * Rendimiento por recurso: quienes graban producen piezas totales (una pauta puede tener
- * varios recursos asignados — a cada uno se le atribuye el total completo, sin repartir),
- * quien edita produce piezas editadas — solo de pautas 'realizada'. Ordenado de mayor a
- * menor producción total.
+ * Rendimiento por recurso, separado por grupo de formato (Video/Reel vs Foto) — reemplaza
+ * a la antigua `aggregateByResource`, que le atribuía el total COMPLETO de la pauta a cada
+ * recurso de `recurso_ids` (dos camarógrafos en una pauta de 10 piezas daban 20 "grabadas"
+ * cada uno) y sumaba fotos con videos en un solo número.
  *
- * Cuando la pauta tiene piezas en el checklist (av_pauta_piezas), la edición se atribuye
- * pieza por pieza a cada editor real (`editor_user_id`) en vez de al único
- * `edita_user_id`/`edita_other` legacy — así el rendimiento no queda todo apilado en una
- * sola persona cuando la pauta se repartió entre varios editores. Pautas anteriores a esta
- * tabla (sin filas en `piezasByPauta`) caen al camino legacy.
+ * `graba*` sale, en orden de preferencia, de tres caminos — los tres marcan `grabaEstimado`
+ * salvo el primero, porque solo el reparto explícito dice con certeza quién hizo qué:
+ *   1. Reparto explícito por persona (`grabacion_por_formato`, ver `grabacionPorFormato`) —
+ *      exacto, no estimado.
+ *   2. Sin reparto por persona pero con desglose por formato de la pauta
+ *      (`piezas_por_formato`, lo que el coordinador carga como "Salieron" en el detalle):
+ *      se le atribuye a CADA recurso de `recurso_ids` el desglose completo de la pauta
+ *      (video/foto), no solo un total ciego — sigue siendo estimado porque no reparte
+ *      entre varios recursos, pero ya distingue formato.
+ *   3. Ni reparto ni desglose por formato (pauta completamente legacy): el total ciego de
+ *      siempre, en `grabaSinDesglose` (`recurso_ids` × `piezas_totales`).
+ *
+ * `edita*` sigue siendo pieza por pieza (`editor_user_id`/`piezaListas`), ahora ruteado por
+ * `pz.formato` a través de `formatGroupOf`; si la pauta tiene un solo formato activo, las
+ * piezas sin `formato` propio se imputan a ese grupo (determinista) en vez de cargarlas
+ * todas a `editaOtro`. Pautas sin filas en `piezasByPauta` caen al camino legacy
+ * (`edita_user_id`/`piezas_editadas`), igual que antes.
+ *
+ * Agrupa por ID de recurso, no por nombre — dos personas homónimas ya no se fusionan.
  * @param {Array} pautas
  * @param {Map<string,object>} usersById
  * @param {Map<string,Array>} [piezasByPauta] — pauta_id → piezas de esa pauta
- * @returns {Array<{name:string, graba:number, edita:number}>}
+ * @returns {Array<{id:string, name:string, grabaAv:number, grabaFoto:number,
+ *   grabaSinDesglose:number, grabaEstimado:boolean, editaAv:number, editaFoto:number,
+ *   editaOtro:number, graba:number, edita:number}>}
  */
-export function aggregateByResource(pautas, usersById, piezasByPauta) {
-  const byRes = new Map()
-  const add = (name, key, n) => {
-    if (!name) return
-    if (!byRes.has(name)) byRes.set(name, { name, graba: 0, edita: 0 })
-    byRes.get(name)[key] += n
+export function aggregateResourcePerformance(pautas, usersById, piezasByPauta) {
+  const byId = new Map()
+  const ensure = (id, name) => {
+    if (!byId.has(id)) {
+      byId.set(id, {
+        id,
+        name,
+        grabaAv: 0,
+        grabaFoto: 0,
+        grabaSinDesglose: 0,
+        grabaEstimado: false,
+        editaAv: 0,
+        editaFoto: 0,
+        editaOtro: 0,
+      })
+    }
+    return byId.get(id)
   }
+  const nameOf = (id) => {
+    if (isExternalId(id)) return usersById?.get(id) ? editorLabel(id, usersById) : id
+    const u = usersById?.get(id)
+    return u ? `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() || id : id
+  }
+
   pautas.forEach((p) => {
     if (p.status !== 'realizada') return
-    const piezasTotales = Number(p.piezas_totales) || 0
-    resourceNames(p, usersById).forEach((name) => add(name, 'graba', piezasTotales))
 
+    // ─ Grabación ─
+    if (hasGrabacionReparto(p)) {
+      const reparto = grabacionPorFormato(p)
+      FORMAT_KEYS.forEach((code) => {
+        const group = formatGroupOf(code)
+        if (!group) return
+        Object.entries(reparto[code] ?? {}).forEach(([id, n]) => {
+          const entry = ensure(id, nameOf(id))
+          entry[group === 'av' ? 'grabaAv' : 'grabaFoto'] += n
+        })
+      })
+    } else if (hasFormatoBreakdown(p)) {
+      // Sin reparto por persona, pero la pauta sí sabe cuánto "salió" de cada formato
+      // (piezas_por_formato, cargado a mano en el detalle desde antes de esta función) —
+      // se usa ese desglose en vez de tirar todo a "sin desglosar". Sigue siendo una
+      // estimación (se le atribuye el total completo a cada recurso, sin saber quién hizo
+      // qué), por eso sigue marcando grabaEstimado.
+      const breakdown = piezasPorFormato(p)
+      ;(p.recurso_ids ?? []).forEach((id) => {
+        const entry = ensure(id, nameOf(id))
+        Object.entries(breakdown).forEach(([code, { salieron }]) => {
+          const group = formatGroupOf(code)
+          if (!group) return
+          entry[group === 'av' ? 'grabaAv' : 'grabaFoto'] += salieron
+        })
+        entry.grabaEstimado = true
+      })
+    } else {
+      const piezasTotales = Number(p.piezas_totales) || 0
+      ;(p.recurso_ids ?? []).forEach((id) => {
+        const entry = ensure(id, nameOf(id))
+        entry.grabaSinDesglose += piezasTotales
+        entry.grabaEstimado = true
+      })
+    }
+
+    // ─ Edición ─
     const piezas = piezasByPauta?.get(p.id)
     if (piezas?.length) {
+      const soloFormato = (p.formats ?? []).length === 1 ? p.formats[0] : null
       piezas
         .filter((pz) => pz.status !== 'cancelado')
         .forEach((pz) => {
-          const editor = pz.editor_user_id ? usersById.get(pz.editor_user_id) : null
-          const name = editor ? `${editor.first_name ?? ''} ${editor.last_name ?? ''}`.trim() : null
-          add(name, 'edita', piezaListas(pz))
+          if (!pz.editor_user_id) return
+          const entry = ensure(pz.editor_user_id, nameOf(pz.editor_user_id))
+          const group = formatGroupOf(pz.formato ?? soloFormato)
+          const n = piezaListas(pz)
+          if (group === 'av') entry.editaAv += n
+          else if (group === 'foto') entry.editaFoto += n
+          else entry.editaOtro += n
         })
-    } else {
-      add(resourceName(p, 'edita', usersById), 'edita', Number(p.piezas_editadas) || 0)
+    } else if (p.edita_user_id || p.edita_other) {
+      const id = p.edita_user_id ?? `other:${p.edita_other}`
+      const entry = ensure(id, p.edita_user_id ? nameOf(id) : p.edita_other)
+      entry.editaOtro += Number(p.piezas_editadas) || 0
     }
   })
-  return [...byRes.values()].sort((a, b) => b.graba + b.edita - (a.graba + a.edita))
+
+  return [...byId.values()]
+    .map((r) => ({
+      ...r,
+      graba: r.grabaAv + r.grabaFoto + r.grabaSinDesglose,
+      edita: r.editaAv + r.editaFoto + r.editaOtro,
+    }))
+    .sort((a, b) => b.graba + b.edita - (a.graba + a.edita))
 }
 
 /** Suma piezas totales/editadas de las pautas 'realizada' de una línea en un período. */
@@ -668,9 +818,44 @@ export function piezasByEditor(piezas) {
   return grouped
 }
 
-/** Nombre por defecto de una pieza nueva, 1-indexado — editable después por el coordinador. */
-export function defaultPiezaName(index) {
-  return `Video #${index + 1}`
+/**
+ * Ordinal 1..N de cada pieza NO-lote dentro de una pauta, ordenado por `position` (empate
+ * desempatado por `id` para que el resultado sea estable). Los lotes ('Fotos') no numeran
+ * ni consumen número — no tiene sentido "Foto #1" cuando la fila representa 40 unidades.
+ * Reemplaza a `piezas.length` como base de la numeración: ese conteo de filas crecía con
+ * cada pieza creada pero nunca bajaba al borrar, así que el siguiente nombre/`position`
+ * repetía uno ya existente (ver `createForEditor` en PautaDetailModal.jsx).
+ * @param {Array} piezas — piezas de UNA pauta
+ * @returns {Map<string, number>} piezaId -> ordinal (1-indexado)
+ */
+export function piezaOrdinals(piezas) {
+  const sorted = (piezas ?? [])
+    .filter((pz) => !pz.es_lote)
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0) || String(a.id).localeCompare(b.id))
+  const ordinals = new Map()
+  sorted.forEach((pz, i) => ordinals.set(pz.id, i + 1))
+  return ordinals
+}
+
+/**
+ * Etiqueta a mostrar de una pieza: el `nombre` que el coordinador escribió a mano manda
+ * siempre; si está vacío se DERIVA del formato + ordinal ('Video #1', 'Reel #2', 'Foto #3'
+ * si es una foto suelta sin lote, 'Pieza #4' sin formato). Nunca se persiste — así un
+ * borrado no puede volver a producir nombres repetidos, a diferencia del viejo
+ * `defaultPiezaName` que sí se guardaba en `nombre`.
+ * @param {{nombre?:string, formato?:string}} pieza
+ * @param {number} ordinal — de `piezaOrdinals`
+ */
+export function piezaDisplayName(pieza, ordinal) {
+  if (pieza?.nombre) return pieza.nombre
+  const label = pieza?.formato ? FORMAT_LABELS[pieza.formato] : 'Pieza'
+  return `${label} #${ordinal}`
+}
+
+/** Siguiente `position` libre de una pauta: `max(position) + 1`, o 0 si no hay piezas. */
+export function nextPosition(piezas) {
+  const positions = (piezas ?? []).map((pz) => Number(pz.position) || 0)
+  return positions.length ? Math.max(...positions) + 1 : 0
 }
 
 /** Código de formato que siempre se reparte como lote (ver createLotePieza en avPautasApi.js). */
@@ -783,6 +968,112 @@ export function formatoBreakdownLabel(pauta) {
   return FORMAT_KEYS.filter((code) => code in breakdown)
     .map((code) => `${FORMAT_LABELS[code]} ${breakdown[code].salieron}/${breakdown[code].editadas}`)
     .join(' · ')
+}
+
+// ─── Grabación por formato y por persona (av_pautas.grabacion_por_formato) ─
+
+/**
+ * Reparto de la GRABACIÓN de una pauta: cuántas unidades de cada formato grabó cada
+ * persona. Antes solo existía `recurso_ids` (quién fue) sin cuánto ni de qué formato —
+ * `aggregateResourcePerformance` le atribuía a cada recurso el total completo de la pauta.
+ * Acotado a `pauta.formats` (igual criterio que `piezasPorFormato`): un formato desmarcado
+ * no aparece aunque quedara basura de un desmarcado anterior en la columna.
+ * @param {{formats?: string[], grabacion_por_formato?: object}} pauta
+ * @returns {Record<'V'|'R'|'F', Record<string, number>>}  formato -> resourceId -> cantidad
+ */
+export function grabacionPorFormato(pauta) {
+  const formats = pauta.formats ?? []
+  const raw = pauta.grabacion_por_formato ?? {}
+  const out = {}
+  FORMAT_KEYS.filter((code) => formats.includes(code)).forEach((code) => {
+    const entry = raw[code] ?? {}
+    const byResource = {}
+    Object.entries(entry).forEach(([resourceId, value]) => {
+      const n = Math.max(0, Math.round(Number(value)) || 0)
+      if (n > 0) byResource[resourceId] = n
+    })
+    out[code] = byResource
+  })
+  return out
+}
+
+/**
+ * Siguiente valor de `grabacion_por_formato` tras cambiar la cantidad de un recurso en un
+ * formato — listo para `onFields(pauta, { grabacion_por_formato: ... })`. Si la cantidad
+ * queda en 0 se BORRA la clave (no deja ceros basura arrastrados de un recurso quitado), y
+ * se poda a los formatos actualmente marcados.
+ * @param {object} pauta
+ * @param {'V'|'R'|'F'} code
+ * @param {string} resourceId  user_id de empleado, o `ext:<uuid>`
+ * @param {number|string} value
+ */
+export function setGrabacionCount(pauta, code, resourceId, value) {
+  const next = grabacionPorFormato(pauta)
+  const current = { ...(next[code] ?? {}) }
+  const n = Math.max(0, Math.round(Number(value)) || 0)
+  if (n > 0) current[resourceId] = n
+  else delete current[resourceId]
+  next[code] = current
+  return next
+}
+
+/**
+ * Cuánto se ha repartido vs. cuánto "salió" (`piezas_por_formato[code].salieron`, el dato
+ * manual y maestro) de cada formato. `faltan` puede ser negativo si se repartió de más —
+ * p. ej. porque alguien bajó "Salieron" después de repartir — y el llamador debe avisarlo,
+ * nunca ocultarlo ni corregirlo solo.
+ * @param {object} pauta
+ * @returns {Record<'V'|'R'|'F', {salieron:number, repartido:number, faltan:number}>}
+ */
+export function grabacionBalance(pauta) {
+  const breakdown = piezasPorFormato(pauta)
+  const reparto = grabacionPorFormato(pauta)
+  const out = {}
+  Object.keys(breakdown).forEach((code) => {
+    const salieron = breakdown[code].salieron
+    const repartido = Object.values(reparto[code] ?? {}).reduce((sum, n) => sum + n, 0)
+    out[code] = { salieron, repartido, faltan: salieron - repartido }
+  })
+  return out
+}
+
+/** Ids (empleados o `ext:<uuid>`) con cantidad repartida > 0 en algún formato, orden V/R/F. */
+export function grabacionResourceIds(pauta) {
+  const reparto = grabacionPorFormato(pauta)
+  const ids = []
+  FORMAT_KEYS.forEach((code) => {
+    Object.keys(reparto[code] ?? {}).forEach((id) => {
+      if (!ids.includes(id)) ids.push(id)
+    })
+  })
+  return ids
+}
+
+/** true si la pauta ya tiene algún reparto de grabación cargado (vs. el camino histórico). */
+export function hasGrabacionReparto(pauta) {
+  return grabacionResourceIds(pauta).length > 0
+}
+
+/**
+ * Próximo valor de `recurso_ids` tras repartir grabación a gente nueva — unión ADITIVA,
+ * nunca quita a nadie (quitar rompería la RLS de av_pauta_piezas, que autoriza por
+ * `any(recurso_ids)`, y el historial de disponibilidad de `resourceConflicts`). Devuelve
+ * `null` si no hay ids nuevos que agregar, para no disparar un UPDATE ni un evento de
+ * realtime de más.
+ * @param {{recurso_ids?: string[]}} pauta
+ * @param {object} nextGrabacion  valor ya calculado de `grabacion_por_formato`
+ * @returns {string[]|null}
+ */
+export function syncRecursoIds(pauta, nextGrabacion) {
+  const current = pauta.recurso_ids ?? []
+  const currentSet = new Set(current)
+  const ids = []
+  FORMAT_KEYS.forEach((code) => {
+    Object.keys(nextGrabacion[code] ?? {}).forEach((id) => {
+      if (!currentSet.has(id) && !ids.includes(id)) ids.push(id)
+    })
+  })
+  return ids.length ? [...current, ...ids] : null
 }
 
 // ─── Generador de agenda para WhatsApp ─────────────────────────────────────

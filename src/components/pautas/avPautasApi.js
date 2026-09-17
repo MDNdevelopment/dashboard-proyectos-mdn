@@ -182,23 +182,26 @@ export async function loadPiezas(companyId) {
 }
 
 /**
- * Inserta un lote de piezas nuevas para un editor, continuando `position` desde
- * `startPosition`. `formato` (V/R/F) es opcional: se pasa cuando la pauta tiene un único
- * formato marcado, para no obligar a elegirlo pieza por pieza en el caso común.
+ * Inserta `count` piezas nuevas para un editor, continuando `position` desde
+ * `startPosition`. `nombre` se inserta vacío: el número visible (#1, #2…) se deriva en
+ * cliente del orden (`piezaOrdinals`/`piezaDisplayName` en utils/audiovisual.js), nunca se
+ * persiste — así un borrado no puede volver a producir nombres repetidos. `formato` (V/R/F)
+ * es opcional: se pasa cuando la pauta tiene un único formato marcado, para no obligar a
+ * elegirlo pieza por pieza en el caso común.
  */
 export async function createPiezas(
   companyId,
   pautaId,
   editorUserId,
-  nombres,
+  count,
   startPosition = 0,
   formato = null,
 ) {
-  const rows = nombres.map((nombre, i) => ({
+  const rows = Array.from({ length: count }, (_, i) => ({
     company_id: companyId,
     pauta_id: pautaId,
     editor_user_id: editorUserId,
-    nombre,
+    nombre: '',
     position: startPosition + i,
     formato,
   }))
@@ -232,6 +235,27 @@ export async function updatePieza(piezaId, fields) {
   return supabase.from('av_pauta_piezas').update(updates).eq('id', piezaId).select().single()
 }
 
+/**
+ * Reasigna varias piezas a un editor (o a `null` para dejarlas sin asignar) en un solo
+ * UPDATE — reemplaza el `Promise.all` de N updates individuales que usaba
+ * `handleEditorsChange` para huerfanizar, con menos round-trips y menos eventos de
+ * realtime. `prevEditorId` queda guardado en `prev_editor_user_id` para poder ofrecer la
+ * devolución si `editorUserId` es `null` (ver `RemoveEditorDialog`); al reasignar a alguien
+ * concreto se limpia (`null`), porque la pieza ya no está huérfana.
+ */
+export async function reassignPiezas(ids, editorUserId, prevEditorId = null) {
+  if (!ids?.length) return { data: null, error: null }
+  return supabase
+    .from('av_pauta_piezas')
+    .update({
+      editor_user_id: editorUserId,
+      prev_editor_user_id: editorUserId ? null : prevEditorId,
+      updated_at: new Date().toISOString(),
+    })
+    .in('id', ids)
+    .select()
+}
+
 export async function deletePiezas(ids) {
   if (!ids?.length) return { data: null, error: null }
   return supabase.from('av_pauta_piezas').delete().in('id', ids)
@@ -240,6 +264,7 @@ export async function deletePiezas(ids) {
 function sanitizePiezaFields(fields) {
   const allowed = [
     'editor_user_id',
+    'prev_editor_user_id',
     'nombre',
     'status',
     'position',
@@ -286,6 +311,7 @@ function sanitizeFields(fields) {
     'piezas_totales',
     'piezas_editadas',
     'piezas_por_formato',
+    'grabacion_por_formato',
   ]
   const out = {}
   for (const key of allowed) {
@@ -301,5 +327,7 @@ function sanitizeFields(fields) {
   if ('piezas_totales' in fields) out.piezas_totales = Number(fields.piezas_totales) || 0
   if ('piezas_editadas' in fields) out.piezas_editadas = Number(fields.piezas_editadas) || 0
   if ('piezas_por_formato' in fields) out.piezas_por_formato = fields.piezas_por_formato ?? {}
+  if ('grabacion_por_formato' in fields)
+    out.grabacion_por_formato = fields.grabacion_por_formato ?? {}
   return out
 }
