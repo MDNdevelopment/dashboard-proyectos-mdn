@@ -418,13 +418,20 @@ export async function moveClientToLine({
     newAmount: Number(newAmount) || 0,
   })
 
-  // 2. Persistir ambos reportes del mes de transición.
-  if (fromLineId) {
-    const { error } = await upsertReport(companyId, fromLineId, year, month, oldReportData)
-    if (error) return { error }
-  }
-  const { error: e2 } = await upsertReport(companyId, toLineId, year, month, newReportData)
-  if (e2) return { error: e2 }
+  // 2. Persistir ambos reportes del mes de transición. Vía RPC SECURITY DEFINER: el usuario
+  //    solo necesita acceso a la línea DESTINO (RLS de metric_reports exige membership de
+  //    ambas líneas para un upsert directo, y quien mueve una cuenta no siempre es miembro
+  //    de la línea de origen ajena — ver migración 20260926000000).
+  const { error: eMove } = await supabase.rpc('move_client_line_reports', {
+    p_company_id: companyId,
+    p_from_line_id: fromLineId,
+    p_to_line_id: toLineId,
+    p_year: year,
+    p_month: month,
+    p_from_data: oldReportData,
+    p_to_data: newReportData,
+  })
+  if (eMove) return { error: eMove }
 
   // 3. Cambiar la línea del cliente (limpiando staff que ya no aplica y cualquier
   //    cambio diferido pendiente, ya que este movimiento es inmediato).

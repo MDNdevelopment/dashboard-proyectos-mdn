@@ -246,6 +246,7 @@ export const CHANGELOG = [
       'Corregido: en la sección de captura de una pauta, el botón "+" para aumentar cuántas piezas grabó/tomó alguien se quedaba deshabilitado sin explicación si antes no se había cargado "Salieron" de ese formato. Ahora se avisa el motivo con el paso a seguir. También se renombró a "Captura por formato" y para Foto ya no se habla de "grabar" (eso queda solo para Video/Reel) — para Foto se dice "recurso" y "capturadas".',
       'El número de "Salieron" de cada formato ahora se carga directamente en "Captura por formato", junto al reparto por persona — antes había que bajar hasta "Edición de piezas" para cargarlo antes de poder repartir, lo cual quedaba al revés. Más abajo, "Edición de piezas" solo lo muestra de lectura.',
       'En el bloque de Fotos del checklist de piezas, los contadores "Asignadas" y "Listas" ahora se muestran uno debajo del otro en vez de lado a lado, para no confundir los botones de subir/bajar de cada uno.',
+      'Corregido: en Empresa → Clientes, "Mover de línea" con la opción "Pasan a la línea nueva este mes" daba un error de permisos al mover una cuenta hacia la propia línea desde una línea ajena. Ya se puede mover sin problema.',
     ],
   },
   {
