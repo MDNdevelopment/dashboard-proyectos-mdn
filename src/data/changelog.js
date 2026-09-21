@@ -253,6 +253,7 @@ export const CHANGELOG = [
       'Corregido: en Finanzas, registrar o quitar un cobro daba error siempre — quedó resuelto.',
       'Corregido: en Chequeo, cuando había muchas publicaciones registradas en el mes, a algunos usuarios les faltaban celdas y algunas plataformas se veían incompletas mientras a otros les aparecían completas. También se actualiza solo al volver a la pestaña, para no quedarse con datos viejos.',
       'Se cargó y cerró en Finanzas la información real de agosto 2026 (facturación, cobros y reparto en partidas), y se abrió septiembre con la mensualidad de cada cliente activo ya precargada: arranca la nueva dinámica de registrar cada cobro y repartirlo el mismo día.',
+      'En Finanzas → Distribución, al repartir un cobro los porcentajes de Gastos/Socios/Ganancia ahora se recalculan al momento según el monto que vas escribiendo en cada uno. Se quitó el campo de nota opcional del formulario.',
     ],
   },
   {

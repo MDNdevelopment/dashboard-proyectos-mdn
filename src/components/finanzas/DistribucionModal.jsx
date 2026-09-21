@@ -33,7 +33,6 @@ export default function DistribucionModal({
   const disponible = selected ? cobradoDe(selected) - distribuidoDe(selected, distributions) : 0
 
   const [amounts, setAmounts] = useState(() => ({ gastos: '', socios: '', ganancia: '' }))
-  const [splitNote, setSplitNote] = useState('')
 
   const [manualPartida, setManualPartida] = useState('gastos')
   const [manualAmount, setManualAmount] = useState('')
@@ -78,7 +77,7 @@ export default function DistribucionModal({
         socios: Number(amounts.socios) || 0,
         ganancia: Number(amounts.ganancia) || 0,
       },
-      note: splitNote || null,
+      note: null,
       createdBy: userProfile?.user_id,
     })
     setSaving(false)
@@ -160,26 +159,22 @@ export default function DistribucionModal({
 
           {selected && (
             <div className="space-y-3">
-              {PARTIDA_KEYS.map((p) => (
-                <div key={p} className="flex items-center gap-3">
-                  <span className={`w-24 text-[12.5px] font-medium ${PARTIDAS[p].text}`}>
-                    {PARTIDAS[p].name} · {Math.round(pcts[p] * 100)}%
-                  </span>
-                  <input
-                    type="number"
-                    className="input-base flex-1"
-                    value={amounts[p]}
-                    onChange={(e) => setAmounts((a) => ({ ...a, [p]: e.target.value }))}
-                  />
-                </div>
-              ))}
-              <input
-                type="text"
-                className="input-base"
-                value={splitNote}
-                onChange={(e) => setSplitNote(e.target.value)}
-                placeholder="Ej. a nómina, retiro socios, reserva…"
-              />
+              {PARTIDA_KEYS.map((p) => {
+                const realPct = disponible > 0.5 ? (Number(amounts[p]) || 0) / disponible : 0
+                return (
+                  <div key={p} className="flex items-center gap-3">
+                    <span className={`w-24 text-[12.5px] font-medium ${PARTIDAS[p].text}`}>
+                      {PARTIDAS[p].name} · {Math.round(realPct * 100)}%
+                    </span>
+                    <input
+                      type="number"
+                      className="input-base flex-1"
+                      value={amounts[p]}
+                      onChange={(e) => setAmounts((a) => ({ ...a, [p]: e.target.value }))}
+                    />
+                  </div>
+                )
+              })}
               <p
                 className={`text-[12.5px] font-semibold ${
                   Math.abs(restoSplit) < 0.5
