@@ -252,7 +252,7 @@ export const CHANGELOG = [
       'En Finanzas, el Dashboard ahora muestra qué clientes entraron y cuáles se dieron de baja en el mes, con su mensualidad.',
       'Corregido: en Finanzas, registrar o quitar un cobro daba error siempre — quedó resuelto.',
       'Corregido: en Chequeo, cuando había muchas publicaciones registradas en el mes, a algunos usuarios les faltaban celdas y algunas plataformas se veían incompletas mientras a otros les aparecían completas. También se actualiza solo al volver a la pestaña, para no quedarse con datos viejos.',
-      'Se cargó en Finanzas la información real de agosto 2026 (facturación, cobros y reparto en partidas) como prueba antes de arrancar el módulo en producción en octubre.',
+      'Se cargó y cerró en Finanzas la información real de agosto 2026 (facturación, cobros y reparto en partidas), y se abrió septiembre con la mensualidad de cada cliente activo ya precargada: arranca la nueva dinámica de registrar cada cobro y repartirlo el mismo día.',
     ],
   },
   {
