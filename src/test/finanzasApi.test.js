@@ -1,9 +1,33 @@
 import { vi } from 'vitest'
-import { createSupabaseMock, makeQuery } from './helpers/supabaseMock'
+import { createSupabaseMock } from './helpers/supabaseMock'
 
 vi.mock('../supabase', () => ({
   supabase: createSupabaseMock({
     tables: {
+      fin_payments: [
+        {
+          id: 'p-new',
+          invoice_id: 'inv-1',
+          paid_on: '2026-08-05',
+          amount: 100,
+          amount_bs: null,
+          rate: null,
+          method: null,
+          note: null,
+        },
+      ],
+      fin_months: [
+        {
+          id: 'm-1',
+          company_id: 'co-1',
+          year: 2026,
+          month: 8,
+          closed: false,
+          pct_gastos: 0.72,
+          pct_socios: 0.18,
+          pct_ganancia: 0.1,
+        },
+      ],
       fin_invoices: [
         {
           id: 'inv-1',
@@ -35,6 +59,8 @@ import {
   loadInvoices,
   createInvoice,
   createDistributionSplit,
+  addPayment,
+  updateMonthPcts,
 } from '../components/finanzas/finanzasApi'
 
 beforeEach(() => {
@@ -118,5 +144,61 @@ describe('finanzasApi — createDistributionSplit', () => {
     })
     expect(data).toEqual([])
     expect(error).toBeNull()
+  })
+})
+
+describe('finanzasApi — addPayment', () => {
+  it('persiste amount_bs y rate cuando el cobro es en bolívares', async () => {
+    await addPayment('inv-1', {
+      paidOn: '2026-08-05',
+      amount: 100,
+      amountBs: 84000,
+      rate: 840,
+      method: 'Transferencia Bs',
+      note: null,
+    })
+    const query = supabase.from.mock.results.at(-1).value
+    expect(query.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        invoice_id: 'inv-1',
+        amount: 100,
+        amount_bs: 84000,
+        rate: 840,
+        method: 'Transferencia Bs',
+      }),
+    )
+  })
+
+  it('deja amount_bs y rate en null para un cobro en divisa', async () => {
+    await addPayment('inv-1', { paidOn: '2026-08-05', amount: 100, method: 'Zelle' })
+    const query = supabase.from.mock.results.at(-1).value
+    expect(query.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ amount_bs: null, rate: null }),
+    )
+  })
+})
+
+describe('finanzasApi — updateMonthPcts', () => {
+  it('rechaza porcentajes que no suman 100% sin llamar a Supabase', async () => {
+    const fromCallsBefore = supabase.from.mock.calls.length
+    const { data, error } = await updateMonthPcts('m-1', {
+      gastos: 0.7,
+      socios: 0.2,
+      ganancia: 0.2,
+    })
+    expect(data).toBeNull()
+    expect(error).toBeInstanceOf(Error)
+    expect(supabase.from.mock.calls.length).toBe(fromCallsBefore)
+  })
+
+  it('acepta porcentajes que suman 100% y actualiza fin_months', async () => {
+    const { error } = await updateMonthPcts('m-1', { gastos: 0.72, socios: 0.18, ganancia: 0.1 })
+    expect(error).toBeNull()
+    const query = supabase.from.mock.results.at(-1).value
+    expect(query.update).toHaveBeenCalledWith({
+      pct_gastos: 0.72,
+      pct_socios: 0.18,
+      pct_ganancia: 0.1,
+    })
   })
 })

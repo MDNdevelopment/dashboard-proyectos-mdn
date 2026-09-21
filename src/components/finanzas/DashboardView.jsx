@@ -18,6 +18,9 @@ import {
   asignadoPorPartida,
   desviacionEnPuntos,
   metaPartida,
+  pctsDelMes,
+  cobradoPorMoneda,
+  movimientoCartera,
 } from '../../utils/finanzas'
 import { loadAllInvoices } from './finanzasApi'
 import { PARTIDAS, PARTIDA_KEYS } from './constants'
@@ -84,11 +87,16 @@ export default function DashboardView({
     [clients, year, month],
   )
 
+  const pcts = pctsDelMes(finMonth)
   const facturado = totalFacturado(invoices)
   const cobrado = totalCobrado(invoices)
   const porCobrar = totalPorCobrar(invoices)
+  const { bs: cobradoBs, divisa: cobradoDivisa } = cobradoPorMoneda(invoices)
   const gananciaReal = asignadoPorPartida(distributions, 'ganancia')
   const margenPct = cobrado ? gananciaReal / cobrado : 0
+  const cartera = useMemo(() => movimientoCartera(clients, year, month), [clients, year, month])
+  const carteraEntraronFee = cartera.entraron.reduce((a, c) => a + Number(c.monthly_fee ?? 0), 0)
+  const carteraSalieronFee = cartera.salieron.reduce((a, c) => a + Number(c.monthly_fee ?? 0), 0)
 
   const topClientes = useMemo(() => {
     const grp = new Map()
@@ -144,7 +152,7 @@ export default function DashboardView({
         <KpiCard
           label="Cobrado"
           value={fmtUSD(cobrado)}
-          sub={`${facturado ? Math.round((cobrado / facturado) * 100) : 0}% de lo facturado`}
+          sub={`Bs ${fmtUSD(cobradoBs)} · Divisa ${fmtUSD(cobradoDivisa)} · ${facturado ? Math.round((cobrado / facturado) * 100) : 0}%`}
           accent="#1F9D57"
         />
         <KpiCard
@@ -156,11 +164,41 @@ export default function DashboardView({
         <KpiCard
           label="Ganancia real"
           value={fmtUSD(gananciaReal)}
-          sub={`${(margenPct * 100).toFixed(1)}% · meta 14%`}
-          accent={margenPct >= 0.14 ? '#1F9D57' : '#D6453F'}
+          sub={`${(margenPct * 100).toFixed(1)}% · meta ${Math.round(pcts.ganancia * 100)}%`}
+          accent={margenPct >= pcts.ganancia ? '#1F9D57' : '#D6453F'}
         />
         <KpiCard label="Clientes activos" value={activeClients.length} sub="retainer mensual" />
       </div>
+
+      {(cartera.entraron.length > 0 || cartera.salieron.length > 0) && (
+        <div className="bg-white border border-[#e0ddd4] rounded-xl p-4">
+          <p className="text-[13px] font-mono font-bold uppercase tracking-wide text-[#888] mb-3">
+            Movimiento de cartera
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-[13.5px]">
+            <div>
+              <p className="font-semibold text-[#1F9D57] mb-1">
+                +{cartera.entraron.length} clientes ({fmtUSD(carteraEntraronFee)}/mes)
+              </p>
+              {cartera.entraron.map((c) => (
+                <p key={c.id} className="text-[#666]">
+                  {c.name}
+                </p>
+              ))}
+            </div>
+            <div>
+              <p className="font-semibold text-[#D6453F] mb-1">
+                −{cartera.salieron.length} clientes ({fmtUSD(carteraSalieronFee)}/mes)
+              </p>
+              {cartera.salieron.map((c) => (
+                <p key={c.id} className="text-[#666]">
+                  {c.name}
+                </p>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="bg-white border border-[#e0ddd4] rounded-xl p-4">
@@ -187,7 +225,7 @@ export default function DashboardView({
           <div className="space-y-3">
             {PARTIDA_KEYS.map((p) => {
               const real = asignadoPorPartida(distributions, p)
-              const { puntos, neutral, favorable } = desviacionEnPuntos(distributions, p)
+              const { puntos, neutral, favorable } = desviacionEnPuntos(distributions, p, pcts)
               return (
                 <div key={p}>
                   <div className="flex items-center justify-between text-[13px] mb-1">
@@ -196,7 +234,7 @@ export default function DashboardView({
                       {PARTIDAS[p].name}
                     </span>
                     <span className="text-[#888]">
-                      {fmtUSD(real)} / meta {fmtUSD(metaPartida(cobrado, p))}
+                      {fmtUSD(real)} / meta {fmtUSD(metaPartida(cobrado, p, pcts))}
                     </span>
                   </div>
                   <div className="h-2 rounded-full bg-[#f0ede3] overflow-hidden">

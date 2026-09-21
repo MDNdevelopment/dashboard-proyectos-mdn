@@ -34,6 +34,8 @@ function normalizePayment(row) {
     invoiceId: row.invoice_id,
     paidOn: row.paid_on,
     amount: Number(row.amount),
+    amountBs: row.amount_bs == null ? null : Number(row.amount_bs),
+    rate: row.rate == null ? null : Number(row.rate),
     method: row.method,
     note: row.note,
   }
@@ -65,6 +67,9 @@ function normalizeMonth(row) {
     closed: row.closed,
     closedAt: row.closed_at,
     closedBy: row.closed_by,
+    pctGastos: Number(row.pct_gastos),
+    pctSocios: Number(row.pct_socios),
+    pctGanancia: Number(row.pct_ganancia),
   }
 }
 
@@ -191,10 +196,21 @@ export async function deleteInvoice(invoiceId) {
   return supabase.from('fin_invoices').delete().eq('id', invoiceId)
 }
 
-export async function addPayment(invoiceId, { paidOn, amount, method = null, note = null }) {
+export async function addPayment(
+  invoiceId,
+  { paidOn, amount, amountBs = null, rate = null, method = null, note = null },
+) {
   const { data, error } = await supabase
     .from('fin_payments')
-    .insert({ invoice_id: invoiceId, paid_on: paidOn, amount, method, note })
+    .insert({
+      invoice_id: invoiceId,
+      paid_on: paidOn,
+      amount,
+      amount_bs: amountBs,
+      rate,
+      method,
+      note,
+    })
     .select()
     .single()
   return { data: normalizePayment(data), error }
@@ -202,6 +218,21 @@ export async function addPayment(invoiceId, { paidOn, amount, method = null, not
 
 export async function deletePayment(paymentId) {
   return supabase.from('fin_payments').delete().eq('id', paymentId)
+}
+
+/** Actualiza el reparto del mes. Valida que sumen 1 (con tolerancia de redondeo) antes de escribir. */
+export async function updateMonthPcts(monthId, { gastos, socios, ganancia }) {
+  const suma = Number(gastos) + Number(socios) + Number(ganancia)
+  if (Math.abs(suma - 1) > 0.005) {
+    return { data: null, error: new Error('Los porcentajes deben sumar 100%') }
+  }
+  const { data, error } = await supabase
+    .from('fin_months')
+    .update({ pct_gastos: gastos, pct_socios: socios, pct_ganancia: ganancia })
+    .eq('id', monthId)
+    .select()
+    .single()
+  return { data: normalizeMonth(data), error }
 }
 
 // ─── Distribución en partidas ───────────────────────────────────────────────────

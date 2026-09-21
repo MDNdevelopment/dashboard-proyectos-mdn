@@ -15,11 +15,28 @@ export default function CobroModal({ invoice, canManage, onClose, onSaved }) {
   const [method, setMethod] = useState(METODOS_PAGO[0])
   const [date, setDate] = useState(todayISO())
   const [note, setNote] = useState('')
+  const [amountBs, setAmountBs] = useState('')
+  const [rate, setRate] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
   const cobrado = cobradoDe(invoice)
   const pendiente = pendienteDe(invoice)
+  const isBs = method === 'Transferencia Bs'
+
+  // Al cargar Bs + tasa, el USD se deriva y ya no se edita a mano.
+  function handleAmountBsChange(v) {
+    setAmountBs(v)
+    const bs = Number(v)
+    const r = Number(rate)
+    if (bs > 0 && r > 0) setAmount((bs / r).toFixed(2))
+  }
+  function handleRateChange(v) {
+    setRate(v)
+    const bs = Number(amountBs)
+    const r = Number(v)
+    if (bs > 0 && r > 0) setAmount((bs / r).toFixed(2))
+  }
 
   async function handleAddPayment() {
     const amt = Number(amount)
@@ -31,9 +48,20 @@ export default function CobroModal({ invoice, canManage, onClose, onSaved }) {
       setError('No puedes cobrar más de lo pendiente')
       return
     }
+    if (isBs && (!Number(amountBs) || !Number(rate))) {
+      setError('Ingresa el monto en Bs y la tasa')
+      return
+    }
     setSaving(true)
     setError(null)
-    const { error: err } = await addPayment(invoice.id, { paidOn: date, amount: amt, method, note })
+    const { error: err } = await addPayment(invoice.id, {
+      paidOn: date,
+      amount: amt,
+      amountBs: isBs ? Number(amountBs) : null,
+      rate: isBs ? Number(rate) : null,
+      method,
+      note,
+    })
     setSaving(false)
     if (err) {
       setError(err.message)
@@ -100,6 +128,11 @@ export default function CobroModal({ invoice, canManage, onClose, onSaved }) {
                   >
                     <div>
                       <span className="font-bold text-[#111]">{fmtUSD(p.amount)}</span>{' '}
+                      {p.amountBs != null && (
+                        <span className="text-[#999]">
+                          (Bs {p.amountBs.toLocaleString('es-VE')} · tasa {p.rate}){' '}
+                        </span>
+                      )}
                       <span className="text-[#999]">
                         · {p.method || '—'} · {fmtDate(p.paidOn)}
                       </span>
@@ -123,17 +156,6 @@ export default function CobroModal({ invoice, canManage, onClose, onSaved }) {
 
           {canManage && pendiente > 0.5 && (
             <>
-              <div>
-                <label className="block text-[12px] font-mono font-bold uppercase tracking-wide text-[#888] mb-1.5">
-                  Monto cobrado (USD)
-                </label>
-                <input
-                  type="number"
-                  className="input-base"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                />
-              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[12px] font-mono font-bold uppercase tracking-wide text-[#888] mb-1.5">
@@ -160,6 +182,44 @@ export default function CobroModal({ invoice, canManage, onClose, onSaved }) {
                     onChange={(e) => setDate(e.target.value)}
                   />
                 </div>
+              </div>
+              {isBs && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[12px] font-mono font-bold uppercase tracking-wide text-[#888] mb-1.5">
+                      Monto en Bs
+                    </label>
+                    <input
+                      type="number"
+                      className="input-base"
+                      value={amountBs}
+                      onChange={(e) => handleAmountBsChange(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[12px] font-mono font-bold uppercase tracking-wide text-[#888] mb-1.5">
+                      Tasa (Bs/$)
+                    </label>
+                    <input
+                      type="number"
+                      className="input-base"
+                      value={rate}
+                      onChange={(e) => handleRateChange(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+              <div>
+                <label className="block text-[12px] font-mono font-bold uppercase tracking-wide text-[#888] mb-1.5">
+                  Monto cobrado (USD){isBs ? ' — calculado' : ''}
+                </label>
+                <input
+                  type="number"
+                  className="input-base"
+                  value={amount}
+                  readOnly={isBs}
+                  onChange={(e) => setAmount(e.target.value)}
+                />
               </div>
               <div>
                 <label className="block text-[12px] font-mono font-bold uppercase tracking-wide text-[#888] mb-1.5">

@@ -140,6 +140,7 @@ export default function FinanzasPage() {
   const canManageCobros = can('finanzas.cobros.manage')
   const canManageDistribucion = can('finanzas.distribucion.manage')
   const canCerrarMes = can('finanzas.cerrar_mes')
+  const canManagePartidas = can('finanzas.partidas.manage')
 
   const shared = {
     companyId,
@@ -212,6 +213,7 @@ export default function FinanzasPage() {
               {...shared}
               canManage={canManageDistribucion}
               canCerrarMes={canCerrarMes}
+              canManagePartidas={canManagePartidas}
             />
           ))}
 

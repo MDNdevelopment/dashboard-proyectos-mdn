@@ -7,6 +7,7 @@ import {
   pagadoPorPartida,
   saldoArrastrado,
   saldoPartida,
+  pctsDelMes,
 } from '../../utils/finanzas'
 import { loadDistributionsBefore, deleteDistribution } from './finanzasApi'
 import { PARTIDAS } from './constants'
@@ -44,6 +45,7 @@ export default function PartidaView({
   }, [companyId, year, month])
 
   const P = PARTIDAS[partida]
+  const pcts = pctsDelMes(finMonth)
   const closed = !!finMonth?.closed
   const asignado = asignadoPorPartida(distributions, partida)
   const pagado = pagadoPorPartida(distributions, partida)
@@ -71,7 +73,7 @@ export default function PartidaView({
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <p className="text-[13.5px] text-[#888]">
-            Partida {Math.round(P.pct * 100)}% · el saldo se arrastra mes a mes
+            Partida {Math.round(pcts[partida] * 100)}% · el saldo se arrastra mes a mes
           </p>
         </div>
         <div className="flex gap-2">

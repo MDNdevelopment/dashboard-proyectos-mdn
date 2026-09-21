@@ -13,7 +13,8 @@
  *                   kind: 'in'|'out', movedOn, concept, beneficiary, amount,
  *                   invoiceId, note }
  */
-import { PARTIDAS } from '../components/finanzas/constants'
+import { PARTIDAS_PCT_DEFAULT } from '../components/finanzas/constants'
+import { clientInMonth } from './clientInMonth'
 
 /** Tolerancia usada en todo el módulo para tratar redondeos como iguales. */
 const EPS = 0.5
@@ -53,6 +54,24 @@ export function totalCobrado(invoices) {
 
 export function totalPorCobrar(invoices) {
   return totalFacturado(invoices) - totalCobrado(invoices)
+}
+
+/**
+ * Desglosa lo cobrado del mes por moneda de entrada real (Bs vs divisa),
+ * en USD equivalente. Un pago cuenta como "bs" si tiene `amountBs` cargado
+ * (registrado con monto + tasa); el resto — incluida la cobranza histórica
+ * sin este dato — cuenta como "divisa", igual que hacía `totalCobrado` antes.
+ */
+export function cobradoPorMoneda(invoices) {
+  let bs = 0
+  let divisa = 0
+  for (const inv of invoices ?? []) {
+    for (const p of inv.payments ?? []) {
+      if (p.amountBs != null) bs += Number(p.amount ?? 0)
+      else divisa += Number(p.amount ?? 0)
+    }
+  }
+  return { bs, divisa }
 }
 
 // ─── Distribución en partidas ───────────────────────────────────────────────────
@@ -102,14 +121,30 @@ export function saldoPartida(distsAnteriores, distsDelMes, partida) {
   )
 }
 
-/** Meta presupuestada de una partida sobre lo cobrado del mes (66/20/14%). */
-export function metaPartida(cobradoDelMes, partida) {
-  return Number(cobradoDelMes ?? 0) * (PARTIDAS[partida]?.pct ?? 0)
+/**
+ * % de reparto vigentes para un mes: lee las columnas `pct_*` de `fin_months`
+ * (normalizadas a pctGastos/pctSocios/pctGanancia por finanzasApi.js), con
+ * fallback a PARTIDAS_PCT_DEFAULT si el mes aún no existe (mes no abierto).
+ * Guardarlos por mes (no como constante global) es lo que permite que un mes
+ * cerrado quede auditable contra el % vigente cuando se cerró.
+ */
+export function pctsDelMes(finMonth) {
+  return {
+    gastos: Number(finMonth?.pctGastos ?? PARTIDAS_PCT_DEFAULT.gastos),
+    socios: Number(finMonth?.pctSocios ?? PARTIDAS_PCT_DEFAULT.socios),
+    ganancia: Number(finMonth?.pctGanancia ?? PARTIDAS_PCT_DEFAULT.ganancia),
+  }
+}
+
+/** Meta presupuestada de una partida sobre lo cobrado del mes, según sus % vigentes. */
+export function metaPartida(cobradoDelMes, partida, pcts) {
+  return Number(cobradoDelMes ?? 0) * (pcts?.[partida] ?? 0)
 }
 
 /** % real que representa una partida sobre el total distribuido del mes. */
 export function realPct(distsDelMes, partida) {
-  const total = Object.keys(PARTIDAS).reduce((a, p) => a + asignadoPorPartida(distsDelMes, p), 0)
+  const partidas = ['gastos', 'socios', 'ganancia']
+  const total = partidas.reduce((a, p) => a + asignadoPorPartida(distsDelMes, p), 0)
   if (!total) return 0
   return asignadoPorPartida(distsDelMes, partida) / total
 }
@@ -120,8 +155,8 @@ export function realPct(distsDelMes, partida) {
  * la meta es favorable (se gasta menos); en Socios y Ganancia, estar por
  * ENCIMA es favorable. Desviaciones menores a 0.3 pts se consideran neutras.
  */
-export function desviacionEnPuntos(distsDelMes, partida) {
-  const puntos = (realPct(distsDelMes, partida) - (PARTIDAS[partida]?.pct ?? 0)) * 100
+export function desviacionEnPuntos(distsDelMes, partida, pcts) {
+  const puntos = (realPct(distsDelMes, partida) - (pcts?.[partida] ?? 0)) * 100
   const neutral = Math.abs(puntos) < 0.3
   const favorable = partida === 'gastos' ? puntos <= 0 : puntos >= 0
   return { puntos, neutral, favorable: neutral ? null : favorable }
@@ -156,4 +191,29 @@ export function tasaCobranza(invoices) {
 /** Ticket promedio: facturado / clientes activos facturados (0 si no hay clientes). */
 export function ticketPromedio(invoices, activeClientCount) {
   return activeClientCount ? totalFacturado(invoices) / activeClientCount : 0
+}
+
+// ─── Movimiento de cartera ────────────────────────────────────────────────────
+
+function prevYearMonth(year, month) {
+  return month <= 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 }
+}
+
+/**
+ * Clientes que entraron o salieron de la cartera activa entre el mes anterior
+ * y el mes dado, según la misma regla de alta/baja que usa Reportes
+ * (`clientInMonth`) — no se reimplementa ni se captura a mano, se deriva de
+ * `metric_clients` para no crear una segunda fuente de verdad.
+ */
+export function movimientoCartera(clients, year, month) {
+  const prev = prevYearMonth(year, month)
+  const entraron = []
+  const salieron = []
+  for (const c of clients ?? []) {
+    const estabaAntes = clientInMonth(c, prev.year, prev.month)
+    const estaAhora = clientInMonth(c, year, month)
+    if (!estabaAntes && estaAhora) entraron.push(c)
+    else if (estabaAntes && !estaAhora) salieron.push(c)
+  }
+  return { entraron, salieron }
 }

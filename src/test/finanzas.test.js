@@ -17,7 +17,12 @@ import {
   cuentasPorCobrar,
   tasaCobranza,
   ticketPromedio,
+  pctsDelMes,
+  cobradoPorMoneda,
+  movimientoCartera,
 } from '../utils/finanzas'
+
+const PCTS_66_20_14 = { gastos: 0.66, socios: 0.2, ganancia: 0.14 }
 
 function invoice(overrides = {}) {
   return { id: 'i1', amount: 1000, payments: [], ...overrides }
@@ -107,9 +112,9 @@ describe('finanzas — distribución en partidas', () => {
   })
 
   it('metaPartida aplica el % presupuestado sobre lo cobrado', () => {
-    expect(metaPartida(1000, 'gastos')).toBeCloseTo(660)
-    expect(metaPartida(1000, 'socios')).toBeCloseTo(200)
-    expect(metaPartida(1000, 'ganancia')).toBeCloseTo(140)
+    expect(metaPartida(1000, 'gastos', PCTS_66_20_14)).toBeCloseTo(660)
+    expect(metaPartida(1000, 'socios', PCTS_66_20_14)).toBeCloseTo(200)
+    expect(metaPartida(1000, 'ganancia', PCTS_66_20_14)).toBeCloseTo(140)
   })
 
   it('realPct calcula el % real de cada partida sobre el total distribuido', () => {
@@ -123,7 +128,7 @@ describe('finanzas — distribución en partidas', () => {
 
   it('desviacionEnPuntos marca "gastos" favorable cuando está por debajo de la meta', () => {
     const dists = [{ partida: 'gastos', kind: 'in', amount: 500 }] // 100% del total, meta 66%
-    const d = desviacionEnPuntos(dists, 'gastos')
+    const d = desviacionEnPuntos(dists, 'gastos', PCTS_66_20_14)
     expect(d.puntos).toBeCloseTo(34) // (1 - 0.66) * 100
     expect(d.favorable).toBe(false) // por encima de la meta en gastos = desfavorable
   })
@@ -134,7 +139,7 @@ describe('finanzas — distribución en partidas', () => {
       { partida: 'socios', kind: 'in', amount: 200 },
       { partida: 'ganancia', kind: 'in', amount: 139 },
     ]
-    const d = desviacionEnPuntos(dists, 'gastos')
+    const d = desviacionEnPuntos(dists, 'gastos', PCTS_66_20_14)
     expect(d.neutral).toBe(true)
     expect(d.favorable).toBeNull()
   })
@@ -145,7 +150,76 @@ describe('finanzas — distribución en partidas', () => {
       { partida: 'socios', kind: 'in', amount: 400 },
       { partida: 'ganancia', kind: 'in', amount: 200 },
     ]
-    expect(desviacionEnPuntos(dists, 'socios').favorable).toBe(true)
+    expect(desviacionEnPuntos(dists, 'socios', PCTS_66_20_14).favorable).toBe(true)
+  })
+})
+
+describe('finanzas — pctsDelMes', () => {
+  it('lee los % del mes normalizados', () => {
+    const finMonth = { pctGastos: 0.72, pctSocios: 0.18, pctGanancia: 0.1 }
+    expect(pctsDelMes(finMonth)).toEqual({ gastos: 0.72, socios: 0.18, ganancia: 0.1 })
+  })
+
+  it('usa el default 72/18/10 si el mes aún no existe', () => {
+    expect(pctsDelMes(null)).toEqual({ gastos: 0.72, socios: 0.18, ganancia: 0.1 })
+  })
+})
+
+describe('finanzas — cobradoPorMoneda', () => {
+  it('separa lo cobrado en Bs (con amountBs) de lo cobrado en divisa', () => {
+    const invoices = [
+      invoice({
+        payments: [
+          { amount: 100, amountBs: 84000 },
+          { amount: 50, amountBs: null },
+        ],
+      }),
+    ]
+    expect(cobradoPorMoneda(invoices)).toEqual({ bs: 100, divisa: 50 })
+  })
+
+  it('devuelve ceros sin facturas', () => {
+    expect(cobradoPorMoneda([])).toEqual({ bs: 0, divisa: 0 })
+  })
+})
+
+describe('finanzas — movimientoCartera', () => {
+  function client(overrides = {}) {
+    return { id: 'c1', name: 'Cliente', monthly_fee: 500, ...overrides }
+  }
+
+  it('detecta un cliente que entra este mes (alta en el mes actual)', () => {
+    const clients = [client({ id: 'nuevo', mdn_since: '2026-08-10' })]
+    const { entraron, salieron } = movimientoCartera(clients, 2026, 8)
+    expect(entraron.map((c) => c.id)).toEqual(['nuevo'])
+    expect(salieron).toEqual([])
+  })
+
+  it('detecta un cliente que sale este mes (contract_end en el mes anterior)', () => {
+    const clients = [client({ id: 'baja', mdn_since: '2026-01-01', contract_end: '2026-07-15' })]
+    const { entraron, salieron } = movimientoCartera(clients, 2026, 8)
+    expect(entraron).toEqual([])
+    expect(salieron.map((c) => c.id)).toEqual(['baja'])
+  })
+
+  it('respeta baja_incluye_mes=false: el cliente sale desde el mes de la baja, no el siguiente', () => {
+    const clients = [
+      client({
+        id: 'baja-inmediata',
+        mdn_since: '2026-01-01',
+        deleted_at: '2026-08-05',
+        baja_incluye_mes: false,
+      }),
+    ]
+    const { salieron } = movimientoCartera(clients, 2026, 8)
+    expect(salieron.map((c) => c.id)).toEqual(['baja-inmediata'])
+  })
+
+  it('no reporta movimiento para un cliente estable en ambos meses', () => {
+    const clients = [client({ id: 'estable', mdn_since: '2025-01-01' })]
+    const { entraron, salieron } = movimientoCartera(clients, 2026, 8)
+    expect(entraron).toEqual([])
+    expect(salieron).toEqual([])
   })
 })
 

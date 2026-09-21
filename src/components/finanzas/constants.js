@@ -1,27 +1,28 @@
 /**
- * Constantes del módulo Finanzas. Los porcentajes de PARTIDAS son una decisión de
- * dirección que se revisa a lo sumo una vez al año — se dejan como constante y no
- * como tabla administrable para que los meses ya cerrados sigan siendo auditables
- * contra el porcentaje vigente cuando se cerraron.
+ * Constantes del módulo Finanzas. Los porcentajes de reparto viven por mes en
+ * `fin_months.pct_gastos/pct_socios/pct_ganancia` (ver src/utils/finanzas.js →
+ * pctsDelMes), no aquí: así un mes cerrado sigue siendo auditable contra el
+ * porcentaje vigente cuando se cerró, aunque la política cambie después.
+ * PARTIDAS_PCT_DEFAULT es solo el valor con el que se abre un mes nuevo.
  */
 
 export const PARTIDAS = {
   gastos: {
     key: 'gastos',
     name: 'Gastos operativos',
-    pct: 0.66,
     dot: 'bg-[#F97316]',
     text: 'text-[#c2410c]',
   },
-  socios: { key: 'socios', name: 'Socios', pct: 0.2, dot: 'bg-[#34343A]', text: 'text-[#333]' },
+  socios: { key: 'socios', name: 'Socios', dot: 'bg-[#34343A]', text: 'text-[#333]' },
   ganancia: {
     key: 'ganancia',
     name: 'Ganancia',
-    pct: 0.14,
     dot: 'bg-[#10B981]',
     text: 'text-[#047857]',
   },
 }
+
+export const PARTIDAS_PCT_DEFAULT = { gastos: 0.72, socios: 0.18, ganancia: 0.1 }
 
 export const PARTIDA_KEYS = Object.keys(PARTIDAS)
 

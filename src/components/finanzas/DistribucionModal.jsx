@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { fmtUSD } from '../../utils/metricsFinance'
-import { cobradoDe, distribuidoDe } from '../../utils/finanzas'
+import { cobradoDe, distribuidoDe, pctsDelMes } from '../../utils/finanzas'
 import { createDistributionSplit, createDistribution } from './finanzasApi'
 import { PARTIDAS, PARTIDA_KEYS } from './constants'
 
@@ -17,9 +17,11 @@ export default function DistribucionModal({
   invoice,
   invoices,
   distributions,
+  finMonth,
   onClose,
   onSaved,
 }) {
+  const pcts = pctsDelMes(finMonth)
   const { userProfile } = useAuth()
   const paid = useMemo(
     () => invoices.filter((i) => cobradoDe(i) - distribuidoDe(i, distributions) > 0.5),
@@ -47,9 +49,9 @@ export default function DistribucionModal({
       const inv = paid.find((i) => i.id === id)
       const rem = inv ? cobradoDe(inv) - distribuidoDe(inv, distributions) : 0
       setAmounts({
-        gastos: (rem * PARTIDAS.gastos.pct).toFixed(2),
-        socios: (rem * PARTIDAS.socios.pct).toFixed(2),
-        ganancia: (rem * PARTIDAS.ganancia.pct).toFixed(2),
+        gastos: (rem * pcts.gastos).toFixed(2),
+        socios: (rem * pcts.socios).toFixed(2),
+        ganancia: (rem * pcts.ganancia).toFixed(2),
       })
     }
   }
@@ -161,7 +163,7 @@ export default function DistribucionModal({
               {PARTIDA_KEYS.map((p) => (
                 <div key={p} className="flex items-center gap-3">
                   <span className={`w-24 text-[12.5px] font-medium ${PARTIDAS[p].text}`}>
-                    {PARTIDAS[p].name} · {Math.round(PARTIDAS[p].pct * 100)}%
+                    {PARTIDAS[p].name} · {Math.round(pcts[p] * 100)}%
                   </span>
                   <input
                     type="number"

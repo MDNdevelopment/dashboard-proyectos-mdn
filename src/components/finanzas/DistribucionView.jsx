@@ -9,12 +9,14 @@ import {
   asignadoPorPartida,
   pagadoPorPartida,
   saldoPartida,
+  pctsDelMes,
 } from '../../utils/finanzas'
-import { loadDistributionsBefore } from './finanzasApi'
+import { loadDistributionsBefore, updateMonthPcts } from './finanzasApi'
 import { PARTIDAS, PARTIDA_KEYS } from './constants'
 import DistribucionModal from './DistribucionModal'
 import PagoPartidaModal from './PagoPartidaModal'
 import CerrarMesButton from './CerrarMesButton'
+import PartidasPctEditor from './PartidasPctEditor'
 
 export default function DistribucionView({
   companyId,
@@ -28,6 +30,7 @@ export default function DistribucionView({
   refetch,
   canManage,
   canCerrarMes,
+  canManagePartidas,
 }) {
   const navigate = useNavigate()
   const [distModal, setDistModal] = useState(undefined) // undefined=cerrado
@@ -48,6 +51,7 @@ export default function DistribucionView({
   }, [companyId, year, month])
 
   const closed = !!finMonth?.closed
+  const pcts = pctsDelMes(finMonth)
   const cobrado = totalCobrado(invoices)
   const distribuidoTotal = PARTIDA_KEYS.reduce(
     (a, p) => a + asignadoPorPartida(distributions, p),
@@ -107,7 +111,14 @@ export default function DistribucionView({
             </p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <PartidasPctEditor
+            finMonth={finMonth}
+            pcts={pcts}
+            canManage={canManagePartidas}
+            closed={closed}
+            onSaved={refetch}
+          />
           {canCerrarMes && (
             <CerrarMesButton
               companyId={companyId}
@@ -208,7 +219,7 @@ export default function DistribucionView({
                         className={`inline-flex items-center gap-1.5 font-medium ${PARTIDAS[p].text}`}
                       >
                         <span className={`w-2 h-2 rounded-full ${PARTIDAS[p].dot}`} />
-                        {PARTIDAS[p].name} · {Math.round(PARTIDAS[p].pct * 100)}%
+                        {PARTIDAS[p].name} · {Math.round(pcts[p] * 100)}%
                       </span>
                     </td>
                     <td className="text-right px-4 py-2.5 font-mono">{fmtUSD(asg)}</td>
@@ -299,6 +310,7 @@ export default function DistribucionView({
           invoice={distModal}
           invoices={invoices}
           distributions={distributions}
+          finMonth={finMonth}
           onClose={() => setDistModal(undefined)}
           onSaved={() => {
             setDistModal(undefined)
