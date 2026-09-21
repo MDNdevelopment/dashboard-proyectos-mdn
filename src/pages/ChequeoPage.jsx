@@ -87,9 +87,24 @@ export default function ChequeoPage() {
     loadAll()
   }, [loadAll])
 
+  // Recarga completa al volver a la pestaña: si el socket de realtime se cayó mientras
+  // estaba en segundo plano (pestaña dormida, red inestable), evita quedarse con un
+  // snapshot viejo indefinidamente — mismo problema que dejaba a un usuario viendo
+  // plataformas "completas" cuando otro, recién entrado, veía la foto real.
+  useEffect(() => {
+    function onVisibilityChange() {
+      if (document.visibilityState === 'visible') loadAll()
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange)
+  }, [loadAll])
+
   // Realtime: cambios de otros usuarios en la grilla del mes activo.
   useEffect(() => {
     if (!userProfile?.company_id) return
+    // Local a esta instancia del canal: la primera vez que se suscribe es la carga
+    // inicial (ya cubierta por el efecto de arriba); las siguientes son reconexiones.
+    let didInitialSubscribe = false
     const channel = supabase
       .channel('publication-checks-changes')
       .on(
@@ -115,7 +130,15 @@ export default function ChequeoPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'metric_clients' }, () =>
         loadAll(),
       )
-      .subscribe()
+      .subscribe((status) => {
+        // Tras una reconexión (no la suscripción inicial, que ya dispara loadAll arriba)
+        // recarga completa: mientras el canal estuvo caído pudo haberse perdido algún
+        // evento y el estado local habría quedado desactualizado en silencio.
+        if (status === 'SUBSCRIBED') {
+          if (didInitialSubscribe) loadAll()
+          didInitialSubscribe = true
+        }
+      })
 
     return () => {
       supabase.removeChannel(channel)

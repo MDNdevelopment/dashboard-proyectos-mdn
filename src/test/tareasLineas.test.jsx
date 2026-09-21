@@ -93,11 +93,34 @@ vi.mock('../components/metricas/metricsApi', () => ({
 // ── Mock supabase ──────────────────────────────────────────────────────────────
 // tasks y users se cargan directamente con supabase; metric_lines pasa por loadLines
 vi.mock('../supabase', () => {
-  const makeMockTable = (defaultData) => ({
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    order: vi.fn().mockResolvedValue({ data: defaultData, error: null }),
-  })
+  // `tasks` se carga con selectAllPages (ver src/lib/supabasePaginate.js), así que el
+  // mock debe encadenar `.order()` dos veces y responder a `.select(*, {count})`/`.range()`
+  // como un query builder real, no resolver de una vez en `.order()`.
+  const makeMockTable = (defaultData) => {
+    let rangeFrom = null
+    let rangeTo = null
+    let wantsCount = false
+    const q = {
+      select: vi.fn((_cols, opts) => {
+        if (opts?.count) wantsCount = true
+        return q
+      }),
+      eq: vi.fn(() => q),
+      order: vi.fn(() => q),
+      range: vi.fn((from, to) => {
+        rangeFrom = from
+        rangeTo = to
+        return q
+      }),
+      then: (resolve) => {
+        const out = rangeFrom != null ? defaultData.slice(rangeFrom, rangeTo + 1) : defaultData
+        const payload = { data: out, error: null }
+        if (wantsCount) payload.count = defaultData.length
+        return resolve(payload)
+      },
+    }
+    return q
+  }
   const channelStub = { on: vi.fn().mockReturnThis(), subscribe: vi.fn().mockReturnThis() }
   return {
     supabase: {

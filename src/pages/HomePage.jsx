@@ -23,6 +23,7 @@ import { aggregateMetricsDashboard } from '../utils/aggregateMetricsDashboard'
 import { scoreDialColor } from '../components/metricas/ScoreDial'
 import { MONTHS } from '../components/metricas/constants'
 import { visibleLinesForUser } from '../utils/lineMembers'
+import { selectAllPages } from '../lib/supabasePaginate'
 import { canSeeCeoAnalysis } from '../lib/ceoAnalysisAccess'
 import CeoAnalysisCard from '../components/home/CeoAnalysisCard'
 import RecomendacionesCard from '../components/home/RecomendacionesCard'
@@ -443,15 +444,20 @@ export default function HomePage() {
       return
     }
     let cancelled = false
-    supabase
-      .from('tasks')
-      .select('*')
-      .eq('company_id', userProfile.company_id)
-      .then(({ data, error }) => {
-        if (cancelled) return
-        setTasks(error ? [] : (data ?? []))
-        setLoadingTasks(false)
-      })
+    // Paginado con selectAllPages: sin cota, `tasks` puede superar el tope de 1000 filas
+    // por respuesta de Supabase — mismo bug que loadChecks en chequeoApi.js.
+    selectAllPages((from, to) =>
+      supabase
+        .from('tasks')
+        .select('*', { count: 'exact' })
+        .eq('company_id', userProfile.company_id)
+        .order('id', { ascending: true })
+        .range(from, to),
+    ).then(({ data, error }) => {
+      if (cancelled) return
+      setTasks(error ? [] : (data ?? []))
+      setLoadingTasks(false)
+    })
     return () => {
       cancelled = true
     }

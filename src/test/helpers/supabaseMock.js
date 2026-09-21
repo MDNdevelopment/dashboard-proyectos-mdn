@@ -17,9 +17,19 @@ import { vi } from 'vitest'
 export function makeQuery(result = [], { error = null } = {}) {
   const data = result
   const singleData = Array.isArray(data) ? (data[0] ?? null) : data
+  // Soporta `.range()`/`.select(cols, { count: 'exact' })` para que los loaders que
+  // paginan con selectAllPages (ver src/lib/supabasePaginate.js) funcionen contra este
+  // mock sin necesitar un query builder custom por test — ver chequeoApi.test.js para
+  // el caso donde sí hace falta simular varias páginas reales.
+  let rangeFrom = null
+  let rangeTo = null
+  let wantsCount = false
 
   const q = {
-    select: vi.fn(() => q),
+    select: vi.fn((_cols, opts) => {
+      if (opts?.count) wantsCount = true
+      return q
+    }),
     eq: vi.fn(() => q),
     neq: vi.fn(() => q),
     is: vi.fn(() => q),
@@ -32,7 +42,11 @@ export function makeQuery(result = [], { error = null } = {}) {
     lte: vi.fn(() => q),
     order: vi.fn(() => q),
     limit: vi.fn(() => q),
-    range: vi.fn(() => q),
+    range: vi.fn((from, to) => {
+      rangeFrom = from
+      rangeTo = to
+      return q
+    }),
     insert: vi.fn(() => q),
     update: vi.fn(() => q),
     upsert: vi.fn(() => q),
@@ -41,7 +55,12 @@ export function makeQuery(result = [], { error = null } = {}) {
     maybeSingle: vi.fn().mockResolvedValue({ data: singleData, error }),
   }
   // Hace el objeto thenable para que `await supabase.from(...).select().eq()` resuelva.
-  q.then = (resolve, reject) => Promise.resolve({ data, error }).then(resolve, reject)
+  q.then = (resolve, reject) => {
+    const out = Array.isArray(data) && rangeFrom != null ? data.slice(rangeFrom, rangeTo + 1) : data
+    const payload = { data: out, error }
+    if (wantsCount && Array.isArray(data)) payload.count = data.length
+    return Promise.resolve(payload).then(resolve, reject)
+  }
   return q
 }
 

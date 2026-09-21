@@ -247,6 +247,11 @@ export const CHANGELOG = [
       'El número de "Salieron" de cada formato ahora se carga directamente en "Captura por formato", junto al reparto por persona — antes había que bajar hasta "Edición de piezas" para cargarlo antes de poder repartir, lo cual quedaba al revés. Más abajo, "Edición de piezas" solo lo muestra de lectura.',
       'En el bloque de Fotos del checklist de piezas, los contadores "Asignadas" y "Listas" ahora se muestran uno debajo del otro en vez de lado a lado, para no confundir los botones de subir/bajar de cada uno.',
       'Corregido: en Empresa → Clientes, "Mover de línea" con la opción "Pasan a la línea nueva este mes" daba un error de permisos al mover una cuenta hacia la propia línea desde una línea ajena. Ya se puede mover sin problema.',
+      'En Finanzas, el reparto de cada cobro (Gastos operativos / Socios / Ganancia) ahora se puede ajustar por mes en vez de estar fijo en el código — se abre con 72/18/10 y queda editable desde Distribución.',
+      'En Finanzas ahora puedes registrar un cobro en bolívares indicando el monto en Bs y la tasa usada; el dólar se calcula solo, y el Dashboard muestra cuánto se cobró en bolívares y cuánto en divisa.',
+      'En Finanzas, el Dashboard ahora muestra qué clientes entraron y cuáles se dieron de baja en el mes, con su mensualidad.',
+      'Corregido: en Finanzas, registrar o quitar un cobro daba error siempre — quedó resuelto.',
+      'Corregido: en Chequeo, cuando había muchas publicaciones registradas en el mes, a algunos usuarios les faltaban celdas y algunas plataformas se veían incompletas mientras a otros les aparecían completas. También se actualiza solo al volver a la pestaña, para no quedarse con datos viejos.',
     ],
   },
   {

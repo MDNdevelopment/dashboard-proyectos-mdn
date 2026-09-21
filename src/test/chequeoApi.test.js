@@ -14,9 +14,31 @@ const { UPSERTED_CHECK } = vi.hoisted(() => ({
   },
 }))
 
+// loadChecks pagina con selectAllPages (ver src/lib/supabasePaginate.js), así que el
+// mock de `publication_checks` debe responder a `.range()` y devolver `count` — igual
+// que el mock local de NotificationBell.test.jsx para "Cargar más".
+function makeRangeQuery(all) {
+  let lo = 0
+  let hi = all.length - 1
+  const q = {
+    select: vi.fn(() => q),
+    eq: vi.fn(() => q),
+    order: vi.fn(() => q),
+    upsert: vi.fn(() => q),
+    range: vi.fn((from, to) => {
+      lo = from
+      hi = to
+      return q
+    }),
+    single: vi.fn().mockResolvedValue({ data: all[0] ?? null, error: null }),
+    then: (resolve) => resolve({ data: all.slice(lo, hi + 1), error: null, count: all.length }),
+  }
+  return q
+}
+
 vi.mock('../supabase', () => ({
   supabase: createSupabaseMock({
-    tables: { publication_checks: [UPSERTED_CHECK] },
+    tables: { publication_checks: () => makeRangeQuery([UPSERTED_CHECK]) },
   }),
 }))
 
@@ -34,6 +56,33 @@ describe('chequeoApi — loadChecks', () => {
     expect(query.eq).toHaveBeenCalledWith('company_id', 'co-1')
     expect(query.eq).toHaveBeenCalledWith('period_year', 2026)
     expect(query.eq).toHaveBeenCalledWith('period_month', 8)
+  })
+
+  it('pide count exacto, ordena por id y pagina con .range()', async () => {
+    const { data, error } = await loadChecks('co-1', 2026, 8)
+    const query = supabase.from.mock.results.at(-1).value
+    expect(query.select).toHaveBeenCalledWith('*', { count: 'exact' })
+    expect(query.order).toHaveBeenCalledWith('id', { ascending: true })
+    expect(query.range).toHaveBeenCalled()
+    expect(error).toBeNull()
+    expect(data).toEqual([UPSERTED_CHECK])
+  })
+
+  it('trae TODAS las filas del mes aunque superen el tope de una sola página (bug reportado)', async () => {
+    // Reproduce el caso real: publication_checks de septiembre 2026 tiene 1014 filas,
+    // por encima del tope de 1000 de Supabase. Antes de paginar, loadChecks perdía las
+    // filas de la segunda página y algunas plataformas se veían incompletas.
+    const manyChecks = Array.from({ length: 1014 }, (_, i) => ({
+      ...UPSERTED_CHECK,
+      id: `chk-${i}`,
+    }))
+    supabase.from.mockImplementation((table) =>
+      table === 'publication_checks' ? makeRangeQuery(manyChecks) : makeRangeQuery([]),
+    )
+
+    const { data, error } = await loadChecks('co-1', 2026, 9)
+    expect(error).toBeNull()
+    expect(data).toHaveLength(1014)
   })
 })
 

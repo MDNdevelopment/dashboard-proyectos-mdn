@@ -11,6 +11,7 @@ import { loadLines, loadClients } from '../components/metricas/metricsApi'
 import { currentMonthIndex } from '../components/tareas/constants'
 import { MONTHS } from '../components/metricas/constants'
 import { visibleLinesForUser, withDerivedGeneralMembers } from '../utils/lineMembers'
+import { selectAllPages } from '../lib/supabasePaginate'
 
 const ALL_TEAMS = '__all__'
 const CURRENT_YEAR = Math.floor(currentMonthIndex() / 12)
@@ -114,11 +115,18 @@ export default function TareasPage() {
 
     const [linesRes, tasksRes, usersRes, clientsRes] = await Promise.all([
       loadLines(companyId, { includeGeneral: true, includeManagement: true }),
-      supabase
-        .from('tasks')
-        .select('*')
-        .eq('company_id', companyId)
-        .order('created_at', { ascending: false }),
+      // Paginado con selectAllPages: la tabla `tasks` de la empresa no tiene cota (crece
+      // con cada acuerdo) y puede superar el tope de 1000 filas por respuesta de
+      // Supabase — mismo bug que loadChecks en components/chequeo/chequeoApi.js.
+      selectAllPages((from, to) =>
+        supabase
+          .from('tasks')
+          .select('*', { count: 'exact' })
+          .eq('company_id', companyId)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: true })
+          .range(from, to),
+      ),
       supabase
         .from('users')
         .select(

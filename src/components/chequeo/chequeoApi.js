@@ -5,19 +5,29 @@
  * components/pautas/avPautasApi.js.
  */
 import { supabase } from '../../supabase'
+import { selectAllPages } from '../../lib/supabasePaginate'
 
 /**
  * Carga las celdas de la empresa del mes dado (periodizado, ver
  * supabase/migrations/20260831000000_publication_checks_weekly_periods.sql). El filtrado
  * por línea y por semana en alcance se hace client-side, igual que fixed_task_marks/av_pautas.
+ *
+ * Pagina con `selectAllPages` porque el volumen mensual puede superar el tope de 1000
+ * filas por respuesta que aplica Supabase por defecto — sin esto, una empresa con mucho
+ * volumen del mes recibía un subconjunto arbitrario y algunas plataformas se veían
+ * incompletas para unos usuarios y completas para otros (mismo dato, distinta página).
  */
 export async function loadChecks(companyId, year, month) {
-  return supabase
-    .from('publication_checks')
-    .select('*')
-    .eq('company_id', companyId)
-    .eq('period_year', year)
-    .eq('period_month', month)
+  return selectAllPages((from, to) =>
+    supabase
+      .from('publication_checks')
+      .select('*', { count: 'exact' })
+      .eq('company_id', companyId)
+      .eq('period_year', year)
+      .eq('period_month', month)
+      .order('id', { ascending: true })
+      .range(from, to),
+  )
 }
 
 /**

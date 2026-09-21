@@ -6,21 +6,28 @@
  */
 import { supabase } from '../../supabase'
 import { sumPiezasForLine, defaultLoteName, FOTO_FORMAT } from '../../utils/audiovisual'
+import { selectAllPages } from '../../lib/supabasePaginate'
 
 // ─── Lectura ──────────────────────────────────────────────────────────────────
 
 /**
  * Carga todas las pautas de la empresa (sin filtrar por mes: las solicitudes y las
  * "por agendar" no tienen `pauta_date`, así que un filtro por rango de fecha las
- * ocultaría). El volumen esperado es bajo — mismo criterio de simplicidad que
- * `fixed_task_marks`/`meetings`; el filtrado por mes/línea se hace client-side.
+ * ocultaría). El filtrado por mes/línea se hace client-side. Pagina con selectAllPages
+ * por si el volumen supera el tope de 1000 filas por respuesta de Supabase — mismo bug
+ * que loadChecks en chequeoApi.js. `id` desempata `pauta_date` (no es única: varias
+ * pautas del mismo día, o null en solicitudes/"por agendar") para un orden estable.
  */
 export async function loadPautas(companyId) {
-  return supabase
-    .from('av_pautas')
-    .select('*')
-    .eq('company_id', companyId)
-    .order('pauta_date', { ascending: true, nullsFirst: false })
+  return selectAllPages((from, to) =>
+    supabase
+      .from('av_pautas')
+      .select('*', { count: 'exact' })
+      .eq('company_id', companyId)
+      .order('pauta_date', { ascending: true, nullsFirst: false })
+      .order('id', { ascending: true })
+      .range(from, to),
+  )
 }
 
 /**

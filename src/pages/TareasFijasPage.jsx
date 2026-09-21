@@ -6,6 +6,7 @@ import { MONTHS } from '../components/metricas/constants'
 import { visibleLinesForUser } from '../utils/lineMembers'
 import { buildFixedWeeks } from '../utils/fixedTasks'
 import { loadChecks } from '../components/chequeo/chequeoApi'
+import { selectAllPages } from '../lib/supabasePaginate'
 import FixedTasksGrid from '../components/tareas-fijas/FixedTasksGrid'
 import FixedTasksReportPreview from '../components/tareas-fijas/FixedTasksReportPreview'
 
@@ -76,12 +77,19 @@ export default function TareasFijasPage() {
       setMarks([])
       return
     }
-    const { data } = await supabase
-      .from('fixed_task_marks')
-      .select('*')
-      .eq('period_year', year)
-      .eq('period_month', month)
-      .in('line_id', scopedLineIds)
+    // Paginado con selectAllPages: mismo criterio que loadChecks — el volumen mensual
+    // de marcas fijas no tiene cota estricta y podría superar el tope de 1000 filas por
+    // respuesta de Supabase a medida que crece la agencia.
+    const { data } = await selectAllPages((from, to) =>
+      supabase
+        .from('fixed_task_marks')
+        .select('*', { count: 'exact' })
+        .eq('period_year', year)
+        .eq('period_month', month)
+        .in('line_id', scopedLineIds)
+        .order('id', { ascending: true })
+        .range(from, to),
+    )
     setMarks(data ?? [])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scopedLineIds.join(','), year, month])
