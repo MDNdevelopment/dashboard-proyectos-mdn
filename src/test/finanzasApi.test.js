@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import { createSupabaseMock } from './helpers/supabaseMock'
+import { createSupabaseMock, makeQuery } from './helpers/supabaseMock'
 
 vi.mock('../supabase', () => ({
   supabase: createSupabaseMock({
@@ -50,6 +50,19 @@ vi.mock('../supabase', () => ({
           ],
         },
       ],
+      fin_month_totals: [
+        {
+          month_id: 'm-1',
+          total_facturado: 5000,
+          total_cobrado: 4800,
+          total_gastos: 3456,
+          total_socios: 864,
+          total_ganancia: 480,
+          note: 'del sheet',
+          created_by: 'u-1',
+          created_at: '2026-09-22T00:00:00Z',
+        },
+      ],
     },
   }),
 }))
@@ -59,8 +72,13 @@ import {
   loadInvoices,
   createInvoice,
   createDistributionSplit,
+  createDistributionsBatch,
   addPayment,
   updateMonthPcts,
+  loadMonthTotals,
+  loadAllMonthTotals,
+  createSummaryMonth,
+  seedRecurringInvoices,
 } from '../components/finanzas/finanzasApi'
 
 beforeEach(() => {
@@ -116,6 +134,28 @@ describe('finanzasApi — createInvoice', () => {
         client_name: 'Turbopre',
         amount: 2600,
         created_by: 'u-1',
+      }),
+    )
+  })
+})
+
+describe('finanzasApi — createDistributionsBatch', () => {
+  it('inserta todas las filas en un solo insert, con los nombres de columna en snake_case', async () => {
+    await createDistributionsBatch('m-1', [
+      { partida: 'ganancia', kind: 'out', movedOn: '2026-09-22', concept: 'Traspaso', amount: 50 },
+      { partida: 'gastos', kind: 'in', movedOn: '2026-09-22', concept: 'Traspaso', amount: 50 },
+      { partida: 'gastos', kind: 'out', movedOn: '2026-09-22', concept: 'Nómina', amount: 150 },
+    ])
+    const query = supabase.from.mock.results.at(-1).value
+    const inserted = query.insert.mock.calls[0][0]
+    expect(inserted).toHaveLength(3)
+    expect(inserted[0]).toEqual(
+      expect.objectContaining({
+        month_id: 'm-1',
+        partida: 'ganancia',
+        kind: 'out',
+        moved_on: '2026-09-22',
+        amount: 50,
       }),
     )
   })
@@ -200,5 +240,162 @@ describe('finanzasApi — updateMonthPcts', () => {
       pct_socios: 0.18,
       pct_ganancia: 0.1,
     })
+  })
+})
+
+describe('finanzasApi — loadMonthTotals', () => {
+  it('normaliza snake_case a camelCase', async () => {
+    const { data, error } = await loadMonthTotals('m-1')
+    expect(error).toBeNull()
+    expect(data).toEqual(
+      expect.objectContaining({
+        monthId: 'm-1',
+        totalFacturado: 5000,
+        totalCobrado: 4800,
+        totalGastos: 3456,
+        totalSocios: 864,
+        totalGanancia: 480,
+        note: 'del sheet',
+      }),
+    )
+  })
+})
+
+describe('finanzasApi — createSummaryMonth', () => {
+  it('rechaza si el mes ya existe', async () => {
+    const { data, error } = await createSummaryMonth({
+      companyId: 'co-1',
+      year: 2026,
+      month: 8,
+      userId: 'u-1',
+      totals: {
+        totalFacturado: 100,
+        totalCobrado: 100,
+        totalGastos: 0,
+        totalSocios: 0,
+        totalGanancia: 0,
+      },
+    })
+    expect(data).toBeNull()
+    expect(error).toBeInstanceOf(Error)
+  })
+
+  it('crea el mes summary_only, guarda los totales y lo cierra, en ese orden', async () => {
+    const findExistingQuery = makeQuery(null)
+    const insertMonthQuery = makeQuery({
+      id: 'm-new',
+      company_id: 'co-1',
+      year: 2025,
+      month: 1,
+      closed: false,
+      summary_only: true,
+      pct_gastos: 0.72,
+      pct_socios: 0.18,
+      pct_ganancia: 0.1,
+    })
+    const insertTotalsQuery = makeQuery([])
+    const updateMonthQuery = makeQuery({
+      id: 'm-new',
+      company_id: 'co-1',
+      year: 2025,
+      month: 1,
+      closed: true,
+      closed_at: '2026-09-22T00:00:00Z',
+      closed_by: 'u-1',
+      summary_only: true,
+      pct_gastos: 0.72,
+      pct_socios: 0.18,
+      pct_ganancia: 0.1,
+    })
+
+    const fromSpy = vi.spyOn(supabase, 'from')
+    fromSpy
+      .mockImplementationOnce(() => findExistingQuery)
+      .mockImplementationOnce(() => insertMonthQuery)
+      .mockImplementationOnce(() => insertTotalsQuery)
+      .mockImplementationOnce(() => updateMonthQuery)
+
+    const { data, error } = await createSummaryMonth({
+      companyId: 'co-1',
+      year: 2025,
+      month: 1,
+      userId: 'u-1',
+      totals: {
+        totalFacturado: 5000,
+        totalCobrado: 4800,
+        totalGastos: 3456,
+        totalSocios: 864,
+        totalGanancia: 480,
+        note: 'del sheet',
+      },
+    })
+
+    expect(error).toBeNull()
+    expect(data).toMatchObject({ id: 'm-new', summaryOnly: true, closed: true })
+    // Los totales se insertan ANTES de cerrar el mes: el trigger fin_block_closed_month()
+    // rechazaría el insert en fin_month_totals si el mes ya estuviera closed=true.
+    expect(insertTotalsQuery.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        month_id: 'm-new',
+        total_facturado: 5000,
+        total_ganancia: 480,
+        note: 'del sheet',
+      }),
+    )
+    expect(updateMonthQuery.update).toHaveBeenCalledWith(
+      expect.objectContaining({ closed: true, closed_by: 'u-1' }),
+    )
+
+    fromSpy.mockRestore()
+  })
+})
+
+describe('finanzasApi — seedRecurringInvoices', () => {
+  it('es idempotente: no inserta nada si el mes ya tiene alguna factura', async () => {
+    const fromSpy = vi.spyOn(supabase, 'from')
+    // 'm-1' ya tiene inv-1 en el fixture del mock.
+    const { error } = await seedRecurringInvoices('m-1', 2026, 9, [
+      { id: 'c-1', name: 'Turbopre', monthly_fee: 2600, mdn_since: '2025-01-01' },
+    ])
+    expect(error).toBeNull()
+    const finInvoicesCalls = fromSpy.mock.calls.filter(([table]) => table === 'fin_invoices')
+    expect(finInvoicesCalls).toHaveLength(1) // solo el loadInvoices del chequeo, sin insert
+    fromSpy.mockRestore()
+  })
+
+  it('con el mes vacío, inserta un cargo por cada cliente activo con monthly_fee > 0', async () => {
+    const emptyInvoicesQuery = makeQuery([])
+    const insertQuery = makeQuery([])
+    const fromSpy = vi.spyOn(supabase, 'from')
+    fromSpy
+      .mockImplementationOnce(() => emptyInvoicesQuery)
+      .mockImplementationOnce(() => insertQuery)
+
+    const clients = [
+      { id: 'c-1', name: 'Turbopre', monthly_fee: 2600, mdn_since: '2025-01-01' },
+      {
+        id: 'c-2',
+        name: 'Ex cliente',
+        monthly_fee: 500,
+        mdn_since: '2024-01-01',
+        contract_end: '2026-06-30',
+      },
+      { id: 'c-3', name: 'Sin fee', monthly_fee: 0, mdn_since: '2025-01-01' },
+    ]
+
+    const { error } = await seedRecurringInvoices('m-empty', 2026, 9, clients)
+
+    expect(error).toBeNull()
+    expect(insertQuery.insert).toHaveBeenCalledWith([
+      expect.objectContaining({
+        month_id: 'm-empty',
+        client_id: 'c-1',
+        client_name: 'Turbopre',
+        amount: 2600,
+        currency: 'USD',
+        recurring: true,
+      }),
+    ])
+    fromSpy.mockRestore()
   })
 })

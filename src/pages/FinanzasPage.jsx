@@ -3,7 +3,12 @@ import { useLocation, useNavigate, useParams, useSearchParams } from 'react-rout
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../supabase'
 import { loadClients, loadLines } from '../components/metricas/metricsApi'
-import { loadMonth, loadInvoices, loadDistributions } from '../components/finanzas/finanzasApi'
+import {
+  loadMonth,
+  loadInvoices,
+  loadDistributions,
+  loadMonthTotals,
+} from '../components/finanzas/finanzasApi'
 import MonthPeriodPicker, {
   thisMonthStr,
   monthStrToDate,
@@ -77,6 +82,7 @@ export default function FinanzasPage() {
   const [finMonth, setFinMonth] = useState(undefined) // undefined=cargando, null=no abierto
   const [invoices, setInvoices] = useState([])
   const [distributions, setDistributions] = useState([])
+  const [monthTotals, setMonthTotals] = useState(null)
   const [clients, setClients] = useState([])
   const [lines, setLines] = useState([])
   const [loading, setLoading] = useState(true)
@@ -86,16 +92,23 @@ export default function FinanzasPage() {
     setLoading(true)
     const { data: m } = await loadMonth(companyId, year, month)
     setFinMonth(m ?? null)
-    if (m) {
+    if (m?.summaryOnly) {
+      const { data: totals } = await loadMonthTotals(m.id)
+      setMonthTotals(totals ?? null)
+      setInvoices([])
+      setDistributions([])
+    } else if (m) {
       const [{ data: inv }, { data: dist }] = await Promise.all([
         loadInvoices(m.id),
         loadDistributions(m.id),
       ])
       setInvoices(inv ?? [])
       setDistributions(dist ?? [])
+      setMonthTotals(null)
     } else {
       setInvoices([])
       setDistributions([])
+      setMonthTotals(null)
     }
     setLoading(false)
   }, [companyId, year, month])
@@ -130,6 +143,11 @@ export default function FinanzasPage() {
         { event: '*', schema: 'public', table: 'fin_distributions' },
         fetchPeriod,
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'fin_month_totals' },
+        fetchPeriod,
+      )
       .subscribe()
     return () => supabase.removeChannel(channel)
   }, [companyId, fetchPeriod])
@@ -150,6 +168,7 @@ export default function FinanzasPage() {
     finMonth,
     invoices,
     distributions,
+    monthTotals,
     clients,
     lines,
     loading,
@@ -176,7 +195,7 @@ export default function FinanzasPage() {
           {tabs.map((tab) => (
             <button
               key={tab.key}
-              onClick={() => navigate(tab.path)}
+              onClick={() => navigate(`${tab.path}?mes=${monthStr}`)}
               className={`whitespace-nowrap px-3 py-1.5 rounded-lg text-[14px] font-semibold transition-all ${
                 activeKey === tab.key
                   ? 'bg-[#111] text-white'

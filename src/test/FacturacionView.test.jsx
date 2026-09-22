@@ -1,9 +1,14 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
 import FacturacionView from '../components/finanzas/FacturacionView'
 
+const mockLoadOrCreateMonth = vi.fn()
+const mockSeedRecurringInvoices = vi.fn().mockResolvedValue({ error: null })
+
 vi.mock('../components/finanzas/finanzasApi', () => ({
-  loadOrCreateMonth: vi.fn(),
+  loadOrCreateMonth: (...a) => mockLoadOrCreateMonth(...a),
+  seedRecurringInvoices: (...a) => mockSeedRecurringInvoices(...a),
   deleteInvoice: vi.fn(),
 }))
 
@@ -71,5 +76,22 @@ describe('FacturacionView', () => {
     renderView([], { finMonth: null, canManage: true })
     expect(screen.getByText(/Este mes aún no se ha abierto/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Abrir mes' })).toBeInTheDocument()
+  })
+
+  it('al abrir el mes, precarga la facturación recurrente de los clientes activos', async () => {
+    mockLoadOrCreateMonth.mockResolvedValueOnce({
+      data: { id: 'm-new' },
+      error: null,
+    })
+    const clients = [{ id: 'c-1', name: 'Turbopre', monthly_fee: 2600, mdn_since: '2025-01-01' }]
+    const refetch = vi.fn()
+    renderView([], { finMonth: null, canManage: true, clients, refetch })
+
+    await userEvent.click(screen.getByRole('button', { name: 'Abrir mes' }))
+
+    await waitFor(() =>
+      expect(mockSeedRecurringInvoices).toHaveBeenCalledWith('m-new', 2026, 7, clients),
+    )
+    expect(refetch).toHaveBeenCalled()
   })
 })

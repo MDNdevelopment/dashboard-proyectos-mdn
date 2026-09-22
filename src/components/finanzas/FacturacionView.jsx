@@ -7,7 +7,7 @@ import {
   totalFacturado,
   totalCobrado,
 } from '../../utils/finanzas'
-import { loadOrCreateMonth, deleteInvoice } from './finanzasApi'
+import { loadOrCreateMonth, seedRecurringInvoices, deleteInvoice } from './finanzasApi'
 import InvoiceModal from './InvoiceModal'
 import CobroModal from './CobroModal'
 import ConfirmDeleteDialog from '../common/ConfirmDeleteDialog'
@@ -38,7 +38,10 @@ export default function FacturacionView({
 
   async function handleOpenMonth() {
     setOpening(true)
-    await loadOrCreateMonth(companyId, year, month)
+    const { data: opened } = await loadOrCreateMonth(companyId, year, month)
+    if (opened) {
+      await seedRecurringInvoices(opened.id, year, month, clients)
+    }
     setOpening(false)
     refetch()
   }
@@ -86,6 +89,15 @@ export default function FacturacionView({
         ) : (
           <p className="text-[13.5px] text-[#bbb]">Pide a un administrador que lo abra.</p>
         )}
+      </div>
+    )
+  }
+
+  if (finMonth.summaryOnly) {
+    return (
+      <div className="bg-white border border-[#e0ddd4] rounded-xl p-10 text-center text-[13.5px] text-[#999]">
+        Este mes se cargó como resumen (solo totales, sin factura por cliente) — no tiene
+        facturación fila por fila que mostrar aquí.
       </div>
     )
   }

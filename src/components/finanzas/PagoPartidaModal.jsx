@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { fmtUSD } from '../../utils/metricsFinance'
-import { createDistribution } from './finanzasApi'
-import { PARTIDAS } from './constants'
+import { createDistribution, createDistributionsBatch } from './finanzasApi'
+import { PARTIDAS, PARTIDA_KEYS, NOTA_TRASPASO_PARTIDA } from './constants'
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10)
@@ -20,42 +20,100 @@ const PLACEHOLDER_BY_PARTIDA = {
   ganancia: 'Ej. reserva, reinversión…',
 }
 
-/** Modal de registro de un pago (egreso) contra el saldo de una partida. */
-export default function PagoPartidaModal({ monthId, partida, saldoDisponible, onClose, onSaved }) {
+/**
+ * Modal de registro de un pago (egreso) contra el saldo de una partida.
+ *
+ * Si el monto excede el disponible de la partida, en vez de bloquear pide de cuál
+ * otra partida tomar la diferencia: registra el traspaso (salida de la partida
+ * origen + entrada a la partida que paga) y el pago, los 3 movimientos juntos en un
+ * solo insert (createDistributionsBatch) — nunca dos llamadas sueltas, para no dejar
+ * el traspaso a medias si la segunda falla.
+ */
+export default function PagoPartidaModal({ monthId, partida, saldos, onClose, onSaved }) {
   const { userProfile } = useAuth()
   const [concept, setConcept] = useState('')
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState(todayISO())
+  const [sourcePartida, setSourcePartida] = useState(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
+  const saldoDisponible = saldos[partida]
+  const amt = Number(amount) || 0
+  const faltante = Math.max(0, amt - saldoDisponible)
+  const otrasPartidas = PARTIDA_KEYS.filter((p) => p !== partida)
+
   async function handleSubmit(e) {
     e.preventDefault()
-    const amt = Number(amount)
     if (!amt || amt <= 0) {
       setError('El monto debe ser mayor a 0')
-      return
-    }
-    if (amt > saldoDisponible + 0.5) {
-      setError(`Excede el disponible (${fmtUSD(saldoDisponible)})`)
       return
     }
     if (!concept.trim()) {
       setError('Este campo es obligatorio')
       return
     }
+    if (faltante > 0.5) {
+      if (!sourcePartida) {
+        setError('Elige de qué partida tomar la diferencia')
+        return
+      }
+      if (faltante > saldos[sourcePartida] + 0.5) {
+        setError(
+          `${PARTIDAS[sourcePartida].name} tampoco alcanza (disponible ${fmtUSD(saldos[sourcePartida])})`,
+        )
+        return
+      }
+    }
+
     setSaving(true)
     setError(null)
-    const { error: err } = await createDistribution(monthId, {
-      partida,
-      kind: 'out',
-      movedOn: date,
-      concept: concept.trim(),
-      beneficiary: partida === 'socios' ? concept.trim() : null,
-      amount: amt,
-      invoiceId: null,
-      createdBy: userProfile?.user_id,
-    })
+    const beneficiary = partida === 'socios' ? concept.trim() : null
+    const rows =
+      faltante > 0.5
+        ? [
+            {
+              partida: sourcePartida,
+              kind: 'out',
+              movedOn: date,
+              concept: `Traspaso a ${PARTIDAS[partida].name}: ${concept.trim()}`,
+              amount: faltante,
+              note: NOTA_TRASPASO_PARTIDA,
+              createdBy: userProfile?.user_id,
+            },
+            {
+              partida,
+              kind: 'in',
+              movedOn: date,
+              concept: `Traspaso desde ${PARTIDAS[sourcePartida].name}`,
+              amount: faltante,
+              note: NOTA_TRASPASO_PARTIDA,
+              createdBy: userProfile?.user_id,
+            },
+            {
+              partida,
+              kind: 'out',
+              movedOn: date,
+              concept: concept.trim(),
+              beneficiary,
+              amount: amt,
+              createdBy: userProfile?.user_id,
+            },
+          ]
+        : null
+
+    const { error: err } = rows
+      ? await createDistributionsBatch(monthId, rows)
+      : await createDistribution(monthId, {
+          partida,
+          kind: 'out',
+          movedOn: date,
+          concept: concept.trim(),
+          beneficiary,
+          amount: amt,
+          invoiceId: null,
+          createdBy: userProfile?.user_id,
+        })
     setSaving(false)
     if (err) {
       setError(err.message)
@@ -113,6 +171,39 @@ export default function PagoPartidaModal({ monthId, partida, saldoDisponible, on
               onChange={(e) => setDate(e.target.value)}
             />
           </div>
+
+          {faltante > 0.5 && (
+            <div className="rounded-xl border border-[#f0d9a0] bg-[#fff8ea] p-3 space-y-2">
+              <p className="text-[12.5px] text-[#9a6800] font-medium">
+                Excede el disponible de {PARTIDAS[partida].name} por {fmtUSD(faltante)}. ¿De qué
+                partida tomamos la diferencia?
+              </p>
+              <div className="flex gap-2">
+                {otrasPartidas.map((p) => {
+                  const alcanza = saldos[p] >= faltante - 0.5
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      disabled={!alcanza}
+                      onClick={() => setSourcePartida(p)}
+                      className={`flex-1 rounded-lg border px-2 py-2 text-[12.5px] font-semibold text-left transition-colors ${
+                        sourcePartida === p
+                          ? 'border-[#111] bg-[#111] text-white'
+                          : alcanza
+                            ? 'border-[#e0ddd4] text-[#333] hover:bg-[#f5f3eb]'
+                            : 'border-[#e0ddd4] text-[#bbb] cursor-not-allowed opacity-60'
+                      }`}
+                    >
+                      {PARTIDAS[p].name}
+                      <br />
+                      <span className="font-normal">{fmtUSD(saldos[p])} disp.</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="flex items-center justify-end gap-2 pt-1">
             <button

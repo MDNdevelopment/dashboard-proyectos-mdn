@@ -32,7 +32,18 @@ export default function DistribucionModal({
   const selected = paid.find((i) => i.id === selectedId)
   const disponible = selected ? cobradoDe(selected) - distribuidoDe(selected, distributions) : 0
 
-  const [amounts, setAmounts] = useState(() => ({ gastos: '', socios: '', ganancia: '' }))
+  // Si el modal se abre con un cobro ya preseleccionado (botón "Distribuir" de una
+  // fila), hay que precargar los montos recomendados aquí mismo: pick() solo corre
+  // al cambiar el <select>, así que sin esto los inputs quedaban vacíos de entrada.
+  const [amounts, setAmounts] = useState(() =>
+    selected
+      ? {
+          gastos: (disponible * pcts.gastos).toFixed(2),
+          socios: (disponible * pcts.socios).toFixed(2),
+          ganancia: (disponible * pcts.ganancia).toFixed(2),
+        }
+      : { gastos: '', socios: '', ganancia: '' },
+  )
 
   const [manualPartida, setManualPartida] = useState('gastos')
   const [manualAmount, setManualAmount] = useState('')

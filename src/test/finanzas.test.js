@@ -20,6 +20,7 @@ import {
   pctsDelMes,
   cobradoPorMoneda,
   movimientoCartera,
+  pctsEnterosPorPartida,
 } from '../utils/finanzas'
 
 const PCTS_66_20_14 = { gastos: 0.66, socios: 0.2, ganancia: 0.14 }
@@ -261,5 +262,40 @@ describe('finanzas — por cobrar y análisis', () => {
     const invoices = [invoice({ amount: 1000 }), invoice({ id: 'b', amount: 500 })]
     expect(ticketPromedio(invoices, 3)).toBeCloseTo(500)
     expect(ticketPromedio(invoices, 0)).toBe(0)
+  })
+})
+
+describe('finanzas — pctsEnterosPorPartida', () => {
+  it('con el split exacto 72/18/10, redondea a 72/18/10', () => {
+    const montos = { gastos: 720, socios: 180, ganancia: 100 }
+    expect(pctsEnterosPorPartida(montos, 1000)).toEqual({ gastos: 72, socios: 18, ganancia: 10 })
+  })
+
+  it('nunca deja que la suma pase de 100% aunque Math.round por separado sí lo haría', () => {
+    // 24.5/37.8/37.7 → Math.round por separado da 25/38/38 = 101.
+    const montos = { gastos: 245, socios: 378, ganancia: 377 }
+    const pcts = pctsEnterosPorPartida(montos, 1000)
+    expect(pcts.gastos + pcts.socios + pcts.ganancia).toBe(100)
+  })
+
+  it('reparte el resto a quien tenga el residuo más grande (método del resto mayor)', () => {
+    // 33.33/33.33/33.34 → piso 33/33/33 = 99, falta 1 → se lo lleva ganancia (mayor resto).
+    const montos = { gastos: 333.3, socios: 333.3, ganancia: 333.4 }
+    expect(pctsEnterosPorPartida(montos, 1000)).toEqual({ gastos: 33, socios: 33, ganancia: 34 })
+  })
+
+  it('sin base (cobrado 0), todas quedan en 0 sin dividir por cero', () => {
+    expect(pctsEnterosPorPartida({ gastos: 100, socios: 0, ganancia: 0 }, 0)).toEqual({
+      gastos: 0,
+      socios: 0,
+      ganancia: 0,
+    })
+  })
+
+  it('si no todo lo cobrado fue distribuido, la suma refleja eso (no fuerza a 100%)', () => {
+    // Solo se distribuyó la mitad del cobrado — el total real es ~50%, no 100%.
+    const montos = { gastos: 360, socios: 90, ganancia: 50 }
+    const pcts = pctsEnterosPorPartida(montos, 1000)
+    expect(pcts.gastos + pcts.socios + pcts.ganancia).toBe(50)
   })
 })

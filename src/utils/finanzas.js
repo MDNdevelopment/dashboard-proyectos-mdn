@@ -217,3 +217,34 @@ export function movimientoCartera(clients, year, month) {
   }
   return { entraron, salieron }
 }
+
+/**
+ * Redondea el % de cada partida sobre `base` a un entero, garantizando que los
+ * tres SIEMPRE sumen el total real redondeado (método del resto mayor / Hamilton).
+ * Redondear cada partida por separado con Math.round puede dar una suma que no
+ * cuadra (ej. 24.5/37.8/37.7 → 25/38/38 = 101%) — ver card "Distribución · meta
+ * vs real" del Dashboard.
+ * @param {Record<string, number>} montos - monto real de cada partida, ej. {gastos, socios, ganancia}
+ * @param {number} base - total sobre el que se calcula el %, ej. cobrado del mes
+ * @returns {Record<string, number>} mismo shape de `montos`, con el % entero de cada una
+ */
+export function pctsEnterosPorPartida(montos, base) {
+  const keys = Object.keys(montos ?? {})
+  if (!base || base <= 0) return Object.fromEntries(keys.map((k) => [k, 0]))
+
+  const exactos = keys.map((k) => ((Number(montos[k]) || 0) / base) * 100)
+  const totalRedondeado = Math.round(exactos.reduce((a, v) => a + v, 0))
+  const filas = keys.map((k, i) => ({
+    key: k,
+    piso: Math.floor(exactos[i]),
+    resto: exactos[i] - Math.floor(exactos[i]),
+  }))
+
+  const resultado = Object.fromEntries(filas.map((f) => [f.key, f.piso]))
+  const faltan = Math.max(0, totalRedondeado - filas.reduce((a, f) => a + f.piso, 0))
+  const porResto = [...filas].sort((a, b) => b.resto - a.resto)
+  for (let i = 0; i < faltan && i < porResto.length; i++) {
+    resultado[porResto[i].key] += 1
+  }
+  return resultado
+}
