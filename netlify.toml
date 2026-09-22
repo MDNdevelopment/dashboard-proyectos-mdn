@@ -2,6 +2,14 @@
   command = "npm test && npm run build"
   publish = "dist"
 
+[build.environment]
+  # El seed histórico de agosto (ya deprecado, ver ARQUITECTURA.md §2.15
+  # "Periodo de referencia") tiene hardcodeado el company_id de MDN Publicidad.
+  # Ese mismo valor quedó configurado como la env var MCP_COMPANY_ID, así que
+  # el secrets scanning de Netlify lo detecta como una fuga y bloquea el build
+  # (falso positivo: es un identificador interno, no una credencial).
+  SECRETS_SCAN_OMIT_PATHS = "supabase/seed/finanzas_202608.sql"
+
 [functions]
   directory = "netlify/functions"
 
