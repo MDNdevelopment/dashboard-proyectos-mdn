@@ -115,10 +115,6 @@ export const MODULES = [
         label: 'Ver sueldos y niveles de acceso de empleados',
       },
       {
-        key: 'empresa.calendario.ver_todo',
-        label: 'Ver el calendario de toda la empresa (Inicio)',
-      },
-      {
         key: 'empresa.permisos.manage',
         label: 'Registrar / editar / eliminar permisos, ausencias y reposos',
       },

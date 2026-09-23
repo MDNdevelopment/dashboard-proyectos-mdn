@@ -54,38 +54,13 @@ export const EVENT_TYPES = {
 }
 
 /**
- * Un usuario puede ver los eventos de un cliente si es miembro de su línea, o si tiene
- * acceso a toda la empresa (nivel 4+ / admin / capacidad 'empresa.calendario.ver_todo' —
- * caso RRHH: ver el calendario completo sin ser admin/nivel 4). Replica el criterio SQL de
- * `notif_client_recipients()` (supabase/migrations/20260901000000_fix_notif_date_cron_hardening.sql):
- * ojo, `tasks_view_all` NO forma parte de ese criterio, así que tampoco se usa aquí.
- *
- * @param {boolean} [hasCapability] — resultado de can('empresa.calendario.ver_todo')
- */
-export function canSeeClientDates(client, lines, userProfile, hasCapability = false) {
-  if (!userProfile) return false
-  if (userProfile.access_level >= 4 || userProfile.admin === true || hasCapability) return true
-  if (!client.line_id) return false
-  const line = lines.find((l) => l.id === client.line_id)
-  return (line?.member_user_ids ?? []).includes(userProfile.user_id)
-}
-
-/**
  * Construye los eventos del calendario del Home para el mes visible.
  * `employees`: filas de `users` ya filtradas a activos (ver activeEmployees en lib/employees.js).
- * `clients`: filas de `metric_clients` ya filtradas a no archivadas.
- * `lines`: filas de `metric_lines` con `member_user_ids: string[]` (ver metricsApi.js#loadLines).
- * `userProfile`: perfil del usuario logueado (useAuth).
+ * `clients`: filas de `metric_clients` ya filtradas a no archivadas. Todo empleado logueado ve
+ * las fechas de todos los clientes, sin importar su línea (antes se filtraba por membresía de
+ * línea vía `canSeeClientDates`, quitado a propósito).
  */
-export function buildHomeCalendarEvents({
-  employees = [],
-  clients = [],
-  lines = [],
-  userProfile,
-  year,
-  month,
-  canSeeAllClients = false,
-}) {
+export function buildHomeCalendarEvents({ employees = [], clients = [], year, month }) {
   const { startKey, endKey } = monthGridRange(year, month)
 
   // Equipo: mismo cálculo que Empresa → Empleados, sin vacaciones (vacations: []) — sus
@@ -106,7 +81,6 @@ export function buildHomeCalendarEvents({
   const clientEvents = []
   for (const client of clients) {
     if (client.deleted_at) continue
-    if (!canSeeClientDates(client, lines, userProfile, canSeeAllClients)) continue
 
     if (client.anniversary_date) {
       const sourceYear = Number(client.anniversary_date.slice(0, 4))

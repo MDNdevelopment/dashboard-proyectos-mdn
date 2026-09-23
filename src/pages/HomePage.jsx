@@ -574,15 +574,13 @@ export default function HomePage() {
   // "Fechas del equipo y clientes": calendario del mes visible con cumpleaños/aniversario
   // del equipo MDN + aniversario empresa / cliente MDN desde / cumpleaños de contacto de
   // los clientes. Se calcula en el cliente (no depende del cron de notificaciones) a
-  // partir de datos ya cargados arriba.
+  // partir de datos ya cargados arriba. Todo empleado logueado ve las fechas de todos los
+  // clientes, sin importar su línea.
   const homeCalEvents = buildHomeCalendarEvents({
     employees: activeEmployees(companyEmployees),
     clients,
-    lines,
-    userProfile,
     year: calMonth.year,
     month: calMonth.month,
-    canSeeAllClients: can('empresa.calendario.ver_todo'),
   })
   const homeCalDayEvents = calDay
     ? homeCalEvents.filter((ev) => ev.dateKey === format(calDay, 'yyyy-MM-dd'))
