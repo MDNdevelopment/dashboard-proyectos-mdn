@@ -1257,4 +1257,88 @@ describe('PautaDetailModal', () => {
       ).toBeTruthy()
     })
   })
+
+  describe('permisos por editor (canActOnEditorGroup)', () => {
+    // Caso real: una empleada está asignada como editora de una pieza (editor_user_id)
+    // pero no es el recurso/grabador de la pauta ni coordina — sin `userId`, quedaba en
+    // modo solo lectura sin poder marcar el estado de SU propia pieza.
+    it('sin canEditPiezas, el editor asignado a la pieza SÍ puede cambiar su estado', () => {
+      const piezas = [
+        {
+          id: 'pz1',
+          pauta_id: 'p1',
+          editor_user_id: 'u1',
+          nombre: 'Video #1',
+          status: 'pendiente',
+          position: 0,
+        },
+      ]
+      render(
+        <PautaDetailModal
+          {...baseProps({
+            pauta: pauta({ status: 'realizada', piezas_totales: 1 }),
+            piezas,
+            canEditPiezas: false,
+            userId: 'u1',
+          })}
+        />,
+      )
+      // Estado editable (StatusPill como botón), aunque nombre/formato sigan de solo lectura.
+      expect(screen.getByRole('button', { name: /Pendiente/i })).toBeInTheDocument()
+      expect(screen.queryByDisplayValue('Video #1')).not.toBeInTheDocument()
+    })
+
+    it('sin canEditPiezas y sin ser el editor de la pieza, el estado sigue de solo lectura', () => {
+      const piezas = [
+        {
+          id: 'pz1',
+          pauta_id: 'p1',
+          editor_user_id: 'u1',
+          nombre: 'Video #1',
+          status: 'pendiente',
+          position: 0,
+        },
+      ]
+      render(
+        <PautaDetailModal
+          {...baseProps({
+            pauta: pauta({ status: 'realizada', piezas_totales: 1 }),
+            piezas,
+            canEditPiezas: false,
+            userId: 'otro-usuario',
+          })}
+        />,
+      )
+      expect(screen.queryByRole('button', { name: /Pendiente/i })).not.toBeInTheDocument()
+    })
+
+    it('el editor del lote de fotos, sin canEditPiezas, puede marcar "Listas" pero no "Asignadas"', () => {
+      const piezas = [
+        {
+          id: 'lote1',
+          editor_user_id: 'u1',
+          nombre: 'Fotos',
+          status: 'pendiente',
+          position: 0,
+          es_lote: true,
+          cantidad: 5,
+          listas: 2,
+        },
+      ]
+      render(
+        <PautaDetailModal
+          {...baseProps({
+            pauta: pauta({ status: 'realizada', formats: ['F'], piezas_totales: 5 }),
+            piezas,
+            canEditPiezas: false,
+            userId: 'u1',
+          })}
+        />,
+      )
+      expect(screen.getByLabelText('Agregar fotos listas de Lizdania')).toBeInTheDocument()
+      expect(screen.queryByLabelText('Agregar fotos asignadas a Lizdania')).not.toBeInTheDocument()
+      // "Asignadas" se muestra como texto, no como stepper.
+      expect(screen.getByText('Asignadas')).toBeInTheDocument()
+    })
+  })
 })

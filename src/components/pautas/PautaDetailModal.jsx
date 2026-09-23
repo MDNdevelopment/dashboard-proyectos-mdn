@@ -22,6 +22,7 @@ import {
   setGrabacionCount,
   grabacionBalance,
   syncRecursoIds,
+  canActOnEditorGroup,
   piezaOrdinals,
   piezaDisplayName,
   nextPosition,
@@ -84,6 +85,7 @@ export default function PautaDetailModal({
   recursoUsers,
   piezas,
   canEditPiezas,
+  userId,
   companyId,
   onFields,
   onPiezaChanged,
@@ -183,6 +185,7 @@ export default function PautaDetailModal({
                 audiovisualUsers={audiovisualUsers}
                 usersById={usersById}
                 canEditPiezas={canEditPiezas}
+                userId={userId}
                 companyId={companyId}
                 onFields={onFields}
                 onPiezaChanged={onPiezaChanged}
@@ -394,6 +397,7 @@ function PiezasSection({
   audiovisualUsers,
   usersById,
   canEditPiezas,
+  userId,
   companyId,
   onFields,
   onPiezaChanged,
@@ -826,6 +830,7 @@ function PiezasSection({
             piezas={grouped.get(editorId) ?? []}
             ordinals={ordinals}
             canEditPiezas={canEditPiezas}
+            userId={userId}
             formatOptions={activeFormats}
             tieneFoto={tieneFoto}
             tieneTrabajoPorPieza={tieneTrabajoPorPieza}
@@ -850,6 +855,7 @@ function PiezasSection({
             piezas={sinAsignar}
             ordinals={ordinals}
             canEditPiezas={canEditPiezas}
+            userId={userId}
             formatOptions={activeFormats}
             tieneFoto={tieneFoto}
             tieneTrabajoPorPieza={tieneTrabajoPorPieza}
@@ -884,6 +890,7 @@ function EditorChecklist({
   piezas,
   ordinals,
   canEditPiezas,
+  userId,
   formatOptions,
   tieneFoto,
   tieneTrabajoPorPieza,
@@ -917,6 +924,10 @@ function EditorChecklist({
   // repartirle), o si ya existe un lote huérfano que gestionar (p. ej. se quitó al editor
   // de la sección de arriba pero sus fotos siguen ahí).
   const showLoteRow = Boolean(lote) || (tieneFoto && Boolean(editorId))
+  // El propio editor del bloque puede marcar el estado de SUS piezas aunque no tenga
+  // canEditPiezas (no sea coordinador ni el recurso/grabador de la pauta) — ver
+  // canActOnEditorGroup en utils/audiovisual.js.
+  const canEditStatus = canActOnEditorGroup({ canEditPiezas, userId, editorId })
   return (
     <div className="border border-[#ece9df] rounded-xl px-3 py-3">
       <div className="flex items-center gap-2.5 mb-2.5">
@@ -951,6 +962,7 @@ function EditorChecklist({
               pieza={pz}
               ordinal={ordinals?.get(pz.id)}
               canEditPiezas={canEditPiezas}
+              canEditStatus={canEditStatus}
               formatOptions={formatOptions}
               onChanged={onPiezaChanged}
               onDeleted={onPiezaDeleted}
@@ -962,6 +974,7 @@ function EditorChecklist({
               lote={lote}
               editorName={shortLabel}
               canEditPiezas={canEditPiezas && Boolean(editorId) && Boolean(onLoteAssignedChange)}
+              canEditStatus={canEditStatus && Boolean(editorId) && Boolean(onLoteListasChange)}
               maxAssigned={maxLoteAssigned}
               onAssignedChange={onLoteAssignedChange}
               onListasChange={onLoteListasChange}
@@ -987,6 +1000,7 @@ function LoteRow({
   lote,
   editorName,
   canEditPiezas,
+  canEditStatus = canEditPiezas,
   maxAssigned,
   onAssignedChange,
   onListasChange,
@@ -1053,6 +1067,25 @@ function LoteRow({
             />
           </div>
         </>
+      ) : canEditStatus ? (
+        // El editor del bloque (sin ser coordinador ni el recurso de la pauta) solo puede
+        // marcar cuántas quedaron "listas" — "Asignadas" sigue siendo solo lectura.
+        <>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-[#999] w-16">Asignadas</span>
+            <span className="text-[12px] text-[#999]">{cantidad}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-[#999] w-16">Listas</span>
+            <Stepper
+              value={listasCount}
+              onChange={onListasChange}
+              max={cantidad}
+              disabled={cantidad === 0}
+              label={`fotos listas de ${editorName}`}
+            />
+          </div>
+        </>
       ) : (
         <span className="text-[12px] text-[#999]">
           <strong className="text-[#333]">{listasCount}</strong>/{cantidad} listas
@@ -1062,7 +1095,16 @@ function LoteRow({
   )
 }
 
-function PiezaRow({ pieza, ordinal, canEditPiezas, formatOptions, onChanged, onDeleted, onError }) {
+function PiezaRow({
+  pieza,
+  ordinal,
+  canEditPiezas,
+  canEditStatus = canEditPiezas,
+  formatOptions,
+  onChanged,
+  onDeleted,
+  onError,
+}) {
   const displayName = piezaDisplayName(pieza, ordinal)
   async function handleStatusChange(next) {
     onError?.(null)
@@ -1142,7 +1184,7 @@ function PiezaRow({ pieza, ordinal, canEditPiezas, formatOptions, onChanged, onD
         value={pieza.status}
         meta={PIEZA_STATUS_META}
         options={PIEZA_STATUS_ORDER}
-        editable={canEditPiezas}
+        editable={canEditStatus}
         onChange={handleStatusChange}
         size="sm"
       />

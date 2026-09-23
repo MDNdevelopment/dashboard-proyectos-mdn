@@ -7,6 +7,7 @@ import {
   resourceName,
   resourceNames,
   canEditPiezasForPauta,
+  canActOnEditorGroup,
   requesterName,
   pautasInScope,
   pautasInMonth,
@@ -237,6 +238,29 @@ describe('canEditPiezasForPauta', () => {
     const p = pauta({ recurso_ids: ['yo'] })
     expect(canEditPiezasForPauta({ canCoordinate: false, userId: null, pauta: p })).toBe(false)
     expect(canEditPiezasForPauta({ canCoordinate: false, userId: 'yo', pauta: null })).toBe(false)
+  })
+})
+
+describe('canActOnEditorGroup', () => {
+  it('canEditPiezas en true siempre gana, sin importar el editor del bloque', () => {
+    expect(canActOnEditorGroup({ canEditPiezas: true, userId: 'yo', editorId: 'otro' })).toBe(true)
+  })
+
+  it('el editor asignado al bloque puede accionarlo aunque no tenga canEditPiezas', () => {
+    expect(canActOnEditorGroup({ canEditPiezas: false, userId: 'yo', editorId: 'yo' })).toBe(true)
+  })
+
+  it('sin canEditPiezas y sin ser el editor del bloque → false', () => {
+    expect(canActOnEditorGroup({ canEditPiezas: false, userId: 'yo', editorId: 'otro' })).toBe(
+      false,
+    )
+  })
+
+  it('sin userId o sin editorId → false (salvo canEditPiezas)', () => {
+    expect(canActOnEditorGroup({ canEditPiezas: false, userId: null, editorId: 'otro' })).toBe(
+      false,
+    )
+    expect(canActOnEditorGroup({ canEditPiezas: false, userId: 'yo', editorId: null })).toBe(false)
   })
 })
 
@@ -575,6 +599,26 @@ describe('aggregateResourcePerformance', () => {
     )
     expect(result).toContainEqual(
       expect.objectContaining({ name: 'Nadia', grabaAv: 4, grabaEstimado: false, graba: 4 }),
+    )
+  })
+
+  it('reasignar recurso_ids retroactivamente en una pauta vieja se refleja de inmediato (no depende de un snapshot cacheado)', () => {
+    // Caso real: se agrega a alguien como grabadora de pautas de meses anteriores después
+    // de que ya se marcaron 'realizada'. El agregado lee recurso_ids de cada pauta tal
+    // cual llega en el array — sin caché — así que el nuevo recurso debe sumar de una vez,
+    // sin depender de qué mes esté visible en la UI (eso es responsabilidad del caller).
+    const pautaVieja = pauta({
+      status: 'realizada',
+      recurso_ids: ['u1'],
+      piezas_totales: 8,
+    })
+    const antes = aggregateResourcePerformance([pautaVieja], usersById)
+    expect(antes.find((r) => r.name === 'Nadia')).toBeUndefined()
+
+    const reasignada = { ...pautaVieja, recurso_ids: ['u1', 'u2'] }
+    const despues = aggregateResourcePerformance([reasignada], usersById)
+    expect(despues).toContainEqual(
+      expect.objectContaining({ name: 'Nadia', grabaSinDesglose: 8, graba: 8 }),
     )
   })
 

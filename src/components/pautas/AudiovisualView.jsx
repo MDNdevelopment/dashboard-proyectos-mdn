@@ -434,6 +434,7 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
             userId: userProfile?.user_id,
             pauta: detailPauta,
           })}
+          userId={userProfile?.user_id}
           companyId={companyId}
           onFields={handlePautaFields}
           onPiezaChanged={handlePiezaChanged}

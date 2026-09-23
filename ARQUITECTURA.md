@@ -144,7 +144,29 @@ pauta); agendar/aprobar/marcar como realizada ya estaba correctamente acotado a 
   (`20260910000000_av_piezas_restrict_recurso.sql`): las policies insert/update/delete de
   `av_pauta_piezas` exigen `user_can('audiovisual.coordina')` o que `auth.uid()::text` esté en
   `recurso_ids` de la pauta — antes de esto cualquiera con `audiovisual.manage` podía escribir
-  piezas de cualquier pauta por API, sin que el frontend lo reflejara. `evaluaciones.perfil-v2` y
+  piezas de cualquier pauta por API, sin que el frontend lo reflejara.
+
+  **Editor de UNA pieza (sin ser el recurso/grabador de la pauta)** (2026-09-23,
+  `20260923000000_av_piezas_editor_y_recurso_rls.sql`): el grabador (`recurso_ids`) y el editor
+  asignado a una pieza (`av_pauta_piezas.editor_user_id`) son roles independientes — antes solo
+  el grabador (o quien coordina) podía marcar el estado de CUALQUIER pieza de la pauta, dejando
+  al editor sin `recurso_ids` en modo solo lectura sobre sus propias piezas. Ahora
+  `canActOnEditorGroup` (`src/utils/audiovisual.js`) deja que el editor de un bloque marque el
+  estado de sus piezas (y el stepper "Listas" de su lote de fotos) aunque no tenga
+  `canEditPiezas` — el resto de la gestión de la pauta (crear/borrar piezas, reasignar editores,
+  "Piezas totales") sigue exigiendo `canEditPiezas` (coordina o recurso). Reflejado en RLS:
+  `av_pauta_piezas_update` ahora también acepta `auth.uid()::text = editor_user_id`. La misma
+  migración cierra un hueco correlacionado: `av_pautas_update` exigía `audiovisual.coordina` o
+  `audiovisual.manage` (nivel ≥ 2) sin excepción para `recurso_ids`, así que un grabador de nivel
+  1 podía ver habilitados los steppers de "Captura por formato" en el cliente pero el `UPDATE`
+  real a `grabacion_por_formato`/`piezas_por_formato`/`recurso_ids` era rechazado por RLS; ahora
+  también acepta `auth.uid()::text = any(recurso_ids)`.
+
+  El contador "Capturadas" del panel "Rendimiento por recurso" (`AvAnalytics.jsx`,
+  `aggregateResourcePerformance` en `utils/audiovisual.js`) es 100% dinámico y lee `recurso_ids`
+  de cada pauta en vivo (sin caché) — si no refleja una reasignación retroactiva de grabador en
+  una pauta vieja, es porque el panel está acotado al mes/período visible (`visiblePautas`), no
+  porque el cálculo esté desactualizado: hay que navegar al mes en que ocurrió la pauta. `evaluaciones.perfil-v2` y
   `tareas.panorama` tienen `deny` a los 9 departamentos (cierra el módulo a todos salvo admins) —
   verificado y dejado así a propósito, no es un bug pendiente de arreglar.
 

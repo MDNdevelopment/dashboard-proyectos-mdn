@@ -232,6 +232,24 @@ export function canEditPiezasForPauta({ canCoordinate, userId, pauta }) {
 }
 
 /**
+ * Determina si `userId` puede accionar el checklist de UN editor concreto dentro de una
+ * pauta: además de quien ya puede editar toda la pauta (`canEditPiezas` — coordina o el
+ * recurso/grabador de la pauta), el propio editor asignado a ese bloque (`editor_user_id`)
+ * puede marcar el estado de sus piezas, aunque no sea el recurso que grabó la pauta. Antes
+ * el gate único `canEditPiezasForPauta` dejaba a un editor sin `recurso_ids` en modo solo
+ * lectura sobre sus propias piezas (caso: grabadora/editora sin acceso a marcar estado).
+ * @param {object} params
+ * @param {boolean} params.canEditPiezas — ya resuelto por canEditPiezasForPauta
+ * @param {string|null|undefined} params.userId
+ * @param {string|null|undefined} params.editorId — editor_user_id del bloque/pieza
+ * @returns {boolean}
+ */
+export function canActOnEditorGroup({ canEditPiezas, userId, editorId }) {
+  if (canEditPiezas) return true
+  return Boolean(userId) && Boolean(editorId) && userId === editorId
+}
+
+/**
  * Nombres únicos de los editores asignados a las piezas de una pauta (`editor_user_id`,
  * empleados o recursos externos con rol `edicion`) — complemento de `resourceNames`, que
  * solo resuelve quién graba (`recurso_ids`). Usa `piezasByEditor` para agrupar y descarta
