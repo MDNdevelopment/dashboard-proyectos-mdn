@@ -51,20 +51,34 @@ export function AuthProvider({ children }) {
     supabase.auth.signOut()
   }
 
-  async function fetchUserProfile(userId) {
+  async function fetchUserProfile(userId, { retry = true } = {}) {
     loadedUserId.current = userId
     const { data, error } = await supabase
       .from('users')
-      .select('user_id, first_name, last_name, email, department_id, position_id, access_level, admin, tasks_view_all, company_id, avatar_url, receive_ticket_notifications, deleted_at, department:departments(department_name), position:positions(position_name)')
+      .select(
+        'user_id, first_name, last_name, email, department_id, position_id, access_level, admin, tasks_view_all, company_id, avatar_url, receive_ticket_notifications, deleted_at, department:departments(department_name), position:positions(position_name)',
+      )
       .eq('user_id', userId)
       .single()
     if (error) {
-      if (isAuthError(error)) { handleSessionExpired(); return }
-      // Error no-auth (p.ej. PGRST116 si el usuario no existe aún): perfil null.
+      if (isAuthError(error)) {
+        handleSessionExpired()
+        return
+      }
+      // Error no-auth (p.ej. PGRST116 si el usuario no existe aún, o un 406
+      // transitorio por una carrera con el refresh del token justo al cargar
+      // la página): reintenta una vez antes de rendirse con perfil null.
+      if (retry) {
+        await new Promise((resolve) => setTimeout(resolve, 800))
+        return fetchUserProfile(userId, { retry: false })
+      }
       setUserProfile(null)
       return
     }
-    if (data?.deleted_at) { handleAccountDisabled(); return }
+    if (data?.deleted_at) {
+      handleAccountDisabled()
+      return
+    }
     setUserProfile(data)
     if (data?.company_id) await fetchModulePermissions(data.company_id)
   }
@@ -79,13 +93,18 @@ export function AuthProvider({ children }) {
       .select('module_key, rules')
       .eq('company_id', companyId)
     if (error) {
-      if (isAuthError(error)) { handleSessionExpired(); return }
+      if (isAuthError(error)) {
+        handleSessionExpired()
+        return
+      }
       setPermissionsLoaded(true)
       return
     }
     if (data) {
       const map = {}
-      data.forEach(row => { map[row.module_key] = row.rules })
+      data.forEach((row) => {
+        map[row.module_key] = row.rules
+      })
       setModulePermissions(map)
     }
     setPermissionsLoaded(true)
@@ -94,7 +113,9 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     async function initSession() {
       try {
-        const { data: { session } } = await supabase.auth.getSession()
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
         if (session) {
           // Validar el token contra el servidor antes de confiar en él.
           // getSession() solo lee localStorage y valida la expiración localmente,
@@ -117,7 +138,9 @@ export function AuthProvider({ children }) {
 
     initSession()
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
       if (session) {
         // Un nuevo login (o token refresh exitoso) limpia cualquier aviso previo.
@@ -125,8 +148,12 @@ export function AuthProvider({ children }) {
         setAccountDisabled(false)
         // Solo re-fetchear si el usuario cambia (evita remounts por TOKEN_REFRESHED
         // al refocar la pestaña, que desmontaría las vistas y perdería datos sin guardar).
+        // Mientras el perfil carga, loading vuelve a true: si no, ProtectedRoute/
+        // RequireModule renderizan con userProfile/modulePermissions aún vacíos y
+        // canAccessModule() deniega todo, mandando al usuario a "/" justo tras el login.
         if (session.user.id !== loadedUserId.current) {
-          fetchUserProfile(session.user.id)
+          setLoading(true)
+          fetchUserProfile(session.user.id).finally(() => setLoading(false))
         }
       } else {
         loadedUserId.current = null
@@ -167,7 +194,9 @@ export function AuthProvider({ children }) {
   }
 
   async function refreshProfile() {
-    const { data: { session: currentSession } } = await supabase.auth.getSession()
+    const {
+      data: { session: currentSession },
+    } = await supabase.auth.getSession()
     if (currentSession) await fetchUserProfile(currentSession.user.id)
   }
 
@@ -177,16 +206,26 @@ export function AuthProvider({ children }) {
    */
   const can = useCallback(
     (moduleKey) => canAccessModule(moduleKey, userProfile, modulePermissions),
-    [userProfile, modulePermissions]
+    [userProfile, modulePermissions],
   )
 
   return (
-    <AuthContext.Provider value={{
-      session, loading, userProfile, modulePermissions, permissionsLoaded,
-      sessionExpired, accountDisabled,
-      signIn, signOut, resetPassword, refreshProfile,
-      can,
-    }}>
+    <AuthContext.Provider
+      value={{
+        session,
+        loading,
+        userProfile,
+        modulePermissions,
+        permissionsLoaded,
+        sessionExpired,
+        accountDisabled,
+        signIn,
+        signOut,
+        resetPassword,
+        refreshProfile,
+        can,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   )

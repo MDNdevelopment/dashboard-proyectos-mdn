@@ -269,6 +269,7 @@ export const CHANGELOG = [
       'Se cargó y cerró en Finanzas la información real de agosto 2026 (facturación, cobros y reparto en partidas), y se abrió septiembre con la mensualidad de cada cliente activo ya precargada: arranca la nueva dinámica de registrar cada cobro y repartirlo el mismo día.',
       'En Finanzas → Distribución, al repartir un cobro los porcentajes de Gastos/Socios/Ganancia ahora se recalculan al momento según el monto que vas escribiendo en cada uno. Se quitó el campo de nota opcional del formulario.',
       'En el calendario de fechas del Inicio, ahora cualquier persona del equipo ve el aniversario y cumpleaños de contacto de todos los clientes, sin importar de qué línea sea (antes solo se veían las fechas de los clientes de tu propia línea).',
+      'Corregido: justo al iniciar sesión, algunas personas eran mandadas a Inicio al entrar a un módulo (o veían el menú incompleto y sin su nombre) porque la pantalla se dibujaba una fracción de segundo antes de que terminaran de cargar sus permisos.',
     ],
   },
   {
