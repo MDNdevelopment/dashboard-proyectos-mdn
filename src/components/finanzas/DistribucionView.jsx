@@ -10,9 +10,10 @@ import {
   pagadoPorPartida,
   saldoPartida,
   pctsDelMes,
+  resultadoCambio,
 } from '../../utils/finanzas'
 import { loadDistributionsBefore, updateMonthPcts } from './finanzasApi'
-import { PARTIDAS, PARTIDA_KEYS } from './constants'
+import { PARTIDA_KEYS, PARTIDA_CAMBIO, partidaMeta } from './constants'
 import DistribucionModal from './DistribucionModal'
 import PagoPartidaModal from './PagoPartidaModal'
 import CerrarMesButton from './CerrarMesButton'
@@ -64,6 +65,7 @@ export default function DistribucionView({
     0,
   )
   const sinDistribuir = Math.max(cobrado - distribuidoTotal, 0)
+  const cambioTotal = resultadoCambio(distributions)
   const saldos = useMemo(
     () => Object.fromEntries(PARTIDA_KEYS.map((p) => [p, saldoPartida(before, distributions, p)])),
     [before, distributions],
@@ -196,14 +198,13 @@ export default function DistribucionView({
                 const asg = asignadoPorPartida(distributions, p)
                 const pag = pagadoPorPartida(distributions, p)
                 const disp = saldoPartida(before, distributions, p)
+                const meta = partidaMeta(p)
                 return (
                   <tr key={p} className="border-b border-[#f5f3eb] last:border-0">
                     <td className="px-4 py-2.5">
-                      <span
-                        className={`inline-flex items-center gap-1.5 font-medium ${PARTIDAS[p].text}`}
-                      >
-                        <span className={`w-2 h-2 rounded-full ${PARTIDAS[p].dot}`} />
-                        {PARTIDAS[p].name} · {Math.round(pcts[p] * 100)}%
+                      <span className={`inline-flex items-center gap-1.5 font-medium ${meta.text}`}>
+                        <span className={`w-2 h-2 rounded-full ${meta.dot}`} />
+                        {meta.name} · {Math.round(pcts[p] * 100)}%
                       </span>
                     </td>
                     <td className="text-right px-4 py-2.5 font-mono">{fmtUSD(asg)}</td>
@@ -240,6 +241,31 @@ export default function DistribucionView({
                 )
               })}
             </tbody>
+            {/* Resultado por cambio: partida técnica, separada visualmente de las 3
+                reales (sin % de meta, sin botón "Pagar" — no es una caja real, ver
+                ARQUITECTURA.md §2.15). */}
+            <tfoot>
+              <tr className="border-t-2 border-[#e0ddd4] bg-[#faf9f5]">
+                <td className="px-4 py-2.5">
+                  <span
+                    className={`inline-flex items-center gap-1.5 font-medium ${partidaMeta(PARTIDA_CAMBIO).text}`}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${partidaMeta(PARTIDA_CAMBIO).dot}`} />
+                    {partidaMeta(PARTIDA_CAMBIO).name}
+                  </span>
+                </td>
+                <td className="text-right px-4 py-2.5 font-mono" colSpan={2}>
+                  &nbsp;
+                </td>
+                <td
+                  className="text-right px-4 py-2.5 font-mono"
+                  style={{ color: cambioTotal < 0 ? '#D6453F' : undefined }}
+                >
+                  {fmtUSD(cambioTotal)}
+                </td>
+                <td className="px-4 py-2.5" />
+              </tr>
+            </tfoot>
           </table>
         </div>
       </div>
@@ -316,24 +342,34 @@ export default function DistribucionView({
                   </tr>
                 </thead>
                 <tbody>
-                  {movimientosPagina.map((d) => (
-                    <tr key={d.id} className="border-b border-[#f5f3eb] last:border-0">
-                      <td className="px-4 py-2.5 text-[#888]">{fmtDate(d.movedOn)}</td>
-                      <td className="px-4 py-2.5">
-                        <span
-                          className={`inline-flex items-center gap-1.5 ${PARTIDAS[d.partida].text}`}
-                        >
-                          <span className={`w-2 h-2 rounded-full ${PARTIDAS[d.partida].dot}`} />
-                          {PARTIDAS[d.partida].name}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5">{d.concept}</td>
-                      <td className="text-right px-4 py-2.5 font-mono">
-                        {d.kind === 'out' ? '− ' : ''}
-                        {fmtUSD(d.amount)}
-                      </td>
-                    </tr>
-                  ))}
+                  {movimientosPagina.map((d) => {
+                    const meta = partidaMeta(d.partida)
+                    return (
+                      <tr key={d.id} className="border-b border-[#f5f3eb] last:border-0">
+                        <td className="px-4 py-2.5 text-[#888]">{fmtDate(d.movedOn)}</td>
+                        <td className="px-4 py-2.5">
+                          <span
+                            className={`inline-flex items-center gap-1.5 ${meta?.text ?? 'text-[#888]'}`}
+                          >
+                            <span className={`w-2 h-2 rounded-full ${meta?.dot ?? 'bg-[#ccc]'}`} />
+                            {meta?.name ?? d.partida}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          {d.concept}
+                          {d.currency === 'Bs' && (
+                            <span className="ml-1.5 text-[11px] text-[#999]">
+                              ({fmtUSD(d.amountBs)} Bs · {d.rate})
+                            </span>
+                          )}
+                        </td>
+                        <td className="text-right px-4 py-2.5 font-mono">
+                          {d.kind === 'out' ? '− ' : ''}
+                          {fmtUSD(d.amount)}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -385,6 +421,7 @@ export default function DistribucionView({
       {pagoPartida && (
         <PagoPartidaModal
           monthId={finMonth.id}
+          companyId={companyId}
           partida={pagoPartida}
           saldos={saldos}
           onClose={() => setPagoPartida(null)}

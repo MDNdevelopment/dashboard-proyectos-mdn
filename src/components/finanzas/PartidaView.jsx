@@ -10,7 +10,7 @@ import {
   pctsDelMes,
 } from '../../utils/finanzas'
 import { loadDistributionsBefore, deleteDistribution } from './finanzasApi'
-import { PARTIDAS } from './constants'
+import { PARTIDA_KEYS, PARTIDA_CAMBIO, partidaMeta } from './constants'
 import PagoPartidaModal from './PagoPartidaModal'
 import ConfirmDeleteDialog from '../common/ConfirmDeleteDialog'
 
@@ -44,13 +44,21 @@ export default function PartidaView({
     }
   }, [companyId, year, month])
 
-  const P = PARTIDAS[partida]
+  const P = partidaMeta(partida)
   const pcts = pctsDelMes(finMonth)
   const closed = !!finMonth?.closed
+  const esCambio = partida === PARTIDA_CAMBIO
   const asignado = asignadoPorPartida(distributions, partida)
   const pagado = pagadoPorPartida(distributions, partida)
   const prevSaldo = saldoArrastrado(before, partida)
   const saldoDisponible = saldoPartida(before, distributions, partida)
+  // La partida técnica 'cambio' no se paga ni tiene traspaso, así que el modal de
+  // pago nunca se abre para ella — pero cuando SÍ se abre (para gastos/socios/
+  // ganancia), necesita el saldo de las 3 partidas reales para poder ofrecer
+  // "tomar la diferencia de otra partida" (ver PagoPartidaModal).
+  const saldos = Object.fromEntries(
+    PARTIDA_KEYS.map((p) => [p, saldoPartida(before, distributions, p)]),
+  )
 
   const movimientos = useMemo(
     () =>
@@ -73,7 +81,9 @@ export default function PartidaView({
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <p className="text-[13.5px] text-[#888]">
-            Partida {Math.round(pcts[partida] * 100)}% · el saldo se arrastra mes a mes
+            {esCambio
+              ? 'Partida técnica · se genera sola al comprar o vender divisas, no se paga a mano'
+              : `Partida ${Math.round(pcts[partida] * 100)}% · el saldo se arrastra mes a mes`}
           </p>
         </div>
         <div className="flex gap-2">
@@ -84,7 +94,7 @@ export default function PartidaView({
           >
             ‹ Distribución
           </button>
-          {canManage && !closed && (
+          {!esCambio && canManage && !closed && (
             <button
               type="button"
               onClick={() => setPagoOpen(true)}
@@ -189,8 +199,9 @@ export default function PartidaView({
       {pagoOpen && (
         <PagoPartidaModal
           monthId={finMonth.id}
+          companyId={companyId}
           partida={partida}
-          saldoDisponible={saldoDisponible}
+          saldos={saldos}
           onClose={() => setPagoOpen(false)}
           onSaved={() => {
             setPagoOpen(false)

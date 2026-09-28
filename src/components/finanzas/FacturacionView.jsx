@@ -1,11 +1,13 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { fmtUSD } from '../../utils/metricsFinance'
 import {
   cobradoDe,
+  cobradoMostradoDe,
   pendienteDe,
   estadoFactura,
   totalFacturado,
   totalCobrado,
+  facturadoPorMoneda,
 } from '../../utils/finanzas'
 import { loadOrCreateMonth, seedRecurringInvoices, deleteInvoice } from './finanzasApi'
 import InvoiceModal from './InvoiceModal'
@@ -16,6 +18,15 @@ const ESTADO_LABEL = {
   pendiente: { label: 'Pendiente', cls: 'bg-[#fbe9e8] text-[#c0392b]' },
   abonado: { label: 'Abonado', cls: 'bg-[#fff4d6] text-[#9a6800]' },
   cobrado: { label: 'Cobrado', cls: 'bg-[#e6f4ec] text-[#1f9d57]' },
+}
+
+const MONEDA_FILTROS = ['Todas', 'USD', 'Bs']
+
+function fmtBs(n) {
+  return Number(n ?? 0).toLocaleString('es-VE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
 }
 
 export default function FacturacionView({
@@ -35,6 +46,7 @@ export default function FacturacionView({
   const [toDelete, setToDelete] = useState(null)
   const [opening, setOpening] = useState(false)
   const [sort, setSort] = useState({ key: '', dir: 1 })
+  const [monedaFiltro, setMonedaFiltro] = useState('Todas')
 
   async function handleOpenMonth() {
     setOpening(true)
@@ -54,8 +66,19 @@ export default function FacturacionView({
   const facturado = totalFacturado(invoices)
   const cobrado = totalCobrado(invoices)
   const pct = facturado ? Math.round((cobrado / facturado) * 100) : 0
+  // Siempre sobre el total real (invoices), sin filtrar — el filtro de moneda de
+  // abajo solo afecta las filas mostradas en la tabla, no este resumen.
+  const { usd: facturadoUsd, bs: facturadoBs } = useMemo(
+    () => facturadoPorMoneda(invoices),
+    [invoices],
+  )
 
-  let rows = [...invoices]
+  // Filtra por la moneda MOSTRADA (la del cobro, no la de facturación) — la
+  // misma que pinta el badge de la columna "Moneda", para que el filtro y lo
+  // que ve el usuario en la tabla nunca se contradigan.
+  let rows = invoices.filter((inv) =>
+    monedaFiltro === 'Todas' ? true : cobradoMostradoDe(inv).currency === monedaFiltro,
+  )
   if (sort.key) {
     rows.sort((a, b) => {
       let x, y
@@ -110,6 +133,21 @@ export default function FacturacionView({
         </div>
       )}
 
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-white border border-[#e0ddd4] rounded-xl p-3">
+          <p className="text-[11px] uppercase text-[#999]">Total facturado</p>
+          <p className="font-bold text-[#111] text-[16px]">{fmtUSD(facturado)}</p>
+        </div>
+        <div className="bg-white border border-[#e0ddd4] rounded-xl p-3">
+          <p className="text-[11px] uppercase text-[#999]">Facturado en USD</p>
+          <p className="font-bold text-[#111] text-[16px]">{fmtUSD(facturadoUsd)}</p>
+        </div>
+        <div className="bg-white border border-[#e0ddd4] rounded-xl p-3">
+          <p className="text-[11px] uppercase text-[#999]">Facturado en Bs</p>
+          <p className="font-bold text-[#111] text-[16px]">{fmtUSD(facturadoBs)}</p>
+        </div>
+      </div>
+
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex-1 min-w-[240px]">
           <div className="flex justify-between text-[13px] text-[#666] mb-1">
@@ -135,9 +173,29 @@ export default function FacturacionView({
         )}
       </div>
 
+      <div className="flex items-center gap-2">
+        <span className="text-[12px] text-[#888]">Moneda:</span>
+        <div className="flex rounded-lg border border-[#e0ddd4] overflow-hidden">
+          {MONEDA_FILTROS.map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMonedaFiltro(m)}
+              className={`px-3 py-1.5 text-[12.5px] font-semibold ${
+                monedaFiltro === m ? 'bg-[#111] text-white' : 'text-[#666] hover:bg-[#f5f3eb]'
+              }`}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {rows.length === 0 ? (
         <div className="bg-white border border-[#e0ddd4] rounded-xl p-8 text-center text-[13.5px] text-[#999]">
-          Sin facturación este mes. Usa &ldquo;Agregar facturación&rdquo;.
+          {invoices.length === 0
+            ? 'Sin facturación este mes. Usa "Agregar facturación".'
+            : `Ninguna factura en ${monedaFiltro} este mes.`}
         </div>
       ) : (
         <div className="bg-white border border-[#e0ddd4] rounded-xl overflow-x-auto">
@@ -153,6 +211,7 @@ export default function FacturacionView({
                 >
                   Facturado
                 </th>
+                <th className="text-center px-4 py-2">Moneda</th>
                 <th className="text-right px-4 py-2">Cobrado</th>
                 <th className="text-right px-4 py-2">Pendiente</th>
                 <th
@@ -169,6 +228,10 @@ export default function FacturacionView({
                 const estado = estadoFactura(inv)
                 const cob = cobradoDe(inv)
                 const pend = pendienteDe(inv)
+                // Badge y columna "Cobrado": reflejan la moneda del COBRO, no de la
+                // factura — un cliente puede facturar en USD y pagar en Bs.
+                const cobradoMostrado = cobradoMostradoDe(inv)
+                const esBs = cobradoMostrado.currency === 'Bs'
                 return (
                   <tr key={inv.id} className="border-b border-[#f5f3eb] last:border-0">
                     <td className="px-4 py-2.5">
@@ -180,8 +243,21 @@ export default function FacturacionView({
                       </div>
                     </td>
                     <td className="text-right px-4 py-2.5 font-mono">{fmtUSD(inv.amount)}</td>
+                    <td className="text-center px-4 py-2.5">
+                      <span
+                        className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                          esBs ? 'bg-[#eef0ff] text-[#4c3fd0]' : 'bg-[#f0ede3] text-[#666]'
+                        }`}
+                      >
+                        {cobradoMostrado.currency}
+                      </span>
+                    </td>
                     <td className="text-right px-4 py-2.5 font-mono text-[#1F9D57]">
-                      {cob > 0.5 ? fmtUSD(cob) : '—'}
+                      {cob > 0.5
+                        ? esBs
+                          ? `Bs ${fmtBs(cobradoMostrado.amount)}`
+                          : fmtUSD(cobradoMostrado.amount)
+                        : '—'}
                     </td>
                     <td className="text-right px-4 py-2.5 font-mono text-[#D6453F]">
                       {pend > 0.5 ? fmtUSD(pend) : '—'}
@@ -238,6 +314,7 @@ export default function FacturacionView({
         <InvoiceModal
           invoice={modal}
           monthId={finMonth.id}
+          companyId={companyId}
           clients={clients}
           onClose={() => setModal(undefined)}
           onSaved={() => {
@@ -250,6 +327,7 @@ export default function FacturacionView({
       {cobroInvoice && (
         <CobroModal
           invoice={cobroInvoice}
+          companyId={companyId}
           canManage={canManageCobros && !closed}
           onClose={() => setCobroInvoice(null)}
           onSaved={() => {

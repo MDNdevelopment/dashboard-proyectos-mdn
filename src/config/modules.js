@@ -190,12 +190,16 @@ export const MODULES = [
       { key: 'clientes', label: 'Clientes' },
       { key: 'distribucion', label: 'Distribución' },
       { key: 'porcobrar', label: 'Por cobrar' },
+      { key: 'cajabs', label: 'Caja Bs' },
     ],
     manageActions: [
       { key: 'finanzas.facturacion.manage', label: 'Crear / editar / eliminar facturación' },
       { key: 'finanzas.cobros.manage', label: 'Registrar / quitar cobros y abonos' },
       { key: 'finanzas.distribucion.manage', label: 'Registrar distribuciones y pagos de partida' },
       { key: 'finanzas.cerrar_mes', label: 'Cerrar el mes y abrir el siguiente' },
+      // Ya existía en la BD (migración 20260918205117) y se usa en FinanzasPage.jsx,
+      // pero faltaba en esta lista — no era editable desde Empresa → Accesos.
+      { key: 'finanzas.partidas.manage', label: 'Editar el % de reparto del mes' },
     ],
   },
 ]

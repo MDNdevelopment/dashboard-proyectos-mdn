@@ -1,41 +1,88 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { fmtUSD } from '../../utils/metricsFinance'
 import { fmtDate } from '../../utils/formatDate'
 import { cobradoDe, pendienteDe } from '../../utils/finanzas'
-import { addPayment, deletePayment, deleteDistributionsForInvoice } from './finanzasApi'
-import { METODOS_PAGO } from './constants'
+import {
+  addPayment,
+  deletePayment,
+  deleteDistributionsForInvoice,
+  resolveRateBcv,
+} from './finanzasApi'
+import { METODOS_PAGO_USD, METODOS_PAGO_BS } from './constants'
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10)
 }
 
-/** Modal de registro de cobro y abonos de una factura, más "quitar cobro" (revierte todo). */
-export default function CobroModal({ invoice, canManage, onClose, onSaved }) {
+function fmtBs(n) {
+  return Number(n ?? 0).toLocaleString('es-VE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
+
+/**
+ * Modal de registro de cobro y abonos de una factura, más "quitar cobro"
+ * (revierte todo). Mismo patrón que InvoiceModal.jsx: el monto SIEMPRE se
+ * escribe en USD — un toggle de moneda decide si el cobro entró en Bs, y en
+ * ese caso solo se pide/confirma la tasa (BCV auto-resuelta o personalizada).
+ * El equivalente en Bs (fin_payments.amount_bs) se deriva de `amount × tasa`,
+ * nunca se escribe a mano. Una tasa personalizada nunca se sube a fin_rates
+ * (eso contaminaría la BCV oficial del día que usan otros cobros/pagos) — se
+ * guarda solo en el pago (`rate` + `rate_source='manual'`).
+ */
+export default function CobroModal({ invoice, companyId, canManage, onClose, onSaved }) {
   const [amount, setAmount] = useState(() => pendienteDe(invoice))
-  const [method, setMethod] = useState(METODOS_PAGO[0])
+  const [currency, setCurrency] = useState('USD')
+  const [method, setMethod] = useState(METODOS_PAGO_USD[0])
   const [date, setDate] = useState(todayISO())
   const [note, setNote] = useState('')
-  const [amountBs, setAmountBs] = useState('')
-  const [rate, setRate] = useState('')
+  const [rateInfo, setRateInfo] = useState(null) // { rate, rateDate, source }
+  const [customRate, setCustomRate] = useState(false)
+  const [manualRate, setManualRate] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
   const cobrado = cobradoDe(invoice)
   const pendiente = pendienteDe(invoice)
-  const isBs = method === 'Transferencia Bs'
+  const isBs = currency === 'Bs'
+  const effectiveRate = customRate ? Number(manualRate) || null : (rateInfo?.rate ?? null)
+  const amountBs =
+    isBs && effectiveRate && Number(amount) > 0
+      ? Math.round(Number(amount) * effectiveRate * 100) / 100
+      : null
 
-  // Al cargar Bs + tasa, el USD se deriva y ya no se edita a mano.
-  function handleAmountBsChange(v) {
-    setAmountBs(v)
-    const bs = Number(v)
-    const r = Number(rate)
-    if (bs > 0 && r > 0) setAmount((bs / r).toFixed(2))
+  // Resuelve la BCV vigente para la fecha elegida en cuanto la moneda es Bs.
+  useEffect(() => {
+    if (!isBs || !companyId) return
+    let cancelled = false
+    resolveRateBcv(companyId, date).then(({ data }) => {
+      if (!cancelled) setRateInfo(data)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [isBs, companyId, date])
+
+  function handleSetCurrency(cur) {
+    setCurrency(cur)
+    if (cur === 'USD') {
+      // Sin esto, volver a Bs mostraría datos de una elección anterior.
+      setManualRate('')
+      setCustomRate(false)
+      setMethod(METODOS_PAGO_USD[0])
+    } else {
+      setMethod(METODOS_PAGO_BS[0])
+    }
   }
-  function handleRateChange(v) {
-    setRate(v)
-    const bs = Number(amountBs)
-    const r = Number(v)
-    if (bs > 0 && r > 0) setAmount((bs / r).toFixed(2))
+
+  function toggleCustomRate() {
+    setCustomRate((prev) => {
+      // Por defecto muestra la BCV: al activar la tasa personalizada, se precarga
+      // con la BCV vigente en vez de arrancar vacía.
+      if (!prev) setManualRate(rateInfo?.rate ?? '')
+      return !prev
+    })
   }
 
   async function handleAddPayment() {
@@ -48,19 +95,22 @@ export default function CobroModal({ invoice, canManage, onClose, onSaved }) {
       setError('No puedes cobrar más de lo pendiente')
       return
     }
-    if (isBs && (!Number(amountBs) || !Number(rate))) {
-      setError('Ingresa el monto en Bs y la tasa')
+    if (isBs && (!effectiveRate || effectiveRate <= 0)) {
+      setError('Ingresa o confirma la tasa BCV')
       return
     }
     setSaving(true)
     setError(null)
+
     const { error: err } = await addPayment(invoice.id, {
       paidOn: date,
       amount: amt,
-      amountBs: isBs ? Number(amountBs) : null,
-      rate: isBs ? Number(rate) : null,
+      amountBs: isBs ? amountBs : null,
+      rate: isBs ? effectiveRate : null,
       method,
       note,
+      currency,
+      rateSource: isBs ? (customRate ? 'manual' : 'bcv') : null,
     })
     setSaving(false)
     if (err) {
@@ -130,7 +180,7 @@ export default function CobroModal({ invoice, canManage, onClose, onSaved }) {
                       <span className="font-bold text-[#111]">{fmtUSD(p.amount)}</span>{' '}
                       {p.amountBs != null && (
                         <span className="text-[#999]">
-                          (Bs {p.amountBs.toLocaleString('es-VE')} · tasa {p.rate}){' '}
+                          (Bs {fmtBs(p.amountBs)} · tasa {p.rate}){' '}
                         </span>
                       )}
                       <span className="text-[#999]">
@@ -159,6 +209,41 @@ export default function CobroModal({ invoice, canManage, onClose, onSaved }) {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[12px] font-mono font-bold uppercase tracking-wide text-[#888] mb-1.5">
+                    Monto cobrado (USD)
+                  </label>
+                  <input
+                    type="number"
+                    className="input-base"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[12px] font-mono font-bold uppercase tracking-wide text-[#888] mb-1.5">
+                    Moneda de pago
+                  </label>
+                  <div className="flex rounded-lg border border-[#e0ddd4] overflow-hidden">
+                    {['USD', 'Bs'].map((cur) => (
+                      <button
+                        key={cur}
+                        type="button"
+                        onClick={() => handleSetCurrency(cur)}
+                        className={`flex-1 py-2 text-[13px] font-semibold ${
+                          currency === cur
+                            ? 'bg-[#111] text-white'
+                            : 'text-[#666] hover:bg-[#f5f3eb]'
+                        }`}
+                      >
+                        {cur}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[12px] font-mono font-bold uppercase tracking-wide text-[#888] mb-1.5">
                     Método de pago
                   </label>
                   <select
@@ -166,7 +251,7 @@ export default function CobroModal({ invoice, canManage, onClose, onSaved }) {
                     value={method}
                     onChange={(e) => setMethod(e.target.value)}
                   >
-                    {METODOS_PAGO.map((m) => (
+                    {(isBs ? METODOS_PAGO_BS : METODOS_PAGO_USD).map((m) => (
                       <option key={m}>{m}</option>
                     ))}
                   </select>
@@ -183,44 +268,62 @@ export default function CobroModal({ invoice, canManage, onClose, onSaved }) {
                   />
                 </div>
               </div>
+
               {isBs && (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl border border-[#e0ddd4] p-3 space-y-3">
                   <div>
-                    <label className="block text-[12px] font-mono font-bold uppercase tracking-wide text-[#888] mb-1.5">
-                      Monto en Bs
-                    </label>
-                    <input
-                      type="number"
-                      className="input-base"
-                      value={amountBs}
-                      onChange={(e) => handleAmountBsChange(e.target.value)}
-                    />
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-[12px] font-mono font-bold uppercase tracking-wide text-[#888]">
+                        Tasa BCV
+                      </label>
+                      <button
+                        type="button"
+                        onClick={toggleCustomRate}
+                        className="text-[11.5px] font-semibold text-[#666] hover:text-[#111] hover:underline"
+                      >
+                        {customRate ? 'Usar tasa BCV' : 'Usar tasa personalizada'}
+                      </button>
+                    </div>
+                    {customRate ? (
+                      <input
+                        type="number"
+                        step="0.0001"
+                        className="input-base"
+                        value={manualRate}
+                        onChange={(e) => setManualRate(e.target.value)}
+                      />
+                    ) : (
+                      <>
+                        {rateInfo?.source === 'bcv' && (
+                          <p className="text-[12px] text-[#666]">
+                            BCV {fmtDate(rateInfo.rateDate)}:{' '}
+                            <span className="font-mono">{fmtBs(rateInfo.rate)}</span>
+                          </p>
+                        )}
+                        {rateInfo?.source === 'stale' && (
+                          <p className="text-[12px] text-[#9a6800]">
+                            No se pudo obtener la tasa de hoy — se usa la del{' '}
+                            {fmtDate(rateInfo.rateDate)}:{' '}
+                            <span className="font-mono">{fmtBs(rateInfo.rate)}</span>
+                          </p>
+                        )}
+                        {rateInfo?.source === 'missing' && (
+                          <p className="text-[12px] text-[#9a6800]">
+                            No hay tasa BCV disponible — usa una tasa personalizada.
+                          </p>
+                        )}
+                        {!rateInfo && <p className="text-[12px] text-[#999]">Cargando tasa…</p>}
+                      </>
+                    )}
                   </div>
-                  <div>
-                    <label className="block text-[12px] font-mono font-bold uppercase tracking-wide text-[#888] mb-1.5">
-                      Tasa (Bs/$)
-                    </label>
-                    <input
-                      type="number"
-                      className="input-base"
-                      value={rate}
-                      onChange={(e) => handleRateChange(e.target.value)}
-                    />
-                  </div>
+                  {amountBs != null && (
+                    <p className="text-[12px] text-[#666]">
+                      Equivale a Bs <span className="font-mono">{fmtBs(amountBs)}</span>
+                    </p>
+                  )}
                 </div>
               )}
-              <div>
-                <label className="block text-[12px] font-mono font-bold uppercase tracking-wide text-[#888] mb-1.5">
-                  Monto cobrado (USD){isBs ? ' — calculado' : ''}
-                </label>
-                <input
-                  type="number"
-                  className="input-base"
-                  value={amount}
-                  readOnly={isBs}
-                  onChange={(e) => setAmount(e.target.value)}
-                />
-              </div>
+
               <div>
                 <label className="block text-[12px] font-mono font-bold uppercase tracking-wide text-[#888] mb-1.5">
                   Nota (opcional)

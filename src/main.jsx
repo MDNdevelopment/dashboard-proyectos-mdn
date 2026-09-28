@@ -372,6 +372,14 @@ createRoot(document.getElementById('root')).render(
                 </RequireModule>
               }
             />
+            <Route
+              path="/finanzas/caja-bs"
+              element={
+                <RequireModule moduleKey="finanzas">
+                  <FinanzasPage />
+                </RequireModule>
+              }
+            />
 
             {/* Proyectos */}
             <Route path="/proyectos" element={<App />} />

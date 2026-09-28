@@ -4,6 +4,16 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
+  server: {
+    watch: {
+      // Netlify Dev reescribe estos bundles en cada invocación de una función
+      // (p.ej. /api/bcv-rate); sin este ignore, el watcher de Vite los detecta
+      // como cambio "fuera del module graph" y fuerza un full reload — se
+      // pierde el estado del modal justo al elegir "Bs" (que dispara la
+      // llamada a la función).
+      ignored: ['**/.netlify/**'],
+    },
+  },
   test: {
     environment: 'jsdom',
     globals: true,

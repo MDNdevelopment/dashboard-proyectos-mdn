@@ -13,6 +13,15 @@
 [functions]
   directory = "netlify/functions"
 
+# Sin esto, `netlify dev` autodetecta el framework/puerto de Vite en cada
+# arranque; esa autodetección es la sospechosa más probable de la inestabilidad
+# del proxy de WebSocket (HMR) al invocar una función en paralelo — el cliente
+# de Vite hace un full reload solo con perder esa conexión un instante. Fijar
+# framework/puerto evita la detección dinámica.
+[dev]
+  framework = "vite"
+  targetPort = 5173
+
 # Congela el score de desempeño del mes anterior el día 5 a las 08:00 Caracas (12:00
 # UTC), después del cron SQL de cierre de metric_reports (07:30 Caracas) — ver
 # netlify/functions/employee-scores-snapshot.js y ARQUITECTURA.md §2.7.
@@ -58,6 +67,12 @@
 [[redirects]]
   from = "/api/av-workload-insight"
   to = "/.netlify/functions/av-workload-insight"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/bcv-rate"
+  to = "/.netlify/functions/bcv-rate"
   status = 200
   force = true
 

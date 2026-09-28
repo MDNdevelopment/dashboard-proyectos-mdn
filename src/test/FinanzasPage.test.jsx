@@ -14,6 +14,12 @@ vi.mock('../components/finanzas/finanzasApi', () => ({
   loadMonthTotals: (...a) => mockLoadMonthTotals(...a),
   loadAllInvoices: vi.fn().mockResolvedValue({ data: [], error: null }),
   loadAllMonthTotals: vi.fn().mockResolvedValue({ data: [], error: null }),
+  loadFxOperationsUpTo: vi.fn().mockResolvedValue({ data: [], error: null }),
+  loadBsLedgerUpTo: vi.fn().mockResolvedValue({ data: [], error: null }),
+  loadRates: vi.fn().mockResolvedValue({ data: [], error: null }),
+  resolveRateBcv: vi
+    .fn()
+    .mockResolvedValue({ data: { rate: null, rateDate: null, source: 'missing' }, error: null }),
 }))
 
 vi.mock('../components/metricas/metricsApi', () => ({
@@ -299,5 +305,66 @@ describe('FinanzasPage — tabs por capability', () => {
     expect(screen.getByTestId('meta-linea-gastos')).toBeInTheDocument()
     expect(screen.getByTestId('meta-linea-socios')).toBeInTheDocument()
     expect(screen.getByTestId('meta-linea-ganancia')).toBeInTheDocument()
+  })
+})
+
+describe('FinanzasPage — tab Caja Bs (divisas)', () => {
+  it('la tab "Caja Bs" solo aparece con la capability finanzas.cajabs', async () => {
+    const can = (key) => key === 'finanzas.dashboard' || key === 'finanzas.cajabs'
+    renderAt('/finanzas', can)
+    await waitFor(() => expect(mockLoadMonth).toHaveBeenCalled())
+    expect(screen.getByRole('button', { name: 'Caja Bs' })).toBeInTheDocument()
+  })
+
+  it('sin la capability, la tab no aparece y /finanzas/caja-bs redirige', async () => {
+    const can = (key) => key === 'finanzas.dashboard'
+    renderAt('/finanzas/caja-bs', can)
+    await waitFor(() => expect(mockLoadMonth).toHaveBeenCalled())
+    expect(screen.queryByRole('button', { name: 'Caja Bs' })).not.toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Dashboard' })).toHaveClass('bg-[#111]'),
+    )
+  })
+
+  it('renderiza la vista Caja Bs con sus 3 cards de composición', async () => {
+    const can = () => true
+    mockLoadMonth.mockResolvedValueOnce({
+      data: { id: 'm-1', closed: false, pctGastos: 0.72, pctSocios: 0.18, pctGanancia: 0.1 },
+      error: null,
+    })
+    renderAt('/finanzas/caja-bs', can)
+
+    await waitFor(() => expect(screen.getByText('Divisa física')).toBeInTheDocument())
+    expect(screen.getAllByText('Caja Bs').length).toBeGreaterThan(0)
+    expect(screen.getByText('Resultado por cambio')).toBeInTheDocument()
+    // Sin operaciones/ledger, todo debería quedar en 0 sin lanzar.
+    expect(screen.getByText('Sin movimientos este mes.')).toBeInTheDocument()
+  })
+
+  it('el Dashboard esconde Comprar/Vender dólares sin finanzas.distribucion.manage', async () => {
+    const can = (key) => key !== 'finanzas.distribucion.manage'
+    mockLoadMonth.mockResolvedValueOnce({
+      data: { id: 'm-1', closed: false, pctGastos: 0.72, pctSocios: 0.18, pctGanancia: 0.1 },
+      error: null,
+    })
+    renderAt('/finanzas', can)
+
+    await waitFor(() => expect(screen.getByText('Divisa física')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: 'Comprar dólares' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Vender dólares' })).not.toBeInTheDocument()
+  })
+
+  it('el Dashboard muestra Comprar/Vender dólares con la capability y el mes abierto', async () => {
+    const can = () => true
+    mockLoadMonth.mockResolvedValueOnce({
+      data: { id: 'm-1', closed: false, pctGastos: 0.72, pctSocios: 0.18, pctGanancia: 0.1 },
+      error: null,
+    })
+    renderAt('/finanzas', can)
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Comprar dólares' })).toBeInTheDocument(),
+    )
+    expect(screen.getByRole('button', { name: 'Vender dólares' })).toBeInTheDocument()
   })
 })

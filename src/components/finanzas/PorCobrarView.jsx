@@ -134,6 +134,7 @@ export default function PorCobrarView({ companyId, canManageCobros }) {
       {cobroInvoice && (
         <CobroModal
           invoice={cobroInvoice}
+          companyId={companyId}
           canManage={canManageCobros}
           onClose={() => setCobroInvoice(null)}
           onSaved={() => {

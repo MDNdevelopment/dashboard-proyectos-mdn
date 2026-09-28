@@ -8,7 +8,7 @@
  * duplicar mensualidad/línea/fechas de alta-baja que ya mantiene Empresa → Clientes.
  */
 import { supabase } from '../../supabase'
-import { invoiceRowsForNewMonth } from '../../utils/finanzas'
+import { invoiceRowsForNewMonth, cuadreDivisas } from '../../utils/finanzas'
 
 function normalizeInvoice(row) {
   if (!row) return row
@@ -20,6 +20,8 @@ function normalizeInvoice(row) {
     concept: row.concept,
     amount: Number(row.amount),
     currency: row.currency,
+    amountBs: row.amount_bs == null ? null : Number(row.amount_bs),
+    rate: row.rate == null ? null : Number(row.rate),
     recurring: row.recurring,
     createdBy: row.created_by,
     createdAt: row.created_at,
@@ -37,6 +39,8 @@ function normalizePayment(row) {
     rate: row.rate == null ? null : Number(row.rate),
     method: row.method,
     note: row.note,
+    currency: row.currency,
+    rateSource: row.rate_source,
   }
 }
 
@@ -52,6 +56,62 @@ function normalizeDistribution(row) {
     amount: Number(row.amount),
     invoiceId: row.invoice_id,
     note: row.note,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+    currency: row.currency,
+    amountBs: row.amount_bs == null ? null : Number(row.amount_bs),
+    rate: row.rate == null ? null : Number(row.rate),
+    fxOperationId: row.fx_operation_id,
+  }
+}
+
+function normalizeRate(row) {
+  if (!row) return row
+  return {
+    companyId: row.company_id,
+    rateDate: row.rate_date,
+    rateBcv: Number(row.rate_bcv),
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+  }
+}
+
+function normalizeFxOperation(row) {
+  if (!row) return row
+  return {
+    id: row.id,
+    companyId: row.company_id,
+    monthId: row.month_id,
+    opType: row.op_type,
+    movedOn: row.moved_on,
+    amountBs: Number(row.amount_bs),
+    amountUsd: Number(row.amount_usd),
+    rateReal: Number(row.rate_real),
+    rateBcv: Number(row.rate_bcv),
+    counterparty: row.counterparty,
+    purpose: row.purpose,
+    note: row.note,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+  }
+}
+
+function normalizeBsLedgerEntry(row) {
+  if (!row) return row
+  return {
+    id: row.id,
+    companyId: row.company_id,
+    monthId: row.month_id,
+    movedOn: row.moved_on,
+    kind: row.kind,
+    source: row.source,
+    amountBs: Number(row.amount_bs),
+    rate: Number(row.rate),
+    amountUsdRef: Number(row.amount_usd_ref),
+    paymentId: row.payment_id,
+    fxOperationId: row.fx_operation_id,
+    distributionId: row.distribution_id,
+    concept: row.concept,
     createdBy: row.created_by,
     createdAt: row.created_at,
   }
@@ -83,6 +143,10 @@ function normalizeMonthTotals(row) {
     totalGastos: Number(row.total_gastos),
     totalSocios: Number(row.total_socios),
     totalGanancia: Number(row.total_ganancia),
+    totalDivisaFisica: Number(row.total_divisa_fisica ?? 0),
+    saldoBs: Number(row.saldo_bs ?? 0),
+    saldoBsUsdRef: Number(row.saldo_bs_usd_ref ?? 0),
+    resultadoCambio: Number(row.resultado_cambio ?? 0),
     note: row.note,
     createdBy: row.created_by,
     createdAt: row.created_at,
@@ -144,17 +208,25 @@ export async function loadMonthTotals(monthId) {
   return { data: normalizeMonthTotals(data), error }
 }
 
-/** Totales de todos los meses resumen de la empresa, con su año/mes — para la tendencia del Dashboard. */
+/**
+ * Totales de TODOS los meses cerrados de la empresa (resumen o no — desde que
+ * `closeMonth()` también snapshotea la composición en divisas de §10 al cerrar),
+ * con su año/mes y si el mes es `summary_only` — para la tendencia del Dashboard,
+ * que solo debe tomar `totalFacturado`/etc de un mes resumen (ver DashboardView.jsx:
+ * un mes normal cerrado ya tiene su propio total derivado de `fin_invoices`, y este
+ * snapshot no lo duplica para esas 5 columnas, solo para las 4 de divisas).
+ */
 export async function loadAllMonthTotals(companyId) {
   const { data, error } = await supabase
     .from('fin_month_totals')
-    .select('*, month:fin_months!inner(year, month, company_id)')
+    .select('*, month:fin_months!inner(year, month, company_id, summary_only)')
     .eq('month.company_id', companyId)
   if (error) return { data: [], error }
   return {
     data: (data ?? []).map((row) => ({
       year: row.month.year,
       month: row.month.month,
+      summaryOnly: !!row.month.summary_only,
       totals: normalizeMonthTotals(row),
     })),
     error: null,
@@ -249,6 +321,8 @@ export async function createInvoice(monthId, fields) {
     concept,
     amount,
     currency = 'USD',
+    amountBs = null,
+    rate = null,
     recurring = true,
     createdBy = null,
   } = fields
@@ -261,6 +335,8 @@ export async function createInvoice(monthId, fields) {
       concept,
       amount,
       currency,
+      amount_bs: amountBs,
+      rate,
       recurring,
       created_by: createdBy,
     })
@@ -276,6 +352,8 @@ export async function updateInvoice(invoiceId, updates) {
   if ('concept' in updates) patch.concept = updates.concept
   if ('amount' in updates) patch.amount = updates.amount
   if ('currency' in updates) patch.currency = updates.currency
+  if ('amountBs' in updates) patch.amount_bs = updates.amountBs
+  if ('rate' in updates) patch.rate = updates.rate
   if ('recurring' in updates) patch.recurring = updates.recurring
   const { data, error } = await supabase
     .from('fin_invoices')
@@ -292,7 +370,16 @@ export async function deleteInvoice(invoiceId) {
 
 export async function addPayment(
   invoiceId,
-  { paidOn, amount, amountBs = null, rate = null, method = null, note = null },
+  {
+    paidOn,
+    amount,
+    amountBs = null,
+    rate = null,
+    method = null,
+    note = null,
+    currency = 'USD',
+    rateSource = null,
+  },
 ) {
   const { data, error } = await supabase
     .from('fin_payments')
@@ -304,6 +391,8 @@ export async function addPayment(
       rate,
       method,
       note,
+      currency,
+      rate_source: rateSource,
     })
     .select()
     .single()
@@ -362,6 +451,9 @@ export async function createDistribution(monthId, fields) {
     invoiceId = null,
     note = null,
     createdBy = null,
+    currency = 'USD',
+    amountBs = null,
+    rate = null,
   } = fields
   const { data, error } = await supabase
     .from('fin_distributions')
@@ -376,6 +468,9 @@ export async function createDistribution(monthId, fields) {
       invoice_id: invoiceId,
       note,
       created_by: createdBy,
+      currency,
+      amount_bs: amountBs,
+      rate,
     })
     .select()
     .single()
@@ -403,6 +498,9 @@ export async function createDistributionsBatch(monthId, rows) {
         invoice_id: r.invoiceId ?? null,
         note: r.note ?? null,
         created_by: r.createdBy ?? null,
+        currency: r.currency ?? 'USD',
+        amount_bs: r.amountBs ?? null,
+        rate: r.rate ?? null,
       })),
     )
     .select()
@@ -439,6 +537,280 @@ export async function deleteDistribution(distributionId) {
 /** Borra todas las distribuciones ligadas a una factura (revertir un cobro). */
 export async function deleteDistributionsForInvoice(invoiceId) {
   return supabase.from('fin_distributions').delete().eq('invoice_id', invoiceId)
+}
+
+// ─── Divisas y Caja Bs (spec MAPPI-Finanzas-Divisas) ────────────────────────────
+//
+// `fin_bs_ledger` y la fila de la partida 'cambio' NO se insertan desde aquí: las
+// generan los triggers de la migración 20260928100000 a partir de un cobro en Bs
+// (fin_payments), una operación de divisas (fin_fx_operations) o un pago directo
+// en Bs (fin_distributions) — ver el comentario de esa migración. Esta capa solo
+// LEE el ledger y escribe las 2 operaciones de divisas + el ajuste de cuadre.
+
+/**
+ * Tasa BCV en vivo desde `/api/bcv-rate` (Netlify Function con fallback entre
+ * pydolarve.org y ve.dolarapi.com — ver netlify/functions/bcv-rate.js). Nunca
+ * lanza: devuelve `null` ante cualquier falla (sin sesión, red, 502, forma
+ * inesperada) para que `resolveRateBcv()` caiga sola al histórico de `fin_rates`.
+ */
+async function fetchLiveBcvRate() {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  if (!session?.access_token) return null
+  try {
+    const res = await fetch('/api/bcv-rate', {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    })
+    if (!res.ok) return null
+    const payload = await res.json()
+    const rate = Number(payload?.rate)
+    return rate > 0 ? rate : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Tasa BCV vigente para una fecha. Si `date` es hoy, intenta primero la API en
+ * vivo (`fetchLiveBcvRate`) y, si responde, la deja cacheada en `fin_rates`
+ * (best-effort: si el `upsert` falla por RLS — el caller puede no tener
+ * `finanzas.distribucion.manage` — igual se usa la tasa, solo no queda guardada
+ * para los demás). Si la API no respondió o `date` no es hoy (ej. `closeMonth()`
+ * resolviendo el último día de un mes pasado), cae a los 3 escalones históricos
+ * de `fin_rates` (ninguno bloqueante — antes era el único camino, con el botón
+ * manual de `TasaBcvModal.jsx`, ya eliminado):
+ *  - 'bcv': hay una fila exacta para esa fecha (o la que acaba de traer la API).
+ *  - 'stale': no hay fila exacta, se usa la más reciente ANTERIOR (§5.1 lo pide así).
+ *  - 'missing': no hay ninguna fila anterior — el caller debe pedir la tasa a mano.
+ */
+export async function resolveRateBcv(companyId, date) {
+  const today = new Date().toISOString().slice(0, 10)
+  if (date === today) {
+    const live = await fetchLiveBcvRate()
+    if (live) {
+      try {
+        await upsertRate({ companyId, rateDate: date, rateBcv: live, userId: null })
+      } catch {
+        // best-effort: sin permiso de escritura en fin_rates, se usa la tasa igual.
+      }
+      return { data: { rate: live, rateDate: date, source: 'bcv' }, error: null }
+    }
+  }
+
+  const { data: exact, error: exactErr } = await supabase
+    .from('fin_rates')
+    .select('rate_bcv, rate_date')
+    .eq('company_id', companyId)
+    .eq('rate_date', date)
+    .maybeSingle()
+  if (exactErr) return { data: null, error: exactErr }
+  if (exact) {
+    return {
+      data: { rate: Number(exact.rate_bcv), rateDate: exact.rate_date, source: 'bcv' },
+      error: null,
+    }
+  }
+
+  const { data: prev, error: prevErr } = await supabase
+    .from('fin_rates')
+    .select('rate_bcv, rate_date')
+    .eq('company_id', companyId)
+    .lte('rate_date', date)
+    .order('rate_date', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (prevErr) return { data: null, error: prevErr }
+  if (prev) {
+    return {
+      data: { rate: Number(prev.rate_bcv), rateDate: prev.rate_date, source: 'stale' },
+      error: null,
+    }
+  }
+
+  return { data: { rate: null, rateDate: null, source: 'missing' }, error: null }
+}
+
+export async function loadRates(companyId) {
+  const { data, error } = await supabase
+    .from('fin_rates')
+    .select('*')
+    .eq('company_id', companyId)
+    .order('rate_date', { ascending: false })
+  return { data: (data ?? []).map(normalizeRate), error }
+}
+
+export async function upsertRate({ companyId, rateDate, rateBcv, userId }) {
+  const { data, error } = await supabase
+    .from('fin_rates')
+    .upsert(
+      { company_id: companyId, rate_date: rateDate, rate_bcv: rateBcv, created_by: userId },
+      { onConflict: 'company_id,rate_date' },
+    )
+    .select()
+    .single()
+  return { data: normalizeRate(data), error }
+}
+
+export async function loadFxOperations(monthId) {
+  const { data, error } = await supabase
+    .from('fin_fx_operations')
+    .select('*')
+    .eq('month_id', monthId)
+    .order('moved_on')
+  return { data: (data ?? []).map(normalizeFxOperation), error }
+}
+
+/** Todas las operaciones de divisas de la empresa con año/mes <= (year, month) — para el cuadre y el cierre. */
+export async function loadFxOperationsUpTo(companyId, year, month) {
+  const { data, error } = await supabase
+    .from('fin_fx_operations')
+    .select('*, month:fin_months!inner(year, month, company_id)')
+    .eq('month.company_id', companyId)
+    .or(`year.lt.${year},and(year.eq.${year},month.lte.${month})`, { foreignTable: 'month' })
+  if (error) return { data: [], error }
+  return { data: (data ?? []).map(normalizeFxOperation), error: null }
+}
+
+/**
+ * Registra una compra o venta de divisas. El trigger `fin_fx_sync` genera solo
+ * la fila del libro de Bs y, si hubo brecha, la fila de la partida 'cambio' —
+ * esta función no las inserta.
+ */
+export async function createFxOperation(monthId, fields) {
+  const {
+    companyId,
+    opType,
+    movedOn,
+    amountBs,
+    amountUsd,
+    rateBcv,
+    counterparty = null,
+    purpose = null,
+    note = null,
+    createdBy = null,
+  } = fields
+  const { data, error } = await supabase
+    .from('fin_fx_operations')
+    .insert({
+      company_id: companyId,
+      month_id: monthId,
+      op_type: opType,
+      moved_on: movedOn,
+      amount_bs: amountBs,
+      amount_usd: amountUsd,
+      rate_bcv: rateBcv,
+      counterparty,
+      purpose,
+      note,
+      created_by: createdBy,
+    })
+    .select()
+    .single()
+  return { data: normalizeFxOperation(data), error }
+}
+
+/**
+ * Borra una operación de divisas. Inmutable a propósito (sin `updateFxOperation`):
+ * corregir un error es borrar y volver a registrar — el `on delete cascade` de
+ * `fin_bs_ledger.fx_operation_id` y `fin_distributions.fx_operation_id` limpia sus
+ * 2 filas derivadas sin necesitar lógica de resincronización.
+ */
+export async function deleteFxOperation(id) {
+  return supabase.from('fin_fx_operations').delete().eq('id', id)
+}
+
+export async function loadBsLedger(monthId) {
+  const { data, error } = await supabase
+    .from('fin_bs_ledger')
+    .select('*')
+    .eq('month_id', monthId)
+    .order('moved_on')
+  return { data: (data ?? []).map(normalizeBsLedgerEntry), error }
+}
+
+/** Todo el libro de Caja Bs con año/mes <= (year, month) — es un libro ACUMULADO, nunca se cierra por mes (§10). */
+export async function loadBsLedgerUpTo(companyId, year, month) {
+  const { data, error } = await supabase
+    .from('fin_bs_ledger')
+    .select('*, month:fin_months!inner(year, month, company_id)')
+    .eq('month.company_id', companyId)
+    .or(`year.lt.${year},and(year.eq.${year},month.lte.${month})`, { foreignTable: 'month' })
+  if (error) return { data: [], error }
+  return { data: (data ?? []).map(normalizeBsLedgerEntry), error: null }
+}
+
+/**
+ * Ajuste de cuadre contra el banco — el único movimiento del libro de Bs que se
+ * llena a mano (`source: 'ajuste'`), para conciliar intereses, comisiones o
+ * diferencias de redondeo (§8.4). La policy de `fin_bs_ledger` solo permite
+ * insertar con este `source` y sin ninguno de los 3 FK de origen.
+ */
+export async function createBsAdjustment({
+  companyId,
+  monthId,
+  movedOn,
+  kind,
+  amountBs,
+  rate,
+  concept,
+  createdBy = null,
+}) {
+  const amountUsdRef = rate ? Math.round((Number(amountBs) / Number(rate)) * 100) / 100 : 0
+  const { data, error } = await supabase
+    .from('fin_bs_ledger')
+    .insert({
+      company_id: companyId,
+      month_id: monthId,
+      moved_on: movedOn,
+      kind,
+      source: 'ajuste',
+      amount_bs: amountBs,
+      rate,
+      amount_usd_ref: amountUsdRef,
+      // Explícitos en null: la policy de insert exige que un ajuste NO traiga
+      // ninguna fila fuente (ver fin_bs_ledger_ajuste_insert en la migración).
+      payment_id: null,
+      fx_operation_id: null,
+      distribution_id: null,
+      concept,
+      created_by: createdBy,
+    })
+    .select()
+    .single()
+  return { data: normalizeBsLedgerEntry(data), error }
+}
+
+export async function deleteBsLedgerEntry(id) {
+  return supabase.from('fin_bs_ledger').delete().eq('id', id)
+}
+
+/**
+ * Todas las facturas de la empresa con año/mes <= (year, month) — para el
+ * snapshot de cierre y para el invariante de cuadre en vivo (Caja Bs, §7).
+ */
+export async function loadInvoicesUpTo(companyId, year, month) {
+  const { data, error } = await supabase
+    .from('fin_invoices')
+    .select('*, payments:fin_payments(*), month:fin_months!inner(year, month, company_id)')
+    .eq('month.company_id', companyId)
+    .or(`year.lt.${year},and(year.eq.${year},month.lte.${month})`, { foreignTable: 'month' })
+  if (error) return { data: [], error }
+  return { data: (data ?? []).map(normalizeInvoice), error: null }
+}
+
+/**
+ * Todas las distribuciones de la empresa con año/mes <= (year, month) — para el
+ * snapshot de cierre y para el invariante de cuadre en vivo.
+ */
+export async function loadDistributionsUpTo(companyId, year, month) {
+  const { data, error } = await supabase
+    .from('fin_distributions')
+    .select('*, month:fin_months!inner(year, month, company_id)')
+    .eq('month.company_id', companyId)
+    .or(`year.lt.${year},and(year.eq.${year},month.lte.${month})`, { foreignTable: 'month' })
+  if (error) return { data: [], error }
+  return { data: (data ?? []).map(normalizeDistribution), error: null }
 }
 
 // ─── Cierre de mes ───────────────────────────────────────────────────────────────
@@ -495,8 +867,49 @@ export async function seedRecurringInvoices({ companyId, monthId, year, month, c
  * `seedRecurringInvoices` — que ya copia también los cargos externos
  * recurrentes del mes cerrado, así que no hace falta un segundo camino para
  * ellos (antes duplicaba la lógica de `seedRecurringInvoices` para esto).
+ *
+ * Antes de cerrar, snapshotea en `fin_month_totals` las 4 cifras de composición
+ * en divisas del mes que se cierra (§10 de la spec): divisa física, saldo de
+ * Caja Bs, su equivalente en USD y el resultado por cambio, TODO acumulado hasta
+ * este mes inclusive (la Caja Bs y la divisa física nunca se reinician por mes).
+ * El orden es el mismo que `createSummaryMonth()`: los totales se escriben ANTES
+ * de marcar `closed`, porque el trigger `fin_block_closed_month()` rechaza
+ * cualquier escritura en `fin_month_totals` de un mes ya cerrado.
  */
 export async function closeMonth({ companyId, monthId, year, month, userId, clients }) {
+  const [
+    { data: invoicesUpTo },
+    { data: distributionsUpTo },
+    { data: fxOperationsUpTo },
+    { data: ledgerUpTo },
+  ] = await Promise.all([
+    loadInvoicesUpTo(companyId, year, month),
+    loadDistributionsUpTo(companyId, year, month),
+    loadFxOperationsUpTo(companyId, year, month),
+    loadBsLedgerUpTo(companyId, year, month),
+  ])
+  const lastDayOfMonth = new Date(year, month, 0).toISOString().slice(0, 10)
+  const { data: rateInfo } = await resolveRateBcv(companyId, lastDayOfMonth)
+  const cuadre = cuadreDivisas({
+    invoices: invoicesUpTo,
+    distributions: distributionsUpTo,
+    fxOperations: fxOperationsUpTo,
+    ledger: ledgerUpTo,
+    rateBcv: rateInfo?.rate,
+  })
+  const { error: totalsErr } = await supabase.from('fin_month_totals').upsert(
+    {
+      month_id: monthId,
+      total_divisa_fisica: cuadre.divisaFisica,
+      saldo_bs: cuadre.saldoBs,
+      saldo_bs_usd_ref: cuadre.saldoBsUsdRef,
+      resultado_cambio: cuadre.cambio,
+      created_by: userId,
+    },
+    { onConflict: 'month_id' },
+  )
+  if (totalsErr) return { data: null, error: totalsErr }
+
   const { error: closeErr } = await supabase
     .from('fin_months')
     .update({ closed: true, closed_at: new Date().toISOString(), closed_by: userId })

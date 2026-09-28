@@ -22,12 +22,14 @@ import {
   pctsDelMes,
   cobradoPorMoneda,
   movimientoCartera,
+  cuadreDivisas,
 } from '../../utils/finanzas'
 import { loadAllInvoices, loadAllMonthTotals } from './finanzasApi'
 import { PARTIDAS, PARTIDA_KEYS, NOTA_TRASPASO_PARTIDA } from './constants'
 import { MONTHS } from '../metricas/constants'
 import CerrarMesButton from './CerrarMesButton'
 import ResumenMesModal from './ResumenMesModal'
+import FxOperacionModal from './FxOperacionModal'
 
 function trendKeysLastN(year, month, n) {
   const out = []
@@ -57,9 +59,14 @@ export default function DashboardView({
   loading,
   refetch,
   canCerrarMes,
+  canManageDivisas,
+  fxOperations,
+  bsLedger,
+  rateBcv,
 }) {
   const [trend, setTrend] = useState(null)
   const [resumenOpen, setResumenOpen] = useState(false)
+  const [fxOpen, setFxOpen] = useState(null) // null=cerrado, 'compra'|'venta'
 
   useEffect(() => {
     let cancelled = false
@@ -77,8 +84,13 @@ export default function DashboardView({
         byKey.set(k, (byKey.get(k) ?? 0) + Number(invoice.amount ?? 0))
       }
       // Meses "resumen" (sin facturas fila por fila) aportan su total facturado
-      // directo — no hay filas en fin_invoices para ellos.
-      for (const { year: y, month: m, totals } of totalsData ?? []) {
+      // directo — no hay filas en fin_invoices para ellos. Un mes NORMAL cerrado
+      // también tiene fila en fin_month_totals desde que closeMonth() snapshotea
+      // la composición en divisas (§10) — pero esas 4 columnas no incluyen
+      // total_facturado para meses normales, así que hay que ignorarlas aquí o
+      // pisarían el total ya derivado de fin_invoices con un total_facturado=0.
+      for (const { year: y, month: m, summaryOnly, totals } of totalsData ?? []) {
+        if (!summaryOnly) continue
         byKey.set(`${y}-${m}`, totals.totalFacturado)
       }
       setTrend(
@@ -158,6 +170,21 @@ export default function DashboardView({
     return [...byLine.values()].filter((r) => r.facturado > 0)
   }, [invoices, clients, lines])
 
+  // Composición en divisas (§8.1): divisa física, Caja Bs y resultado por cambio,
+  // ACUMULADOS (fxOperations/bsLedger ya llegan acumulados hasta el mes activo
+  // desde FinanzasPage — ninguno de los dos se cierra ni se reinicia por mes).
+  const cuadre = useMemo(
+    () =>
+      cuadreDivisas({
+        invoices,
+        distributions,
+        fxOperations,
+        ledger: bsLedger,
+        rateBcv: rateBcv?.rate,
+      }),
+    [invoices, distributions, fxOperations, bsLedger, rateBcv],
+  )
+
   if (loading || trend == null) {
     return <div className="text-[14px] text-[#999] py-10 text-center">Cargando…</div>
   }
@@ -220,6 +247,57 @@ export default function DashboardView({
           accent={margenPct >= pcts.ganancia ? '#1F9D57' : '#D6453F'}
         />
         <KpiCard label="Clientes activos" value={activeClients.length} sub="retainer mensual" />
+      </div>
+
+      {/* Composición en divisas (§8.1 de la spec): cuánto está en divisa física vs
+          en bolívares, y si la brecha entre BCV y la tasa real está costando algo. */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="grid grid-cols-3 gap-3 max-w-2xl flex-1">
+          <div className="bg-white border border-[#e0ddd4] rounded-xl p-3">
+            <p className="text-[11px] uppercase text-[#999]">Divisa física</p>
+            <p className="font-bold text-[#111] text-[16px]">{fmtUSD(cuadre.divisaFisica)}</p>
+          </div>
+          <div className="bg-white border border-[#e0ddd4] rounded-xl p-3">
+            <p className="text-[11px] uppercase text-[#999]">Caja Bs</p>
+            <p className="font-bold text-[#111] text-[16px]">
+              {Number(cuadre.saldoBs ?? 0).toLocaleString('es-VE', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}{' '}
+              Bs
+            </p>
+            <p className="text-[11px] text-[#999]">
+              {cuadre.bcvFaltante ? 'sin tasa BCV cargada' : `≈ ${fmtUSD(cuadre.saldoBsUsdRef)}`}
+            </p>
+          </div>
+          <div className="bg-white border border-[#e0ddd4] rounded-xl p-3">
+            <p className="text-[11px] uppercase text-[#999]">Resultado por cambio</p>
+            <p
+              className="font-bold text-[16px]"
+              style={{ color: cuadre.cambio < 0 ? '#D6453F' : '#111' }}
+            >
+              {fmtUSD(cuadre.cambio)}
+            </p>
+          </div>
+        </div>
+        {canManageDivisas && finMonth && !finMonth.closed && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setFxOpen('venta')}
+              className="px-3 py-2 rounded-xl text-[13.5px] font-semibold text-[#666] border border-[#e0ddd4] hover:bg-[#f5f3eb]"
+            >
+              Vender dólares
+            </button>
+            <button
+              type="button"
+              onClick={() => setFxOpen('compra')}
+              className="px-3 py-2 rounded-xl text-[13.5px] font-semibold bg-[#111] text-white hover:bg-[#333]"
+            >
+              Comprar dólares
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -398,6 +476,22 @@ export default function DashboardView({
           onClose={() => setResumenOpen(false)}
           onSaved={() => {
             setResumenOpen(false)
+            refetch()
+          }}
+        />
+      )}
+
+      {fxOpen && (
+        <FxOperacionModal
+          companyId={companyId}
+          monthId={finMonth?.id}
+          opType={fxOpen}
+          rateBcv={rateBcv}
+          saldoBs={cuadre.saldoBs}
+          divisaFisica={cuadre.divisaFisica}
+          onClose={() => setFxOpen(null)}
+          onSaved={() => {
+            setFxOpen(null)
             refetch()
           }}
         />

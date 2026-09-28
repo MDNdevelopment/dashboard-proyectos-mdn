@@ -63,6 +63,23 @@ vi.mock('../supabase', () => ({
           created_at: '2026-09-22T00:00:00Z',
         },
       ],
+      fin_rates: [],
+      fin_fx_operations: [],
+      fin_bs_ledger: [],
+      fin_distributions: [
+        {
+          id: 'd-new',
+          month_id: 'm-1',
+          partida: 'gastos',
+          kind: 'out',
+          moved_on: '2026-09-23',
+          concept: 'Nómina',
+          amount: 750,
+          currency: 'Bs',
+          amount_bs: 612000,
+          rate: 816,
+        },
+      ],
     },
   }),
 }))
@@ -71,14 +88,20 @@ import { supabase } from '../supabase'
 import {
   loadInvoices,
   createInvoice,
+  updateInvoice,
   createDistributionSplit,
   createDistributionsBatch,
+  createDistribution,
   addPayment,
   updateMonthPcts,
   loadMonthTotals,
   loadAllMonthTotals,
   createSummaryMonth,
   seedRecurringInvoices,
+  closeMonth,
+  resolveRateBcv,
+  createFxOperation,
+  createBsAdjustment,
 } from '../components/finanzas/finanzasApi'
 
 beforeEach(() => {
@@ -136,6 +159,46 @@ describe('finanzasApi — createInvoice', () => {
         created_by: 'u-1',
       }),
     )
+  })
+
+  it('manda amount_bs y rate cuando la factura es en Bs', async () => {
+    await createInvoice('m-1', {
+      clientId: 'c-1',
+      clientName: 'Turbopre',
+      concept: 'Gestión de redes',
+      amount: 750,
+      currency: 'Bs',
+      amountBs: 637500,
+      rate: 850,
+      recurring: true,
+      createdBy: 'u-1',
+    })
+    const query = supabase.from.mock.results.at(-1).value
+    expect(query.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ currency: 'Bs', amount_bs: 637500, rate: 850 }),
+    )
+  })
+
+  it('deja amount_bs y rate en null para una factura en USD', async () => {
+    await createInvoice('m-1', {
+      clientId: 'c-1',
+      clientName: 'Turbopre',
+      concept: 'Gestión de redes',
+      amount: 2600,
+      createdBy: 'u-1',
+    })
+    const query = supabase.from.mock.results.at(-1).value
+    expect(query.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ amount_bs: null, rate: null }),
+    )
+  })
+})
+
+describe('finanzasApi — updateInvoice', () => {
+  it('manda amount_bs/rate solo cuando vienen en las actualizaciones (patch condicional)', async () => {
+    await updateInvoice('inv-1', { amountBs: 612000, rate: 816 })
+    const query = supabase.from.mock.results.at(-1).value
+    expect(query.update).toHaveBeenCalledWith({ amount_bs: 612000, rate: 816 })
   })
 })
 
@@ -240,6 +303,27 @@ describe('finanzasApi — updateMonthPcts', () => {
       pct_socios: 0.18,
       pct_ganancia: 0.1,
     })
+  })
+})
+
+describe('finanzasApi — loadAllMonthTotals', () => {
+  it('incluye si el mes es summary_only, para que el Dashboard sepa cuáles usar en la tendencia', async () => {
+    const query = makeQuery([
+      {
+        month_id: 'm-1',
+        total_facturado: 5000,
+        total_cobrado: 4800,
+        total_gastos: 3456,
+        total_socios: 864,
+        total_ganancia: 480,
+        month: { year: 2026, month: 8, company_id: 'co-1', summary_only: true },
+      },
+    ])
+    const fromSpy = vi.spyOn(supabase, 'from').mockImplementationOnce(() => query)
+    const { data, error } = await loadAllMonthTotals('co-1')
+    expect(error).toBeNull()
+    expect(data).toEqual([expect.objectContaining({ year: 2026, month: 8, summaryOnly: true })])
+    fromSpy.mockRestore()
   })
 })
 
@@ -488,6 +572,259 @@ describe('finanzasApi — seedRecurringInvoices', () => {
         amount: 300,
       }),
     )
+    fromSpy.mockRestore()
+  })
+})
+
+// ─── Divisas y Caja Bs ────────────────────────────────────────────────────────────
+
+describe('finanzasApi — createFxOperation', () => {
+  it('inserta la operación en snake_case y NO inserta el ledger ni la fila cambio (eso lo hace el trigger)', async () => {
+    const fromCallsBefore = supabase.from.mock.calls.length
+    await createFxOperation('m-1', {
+      companyId: 'co-1',
+      opType: 'compra',
+      movedOn: '2026-09-23',
+      amountBs: 612000,
+      amountUsd: 600,
+      rateBcv: 816,
+      purpose: 'Para nómina',
+      createdBy: 'u-1',
+    })
+    const query = supabase.from.mock.results.at(-1).value
+    expect(query.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        company_id: 'co-1',
+        month_id: 'm-1',
+        op_type: 'compra',
+        moved_on: '2026-09-23',
+        amount_bs: 612000,
+        amount_usd: 600,
+        rate_bcv: 816,
+        purpose: 'Para nómina',
+        created_by: 'u-1',
+      }),
+    )
+    // Un solo insert (a fin_fx_operations) — nada más se llama desde JS.
+    const fxCalls = supabase.from.mock.calls
+      .slice(fromCallsBefore)
+      .filter(([table]) => table === 'fin_fx_operations')
+    const otherInsertCalls = supabase.from.mock.calls
+      .slice(fromCallsBefore)
+      .filter(([table]) => table === 'fin_bs_ledger' || table === 'fin_distributions')
+    expect(fxCalls).toHaveLength(1)
+    expect(otherInsertCalls).toHaveLength(0)
+  })
+})
+
+describe('finanzasApi — createBsAdjustment', () => {
+  it('fuerza source=ajuste con los 3 FK de origen en null', async () => {
+    await createBsAdjustment({
+      companyId: 'co-1',
+      monthId: 'm-1',
+      movedOn: '2026-09-23',
+      kind: 'in',
+      amountBs: 5000,
+      rate: 850,
+      concept: 'Ajuste de cuadre',
+      createdBy: 'u-1',
+    })
+    const query = supabase.from.mock.results.at(-1).value
+    expect(query.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'ajuste',
+        kind: 'in',
+        amount_bs: 5000,
+        rate: 850,
+        amount_usd_ref: Math.round((5000 / 850) * 100) / 100,
+        payment_id: null,
+        fx_operation_id: null,
+        distribution_id: null,
+      }),
+    )
+  })
+})
+
+describe('finanzasApi — resolveRateBcv', () => {
+  it('devuelve source=bcv cuando hay una tasa exacta para la fecha', async () => {
+    const exactQuery = makeQuery({ rate_bcv: 850, rate_date: '2026-09-23' })
+    const fromSpy = vi.spyOn(supabase, 'from').mockImplementationOnce(() => exactQuery)
+    const { data, error } = await resolveRateBcv('co-1', '2026-09-23')
+    expect(error).toBeNull()
+    expect(data).toEqual({ rate: 850, rateDate: '2026-09-23', source: 'bcv' })
+    fromSpy.mockRestore()
+  })
+
+  it('cae a la tasa anterior más reciente y lo marca como stale', async () => {
+    const exactQuery = makeQuery(null)
+    const prevQuery = makeQuery([{ rate_bcv: 816, rate_date: '2026-09-20' }])
+    const fromSpy = vi
+      .spyOn(supabase, 'from')
+      .mockImplementationOnce(() => exactQuery)
+      .mockImplementationOnce(() => prevQuery)
+    const { data } = await resolveRateBcv('co-1', '2026-09-23')
+    expect(data).toEqual({ rate: 816, rateDate: '2026-09-20', source: 'stale' })
+    fromSpy.mockRestore()
+  })
+
+  it('reporta missing sin ninguna tasa cargada', async () => {
+    const exactQuery = makeQuery(null)
+    const prevQuery = makeQuery(null)
+    const fromSpy = vi
+      .spyOn(supabase, 'from')
+      .mockImplementationOnce(() => exactQuery)
+      .mockImplementationOnce(() => prevQuery)
+    const { data } = await resolveRateBcv('co-1', '2026-09-23')
+    expect(data).toEqual({ rate: null, rateDate: null, source: 'missing' })
+    fromSpy.mockRestore()
+  })
+})
+
+describe('finanzasApi — resolveRateBcv con la API en vivo (solo para la fecha de hoy)', () => {
+  const today = new Date().toISOString().slice(0, 10)
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('si hay sesión y la API responde, usa esa tasa y la cachea en fin_rates (best-effort)', async () => {
+    supabase.auth.getSession.mockResolvedValueOnce({
+      data: { session: { access_token: 'tok' } },
+      error: null,
+    })
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({ rate: 197.6, source: 'pydolarve' }) })
+    vi.stubGlobal('fetch', fetchMock)
+    const upsertQuery = makeQuery({ company_id: 'co-1', rate_date: today, rate_bcv: 197.6 })
+    const fromSpy = vi.spyOn(supabase, 'from').mockImplementationOnce(() => upsertQuery)
+
+    const { data, error } = await resolveRateBcv('co-1', today)
+
+    expect(error).toBeNull()
+    expect(data).toEqual({ rate: 197.6, rateDate: today, source: 'bcv' })
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/bcv-rate',
+      expect.objectContaining({ headers: { Authorization: 'Bearer tok' } }),
+    )
+    expect(upsertQuery.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ company_id: 'co-1', rate_date: today, rate_bcv: 197.6 }),
+      expect.anything(),
+    )
+    fromSpy.mockRestore()
+  })
+
+  it('si el upsert a fin_rates falla, igual devuelve la tasa en vivo (best-effort, no bloquea)', async () => {
+    supabase.auth.getSession.mockResolvedValueOnce({
+      data: { session: { access_token: 'tok' } },
+      error: null,
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ rate: 200 }) }),
+    )
+    const fromSpy = vi.spyOn(supabase, 'from').mockImplementationOnce(() => {
+      throw new Error('RLS: sin permiso')
+    })
+
+    const { data, error } = await resolveRateBcv('co-1', today)
+
+    expect(error).toBeNull()
+    expect(data).toEqual({ rate: 200, rateDate: today, source: 'bcv' })
+    fromSpy.mockRestore()
+  })
+
+  it('si la API no responde, cae al histórico de fin_rates aunque la fecha sea hoy', async () => {
+    supabase.auth.getSession.mockResolvedValueOnce({
+      data: { session: { access_token: 'tok' } },
+      error: null,
+    })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }))
+    const exactQuery = makeQuery({ rate_bcv: 850, rate_date: today })
+    const fromSpy = vi.spyOn(supabase, 'from').mockImplementationOnce(() => exactQuery)
+
+    const { data } = await resolveRateBcv('co-1', today)
+    expect(data).toEqual({ rate: 850, rateDate: today, source: 'bcv' })
+    fromSpy.mockRestore()
+  })
+
+  it('sin sesión activa, no llama a la API y cae directo al histórico', async () => {
+    supabase.auth.getSession.mockResolvedValueOnce({ data: { session: null }, error: null })
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const exactQuery = makeQuery({ rate_bcv: 850, rate_date: today })
+    const fromSpy = vi.spyOn(supabase, 'from').mockImplementationOnce(() => exactQuery)
+
+    await resolveRateBcv('co-1', today)
+    expect(fetchMock).not.toHaveBeenCalled()
+    fromSpy.mockRestore()
+  })
+
+  it('para una fecha que no es hoy, nunca llama a la API (ej. closeMonth resolviendo un mes pasado)', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const exactQuery = makeQuery({ rate_bcv: 850, rate_date: '2026-08-31' })
+    const fromSpy = vi.spyOn(supabase, 'from').mockImplementationOnce(() => exactQuery)
+
+    await resolveRateBcv('co-1', '2026-08-31')
+    expect(fetchMock).not.toHaveBeenCalled()
+    fromSpy.mockRestore()
+  })
+})
+
+describe('finanzasApi — createDistribution con Bs', () => {
+  it('manda amount_bs y rate cuando currency es Bs', async () => {
+    await createDistribution('m-1', {
+      partida: 'gastos',
+      kind: 'out',
+      movedOn: '2026-09-23',
+      concept: 'Nómina',
+      amount: 750,
+      currency: 'Bs',
+      amountBs: 612000,
+      rate: 816,
+    })
+    const query = supabase.from.mock.results.at(-1).value
+    expect(query.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ currency: 'Bs', amount_bs: 612000, rate: 816 }),
+    )
+  })
+})
+
+describe('finanzasApi — closeMonth', () => {
+  it('si falla el snapshot en fin_month_totals, NO llega a marcar el mes cerrado', async () => {
+    const monthsQuery = makeQuery({
+      id: 'm-1',
+      company_id: 'co-1',
+      year: 2026,
+      month: 9,
+      closed: false,
+    })
+    const totalsQuery = makeQuery([], { error: new Error('boom') })
+
+    const fromSpy = vi.spyOn(supabase, 'from').mockImplementation((table) => {
+      if (table === 'fin_month_totals') return totalsQuery
+      if (table === 'fin_months') return monthsQuery
+      return makeQuery([])
+    })
+
+    const { data, error } = await closeMonth({
+      companyId: 'co-1',
+      monthId: 'm-1',
+      year: 2026,
+      month: 9,
+      userId: 'u-1',
+      clients: [],
+    })
+
+    expect(error).toBeInstanceOf(Error)
+    expect(data).toBeNull()
+    expect(totalsQuery.upsert).toHaveBeenCalled()
+    // El único `update` posible en fin_months es el de marcar closed=true — no debe
+    // haberse llamado si el snapshot de divisas falló antes (mismo orden que
+    // createSummaryMonth: totales primero, cierre después).
+    expect(monthsQuery.update).not.toHaveBeenCalled()
+
     fromSpy.mockRestore()
   })
 })

@@ -8,6 +8,10 @@ import {
   loadInvoices,
   loadDistributions,
   loadMonthTotals,
+  loadFxOperationsUpTo,
+  loadBsLedgerUpTo,
+  loadRates,
+  resolveRateBcv,
 } from '../components/finanzas/finanzasApi'
 import MonthPeriodPicker, {
   thisMonthStr,
@@ -19,6 +23,7 @@ import ClientesView from '../components/finanzas/ClientesView'
 import DistribucionView from '../components/finanzas/DistribucionView'
 import PartidaView from '../components/finanzas/PartidaView'
 import PorCobrarView from '../components/finanzas/PorCobrarView'
+import CajaBsView from '../components/finanzas/CajaBsView'
 
 const ALL_TABS = [
   { key: 'dashboard', label: 'Dashboard', path: '/finanzas' },
@@ -26,6 +31,7 @@ const ALL_TABS = [
   { key: 'clientes', label: 'Clientes', path: '/finanzas/clientes' },
   { key: 'distribucion', label: 'Distribución', path: '/finanzas/distribucion' },
   { key: 'porcobrar', label: 'Por cobrar', path: '/finanzas/por-cobrar' },
+  { key: 'cajabs', label: 'Caja Bs', path: '/finanzas/caja-bs' },
 ]
 
 function tabCapability(key) {
@@ -37,6 +43,7 @@ function pathToKey(pathname) {
   if (pathname.startsWith('/finanzas/clientes')) return 'clientes'
   if (pathname.startsWith('/finanzas/distribucion')) return 'distribucion'
   if (pathname.startsWith('/finanzas/por-cobrar')) return 'porcobrar'
+  if (pathname.startsWith('/finanzas/caja-bs')) return 'cajabs'
   return 'dashboard'
 }
 
@@ -86,32 +93,66 @@ export default function FinanzasPage() {
   const [clients, setClients] = useState([])
   const [lines, setLines] = useState([])
   const [loading, setLoading] = useState(true)
+  // Caja Bs y divisas son ACUMULADOS (§10 de la spec): no se cierran por mes,
+  // así que se cargan siempre `<= (year, month)`, aparte de invoices/distributions
+  // (que sí son del mes activo). rateBcv es la tasa vigente al último día del mes.
+  const [fxOperations, setFxOperations] = useState([])
+  const [bsLedger, setBsLedger] = useState([])
+  const [rates, setRates] = useState([])
+  const [rateBcv, setRateBcv] = useState(null)
 
-  const fetchPeriod = useCallback(async () => {
-    if (!companyId) return
-    setLoading(true)
-    const { data: m } = await loadMonth(companyId, year, month)
-    setFinMonth(m ?? null)
-    if (m?.summaryOnly) {
-      const { data: totals } = await loadMonthTotals(m.id)
-      setMonthTotals(totals ?? null)
-      setInvoices([])
-      setDistributions([])
-    } else if (m) {
-      const [{ data: inv }, { data: dist }] = await Promise.all([
-        loadInvoices(m.id),
-        loadDistributions(m.id),
-      ])
-      setInvoices(inv ?? [])
-      setDistributions(dist ?? [])
-      setMonthTotals(null)
-    } else {
-      setInvoices([])
-      setDistributions([])
-      setMonthTotals(null)
-    }
-    setLoading(false)
-  }, [companyId, year, month])
+  // `showLoading=false` para los refetch disparados por realtime (incluida la
+  // propia escritura a fin_rates al resolver la tasa BCV en vivo — ver
+  // resolveRateBcv() en finanzasApi.js): con `loading=true`, FacturacionView
+  // desmonta su contenido (early return "Cargando…", ver línea ~86), lo que
+  // desmonta InvoiceModal si estaba abierto y reinicia su estado (moneda vuelve
+  // a USD, tasa se pierde) — el usuario lo percibía como "se recarga el sitio"
+  // justo al elegir Bs. Los refetch de fondo actualizan los datos sin bloquear
+  // la vista; solo la carga inicial (mount) y las acciones explícitas del
+  // usuario (abrir mes, guardar) muestran el estado de carga.
+  const fetchPeriod = useCallback(
+    async (showLoading = true) => {
+      if (!companyId) return
+      if (showLoading) setLoading(true)
+      const { data: m } = await loadMonth(companyId, year, month)
+      setFinMonth(m ?? null)
+      if (m?.summaryOnly) {
+        const { data: totals } = await loadMonthTotals(m.id)
+        setMonthTotals(totals ?? null)
+        setInvoices([])
+        setDistributions([])
+      } else if (m) {
+        const [{ data: inv }, { data: dist }] = await Promise.all([
+          loadInvoices(m.id),
+          loadDistributions(m.id),
+        ])
+        setInvoices(inv ?? [])
+        setDistributions(dist ?? [])
+        setMonthTotals(null)
+      } else {
+        setInvoices([])
+        setDistributions([])
+        setMonthTotals(null)
+      }
+
+      const lastDayOfMonth = new Date(year, month, 0).toISOString().slice(0, 10)
+      const [{ data: fx }, { data: ledger }, { data: rts }, { data: rateInfo }] = await Promise.all(
+        [
+          loadFxOperationsUpTo(companyId, year, month),
+          loadBsLedgerUpTo(companyId, year, month),
+          loadRates(companyId),
+          resolveRateBcv(companyId, lastDayOfMonth),
+        ],
+      )
+      setFxOperations(fx ?? [])
+      setBsLedger(ledger ?? [])
+      setRates(rts ?? [])
+      setRateBcv(rateInfo ?? null)
+
+      if (showLoading) setLoading(false)
+    },
+    [companyId, year, month],
+  )
 
   const fetchBase = useCallback(async () => {
     if (!companyId) return
@@ -133,20 +174,51 @@ export default function FinanzasPage() {
 
   useEffect(() => {
     if (!companyId) return
+    // fetchPeriod(false): Supabase invoca el callback con el payload del cambio
+    // como argumento — sin este wrapper, ese payload (truthy) caería en el
+    // parámetro `showLoading` y reactivaría el "Cargando…" que se quería evitar.
+    const backgroundRefetch = () => fetchPeriod(false)
     const channel = supabase
       .channel('finanzas-view')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'fin_months' }, fetchPeriod)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'fin_invoices' }, fetchPeriod)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'fin_payments' }, fetchPeriod)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'fin_months' },
+        backgroundRefetch,
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'fin_invoices' },
+        backgroundRefetch,
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'fin_payments' },
+        backgroundRefetch,
+      )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'fin_distributions' },
-        fetchPeriod,
+        backgroundRefetch,
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'fin_month_totals' },
-        fetchPeriod,
+        backgroundRefetch,
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'fin_fx_operations' },
+        backgroundRefetch,
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'fin_bs_ledger' },
+        backgroundRefetch,
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'fin_rates' },
+        backgroundRefetch,
       )
       .subscribe()
     return () => supabase.removeChannel(channel)
@@ -159,6 +231,9 @@ export default function FinanzasPage() {
   const canManageDistribucion = can('finanzas.distribucion.manage')
   const canCerrarMes = can('finanzas.cerrar_mes')
   const canManagePartidas = can('finanzas.partidas.manage')
+  // Comprar/vender divisas, cargar la tasa BCV y el ajuste de cuadre de Caja Bs
+  // reusan finanzas.distribucion.manage — decisión A2, sin capability nueva.
+  const canManageDivisas = canManageDistribucion
 
   const shared = {
     companyId,
@@ -174,6 +249,10 @@ export default function FinanzasPage() {
     loading,
     refetch: fetchPeriod,
     userProfile,
+    fxOperations,
+    bsLedger,
+    rates,
+    rateBcv,
   }
 
   return (
@@ -208,7 +287,11 @@ export default function FinanzasPage() {
         </div>
 
         {activeKey === 'dashboard' && can('finanzas.dashboard') && (
-          <DashboardView {...shared} canCerrarMes={canCerrarMes} />
+          <DashboardView
+            {...shared}
+            canCerrarMes={canCerrarMes}
+            canManageDivisas={canManageDivisas}
+          />
         )}
 
         {activeKey === 'facturacion' && can('finanzas.facturacion') && (
@@ -238,6 +321,10 @@ export default function FinanzasPage() {
 
         {activeKey === 'porcobrar' && can('finanzas.porcobrar') && (
           <PorCobrarView companyId={companyId} canManageCobros={canManageCobros} />
+        )}
+
+        {activeKey === 'cajabs' && can('finanzas.cajabs') && (
+          <CajaBsView {...shared} canManage={canManageDivisas} />
         )}
       </div>
     </main>

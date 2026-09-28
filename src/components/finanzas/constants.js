@@ -34,7 +34,58 @@ export const PARTIDAS_PCT_DEFAULT = { gastos: 0.72, socios: 0.18, ganancia: 0.1 
 
 export const PARTIDA_KEYS = Object.keys(PARTIDAS)
 
-export const METODOS_PAGO = ['Zelle', 'Efectivo $', 'Transferencia Bs', 'Otro']
+/**
+ * Partida técnica del "resultado por cambio" (spec MAPPI-Finanzas-Divisas §5.2/D1).
+ * Vive FUERA de `PARTIDAS` a propósito: no tiene meta, ni %, ni saldo pagable —
+ * `PARTIDA_KEYS` es el iterador de todo lo presupuestario (metas, %, selector de
+ * pago, traspasos) y meterla ahí la haría aparecer como una cuarta partida real
+ * en esos 9 sitios. Se genera sola vía trigger (`fin_fx_sync`), nunca a mano.
+ */
+export const PARTIDA_CAMBIO = 'cambio'
+
+export const PARTIDA_CAMBIO_META = {
+  key: PARTIDA_CAMBIO,
+  name: 'Resultado por cambio',
+  dot: 'bg-[#7C6FF0]',
+  text: 'text-[#4c3fd0]',
+  hex: '#7C6FF0',
+}
+
+/** Las 3 partidas reales + 'cambio', solo para sitios que deben MOSTRAR las 4 (ej. Movimientos). */
+export const PARTIDA_KEYS_LEDGER = [...PARTIDA_KEYS, PARTIDA_CAMBIO]
+
+/** Resuelve la meta (nombre/color) de cualquiera de las 4 partidas, o `null` si no existe. */
+export function partidaMeta(key) {
+  return PARTIDAS[key] ?? (key === PARTIDA_CAMBIO ? PARTIDA_CAMBIO_META : null)
+}
+
+/** Métodos disponibles cuando el cobro se registra en USD (ver CobroModal.jsx). */
+export const METODOS_PAGO_USD = ['Zelle', 'Efectivo $', 'Otro']
+
+/**
+ * Métodos disponibles cuando el cobro se registra en Bs (ver CobroModal.jsx).
+ * La moneda ya no se infiere del método elegido (eso lo decide el toggle
+ * USD/Bs, igual que en InvoiceModal.jsx) — esta lista solo puebla el
+ * desplegable cuando la moneda activa es Bs.
+ */
+export const METODOS_PAGO_BS = ['Transferencia Bs', 'Efectivo Bs', 'Otro']
+
+/** Unión de ambas, para listados/filtros que necesiten conocer todos los métodos. */
+export const METODOS_PAGO = [...new Set([...METODOS_PAGO_USD, ...METODOS_PAGO_BS])]
+
+export const FX_OP_TYPES = {
+  compra: { key: 'compra', label: 'Compra de dólares' },
+  venta: { key: 'venta', label: 'Venta de dólares' },
+}
+
+/** Etiquetas en español para la columna "origen" del libro de Caja Bs. */
+export const BS_LEDGER_SOURCES = {
+  cobro: 'Cobro en Bs',
+  venta_divisa: 'Venta de divisas',
+  compra_divisa: 'Compra de divisas',
+  pago_directo: 'Pago directo en Bs',
+  ajuste: 'Ajuste de cuadre',
+}
 
 export const CONCEPTOS_SUGERIDOS = [
   'Gestión de redes',

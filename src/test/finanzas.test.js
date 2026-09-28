@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   cobradoDe,
+  cobradoMostradoDe,
   pendienteDe,
   estadoFactura,
   totalFacturado,
@@ -19,10 +20,22 @@ import {
   ticketPromedio,
   pctsDelMes,
   cobradoPorMoneda,
+  facturadoPorMoneda,
   movimientoCartera,
   pctsEnterosPorPartida,
   invoiceRowsForNewMonth,
+  deltaCambio,
+  brechaPct,
+  tasaRealFx,
+  saldoCajaBs,
+  ledgerConSaldo,
+  divisaFisica,
+  resultadoCambio,
+  pagosRealesUsd,
+  cuadreDivisas,
+  brechaPromedioPonderada,
 } from '../utils/finanzas'
+import { PARTIDA_KEYS, partidaMeta, PARTIDA_CAMBIO_META } from '../components/finanzas/constants'
 
 const PCTS_66_20_14 = { gastos: 0.66, socios: 0.2, ganancia: 0.14 }
 
@@ -74,6 +87,42 @@ describe('finanzas — facturas y cobros', () => {
     expect(totalFacturado([])).toBe(0)
     expect(totalCobrado(undefined)).toBe(0)
     expect(totalPorCobrar(null)).toBe(0)
+  })
+})
+
+describe('finanzas — cobradoMostradoDe', () => {
+  it('sin abonos, cae a la moneda de la factura y 0', () => {
+    const inv = invoice({ currency: 'USD', payments: [] })
+    expect(cobradoMostradoDe(inv)).toEqual({ currency: 'USD', amount: 0 })
+  })
+
+  it('factura en USD pagada en Bs: badge Bs, monto = suma de amount_bs', () => {
+    const inv = invoice({
+      currency: 'USD',
+      payments: [{ amount: 750, amountBs: 612000, rate: 816 }],
+    })
+    expect(cobradoMostradoDe(inv)).toEqual({ currency: 'Bs', amount: 612000 })
+  })
+
+  it('factura en USD pagada en USD: se queda en USD con el total exacto', () => {
+    const inv = invoice({ currency: 'USD', payments: [{ amount: 400 }] })
+    expect(cobradoMostradoDe(inv)).toEqual({ currency: 'USD', amount: 400 })
+  })
+
+  it('factura en Bs pagada en Bs: sigue mostrando Bs', () => {
+    const inv = invoice({
+      currency: 'Bs',
+      payments: [{ amount: 300, amountBs: 244800, rate: 816 }],
+    })
+    expect(cobradoMostradoDe(inv)).toEqual({ currency: 'Bs', amount: 244800 })
+  })
+
+  it('con abonos en monedas mixtas, cae al total exacto en USD (no mezcla Bs de uno con USD del otro)', () => {
+    const inv = invoice({
+      currency: 'USD',
+      payments: [{ amount: 400, amountBs: 326400, rate: 816 }, { amount: 350 }],
+    })
+    expect(cobradoMostradoDe(inv)).toEqual({ currency: 'USD', amount: 750 })
   })
 })
 
@@ -182,6 +231,22 @@ describe('finanzas — cobradoPorMoneda', () => {
 
   it('devuelve ceros sin facturas', () => {
     expect(cobradoPorMoneda([])).toEqual({ bs: 0, divisa: 0 })
+  })
+})
+
+describe('finanzas — facturadoPorMoneda', () => {
+  it('separa lo facturado en USD de lo facturado en Bs, por invoice.currency', () => {
+    const invoices = [
+      invoice({ amount: 750, currency: 'Bs' }),
+      invoice({ amount: 1000, currency: 'USD' }),
+      invoice({ amount: 500 }), // sin currency explícita -> no es 'Bs', cuenta como USD
+    ]
+    expect(facturadoPorMoneda(invoices)).toEqual({ usd: 1500, bs: 750 })
+  })
+
+  it('devuelve ceros sin facturas', () => {
+    expect(facturadoPorMoneda([])).toEqual({ usd: 0, bs: 0 })
+    expect(facturadoPorMoneda(undefined)).toEqual({ usd: 0, bs: 0 })
   })
 })
 
@@ -361,6 +426,8 @@ describe('invoiceRowsForNewMonth', () => {
       concept: 'Página web',
       amount: 3000,
       currency: 'USD',
+      amountBs: null,
+      rate: null,
       recurring: true,
     })
     expect(rows).toContainEqual(
@@ -383,6 +450,8 @@ describe('invoiceRowsForNewMonth', () => {
         concept: 'Gestión de redes',
         amount: 300,
         currency: 'USD',
+        amountBs: null,
+        rate: null,
         recurring: true,
       },
     ])
@@ -416,5 +485,373 @@ describe('invoiceRowsForNewMonth', () => {
       month: 9,
     })
     expect(rows).toHaveLength(1)
+  })
+})
+
+// ─── Divisas y Caja Bs (spec MAPPI-Finanzas-Divisas) ────────────────────────────
+
+describe('finanzas — divisas: aritmética básica', () => {
+  it('deltaCambio en una compra (normalmente negativo)', () => {
+    // 612.000 Bs -> $600, BCV 816 => usd_bcv = 750, delta = 600 - 750 = -150
+    expect(
+      deltaCambio({ opType: 'compra', amountBs: 612000, amountUsd: 600, rateBcv: 816 }),
+    ).toBeCloseTo(-150, 2)
+  })
+
+  it('deltaCambio en una venta (normalmente positivo)', () => {
+    expect(
+      deltaCambio({ opType: 'venta', amountBs: 612000, amountUsd: 600, rateBcv: 816 }),
+    ).toBeCloseTo(150, 2)
+  })
+
+  it('deltaCambio es 0 cuando la tasa real coincide con la BCV', () => {
+    expect(
+      deltaCambio({ opType: 'compra', amountBs: 81600, amountUsd: 100, rateBcv: 816 }),
+    ).toBeCloseTo(0, 6)
+  })
+
+  it('deltaCambio es 0 sin BCV (no divide por cero)', () => {
+    expect(deltaCambio({ opType: 'compra', amountBs: 612000, amountUsd: 600, rateBcv: 0 })).toBe(0)
+  })
+
+  it('tasaRealFx = Bs ÷ USD', () => {
+    expect(tasaRealFx({ amountBs: 612000, amountUsd: 600 })).toBe(1020)
+  })
+
+  it('brechaPct de la tasa real sobre la BCV', () => {
+    expect(brechaPct(1020, 816)).toBeCloseTo(0.25, 4)
+  })
+
+  it('brechaPct es 0 sin BCV', () => {
+    expect(brechaPct(1020, 0)).toBe(0)
+  })
+
+  it('saldoCajaBs suma entradas y resta salidas', () => {
+    const ledger = [
+      { kind: 'in', amountBs: 612000 },
+      { kind: 'out', amountBs: 100000 },
+    ]
+    expect(saldoCajaBs(ledger)).toBe(512000)
+  })
+
+  it('saldoCajaBs es 0 sin movimientos', () => {
+    expect(saldoCajaBs([])).toBe(0)
+    expect(saldoCajaBs(undefined)).toBe(0)
+  })
+
+  it('ledgerConSaldo calcula el saldo acumulado y lo muestra más reciente primero', () => {
+    const ledger = [
+      { movedOn: '2026-09-05', kind: 'in', amountBs: 100 },
+      { movedOn: '2026-09-01', kind: 'in', amountBs: 500 },
+      { movedOn: '2026-09-10', kind: 'out', amountBs: 200 },
+    ]
+    const conSaldo = ledgerConSaldo(ledger)
+    // más reciente arriba
+    expect(conSaldo.map((l) => l.movedOn)).toEqual(['2026-09-10', '2026-09-05', '2026-09-01'])
+    // saldo acumulado en orden cronológico: 500 -> 600 -> 400
+    expect(conSaldo.find((l) => l.movedOn === '2026-09-01').saldo).toBe(500)
+    expect(conSaldo.find((l) => l.movedOn === '2026-09-05').saldo).toBe(600)
+    expect(conSaldo.find((l) => l.movedOn === '2026-09-10').saldo).toBe(400)
+  })
+
+  it('resultadoCambio ignora las 3 partidas reales', () => {
+    const dists = [
+      { partida: 'gastos', kind: 'in', amount: 500 },
+      { partida: 'cambio', kind: 'out', amount: 150 },
+      { partida: 'cambio', kind: 'in', amount: 40 },
+    ]
+    expect(resultadoCambio(dists)).toBe(-110)
+  })
+
+  it('pagosRealesUsd ignora la partida cambio y el traspaso entre partidas', () => {
+    const dists = [
+      { partida: 'gastos', kind: 'out', amount: 500, note: null },
+      { partida: 'cambio', kind: 'out', amount: 150, note: null },
+      { partida: 'ganancia', kind: 'out', amount: 9.6, note: 'traspaso_entre_partidas' },
+      { partida: 'gastos', kind: 'in', amount: 9.6, note: 'traspaso_entre_partidas' },
+    ]
+    expect(pagosRealesUsd(dists)).toBe(500)
+  })
+
+  it('divisaFisica no resta un pago hecho en bolívares (sale de Caja Bs, no de la divisa)', () => {
+    const invoices = [{ payments: [{ amount: 750, currency: 'Bs' }] }]
+    const distributions = [
+      { partida: 'gastos', kind: 'out', amount: 750, currency: 'Bs', note: null },
+    ]
+    expect(divisaFisica({ invoices, fxOperations: [], distributions })).toBe(0)
+  })
+
+  it('divisaFisica suma compras y resta ventas y pagos en USD', () => {
+    const invoices = [{ payments: [{ amount: 1000, currency: 'USD' }] }]
+    const fxOperations = [
+      { opType: 'compra', amountUsd: 600 },
+      { opType: 'venta', amountUsd: 200 },
+    ]
+    const distributions = [{ partida: 'gastos', kind: 'out', amount: 100, currency: 'USD' }]
+    expect(divisaFisica({ invoices, fxOperations, distributions })).toBe(1000 + 600 - 200 - 100)
+  })
+})
+
+describe('finanzas — invariante de cuadre (cuadreDivisas)', () => {
+  const BCV = 816
+
+  function invoiceBs(amount, amountBs) {
+    return { amount, payments: [{ amount, amountBs, currency: 'Bs' }] }
+  }
+
+  it('reproduce las 4 filas exactas de la tabla de §7 de la spec (BCV 816)', () => {
+    // 1) Cobro en Bs: $750 cobrados como 612.000 Bs, distribuido 540/135/75
+    const invoices = [invoiceBs(750, 612000, BCV)]
+    let distributions = [
+      { partida: 'gastos', kind: 'in', amount: 540, currency: 'USD' },
+      { partida: 'socios', kind: 'in', amount: 135, currency: 'USD' },
+      { partida: 'ganancia', kind: 'in', amount: 75, currency: 'USD' },
+    ]
+    let ledger = [{ kind: 'in', amountBs: 612000 }]
+    let fxOperations = []
+
+    let r = cuadreDivisas({ invoices, distributions, fxOperations, ledger, rateBcv: BCV })
+    expect(r.diferencia).toBe(0)
+    expect(r.divisaFisica).toBe(0)
+    expect(r.saldoBs).toBe(612000)
+
+    // 2) Comprar dólares: 612.000 Bs -> $600 (delta -150)
+    fxOperations = [{ opType: 'compra', amountUsd: 600, amountBs: 612000, rateBcv: BCV }]
+    ledger = [...ledger, { kind: 'out', amountBs: 612000 }]
+    distributions = [
+      ...distributions,
+      { partida: 'cambio', kind: 'out', amount: 150, currency: 'USD' },
+    ]
+
+    r = cuadreDivisas({ invoices, distributions, fxOperations, ledger, rateBcv: BCV })
+    expect(r.diferencia).toBe(0)
+    expect(r.divisaFisica).toBe(600)
+    expect(r.saldoBs).toBe(0)
+    expect(r.cambio).toBe(-150)
+
+    // 3) Vender dólares: $600 -> 612.000 Bs (delta +150, se recupera lo descontado)
+    fxOperations = [
+      ...fxOperations,
+      { opType: 'venta', amountUsd: 600, amountBs: 612000, rateBcv: BCV },
+    ]
+    ledger = [...ledger, { kind: 'in', amountBs: 612000 }]
+    distributions = [
+      ...distributions,
+      { partida: 'cambio', kind: 'in', amount: 150, currency: 'USD' },
+    ]
+
+    r = cuadreDivisas({ invoices, distributions, fxOperations, ledger, rateBcv: BCV })
+    expect(r.diferencia).toBe(0)
+    expect(r.divisaFisica).toBe(0)
+    expect(r.saldoBs).toBe(612000)
+    expect(r.cambio).toBe(0)
+
+    // 4) Pago directo en Bs (nómina): 612.000 Bs, sin resultado por cambio
+    distributions = [
+      ...distributions,
+      { partida: 'gastos', kind: 'out', amount: 750, currency: 'Bs', amountBs: 612000, rate: BCV },
+    ]
+    ledger = [...ledger, { kind: 'out', amountBs: 612000 }]
+
+    r = cuadreDivisas({ invoices, distributions, fxOperations, ledger, rateBcv: BCV })
+    expect(r.diferencia).toBe(0)
+    expect(r.divisaFisica).toBe(0)
+    expect(r.saldoBs).toBe(0)
+  })
+
+  it('cuadra sobre los datos reales de producción (septiembre 2026) — reprueba el query literal de §7', () => {
+    // Zelle $1.000 (USD) + Jugos Los Ángeles $750 / 637.500 Bs @ 850.
+    const invoices = [
+      { payments: [{ amount: 1000, currency: 'USD' }] },
+      { payments: [{ amount: 750, amountBs: 637500, currency: 'Bs' }] },
+    ]
+    // Los 10 movimientos reales de fin_distributions de septiembre 2026.
+    const distributions = [
+      { partida: 'gastos', kind: 'in', amount: 590.4, currency: 'USD' },
+      { partida: 'ganancia', kind: 'in', amount: 82.0, currency: 'USD' },
+      { partida: 'socios', kind: 'in', amount: 147.6, currency: 'USD' },
+      { partida: 'gastos', kind: 'out', amount: 500.0, currency: 'USD' },
+      {
+        partida: 'gastos',
+        kind: 'in',
+        amount: 9.6,
+        currency: 'USD',
+        note: 'traspaso_entre_partidas',
+      },
+      {
+        partida: 'ganancia',
+        kind: 'out',
+        amount: 9.6,
+        currency: 'USD',
+        note: 'traspaso_entre_partidas',
+      },
+      { partida: 'gastos', kind: 'out', amount: 100.0, currency: 'USD' },
+      { partida: 'gastos', kind: 'in', amount: 800.0, currency: 'USD' },
+      { partida: 'socios', kind: 'in', amount: 100.0, currency: 'USD' },
+      { partida: 'ganancia', kind: 'in', amount: 100.0, currency: 'USD' },
+    ]
+    const ledger = [{ kind: 'in', amountBs: 637500 }]
+
+    const r = cuadreDivisas({ invoices, distributions, fxOperations: [], ledger, rateBcv: 850 })
+    expect(r.diferencia).toBe(0)
+    expect(r.cobrado).toBe(1750)
+    expect(r.pagosReales).toBe(600)
+    expect(r.divisaFisica).toBe(400)
+    expect(r.saldoBs).toBe(637500)
+
+    // El query literal de §7 (Σ partidas + cambio = divisa física + Bs/BCV, SIN
+    // excluir el traspaso ni el pendiente por distribuir) da distinto de cero
+    // sobre estos mismos datos correctos:
+    const partidasSumaIngenua =
+      590.4 + 82.0 + 147.6 - 500.0 + 9.6 - 9.6 - 100.0 + 800.0 + 100.0 + 100.0
+    const divisaFisicaSegun7 = 1000 - (500 + 100 + 9.6) // resta también el traspaso
+    const diferenciaIngenua =
+      Math.round((partidasSumaIngenua - (divisaFisicaSegun7 + 637500 / 850)) * 100) / 100
+    expect(diferenciaIngenua).not.toBe(0)
+  })
+
+  it('el traspaso entre partidas no descuadra el invariante', () => {
+    const invoices = [invoiceBs(750, 612000, BCV)]
+    const distributions = [
+      { partida: 'gastos', kind: 'in', amount: 750, currency: 'USD' },
+      {
+        partida: 'gastos',
+        kind: 'out',
+        amount: 100,
+        currency: 'USD',
+        note: 'traspaso_entre_partidas',
+      },
+      {
+        partida: 'socios',
+        kind: 'in',
+        amount: 100,
+        currency: 'USD',
+        note: 'traspaso_entre_partidas',
+      },
+      { partida: 'socios', kind: 'out', amount: 100, currency: 'USD' },
+    ]
+    const ledger = [{ kind: 'in', amountBs: 612000 }]
+    const r = cuadreDivisas({ invoices, distributions, fxOperations: [], ledger, rateBcv: BCV })
+    expect(r.diferencia).toBe(0)
+  })
+
+  it('un cobro cobrado y sin distribuir no descuadra, y sinDistribuir lo reporta', () => {
+    const invoices = [invoiceBs(750, 612000, BCV)]
+    const distributions = [] // nada distribuido todavía
+    const ledger = [{ kind: 'in', amountBs: 612000 }]
+    const r = cuadreDivisas({ invoices, distributions, fxOperations: [], ledger, rateBcv: BCV })
+    expect(r.diferencia).toBe(0)
+    expect(r.sinDistribuir).toBe(750)
+  })
+
+  it('la sobre-distribución no descuadra el invariante, pero sinDistribuir queda negativo', () => {
+    const inv = {
+      id: 'i1',
+      amount: 750,
+      payments: [{ amount: 750, amountBs: 612000, currency: 'Bs' }],
+    }
+    // se asignó más de lo cobrado en esta factura (ajuste manual de más)
+    const distributions = [
+      { partida: 'gastos', kind: 'in', amount: 900, currency: 'USD', invoiceId: 'i1' },
+    ]
+    const ledger = [{ kind: 'in', amountBs: 612000 }]
+    const r = cuadreDivisas({
+      invoices: [inv],
+      distributions,
+      fxOperations: [],
+      ledger,
+      rateBcv: BCV,
+    })
+    expect(r.diferencia).toBe(0)
+    expect(r.sinDistribuir).toBe(750 - 900)
+  })
+
+  it('acumulación multi-mes: el saldo de Caja Bs y la divisa física NO se reinician por mes', () => {
+    // Mes 1: compra de dólares con 612.000 Bs (queda saldo en divisa, Caja Bs en 0).
+    // Como toda compra, genera su fila de 'cambio' (delta = 600 - 612000/816 = -150).
+    const ledgerM1 = [{ kind: 'out', amountBs: 612000 }]
+    const fxM1 = [{ opType: 'compra', amountUsd: 600, amountBs: 612000, rateBcv: BCV }]
+    const distM1 = [{ partida: 'cambio', kind: 'out', amount: 150, currency: 'USD' }]
+
+    // Mes 2: sin ningún movimiento propio.
+    const ledgerM2 = []
+    const fxM2 = []
+    const distM2 = []
+
+    // Si se calculara SOLO con los movimientos del mes 2 (como el query de §7,
+    // con month_id = $1), la Caja Bs y la divisa física parecerían en 0 — falso:
+    // los $600 comprados en el mes 1 siguen físicamente en caja.
+    const soloMes2 = cuadreDivisas({
+      invoices: [],
+      distributions: distM2,
+      fxOperations: fxM2,
+      ledger: ledgerM2,
+      rateBcv: BCV,
+    })
+    expect(soloMes2.divisaFisica).toBe(0)
+    expect(soloMes2.saldoBs).toBe(0)
+
+    // Acumulado hasta el mes 2 (mes 1 + mes 2): el saldo real se mantiene.
+    const acumulado = cuadreDivisas({
+      invoices: [],
+      distributions: [...distM1, ...distM2],
+      fxOperations: [...fxM1, ...fxM2],
+      ledger: [...ledgerM1, ...ledgerM2],
+      rateBcv: BCV,
+    })
+    expect(acumulado.divisaFisica).toBe(600)
+    expect(acumulado.saldoBs).toBe(-612000)
+    expect(acumulado.diferencia).toBe(0)
+  })
+
+  it('marca bcvFaltante y no divide por cero sin tasa BCV', () => {
+    const r = cuadreDivisas({
+      invoices: [],
+      distributions: [],
+      fxOperations: [],
+      ledger: [{ kind: 'in', amountBs: 1000 }],
+      rateBcv: 0,
+    })
+    expect(r.bcvFaltante).toBe(true)
+    expect(r.diferencia).toBeNull()
+    expect(r.saldoBsUsdRef).toBe(0)
+  })
+})
+
+describe('finanzas — divisas: brecha promedio ponderada (§9)', () => {
+  it('pondera por volumen, no promedia las tasas reales', () => {
+    const ops = [
+      { amountBs: 612000, amountUsd: 600, rateBcv: 816 }, // real 1020
+      { amountBs: 100000, amountUsd: 100, rateBcv: 800 }, // real 1000
+    ]
+    const r = brechaPromedioPonderada(ops)
+    expect(r.tasaRealProm).toBeCloseTo(712000 / 700, 4)
+    expect(r.bcvProm).toBeCloseTo(808, 4)
+  })
+
+  it('da todo en 0 sin operaciones', () => {
+    const r = brechaPromedioPonderada([])
+    expect(r).toEqual({ tasaRealProm: 0, bcvProm: 0, brechaPct: 0 })
+  })
+})
+
+describe('finanzas — divisas: guard de regresión de la partida técnica cambio', () => {
+  it('PARTIDA_KEYS no incluye cambio (no debe entrar en metas/% ni en el selector de pago)', () => {
+    expect(PARTIDA_KEYS).toEqual(['gastos', 'socios', 'ganancia'])
+    expect(PARTIDA_KEYS).not.toContain('cambio')
+  })
+
+  it('partidaMeta resuelve las 3 reales y también cambio', () => {
+    expect(partidaMeta('gastos')?.name).toBe('Gastos operativos')
+    expect(partidaMeta('cambio')).toEqual(PARTIDA_CAMBIO_META)
+    expect(partidaMeta('inexistente')).toBeNull()
+  })
+
+  it('realPct sigue ignorando la partida cambio', () => {
+    const dists = [
+      { partida: 'gastos', kind: 'in', amount: 500 },
+      { partida: 'cambio', kind: 'in', amount: 1000 },
+    ]
+    expect(realPct(dists, 'gastos')).toBe(1)
   })
 })

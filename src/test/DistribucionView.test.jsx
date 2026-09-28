@@ -120,3 +120,39 @@ describe('DistribucionView — paginación de Movimientos', () => {
     expect(siguiente).toBeDisabled()
   })
 })
+
+describe('DistribucionView — partida técnica "cambio" (regresión)', () => {
+  it('una fila con partida cambio en Movimientos renderiza sin lanzar', async () => {
+    const distributions = [
+      dist({ id: 'd-1', concept: 'Cobro normal', createdAt: '2026-09-22T10:00:00Z' }),
+      {
+        id: 'd-cambio',
+        monthId: 'm-1',
+        partida: 'cambio',
+        kind: 'out',
+        movedOn: '2026-09-23',
+        concept: 'Resultado por cambio · compra',
+        amount: 150,
+        currency: 'USD',
+        invoiceId: null,
+        note: null,
+        createdAt: '2026-09-23T10:00:00Z',
+      },
+    ]
+    expect(() => renderView(distributions)).not.toThrow()
+    expect(await screen.findByText('Resultado por cambio · compra')).toBeInTheDocument()
+    expect(screen.getAllByText('Resultado por cambio').length).toBeGreaterThan(0)
+  })
+
+  it('la fila de Resultado por cambio va al pie, separada de las 3 partidas', async () => {
+    const distributions = [
+      dist({ id: 'd-1', concept: 'Cobro normal', createdAt: '2026-09-22T10:00:00Z' }),
+    ]
+    renderView(distributions)
+    const acumuladoTable = (await screen.findByText('Gastos operativos · 72%')).closest('table')
+    // "Resultado por cambio" aparece en un tfoot, no como una fila más del tbody.
+    const tfoot = acumuladoTable.querySelector('tfoot')
+    expect(tfoot).not.toBeNull()
+    expect(tfoot.textContent).toContain('Resultado por cambio')
+  })
+})

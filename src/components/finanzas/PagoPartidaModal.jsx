@@ -1,11 +1,24 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { fmtUSD } from '../../utils/metricsFinance'
-import { createDistribution, createDistributionsBatch } from './finanzasApi'
+import { fmtDate } from '../../utils/formatDate'
+import {
+  createDistribution,
+  createDistributionsBatch,
+  resolveRateBcv,
+  upsertRate,
+} from './finanzasApi'
 import { PARTIDAS, PARTIDA_KEYS, NOTA_TRASPASO_PARTIDA } from './constants'
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10)
+}
+
+function fmtBs(n) {
+  return Number(n ?? 0).toLocaleString('es-VE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
 }
 
 const LABEL_BY_PARTIDA = {
@@ -29,14 +42,48 @@ const PLACEHOLDER_BY_PARTIDA = {
  * solo insert (createDistributionsBatch) — nunca dos llamadas sueltas, para no dejar
  * el traspaso a medias si la segunda falla.
  */
-export default function PagoPartidaModal({ monthId, partida, saldos, onClose, onSaved }) {
+export default function PagoPartidaModal({
+  monthId,
+  companyId,
+  partida,
+  saldos,
+  onClose,
+  onSaved,
+}) {
   const { userProfile } = useAuth()
   const [concept, setConcept] = useState('')
+  const [payIn, setPayIn] = useState('usd') // 'usd' | 'bs' — §6.5 de la spec
   const [amount, setAmount] = useState('')
+  const [amountBs, setAmountBs] = useState('')
+  const [rateInfo, setRateInfo] = useState(null)
+  const [manualRate, setManualRate] = useState('')
   const [date, setDate] = useState(todayISO())
   const [sourcePartida, setSourcePartida] = useState(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+
+  const isBs = payIn === 'bs'
+  const rate =
+    rateInfo?.rate ?? (rateInfo?.source === 'missing' ? Number(manualRate) || null : null)
+
+  // Al pagar en Bs, la BCV se resuelve sola (mismo camino que CobroModal); el
+  // pago sigue registrándose en USD-equivalente, como siempre.
+  useEffect(() => {
+    if (!isBs || !companyId) return
+    let cancelled = false
+    resolveRateBcv(companyId, date).then(({ data }) => {
+      if (!cancelled) setRateInfo(data)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [isBs, companyId, date])
+
+  useEffect(() => {
+    if (!isBs) return
+    const bs = Number(amountBs)
+    if (bs > 0 && rate > 0) setAmount((bs / rate).toFixed(2))
+  }, [isBs, amountBs, rate])
 
   const saldoDisponible = saldos[partida]
   const amt = Number(amount) || 0
@@ -65,10 +112,36 @@ export default function PagoPartidaModal({ monthId, partida, saldos, onClose, on
         return
       }
     }
+    if (isBs && (!Number(amountBs) || !rate)) {
+      setError('Ingresa el monto en Bs y asegúrate de tener una tasa BCV')
+      return
+    }
 
     setSaving(true)
     setError(null)
+
+    // fin_distributions no tiene rate_source (esa columna es solo de fin_payments):
+    // si no había ninguna tasa aplicable, se carga en fin_rates para los próximos
+    // movimientos, igual que hace CobroModal.
+    if (isBs && rateInfo?.source === 'missing') {
+      await upsertRate({ companyId, rateDate: date, rateBcv: rate, userId: userProfile?.user_id })
+    }
+
     const beneficiary = partida === 'socios' ? concept.trim() : null
+    // El pago puede ser en Bs; el traspaso entre partidas SIEMPRE es USD — ya es
+    // plata que estaba distribuida en dólares, no un movimiento de bolívares.
+    const pagoRow = {
+      partida,
+      kind: 'out',
+      movedOn: date,
+      concept: concept.trim(),
+      beneficiary,
+      amount: amt,
+      createdBy: userProfile?.user_id,
+      currency: isBs ? 'Bs' : 'USD',
+      amountBs: isBs ? Number(amountBs) : null,
+      rate: isBs ? rate : null,
+    }
     const rows =
       faltante > 0.5
         ? [
@@ -90,30 +163,13 @@ export default function PagoPartidaModal({ monthId, partida, saldos, onClose, on
               note: NOTA_TRASPASO_PARTIDA,
               createdBy: userProfile?.user_id,
             },
-            {
-              partida,
-              kind: 'out',
-              movedOn: date,
-              concept: concept.trim(),
-              beneficiary,
-              amount: amt,
-              createdBy: userProfile?.user_id,
-            },
+            pagoRow,
           ]
         : null
 
     const { error: err } = rows
       ? await createDistributionsBatch(monthId, rows)
-      : await createDistribution(monthId, {
-          partida,
-          kind: 'out',
-          movedOn: date,
-          concept: concept.trim(),
-          beneficiary,
-          amount: amt,
-          invoiceId: null,
-          createdBy: userProfile?.user_id,
-        })
+      : await createDistribution(monthId, { ...pagoRow, invoiceId: null })
     setSaving(false)
     if (err) {
       setError(err.message)
@@ -148,14 +204,80 @@ export default function PagoPartidaModal({ monthId, partida, saldos, onClose, on
             />
           </div>
 
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setPayIn('usd')}
+              className={`flex-1 rounded-lg border px-3 py-2 text-[13px] font-semibold ${
+                !isBs
+                  ? 'border-[#111] bg-[#111] text-white'
+                  : 'border-[#e0ddd4] text-[#666] hover:bg-[#f5f3eb]'
+              }`}
+            >
+              Pagué en divisa
+            </button>
+            <button
+              type="button"
+              onClick={() => setPayIn('bs')}
+              className={`flex-1 rounded-lg border px-3 py-2 text-[13px] font-semibold ${
+                isBs
+                  ? 'border-[#111] bg-[#111] text-white'
+                  : 'border-[#e0ddd4] text-[#666] hover:bg-[#f5f3eb]'
+              }`}
+            >
+              Pagué en Bs
+            </button>
+          </div>
+
+          {isBs && (
+            <div>
+              <label className="block text-[12px] font-mono font-bold uppercase tracking-wide text-[#888] mb-1.5">
+                Monto en Bs
+              </label>
+              <input
+                type="number"
+                className="input-base"
+                value={amountBs}
+                onChange={(e) => setAmountBs(e.target.value)}
+              />
+              {rateInfo?.source === 'bcv' && (
+                <p className="text-[12px] text-[#666] mt-1.5">
+                  BCV {fmtDate(rateInfo.rateDate)}:{' '}
+                  <span className="font-mono">{fmtBs(rateInfo.rate)}</span>
+                </p>
+              )}
+              {rateInfo?.source === 'stale' && (
+                <p className="text-[12px] text-[#9a6800] mt-1.5">
+                  No hay tasa cargada para hoy — se usa la del {fmtDate(rateInfo.rateDate)}:{' '}
+                  <span className="font-mono">{fmtBs(rateInfo.rate)}</span>
+                </p>
+              )}
+              {rateInfo?.source === 'missing' && (
+                <div className="mt-1.5">
+                  <label className="block text-[12px] font-mono font-bold uppercase tracking-wide text-[#888] mb-1.5">
+                    No hay tasa BCV cargada — ingrésala
+                  </label>
+                  <input
+                    type="number"
+                    step="0.0001"
+                    className="input-base"
+                    value={manualRate}
+                    onChange={(e) => setManualRate(e.target.value)}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
           <div>
             <label className="block text-[12px] font-mono font-bold uppercase tracking-wide text-[#888] mb-1.5">
-              Monto (USD)
+              Monto (USD){isBs ? ' — calculado' : ''}
             </label>
             <input
               type="number"
               className="input-base"
               value={amount}
+              readOnly={isBs}
               onChange={(e) => setAmount(e.target.value)}
             />
           </div>

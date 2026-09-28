@@ -1,13 +1,25 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
-import { createInvoice, updateInvoice } from './finanzasApi'
+import { fmtDate } from '../../utils/formatDate'
+import { createInvoice, updateInvoice, resolveRateBcv } from './finanzasApi'
 import { CONCEPTOS_SUGERIDOS, CONCEPTO_RECURRENTE } from './constants'
 
 const OTHER = '__other__'
 
+function todayISO() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function fmtBs(n) {
+  return Number(n ?? 0).toLocaleString('es-VE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
+
 /** Modal crear/editar facturación. Convención: invoice=null → crear, invoice=objeto → editar. */
-export default function InvoiceModal({ invoice, monthId, clients, onClose, onSaved }) {
+export default function InvoiceModal({ invoice, monthId, companyId, clients, onClose, onSaved }) {
   const { userProfile } = useAuth()
   const isEdit = invoice != null
   const activeClients = (clients ?? []).filter((c) => !c.deleted_at && !c.contract_end)
@@ -29,8 +41,50 @@ export default function InvoiceModal({ invoice, monthId, clients, onClose, onSav
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
+  // El monto sigue siendo USD, escrito a mano — solo se pide la tasa. El
+  // equivalente en Bs (guardado como referencia en fin_invoices.amount_bs) se
+  // deriva solo de `amount × tasa`, nunca se escribe a mano. Mismo patrón de
+  // resolución de tasa que CobroModal.jsx/PagoPartidaModal.jsx.
+  const [rateInfo, setRateInfo] = useState(null) // { rate, rateDate, source }
+  const [customRate, setCustomRate] = useState(false)
+  const [manualRate, setManualRate] = useState(invoice?.rate ?? '')
+
+  const isBs = form.currency === 'Bs'
+  const effectiveRate = customRate ? Number(manualRate) || null : (rateInfo?.rate ?? null)
+
+  // La factura no tiene fecha propia (es mensual) — se resuelve contra hoy, el
+  // día en que se está registrando/editando.
+  useEffect(() => {
+    if (!isBs || !companyId) return
+    let cancelled = false
+    resolveRateBcv(companyId, todayISO()).then(({ data }) => {
+      if (!cancelled) setRateInfo(data)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [isBs, companyId])
+
   function set(field, value) {
     setForm((f) => ({ ...f, [field]: value }))
+  }
+
+  function setCurrency(cur) {
+    set('currency', cur)
+    if (cur === 'USD') {
+      // Sin esto, reabrir el toggle a Bs mostraría datos de una elección anterior.
+      setManualRate('')
+      setCustomRate(false)
+    }
+  }
+
+  function toggleCustomRate() {
+    setCustomRate((prev) => {
+      // Por defecto muestra la BCV: al activar la tasa personalizada, se precarga
+      // con la BCV vigente en vez de arrancar vacía.
+      if (!prev) setManualRate(rateInfo?.rate ?? '')
+      return !prev
+    })
   }
 
   function onClientPick(id) {
@@ -68,15 +122,23 @@ export default function InvoiceModal({ invoice, monthId, clients, onClose, onSav
       setError('El monto debe ser mayor a 0')
       return
     }
+    if (isBs && (!effectiveRate || effectiveRate <= 0)) {
+      setError('Ingresa o confirma la tasa BCV')
+      return
+    }
 
     setSaving(true)
     setError(null)
+    // El equivalente en Bs es solo de referencia (para relacionar el pago cuando
+    // llegue) — se deriva del monto en USD y la tasa, nunca se escribe a mano.
     const fields = {
       clientId: isOther ? null : form.clientId,
       clientName,
       concept: form.concept.trim(),
       amount,
       currency: form.currency,
+      amountBs: isBs ? Math.round(amount * effectiveRate * 100) / 100 : null,
+      rate: isBs ? effectiveRate : null,
       recurring: form.recurring,
       createdBy: userProfile?.user_id,
     }
@@ -197,7 +259,7 @@ export default function InvoiceModal({ invoice, monthId, clients, onClose, onSav
                   <button
                     key={cur}
                     type="button"
-                    onClick={() => set('currency', cur)}
+                    onClick={() => setCurrency(cur)}
                     className={`flex-1 py-2 text-[13px] font-semibold ${
                       form.currency === cur
                         ? 'bg-[#111] text-white'
@@ -210,6 +272,56 @@ export default function InvoiceModal({ invoice, monthId, clients, onClose, onSav
               </div>
             </div>
           </div>
+
+          {isBs && (
+            <div className="rounded-xl border border-[#e0ddd4] p-3 space-y-3">
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[12px] font-mono font-bold uppercase tracking-wide text-[#888]">
+                    Tasa BCV
+                  </label>
+                  <button
+                    type="button"
+                    onClick={toggleCustomRate}
+                    className="text-[11.5px] font-semibold text-[#666] hover:text-[#111] hover:underline"
+                  >
+                    {customRate ? 'Usar tasa BCV' : 'Usar tasa personalizada'}
+                  </button>
+                </div>
+                {customRate ? (
+                  <input
+                    type="number"
+                    step="0.0001"
+                    className="input-base"
+                    value={manualRate}
+                    onChange={(e) => setManualRate(e.target.value)}
+                  />
+                ) : (
+                  <>
+                    {rateInfo?.source === 'bcv' && (
+                      <p className="text-[12px] text-[#666]">
+                        BCV {fmtDate(rateInfo.rateDate)}:{' '}
+                        <span className="font-mono">{fmtBs(rateInfo.rate)}</span>
+                      </p>
+                    )}
+                    {rateInfo?.source === 'stale' && (
+                      <p className="text-[12px] text-[#9a6800]">
+                        No se pudo obtener la tasa de hoy — se usa la del{' '}
+                        {fmtDate(rateInfo.rateDate)}:{' '}
+                        <span className="font-mono">{fmtBs(rateInfo.rate)}</span>
+                      </p>
+                    )}
+                    {rateInfo?.source === 'missing' && (
+                      <p className="text-[12px] text-[#9a6800]">
+                        No hay tasa BCV disponible — usa una tasa personalizada.
+                      </p>
+                    )}
+                    {!rateInfo && <p className="text-[12px] text-[#999]">Cargando tasa…</p>}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
 
           <label className="flex items-center gap-2 text-[13px] text-[#555]">
             <input

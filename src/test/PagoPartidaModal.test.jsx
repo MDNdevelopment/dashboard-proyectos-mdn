@@ -12,9 +12,16 @@ vi.mock('../context/AuthContext', () => ({
 
 const mockCreateDistribution = vi.fn().mockResolvedValue({ data: {}, error: null })
 const mockCreateDistributionsBatch = vi.fn().mockResolvedValue({ data: [], error: null })
+const mockResolveRateBcv = vi.fn().mockResolvedValue({
+  data: { rate: 816, rateDate: '2026-09-23', source: 'bcv' },
+  error: null,
+})
+const mockUpsertRate = vi.fn().mockResolvedValue({ data: {}, error: null })
 vi.mock('../components/finanzas/finanzasApi', () => ({
   createDistribution: (...a) => mockCreateDistribution(...a),
   createDistributionsBatch: (...a) => mockCreateDistributionsBatch(...a),
+  resolveRateBcv: (...a) => mockResolveRateBcv(...a),
+  upsertRate: (...a) => mockUpsertRate(...a),
 }))
 
 import PagoPartidaModal from '../components/finanzas/PagoPartidaModal'
@@ -130,5 +137,75 @@ describe('PagoPartidaModal — pago que excede el disponible', () => {
 
     const socios = await screen.findByRole('button', { name: /Socios/ })
     expect(socios).toBeDisabled()
+  })
+})
+
+describe('PagoPartidaModal — pago en bolívares (§6.5)', () => {
+  it('deriva el monto en USD a la BCV y escribe currency/amount_bs/rate', async () => {
+    const onSaved = vi.fn()
+    render(
+      <PagoPartidaModal
+        monthId="m-1"
+        companyId="co-1"
+        partida="gastos"
+        saldos={saldos}
+        onClose={() => {}}
+        onSaved={onSaved}
+      />,
+    )
+    fillCommon()
+    fireEvent.click(screen.getByRole('button', { name: 'Pagué en Bs' }))
+
+    await waitFor(() => expect(mockResolveRateBcv).toHaveBeenCalled())
+    // 81.600 Bs @ 816 = $100, dentro del saldo disponible de gastos (100).
+    // El primer spinbutton es "Monto en Bs"; el segundo es el USD derivado (readOnly).
+    fireEvent.change(screen.getAllByRole('spinbutton')[0], { target: { value: '81600' } })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar pago' }))
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled())
+    expect(mockCreateDistribution).toHaveBeenCalledWith(
+      'm-1',
+      expect.objectContaining({
+        partida: 'gastos',
+        kind: 'out',
+        amount: 100,
+        currency: 'Bs',
+        amountBs: 81600,
+        rate: 816,
+      }),
+    )
+  })
+
+  it('el traspaso entre partidas sigue siendo USD aunque el pago sea en Bs', async () => {
+    const onSaved = vi.fn()
+    render(
+      <PagoPartidaModal
+        monthId="m-1"
+        companyId="co-1"
+        partida="gastos"
+        saldos={saldos}
+        onClose={() => {}}
+        onSaved={onSaved}
+      />,
+    )
+    fillCommon()
+    fireEvent.click(screen.getByRole('button', { name: 'Pagué en Bs' }))
+    await waitFor(() => expect(mockResolveRateBcv).toHaveBeenCalled())
+    // 122.400 Bs @ 816 = $150 (excede el disponible de gastos, 100).
+    fireEvent.change(screen.getAllByRole('spinbutton')[0], { target: { value: '122400' } })
+
+    const ganancia = await screen.findByRole('button', { name: /Ganancia/ })
+    fireEvent.click(ganancia)
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar pago' }))
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled())
+    const rows = mockCreateDistributionsBatch.mock.calls.at(-1)[1]
+    expect(rows[0]).toEqual(expect.objectContaining({ partida: 'ganancia', kind: 'out' }))
+    expect(rows[0].currency).toBeUndefined() // no se manda: createDistributionsBatch default a USD
+    expect(rows[1]).toEqual(expect.objectContaining({ partida: 'gastos', kind: 'in' }))
+    expect(rows[2]).toEqual(
+      expect.objectContaining({ partida: 'gastos', kind: 'out', currency: 'Bs', amountBs: 122400 }),
+    )
   })
 })

@@ -13,7 +13,12 @@
  *                   kind: 'in'|'out', movedOn, concept, beneficiary, amount,
  *                   invoiceId, note }
  */
-import { PARTIDAS_PCT_DEFAULT, CONCEPTO_RECURRENTE } from '../components/finanzas/constants'
+import {
+  PARTIDAS_PCT_DEFAULT,
+  CONCEPTO_RECURRENTE,
+  PARTIDA_CAMBIO,
+  NOTA_TRASPASO_PARTIDA,
+} from '../components/finanzas/constants'
 import { clientInMonth } from './clientInMonth'
 
 /** Tolerancia usada en todo el módulo para tratar redondeos como iguales. */
@@ -44,6 +49,27 @@ export function estadoFactura(invoice) {
   return 'cobrado'
 }
 
+/**
+ * Moneda y monto en los que se muestra lo COBRADO de una factura en tablas
+ * como FacturacionView.jsx — distinto de `invoice.currency`, que es solo la
+ * moneda en la que se FACTURÓ. Un cliente puede facturar en USD y pagar en
+ * bolívares: si TODOS los abonos registrados están en Bs, se suma
+ * `amount_bs` y se etiqueta 'Bs' (aunque la factura se haya emitido en USD —
+ * el monto facturado no cambia, sigue siendo el USD original). Sin abonos
+ * aún, o con una mezcla de monedas entre abonos, cae al total exacto en USD
+ * (`cobradoDe`) y a la moneda de la factura, que es lo único inequívoco en
+ * ese caso.
+ */
+export function cobradoMostradoDe(invoice) {
+  const payments = invoice?.payments ?? []
+  const allBs = payments.length > 0 && payments.every((p) => p.amountBs != null)
+  if (allBs) {
+    const bs = payments.reduce((a, p) => a + Number(p.amountBs ?? 0), 0)
+    return { currency: 'Bs', amount: bs }
+  }
+  return { currency: invoice?.currency ?? 'USD', amount: cobradoDe(invoice) }
+}
+
 export function totalFacturado(invoices) {
   return (invoices ?? []).reduce((a, i) => a + Number(i.amount ?? 0), 0)
 }
@@ -72,6 +98,22 @@ export function cobradoPorMoneda(invoices) {
     }
   }
   return { bs, divisa }
+}
+
+/**
+ * Desglosa lo FACTURADO del mes por la moneda elegida en la factura
+ * (`invoice.currency`), en USD equivalente (`amount` siempre es USD, el monto en
+ * Bs es solo referencia — ver InvoiceModal.jsx). Distinto de `cobradoPorMoneda()`,
+ * que mira el pago real, no la factura.
+ */
+export function facturadoPorMoneda(invoices) {
+  let usd = 0
+  let bs = 0
+  for (const inv of invoices ?? []) {
+    if (inv.currency === 'Bs') bs += Number(inv.amount ?? 0)
+    else usd += Number(inv.amount ?? 0)
+  }
+  return { usd, bs }
 }
 
 // ─── Distribución en partidas ───────────────────────────────────────────────────
@@ -200,6 +242,11 @@ export function invoiceRowsForNewMonth({ prevInvoices, clients, year, month }) {
       concept: inv.concept,
       amount: inv.amount,
       currency: inv.currency,
+      // Se copian tal cual, mismo criterio que el monto: si la factura anterior
+      // era en Bs, el monto/tasa de referencia arrastran hasta que alguien los
+      // actualice a mano (ej. con la tasa BCV vigente ese mes).
+      amountBs: inv.amountBs ?? null,
+      rate: inv.rate ?? null,
       recurring: true,
     })
   }
@@ -306,4 +353,197 @@ export function pctsEnterosPorPartida(montos, base) {
     resultado[porResto[i].key] += 1
   }
   return resultado
+}
+
+// ─── Divisas y Caja Bs (spec MAPPI-Finanzas-Divisas) ────────────────────────────
+//
+// Shapes nuevos (normalizados por finanzasApi.js):
+//   FxOperation { id, monthId, opType: 'compra'|'venta', movedOn, amountBs,
+//                 amountUsd, rateReal, rateBcv, counterparty, purpose }
+//   BsLedgerEntry { id, monthId, movedOn, kind: 'in'|'out', source, amountBs,
+//                   rate, amountUsdRef, paymentId, fxOperationId, distributionId }
+//
+// El único movimiento que se llena a mano es el ajuste de cuadre (source='ajuste');
+// el resto lo generan los triggers de la migración 20260928100000. Estas funciones
+// solo LEEN esas filas — nunca las calculan de forma distinta a como las calculó
+// la BD, para no tener dos fórmulas del mismo número.
+
+/** Tasa real de una operación de divisas: Bs entregados/recibidos ÷ USD recibidos/entregados. */
+export function tasaRealFx({ amountBs, amountUsd }) {
+  const usd = Number(amountUsd ?? 0)
+  return usd ? Number(amountBs ?? 0) / usd : 0
+}
+
+/** Brecha de la tasa real sobre la BCV, como fracción (0.25 = 25%). */
+export function brechaPct(rateReal, rateBcv) {
+  const bcv = Number(rateBcv ?? 0)
+  return bcv ? Number(rateReal ?? 0) / bcv - 1 : 0
+}
+
+/**
+ * Resultado por cambio de una operación de divisas, con signo (mismo cálculo que
+ * el trigger `fin_fx_sync` en SQL — ver spec §5.1). Positivo = ganancia.
+ * compra: delta = amountUsd - amountBs/rateBcv (normalmente negativo)
+ * venta:  delta = amountBs/rateBcv - amountUsd (normalmente positivo)
+ */
+export function deltaCambio({ opType, amountBs, amountUsd, rateBcv }) {
+  const bcv = Number(rateBcv ?? 0)
+  if (!bcv) return 0
+  const usdBcv = Number(amountBs ?? 0) / bcv
+  const usd = Number(amountUsd ?? 0)
+  return opType === 'compra' ? usd - usdBcv : usdBcv - usd
+}
+
+/** Saldo de la Caja Bs: Σ entradas − Σ salidas del libro (acumulado, nunca se reinicia). */
+export function saldoCajaBs(ledger) {
+  return (ledger ?? []).reduce(
+    (a, l) => a + (l.kind === 'out' ? -Number(l.amountBs ?? 0) : Number(l.amountBs ?? 0)),
+    0,
+  )
+}
+
+/**
+ * Filas del libro con su saldo acumulado a esa fila, más recientes primero (orden
+ * de exhibición del §8.4). El saldo se calcula en orden cronológico ascendente y
+ * luego se invierte — calcularlo fila por fila ya invertido daría el saldo al
+ * revés (restando lo que aún no había "pasado").
+ */
+export function ledgerConSaldo(ledger) {
+  const asc = [...(ledger ?? [])].sort((a, b) => {
+    if (a.movedOn !== b.movedOn) return a.movedOn < b.movedOn ? -1 : 1
+    return (a.createdAt ?? '') < (b.createdAt ?? '') ? -1 : 1
+  })
+  let saldo = 0
+  const conSaldo = asc.map((l) => {
+    saldo += l.kind === 'out' ? -Number(l.amountBs ?? 0) : Number(l.amountBs ?? 0)
+    return { ...l, saldo }
+  })
+  return conSaldo.reverse()
+}
+
+/** Pagos reales en USD (kind='out', excluye la partida técnica 'cambio' y el traspaso interno entre partidas). */
+export function pagosRealesUsd(distributions) {
+  return (distributions ?? [])
+    .filter(
+      (d) => d.kind === 'out' && d.partida !== PARTIDA_CAMBIO && d.note !== NOTA_TRASPASO_PARTIDA,
+    )
+    .reduce((a, d) => a + Number(d.amount ?? 0), 0)
+}
+
+/** Resultado por cambio acumulado: Σ `in` − Σ `out` de la partida técnica 'cambio'. */
+export function resultadoCambio(distributions) {
+  return (distributions ?? [])
+    .filter((d) => d.partida === PARTIDA_CAMBIO)
+    .reduce((a, d) => a + (d.kind === 'out' ? -Number(d.amount ?? 0) : Number(d.amount ?? 0)), 0)
+}
+
+/**
+ * Divisa física en mano: lo cobrado en USD (no en Bs) + lo comprado − lo vendido
+ * de divisas − lo pagado EN USD (excluida la partida técnica 'cambio' y el
+ * traspaso entre partidas). A propósito NO usa `pagosRealesUsd()`: un pago
+ * directo en bolívares (nómina, §6.5) sale de la Caja Bs, no de la divisa física,
+ * aunque su `amount` (USD-equivalente) sí cuente como "pago real" en el
+ * invariante de `cuadreDivisas()`.
+ */
+export function divisaFisica({ invoices, fxOperations, distributions }) {
+  const cobradoUsd = (invoices ?? []).reduce(
+    (a, inv) =>
+      a +
+      (inv.payments ?? [])
+        .filter((p) => p.currency !== 'Bs')
+        .reduce((b, p) => b + Number(p.amount ?? 0), 0),
+    0,
+  )
+  const netoFx = (fxOperations ?? []).reduce(
+    (a, op) =>
+      a + (op.opType === 'compra' ? Number(op.amountUsd ?? 0) : -Number(op.amountUsd ?? 0)),
+    0,
+  )
+  const pagosUsd = (distributions ?? [])
+    .filter(
+      (d) =>
+        d.kind === 'out' &&
+        d.partida !== PARTIDA_CAMBIO &&
+        d.note !== NOTA_TRASPASO_PARTIDA &&
+        d.currency !== 'Bs',
+    )
+    .reduce((a, d) => a + Number(d.amount ?? 0), 0)
+  return cobradoUsd + netoFx - pagosUsd
+}
+
+/**
+ * Lo cobrado del mes que aún no se ha repartido a ninguna partida — el término
+ * que le falta al invariante de cuadre cuando el reparto es manual (ver §7 de la
+ * spec, corregido: no todo cobro se distribuye el mismo día que se registra).
+ * Reusa `cobradoDe()`/`distribuidoDe()`, ya existentes, para no duplicar esa cuenta.
+ */
+export function sinDistribuir(invoices, distributions) {
+  return (invoices ?? []).reduce(
+    (a, inv) => a + (cobradoDe(inv) - distribuidoDe(inv, distributions)),
+    0,
+  )
+}
+
+/**
+ * El invariante de cuadre real del módulo (identidad de CAJA, no de partidas —
+ * ver "Tres correcciones a la spec" en el plan de implementación). Todo lo que
+ * recibe debe venir ACUMULADO hasta el mes seleccionado, inclusive — igual que
+ * `saldoArrastrado()`/`saldoPartida()` ya hacen para las partidas:
+ *
+ *   cobrado − pagosReales + resultadoCambio  =  divisaFisica + saldoBs/rateBcv
+ *
+ * Es independiente de cuánto se haya repartido a partidas (por eso NO es el query
+ * de §7 de la spec, que asume reparto automático e instantáneo y por eso da
+ * distinto de cero incluso con datos correctos). La descomposición por partidas
+ * de §7 se expone igual en el resultado, como lectura de panel, no como el test
+ * de cuadre: `partidasNetas + sinDistribuir + cambio` debería reproducir `cobrado
+ * − pagosReales + cambio` — si no, hay sobre-distribución (algo asignado de más).
+ */
+export function cuadreDivisas({ invoices, distributions, fxOperations, ledger, rateBcv }) {
+  const cobrado = totalCobrado(invoices)
+  const pagosReales = pagosRealesUsd(distributions)
+  const cambio = resultadoCambio(distributions)
+  const divisaFisicaVal = divisaFisica({ invoices, fxOperations, distributions })
+  const saldoBs = saldoCajaBs(ledger)
+  const bcv = Number(rateBcv ?? 0)
+  const bcvFaltante = !bcv
+  const saldoBsUsdRef = bcvFaltante ? 0 : saldoBs / bcv
+
+  const partidasNetas = ['gastos', 'socios', 'ganancia'].reduce(
+    (a, p) => a + (asignadoPorPartida(distributions, p) - pagadoPorPartida(distributions, p)),
+    0,
+  )
+
+  return {
+    cobrado,
+    pagosReales,
+    cambio,
+    partidasNetas,
+    sinDistribuir: sinDistribuir(invoices, distributions),
+    divisaFisica: divisaFisicaVal,
+    saldoBs,
+    saldoBsUsdRef,
+    bcvFaltante,
+    diferencia: bcvFaltante
+      ? null
+      : Math.round((cobrado - pagosReales + cambio - (divisaFisicaVal + saldoBsUsdRef)) * 100) /
+        100,
+  }
+}
+
+/**
+ * Brecha promedio ponderada del mes sobre las compras de divisas (spec §9): tasa
+ * real promedio (ponderada por volumen) vs BCV promedio simple de esas compras.
+ */
+export function brechaPromedioPonderada(fxOperationsCompra) {
+  const ops = fxOperationsCompra ?? []
+  const totalBs = ops.reduce((a, o) => a + Number(o.amountBs ?? 0), 0)
+  const totalUsd = ops.reduce((a, o) => a + Number(o.amountUsd ?? 0), 0)
+  const bcvProm = ops.length ? ops.reduce((a, o) => a + Number(o.rateBcv ?? 0), 0) / ops.length : 0
+  const tasaRealProm = totalUsd ? totalBs / totalUsd : 0
+  return {
+    tasaRealProm,
+    bcvProm,
+    brechaPct: bcvProm ? tasaRealProm / bcvProm - 1 : 0,
+  }
 }
