@@ -270,6 +270,10 @@ export const CHANGELOG = [
       'En Finanzas → Distribución, al repartir un cobro los porcentajes de Gastos/Socios/Ganancia ahora se recalculan al momento según el monto que vas escribiendo en cada uno. Se quitó el campo de nota opcional del formulario.',
       'En el calendario de fechas del Inicio, ahora cualquier persona del equipo ve el aniversario y cumpleaños de contacto de todos los clientes, sin importar de qué línea sea (antes solo se veían las fechas de los clientes de tu propia línea).',
       'Corregido: justo al iniciar sesión, algunas personas eran mandadas a Inicio al entrar a un módulo (o veían el menú incompleto y sin su nombre) porque la pantalla se dibujaba una fracción de segundo antes de que terminaran de cargar sus permisos.',
+      'En CNP ahora se puede marcar un pedido como "Es audiovisual" (Video/Reel): al activarlo se ocultan las Referencias y el doble check de impresión, que no aplican a ese tipo de trabajo.',
+      'En CNP ahora se puede registrar un pedido sin cliente, para favores o trabajos internos que no son de ningún cliente de la línea — se indica para quién fue, y sigue contando en las estadísticas de la línea.',
+      'En CNP y en Tareas ahora se puede asignar más de un cliente a un mismo pedido/tarea, igual que ya se podía en Reuniones — útil cuando el mismo trabajo cubre varias marcas de un cliente.',
+      'En Finanzas, al abrir un mes nuevo ahora se copia la facturación tal como quedó el mes anterior (montos y conceptos ya ajustados, incluidos los cobros de clientes externos), en vez de recalcularla desde cero cada vez — ya no hay que volver a escribir a mano lo que paga cada cliente.',
     ],
   },
   {

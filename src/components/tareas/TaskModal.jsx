@@ -8,10 +8,11 @@ import UserPickerSingle from './UserPickerSingle'
 import UserPickerMulti from './UserPickerMulti'
 import { assignableUsers, flattenAssignable } from '../../utils/lineFilters'
 import DateInput from '../common/DateInput'
+import ClientPicker from '../common/ClientPicker'
 
 const EMPTY = {
   team_id: '',
-  client_id: '',
+  client_ids: [],
   client: '',
   description: '',
   source: '',
@@ -51,7 +52,11 @@ export default function TaskModal({
     if (isEdit) {
       return {
         team_id: task.team_id ?? '',
-        client_id: task.client_id ?? '',
+        client_ids: task.client_ids?.length
+          ? task.client_ids
+          : task.client_id
+            ? [task.client_id]
+            : [],
         client: task.client ?? '',
         description: task.description ?? '',
         source: task.source ?? '',
@@ -139,7 +144,8 @@ export default function TaskModal({
     const payload = {
       company_id: userProfile?.company_id ?? '',
       team_id: form.team_id,
-      client_id: form.client_id || null,
+      client_ids: form.client_ids,
+      client_id: form.client_ids[0] ?? null,
       client: form.client || null,
       description: form.description.trim(),
       source: form.source || null,
@@ -283,7 +289,7 @@ export default function TaskModal({
                   setForm((f) => ({
                     ...f,
                     team_id: teamId,
-                    client_id: '',
+                    client_ids: [],
                     client: '',
                     assignee_ids: f.assignee_ids.filter(
                       (id) => stillAssignable.has(id) || lockedAssigneeIds.includes(id),
@@ -314,31 +320,21 @@ export default function TaskModal({
                   selectedTeam?.is_general || selectedTeam?.is_management
                     ? clients
                     : clients.filter((c) => c.line_id === form.team_id)
-                // Tarea heredada: tiene nombre de texto pero sin client_id (pre-migración)
-                const hasLegacyName = form.client && !form.client_id
-                const clientNotInLine =
-                  form.client_id && !lineClients.some((c) => c.id === form.client_id)
+                // Tarea heredada: tiene nombre de texto pero sin client_ids (pre-migración)
+                const hasLegacyName = form.client && form.client_ids.length === 0
+                const clientNotInLine = form.client_ids.some(
+                  (id) => !lineClients.some((c) => c.id === id),
+                )
                 return (
                   <>
-                    <select
-                      className="input-base"
-                      value={form.client_id}
-                      onChange={(e) => {
-                        const chosen = lineClients.find((c) => c.id === e.target.value)
-                        setForm((f) => ({
-                          ...f,
-                          client_id: e.target.value,
-                          client: chosen?.name ?? '',
-                        }))
+                    <ClientPicker
+                      clients={lineClients}
+                      selectedIds={form.client_ids}
+                      onChange={(ids) => {
+                        const first = lineClients.find((c) => c.id === ids[0])
+                        setForm((f) => ({ ...f, client_ids: ids, client: first?.name ?? '' }))
                       }}
-                    >
-                      <option value="">Sin cliente</option>
-                      {lineClients.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
+                    />
                     {!form.team_id && (
                       <p className="text-[12.5px] text-[#bbb] mt-1">
                         Selecciona un team para ver los clientes disponibles.

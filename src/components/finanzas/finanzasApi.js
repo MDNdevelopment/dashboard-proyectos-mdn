@@ -8,8 +8,7 @@
  * duplicar mensualidad/línea/fechas de alta-baja que ya mantiene Empresa → Clientes.
  */
 import { supabase } from '../../supabase'
-import { clientInMonth } from '../../utils/clientInMonth'
-import { CONCEPTO_RECURRENTE } from './constants'
+import { invoiceRowsForNewMonth } from '../../utils/finanzas'
 
 function normalizeInvoice(row) {
   if (!row) return row
@@ -448,43 +447,54 @@ function nextYearMonth(year, month) {
   return month >= 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 }
 }
 
-function recurringClientInvoiceRows(monthId, clients, year, month) {
-  return (clients ?? [])
-    .filter((c) => Number(c.monthly_fee) > 0 && clientInMonth(c, year, month))
-    .map((c) => ({
-      month_id: monthId,
-      client_id: c.id,
-      client_name: c.name,
-      concept: CONCEPTO_RECURRENTE,
-      amount: c.monthly_fee,
-      currency: 'USD',
-      recurring: true,
-    }))
+function prevYearMonth(year, month) {
+  return month <= 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 }
 }
 
 /**
- * Precarga la facturación recurrente de un mes (un cargo por cada cliente activo
- * según `clientInMonth`, tomando `monthly_fee`) — la factura siempre sale a
- * inicio de mes independientemente de cuándo se cobre, así que el mes debe
- * abrir con sus clientes ya cargados. Idempotente: si el mes ya tiene alguna
- * factura no inserta nada, para no duplicar cuando `closeMonth` ya la precargó.
+ * Precarga la facturación de un mes copiando la del mes anterior tal cual
+ * (montos/conceptos ya ajustados, incluidos los clientes externos), sembrando
+ * solo las altas nuevas desde `monthly_fee` — ver `invoiceRowsForNewMonth`. La
+ * factura siempre sale a inicio de mes independientemente de cuándo se cobre,
+ * así que el mes debe abrir con sus clientes ya cargados. Idempotente: si el
+ * mes ya tiene alguna factura no inserta nada, para no duplicar cuando
+ * `closeMonth` ya la precargó.
  */
-export async function seedRecurringInvoices(monthId, year, month, clients) {
+export async function seedRecurringInvoices({ companyId, monthId, year, month, clients }) {
   const { data: existing, error: existingErr } = await loadInvoices(monthId)
   if (existingErr) return { error: existingErr }
   if (existing?.length) return { error: null }
 
-  const rows = recurringClientInvoiceRows(monthId, clients, year, month)
+  const prev = prevYearMonth(year, month)
+  const { data: prevMonth } = await loadMonth(companyId, prev.year, prev.month)
+  let prevInvoices = []
+  if (prevMonth) {
+    const { data } = await loadInvoices(prevMonth.id)
+    prevInvoices = data ?? []
+  }
+
+  const rows = invoiceRowsForNewMonth({ prevInvoices, clients, year, month })
   if (!rows.length) return { error: null }
 
-  const { error } = await supabase.from('fin_invoices').insert(rows)
+  const { error } = await supabase.from('fin_invoices').insert(
+    rows.map((r) => ({
+      month_id: monthId,
+      client_id: r.clientId,
+      client_name: r.clientName,
+      concept: r.concept,
+      amount: r.amount,
+      currency: r.currency,
+      recurring: r.recurring,
+    })),
+  )
   return { error }
 }
 
 /**
- * Cierra el mes actual y abre el siguiente, precargando su facturación
- * recurrente vía `seedRecurringInvoices`, más una copia de las facturas
- * recurrentes externas (sin client_id) del mes cerrado.
+ * Cierra el mes actual y abre el siguiente, precargando su facturación vía
+ * `seedRecurringInvoices` — que ya copia también los cargos externos
+ * recurrentes del mes cerrado, así que no hace falta un segundo camino para
+ * ellos (antes duplicaba la lógica de `seedRecurringInvoices` para esto).
  */
 export async function closeMonth({ companyId, monthId, year, month, userId, clients }) {
   const { error: closeErr } = await supabase
@@ -501,33 +511,14 @@ export async function closeMonth({ companyId, monthId, year, month, userId, clie
   )
   if (nextErr) return { data: null, error: nextErr }
 
-  const { error: seedErr } = await seedRecurringInvoices(
-    nextMonth.id,
-    next.year,
-    next.month,
+  const { error: seedErr } = await seedRecurringInvoices({
+    companyId,
+    monthId: nextMonth.id,
+    year: next.year,
+    month: next.month,
     clients,
-  )
+  })
   if (seedErr) return { data: null, error: seedErr }
-
-  const { data: externalInvoices } = await loadInvoices(monthId)
-  const externalRecurring = (externalInvoices ?? []).filter(
-    (i) => i.recurring && i.clientId == null,
-  )
-
-  if (externalRecurring.length) {
-    const { error: insErr } = await supabase.from('fin_invoices').insert(
-      externalRecurring.map((i) => ({
-        month_id: nextMonth.id,
-        client_id: null,
-        client_name: i.clientName,
-        concept: i.concept,
-        amount: i.amount,
-        currency: i.currency,
-        recurring: true,
-      })),
-    )
-    if (insErr) return { data: null, error: insErr }
-  }
 
   return { data: nextMonth, error: null }
 }

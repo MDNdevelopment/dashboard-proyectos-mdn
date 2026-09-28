@@ -14,10 +14,13 @@ import UserPickerSingle from '../tareas/UserPickerSingle'
 import { assignableUsers, flattenAssignable } from '../../utils/lineFilters'
 import { userViewsAllLines } from '../../utils/lineMembers'
 import DateInput from '../common/DateInput'
+import ClientPicker from '../common/ClientPicker'
 
 const EMPTY = {
   line_id: '',
-  client_id: '',
+  client_ids: [],
+  no_client: false,
+  no_client_note: '',
   title: '',
   content: '',
   assignee_id: null,
@@ -25,6 +28,7 @@ const EMPTY = {
   notes: '',
   due_date: '',
   is_print: false,
+  is_audiovisual: false,
   status: 'Pendiente',
   pieces: [],
 }
@@ -72,9 +76,16 @@ export default function CnpModal({
 
   const [form, setForm] = useState(() => {
     if (isEdit) {
+      const clientIds = cnp.client_ids?.length
+        ? cnp.client_ids
+        : cnp.client_id
+          ? [cnp.client_id]
+          : []
       return {
         line_id: cnp.line_id ?? '',
-        client_id: cnp.client_id ?? '',
+        client_ids: clientIds,
+        no_client: clientIds.length === 0,
+        no_client_note: cnp.no_client_note ?? '',
         title: cnp.title ?? '',
         content: cnp.content ?? '',
         assignee_id: cnp.assignee_id ?? null,
@@ -82,6 +93,7 @@ export default function CnpModal({
         notes: cnp.notes ?? '',
         due_date: cnp.due_date ?? '',
         is_print: cnp.is_print ?? false,
+        is_audiovisual: cnp.is_audiovisual ?? false,
         status: cnp.status ?? 'Pendiente',
         pieces: cnp.pieces ?? [],
       }
@@ -184,8 +196,8 @@ export default function CnpModal({
       setError('Selecciona una línea')
       return
     }
-    if (!form.client_id) {
-      setError('Selecciona un cliente')
+    if (!form.no_client && form.client_ids.length === 0) {
+      setError('Selecciona al menos un cliente')
       return
     }
     if (!form.title?.trim()) {
@@ -203,17 +215,24 @@ export default function CnpModal({
     setSaving(true)
     setError(null)
 
+    const clientIds = form.no_client ? [] : form.client_ids
     const payload = {
       company_id: userProfile?.company_id ?? '',
       line_id: form.line_id || null,
-      client_id: form.client_id,
+      client_ids: clientIds,
+      client_id: clientIds[0] ?? null,
+      no_client_note: form.no_client ? form.no_client_note.trim() || null : null,
       title: form.title.trim(),
       content: form.content || null,
       assignee_id: form.assignee_id,
-      refs: (form.refs ?? []).filter((r) => r.url?.trim()),
+      // Un CNP audiovisual no se imprime ni usa referencias — aunque el toggle ya las
+      // oculta en la UI, se fuerza aquí también por si quedó algo cargado de antes de
+      // marcar el CNP como audiovisual.
+      refs: form.is_audiovisual ? [] : (form.refs ?? []).filter((r) => r.url?.trim()),
       notes: form.notes || null,
       due_date: form.due_date || null,
-      is_print: form.is_print,
+      is_print: form.is_audiovisual ? false : form.is_print,
+      is_audiovisual: form.is_audiovisual,
       status: form.status,
       // Si algún label quedó vacío (ej. el usuario lo borró a mano), rellenar con el
       // default en vez de guardar una pieza sin nombre.
@@ -360,7 +379,7 @@ export default function CnpModal({
                   setForm((f) => ({
                     ...f,
                     line_id: lineId,
-                    client_id: '',
+                    client_ids: [],
                     assignee_id: stillAssignable.has(f.assignee_id) ? f.assignee_id : null,
                   }))
                 }}
@@ -382,30 +401,47 @@ export default function CnpModal({
             </div>
 
             <div>
-              <label
-                htmlFor="cnp-client"
-                className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5"
-              >
-                Cliente *
-              </label>
-              <select
-                id="cnp-client"
-                className="input-base"
-                value={form.client_id}
-                onChange={(e) => set('client_id', e.target.value)}
-                required
-              >
-                <option value="">Seleccionar cliente...</option>
-                {lineClients.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-              {lineClients.length === 0 && (
-                <p className="text-[12.5px] text-[#bbb] mt-1">
-                  No hay clientes en esta línea. Agrégalos en <strong>Empresa → Clientes</strong>.
-                </p>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">
+                  Cliente{!form.no_client && ' *'}
+                </label>
+                <label className="flex items-center gap-1.5 text-[13px] text-[#666] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.no_client}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        no_client: e.target.checked,
+                        client_ids: e.target.checked ? [] : f.client_ids,
+                      }))
+                    }
+                    className="w-3.5 h-3.5 rounded accent-[#111] cursor-pointer"
+                  />
+                  Sin cliente (trabajo interno)
+                </label>
+              </div>
+              {form.no_client ? (
+                <input
+                  className="input-base"
+                  value={form.no_client_note}
+                  onChange={(e) => set('no_client_note', e.target.value)}
+                  placeholder="¿Para quién? Ej. Favor para dirección"
+                />
+              ) : (
+                <>
+                  <ClientPicker
+                    clients={lineClients}
+                    selectedIds={form.client_ids}
+                    onChange={(ids) => set('client_ids', ids)}
+                  />
+                  {lineClients.length === 0 && (
+                    <p className="text-[12.5px] text-[#bbb] mt-1">
+                      No hay clientes en esta línea. Agrégalos en{' '}
+                      <strong>Empresa → Clientes</strong>.
+                    </p>
+                  )}
+                </>
               )}
             </div>
 
@@ -536,64 +572,68 @@ export default function CnpModal({
               )}
             </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">
-                  Referencias
-                  <span className="ml-1 font-normal normal-case text-[#bbb]">(opcional)</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={addRef}
-                  className="flex items-center gap-1 text-[13px] font-semibold text-[#555] hover:text-[#111] transition-colors"
-                >
-                  <svg
-                    width="10"
-                    height="10"
-                    viewBox="0 0 12 12"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.8"
+            {/* Un CNP audiovisual no usa referencias visuales — se oculta el bloque en vez
+                de dejarlo vacío, para no pedir algo que no aplica a ese tipo de trabajo. */}
+            {!form.is_audiovisual && (
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">
+                    Referencias
+                    <span className="ml-1 font-normal normal-case text-[#bbb]">(opcional)</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={addRef}
+                    className="flex items-center gap-1 text-[13px] font-semibold text-[#555] hover:text-[#111] transition-colors"
                   >
-                    <path d="M6 1v10M1 6h10" strokeLinecap="round" />
-                  </svg>
-                  Agregar
-                </button>
-              </div>
-              {(form.refs ?? []).length === 0 ? (
-                <p className="text-[13px] text-[#bbb]">Sin referencias.</p>
-              ) : (
-                <div className="space-y-2">
-                  {form.refs.map((r) => (
-                    <div key={r.id} className="flex items-center gap-2">
-                      <input
-                        className="input-base flex-1"
-                        value={r.url}
-                        onChange={(e) => updateRef(r.id, { url: e.target.value })}
-                        placeholder="https://instagram.com/p/..."
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeRef(r.id)}
-                        className="text-[#ccc] hover:text-red-400 transition-colors flex-shrink-0"
-                        aria-label="Quitar referencia"
-                      >
-                        <svg
-                          width="12"
-                          height="12"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                        >
-                          <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
-                        </svg>
-                      </button>
-                    </div>
-                  ))}
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 12 12"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.8"
+                    >
+                      <path d="M6 1v10M1 6h10" strokeLinecap="round" />
+                    </svg>
+                    Agregar
+                  </button>
                 </div>
-              )}
-            </div>
+                {(form.refs ?? []).length === 0 ? (
+                  <p className="text-[13px] text-[#bbb]">Sin referencias.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {form.refs.map((r) => (
+                      <div key={r.id} className="flex items-center gap-2">
+                        <input
+                          className="input-base flex-1"
+                          value={r.url}
+                          onChange={(e) => updateRef(r.id, { url: e.target.value })}
+                          placeholder="https://instagram.com/p/..."
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeRef(r.id)}
+                          className="text-[#ccc] hover:text-red-400 transition-colors flex-shrink-0"
+                          aria-label="Quitar referencia"
+                        >
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2.5"
+                          >
+                            <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div>
               <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
@@ -618,27 +658,61 @@ export default function CnpModal({
 
             <div className="flex items-center justify-between rounded-xl border border-[#ece9df] bg-[#fafaf8] px-3 py-2.5">
               <div>
-                <p className="text-[15px] font-medium text-[#111]">¿Es impreso?</p>
+                <p className="text-[15px] font-medium text-[#111]">¿Es audiovisual?</p>
                 <p className="text-[12.5px] text-[#888]">
-                  Requiere doble aprobación antes de cerrarse.
+                  Video o Reel: sin referencias ni doble check de impresión.
                 </p>
               </div>
               <button
                 type="button"
                 role="switch"
-                aria-checked={form.is_print}
-                onClick={() => set('is_print', !form.is_print)}
+                aria-checked={form.is_audiovisual}
+                onClick={() =>
+                  setForm((f) => ({
+                    ...f,
+                    is_audiovisual: !f.is_audiovisual,
+                    is_print: f.is_audiovisual ? f.is_print : false,
+                  }))
+                }
                 className={`inline-flex items-center flex-shrink-0 w-11 h-6 rounded-full p-0.5 transition-colors ${
-                  form.is_print ? 'bg-[#FFB800]' : 'bg-[#e0ddd4]'
+                  form.is_audiovisual ? 'bg-[#FFB800]' : 'bg-[#e0ddd4]'
                 }`}
               >
                 <span
                   className={`inline-block w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                    form.is_print ? 'translate-x-[20px]' : 'translate-x-0'
+                    form.is_audiovisual ? 'translate-x-[20px]' : 'translate-x-0'
                   }`}
                 />
               </button>
             </div>
+
+            {/* Un CNP audiovisual nunca se imprime — el toggle y el doble check que
+                depende de él quedan ocultos en vez de deshabilitados. */}
+            {!form.is_audiovisual && (
+              <div className="flex items-center justify-between rounded-xl border border-[#ece9df] bg-[#fafaf8] px-3 py-2.5">
+                <div>
+                  <p className="text-[15px] font-medium text-[#111]">¿Es impreso?</p>
+                  <p className="text-[12.5px] text-[#888]">
+                    Requiere doble aprobación antes de cerrarse.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={form.is_print}
+                  onClick={() => set('is_print', !form.is_print)}
+                  className={`inline-flex items-center flex-shrink-0 w-11 h-6 rounded-full p-0.5 transition-colors ${
+                    form.is_print ? 'bg-[#FFB800]' : 'bg-[#e0ddd4]'
+                  }`}
+                >
+                  <span
+                    className={`inline-block w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                      form.is_print ? 'translate-x-[20px]' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+            )}
 
             {isEdit && form.is_print && (
               <div className="rounded-xl border border-[#ece9df] p-3 space-y-2">

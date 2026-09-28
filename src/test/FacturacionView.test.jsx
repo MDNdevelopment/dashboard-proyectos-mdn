@@ -90,7 +90,13 @@ describe('FacturacionView', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Abrir mes' }))
 
     await waitFor(() =>
-      expect(mockSeedRecurringInvoices).toHaveBeenCalledWith('m-new', 2026, 7, clients),
+      expect(mockSeedRecurringInvoices).toHaveBeenCalledWith({
+        companyId: 'co-1',
+        monthId: 'm-new',
+        year: 2026,
+        month: 7,
+        clients,
+      }),
     )
     expect(refetch).toHaveBeenCalled()
   })

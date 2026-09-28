@@ -47,7 +47,7 @@ export async function loadMetricsDataset(companyId) {
     supabase
       .from('tasks')
       .select(
-        'id, team_id, client_id, description, status, assignee_ids, request_date, due_date, closed_date, blocked_reason',
+        'id, team_id, client_id, client_ids, description, status, assignee_ids, request_date, due_date, closed_date, blocked_reason',
       )
       .eq('company_id', companyId),
     supabase
@@ -102,7 +102,9 @@ export async function loadMetricsDataset(companyId) {
       .eq('company_id', companyId),
     supabase
       .from('cnp_requests')
-      .select('id, line_id, client_id, title, status, due_date, created_at, closed_date')
+      .select(
+        'id, line_id, client_id, client_ids, no_client_note, title, status, due_date, created_at, closed_date',
+      )
       .eq('company_id', companyId)
       .is('deleted_at', null),
     // Sin `status`/`due_date`: no existen en la tabla. El semáforo (vacio/normal/naranja/

@@ -12,6 +12,7 @@ import {
   ESTADOS,
 } from './constants'
 import KpiCard from './KpiCard'
+import { clientNamesOf } from '../../utils/rowClients'
 
 export default function TeamView({
   team,
@@ -56,7 +57,11 @@ export default function TeamView({
   }))
   const tot = monthTasks.length
 
-  const clients = [...new Set(monthTasks.map((t) => t.client).filter(Boolean))].sort()
+  // Una tarea con varias marcas cae bajo cada una de ellas — mismo criterio que el
+  // Dashboard de CNP, no hay un solo "cliente" de la fila.
+  const clients = [
+    ...new Set(monthTasks.flatMap((t) => clientNamesOf(t, clientsById, { fallback: t.client }))),
+  ].sort()
 
   return (
     <div className="space-y-4">
@@ -177,7 +182,10 @@ export default function TeamView({
               </thead>
               <tbody>
                 {(clients.length > 0 ? clients : ['(sin cliente)']).map((cl) => {
-                  const ct = monthTasks.filter((t) => (t.client || '(sin cliente)') === cl)
+                  const ct = monthTasks.filter((t) => {
+                    const names = clientNamesOf(t, clientsById, { fallback: t.client })
+                    return names.length > 0 ? names.includes(cl) : cl === '(sin cliente)'
+                  })
                   const tt = ct.length
                   const cer = ct.filter((t) => isClosedInMonth(t, monthIdx)).length
                   const pp = tt ? Math.round((cer / tt) * 100) : 0
@@ -190,7 +198,12 @@ export default function TeamView({
                       <td className="px-4 py-3 font-medium text-[#111]">
                         <div className="flex items-center gap-2 min-w-0">
                           {(() => {
-                            const logoUrl = clientsById?.get(ct[0]?.client_id)?.logo_url
+                            // Resolver el logo por nombre (no por client_id de la posición 0):
+                            // en una fila que agrupa por la SEGUNDA marca de una tarea
+                            // compartida, ese id no es el de "cl".
+                            const logoUrl = [...(clientsById?.values() ?? [])].find(
+                              (c) => c.name === cl,
+                            )?.logo_url
                             if (logoUrl)
                               return (
                                 <img

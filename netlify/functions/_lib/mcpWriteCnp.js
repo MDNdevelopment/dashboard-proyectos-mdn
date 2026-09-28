@@ -17,6 +17,8 @@ const STATUSES = ['Pendiente', 'En proceso', 'Por revisar', 'Paralizado', 'Termi
 const CNP_UPDATE_COLUMNS = [
   'line_id',
   'client_id',
+  'client_ids',
+  'no_client_note',
   'title',
   'content',
   'assignee_id',
@@ -24,13 +26,14 @@ const CNP_UPDATE_COLUMNS = [
   'notes',
   'due_date',
   'is_print',
+  'is_audiovisual',
   'status',
   'pieces',
   'updated_at',
 ]
 
-const RETURNING = `id, line_id, client_id, title, assignee_id, status, is_print, due_date,
-  team_checked_at, print_approved_at, created_at, updated_at`
+const RETURNING = `id, line_id, client_id, client_ids, title, assignee_id, status, is_print,
+  is_audiovisual, due_date, team_checked_at, print_approved_at, created_at, updated_at`
 
 function assertValidStatus(status) {
   if (status !== undefined && !STATUSES.includes(status)) {
@@ -46,6 +49,8 @@ function assertValidStatus(status) {
 export async function createCnp({
   line_id: lineId,
   client_id: clientId,
+  client_ids: clientIds,
+  no_client_note: noClientNote,
   title,
   content,
   assignee_id: assigneeId,
@@ -53,33 +58,44 @@ export async function createCnp({
   notes,
   due_date: dueDate,
   is_print: isPrint = false,
+  is_audiovisual: isAudiovisual = false,
   created_by: createdBy,
 }) {
-  assertNonEmptyString(clientId, 'client_id')
   assertNonEmptyString(title, 'title')
+  // Cliente ya no es obligatorio (trabajo interno sin cliente) — client_ids acepta varias
+  // marcas; client_id (compat) sigue aceptado como una sola. Sin ninguno de los dos, el
+  // CNP queda sin cliente y no_client_note documenta para quién fue.
+  const ids = Array.isArray(clientIds) ? clientIds.filter(Boolean) : clientId ? [clientId] : []
 
   const companyId = requiredCompanyId()
-  const cleanRefs = Array.isArray(refs) ? refs.filter((r) => r?.url?.trim()) : []
+  const cleanRefs = isAudiovisual
+    ? []
+    : Array.isArray(refs)
+      ? refs.filter((r) => r?.url?.trim())
+      : []
 
   const client = await getWriterPool().connect()
   try {
     const result = await client.query(
       `insert into public.cnp_requests
-         (company_id, line_id, client_id, title, content, assignee_id, refs, notes,
-          due_date, is_print, status, created_by)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'Pendiente', $11)
+         (company_id, line_id, client_id, client_ids, no_client_note, title, content,
+          assignee_id, refs, notes, due_date, is_print, is_audiovisual, status, created_by)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'Pendiente', $14)
        returning ${RETURNING}`,
       [
         companyId,
         lineId || null,
-        clientId,
+        ids[0] ?? null,
+        ids,
+        ids.length === 0 ? noClientNote || null : null,
         title.trim(),
         content || null,
         assigneeId || null,
         JSON.stringify(cleanRefs),
         notes || null,
         dueDate || null,
-        Boolean(isPrint),
+        isAudiovisual ? false : Boolean(isPrint),
+        Boolean(isAudiovisual),
         createdBy || null,
       ],
     )
@@ -106,8 +122,22 @@ export async function updateCnp({ id, created_by: _createdBy, ...fields }) {
   const patch = {}
 
   if (fields.line_id !== undefined) patch.line_id = fields.line_id || null
-  if (fields.client_id !== undefined)
-    patch.client_id = assertNonEmptyString(fields.client_id, 'client_id')
+  // client_ids (varias marcas) manda sobre client_id (compat, una sola) cuando ambos
+  // llegan en el mismo patch; cualquiera de los dos puede vaciar el cliente ([] o null).
+  if (fields.client_ids !== undefined || fields.client_id !== undefined) {
+    const ids =
+      fields.client_ids !== undefined
+        ? Array.isArray(fields.client_ids)
+          ? fields.client_ids.filter(Boolean)
+          : []
+        : fields.client_id
+          ? [fields.client_id]
+          : []
+    patch.client_ids = ids
+    patch.client_id = ids[0] ?? null
+    if (ids.length > 0) patch.no_client_note = null
+  }
+  if (fields.no_client_note !== undefined) patch.no_client_note = fields.no_client_note || null
   if (fields.title !== undefined) patch.title = assertNonEmptyString(fields.title, 'title')
   if (fields.content !== undefined) patch.content = fields.content || null
   if (fields.assignee_id !== undefined) patch.assignee_id = fields.assignee_id || null
@@ -118,7 +148,10 @@ export async function updateCnp({ id, created_by: _createdBy, ...fields }) {
   }
   if (fields.notes !== undefined) patch.notes = fields.notes || null
   if (fields.due_date !== undefined) patch.due_date = fields.due_date || null
-  if (fields.is_print !== undefined) patch.is_print = Boolean(fields.is_print)
+  if (fields.is_audiovisual !== undefined) patch.is_audiovisual = Boolean(fields.is_audiovisual)
+  if (fields.is_print !== undefined) {
+    patch.is_print = patch.is_audiovisual === true ? false : Boolean(fields.is_print)
+  }
   if (fields.status !== undefined) patch.status = fields.status
 
   if (Object.keys(patch).length === 0) {

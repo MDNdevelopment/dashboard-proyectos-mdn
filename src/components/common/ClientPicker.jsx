@@ -1,11 +1,13 @@
 import { useState, useMemo } from 'react'
 
 /**
- * Selector múltiple de clientes/marcas para una reunión — mismo patrón que
- * AttendeePicker.jsx (buscador con sugerencias + chips removibles abajo), pero sin los
- * botones rápidos por cargo (no aplican a clientes). Pensado para el caso de un cliente
- * con varias marcas que hoy comparten reunión, hora y participantes: en vez de crear una
- * reunión por marca, se eligen todas acá y se agenda una sola.
+ * Selector múltiple de clientes/marcas — mismo patrón que AttendeePicker.jsx (buscador con
+ * sugerencias + chips removibles abajo), pero sin los botones rápidos por cargo (no aplican
+ * a clientes). Nació en Reuniones (`meetingsApi.js#resolveClientsSnapshot`, un cliente con
+ * varias marcas que comparten reunión/hora/participantes) y se reutiliza igual en CNP
+ * (`CnpModal.jsx`) y Tareas (`TaskModal.jsx`): el mismo trabajo puede cubrir varias marcas
+ * sin duplicar el registro. `onChange` recibe el arreglo completo de ids nuevo; el orden
+ * importa cuando el caller conserva un escalar legado con la marca en la posición 0.
  */
 const MAX_SUGGESTIONS = 6
 

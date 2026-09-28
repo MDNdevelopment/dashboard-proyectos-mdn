@@ -167,13 +167,16 @@ describe('CnpModal — cantidad de piezas (crear)', () => {
     const qty = screen.getByText('Cantidad de piezas').parentElement.querySelector('input')
     fireEvent.change(qty, { target: { value: '3' } })
 
-    await user.selectOptions(screen.getByLabelText('Cliente *'), 'client-1')
+    await user.type(screen.getByPlaceholderText('Buscar cliente por nombre…'), 'Punto')
+    await user.click(await screen.findByText('Punto Fit'))
     await user.click(screen.getByText('Asignar diseñador...'))
     await user.click(await screen.findByText('Jesús García'))
 
     await user.click(screen.getByRole('button', { name: 'Crear CNP' }))
 
     await waitFor(() => expect(insertPayloadHolder.current).not.toBeNull())
+    expect(insertPayloadHolder.current.client_ids).toEqual(['client-1'])
+    expect(insertPayloadHolder.current.client_id).toBe('client-1')
     expect(insertPayloadHolder.current.pieces).toHaveLength(3)
     expect(insertPayloadHolder.current.pieces.map((p) => p.label)).toEqual([
       'Historias parada Energon 1',
@@ -290,7 +293,8 @@ describe('CnpModal — cantidad de piezas (crear)', () => {
     await user.type(content1, 'Copy de la primera historia')
     await user.type(content2, 'Copy de la segunda historia')
 
-    await user.selectOptions(screen.getByLabelText('Cliente *'), 'client-1')
+    await user.type(screen.getByPlaceholderText('Buscar cliente por nombre…'), 'Punto')
+    await user.click(await screen.findByText('Punto Fit'))
     await user.click(screen.getByText('Asignar diseñador...'))
     await user.click(await screen.findByText('Jesús García'))
 
@@ -350,14 +354,243 @@ describe('CnpModal — CNP de una línea ajena (scope "Mis CNP")', () => {
     expect(screen.getByText('Independientes')).toBeInTheDocument()
   })
 
-  it('muestra el cliente del CNP (Bellezza) ya seleccionado en el select de Cliente', async () => {
+  it('muestra el cliente del CNP (Bellezza) ya seleccionado como chip', async () => {
     renderForeign()
-    expect(screen.getByDisplayValue('Bellezza')).toBeInTheDocument()
+    expect(screen.getByText('Bellezza')).toBeInTheDocument()
+    expect(screen.getByLabelText('Quitar a Bellezza')).toBeInTheDocument()
   })
 
   it('el responsable queda fijo (no editable) cuando el único acceso del usuario es ser el asignado', async () => {
     renderForeign({ isAssignee: true })
     expect(screen.getByText('Luis Fajardo')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /asignar diseñador/i })).not.toBeInTheDocument()
+  })
+})
+
+describe('CnpModal — ¿Es audiovisual?', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    useAuth.mockReturnValue({
+      userProfile: { user_id: 'reviewer-1', company_id: 'co-1' },
+      can: () => true,
+    })
+  })
+
+  function renderNewModal() {
+    return render(
+      <CnpModal
+        cnp={null}
+        teams={[{ id: 'line-1', name: 'Georgina', member_user_ids: ['u1'] }]}
+        defaultTeamId="line-1"
+        clients={[{ id: 'client-1', name: 'Punto Fit', line_id: 'line-1' }]}
+        users={[{ user_id: 'u1', first_name: 'Jesús', last_name: 'García' }]}
+        onClose={vi.fn()}
+        onCreated={vi.fn()}
+        onUpdated={vi.fn()}
+      />,
+    )
+  }
+
+  it('activar el toggle oculta Referencias y ¿Es impreso?', async () => {
+    const user = userEvent.setup()
+    renderNewModal()
+
+    expect(screen.getByText('Referencias')).toBeInTheDocument()
+    expect(screen.getByText('¿Es impreso?')).toBeInTheDocument()
+
+    // El switch no tiene aria-label propio (mismo patrón que "¿Es impreso?"): se ubica
+    // por su fila (el primero de los dos switches, "Es audiovisual" va antes de "Es impreso").
+    await user.click(screen.getAllByRole('switch')[0])
+
+    expect(screen.queryByText('Referencias')).not.toBeInTheDocument()
+    expect(screen.queryByText('¿Es impreso?')).not.toBeInTheDocument()
+  })
+
+  it('el payload sale con is_print false y refs vacío al crear como audiovisual', async () => {
+    const insertPayloadHolder = { current: null }
+    supabase.from.mockImplementation((table) => {
+      if (table === 'cnp_requests') {
+        const q = makeQuery([{ id: 'new-cnp' }])
+        const originalInsert = q.insert
+        q.insert = vi.fn((payload) => {
+          insertPayloadHolder.current = payload
+          return originalInsert(payload)
+        })
+        return q
+      }
+      return makeQuery([])
+    })
+
+    const user = userEvent.setup()
+    renderNewModal()
+
+    await user.type(
+      screen.getByPlaceholderText('Ej. Creatina con sello de calidad'),
+      'Reel de lanzamiento',
+    )
+    await user.click(screen.getAllByRole('switch')[0])
+    await user.type(screen.getByPlaceholderText('Buscar cliente por nombre…'), 'Punto')
+    await user.click(await screen.findByText('Punto Fit'))
+    await user.click(screen.getByText('Asignar diseñador...'))
+    await user.click(await screen.findByText('Jesús García'))
+
+    await user.click(screen.getByRole('button', { name: 'Crear CNP' }))
+
+    await waitFor(() => expect(insertPayloadHolder.current).not.toBeNull())
+    expect(insertPayloadHolder.current.is_audiovisual).toBe(true)
+    expect(insertPayloadHolder.current.is_print).toBe(false)
+    expect(insertPayloadHolder.current.refs).toEqual([])
+  })
+})
+
+describe('CnpModal — sin cliente (trabajo interno)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    useAuth.mockReturnValue({
+      userProfile: { user_id: 'reviewer-1', company_id: 'co-1' },
+      can: () => true,
+    })
+  })
+
+  function renderNewModal() {
+    return render(
+      <CnpModal
+        cnp={null}
+        teams={[{ id: 'line-1', name: 'Georgina', member_user_ids: ['u1'] }]}
+        defaultTeamId="line-1"
+        clients={[{ id: 'client-1', name: 'Punto Fit', line_id: 'line-1' }]}
+        users={[{ user_id: 'u1', first_name: 'Jesús', last_name: 'García' }]}
+        onClose={vi.fn()}
+        onCreated={vi.fn()}
+        onUpdated={vi.fn()}
+      />,
+    )
+  }
+
+  it('marcar "Sin cliente" oculta el picker y muestra el campo "¿Para quién?"', async () => {
+    const user = userEvent.setup()
+    renderNewModal()
+
+    expect(screen.getByPlaceholderText('Buscar cliente por nombre…')).toBeInTheDocument()
+
+    await user.click(screen.getByLabelText('Sin cliente (trabajo interno)'))
+
+    expect(screen.queryByPlaceholderText('Buscar cliente por nombre…')).not.toBeInTheDocument()
+    expect(screen.getByPlaceholderText('¿Para quién? Ej. Favor para dirección')).toBeInTheDocument()
+  })
+
+  it('sin marcar "Sin cliente" y sin elegir cliente, el submit muestra el error', async () => {
+    const user = userEvent.setup()
+    renderNewModal()
+
+    await user.type(
+      screen.getByPlaceholderText('Ej. Creatina con sello de calidad'),
+      'Favor interno',
+    )
+    await user.click(screen.getByText('Asignar diseñador...'))
+    await user.click(await screen.findByText('Jesús García'))
+    await user.click(screen.getByRole('button', { name: 'Crear CNP' }))
+
+    expect(await screen.findByText('Selecciona al menos un cliente')).toBeInTheDocument()
+  })
+
+  it('el payload sale con client_ids vacío, client_id null y la nota escrita', async () => {
+    const insertPayloadHolder = { current: null }
+    supabase.from.mockImplementation((table) => {
+      if (table === 'cnp_requests') {
+        const q = makeQuery([{ id: 'new-cnp' }])
+        const originalInsert = q.insert
+        q.insert = vi.fn((payload) => {
+          insertPayloadHolder.current = payload
+          return originalInsert(payload)
+        })
+        return q
+      }
+      return makeQuery([])
+    })
+
+    const user = userEvent.setup()
+    renderNewModal()
+
+    await user.type(
+      screen.getByPlaceholderText('Ej. Creatina con sello de calidad'),
+      'Favor interno',
+    )
+    await user.click(screen.getByLabelText('Sin cliente (trabajo interno)'))
+    await user.type(
+      screen.getByPlaceholderText('¿Para quién? Ej. Favor para dirección'),
+      'Favor para dirección',
+    )
+    await user.click(screen.getByText('Asignar diseñador...'))
+    await user.click(await screen.findByText('Jesús García'))
+
+    await user.click(screen.getByRole('button', { name: 'Crear CNP' }))
+
+    await waitFor(() => expect(insertPayloadHolder.current).not.toBeNull())
+    expect(insertPayloadHolder.current.client_ids).toEqual([])
+    expect(insertPayloadHolder.current.client_id).toBeNull()
+    expect(insertPayloadHolder.current.no_client_note).toBe('Favor para dirección')
+  })
+})
+
+describe('CnpModal — varias marcas (multi-cliente)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    useAuth.mockReturnValue({
+      userProfile: { user_id: 'reviewer-1', company_id: 'co-1' },
+      can: () => true,
+    })
+  })
+
+  it('elegir dos clientes produce client_ids de largo 2 y client_id = el primero', async () => {
+    const insertPayloadHolder = { current: null }
+    supabase.from.mockImplementation((table) => {
+      if (table === 'cnp_requests') {
+        const q = makeQuery([{ id: 'new-cnp' }])
+        const originalInsert = q.insert
+        q.insert = vi.fn((payload) => {
+          insertPayloadHolder.current = payload
+          return originalInsert(payload)
+        })
+        return q
+      }
+      return makeQuery([])
+    })
+
+    const user = userEvent.setup()
+    render(
+      <CnpModal
+        cnp={null}
+        teams={[{ id: 'line-1', name: 'Georgina', member_user_ids: ['u1'] }]}
+        defaultTeamId="line-1"
+        clients={[
+          { id: 'client-1', name: 'Punto Fit', line_id: 'line-1' },
+          { id: 'client-2', name: 'Punto Beauty', line_id: 'line-1' },
+        ]}
+        users={[{ user_id: 'u1', first_name: 'Jesús', last_name: 'García' }]}
+        onClose={vi.fn()}
+        onCreated={vi.fn()}
+        onUpdated={vi.fn()}
+      />,
+    )
+
+    await user.type(
+      screen.getByPlaceholderText('Ej. Creatina con sello de calidad'),
+      'Campaña compartida',
+    )
+    await user.type(screen.getByPlaceholderText('Buscar cliente por nombre…'), 'Punto')
+    await user.click(await screen.findByText('Punto Fit'))
+    // Al elegir un cliente el buscador limpia el texto (toggleFromSearch) — hay que
+    // volver a escribir para que aparezca la sugerencia del segundo.
+    await user.type(screen.getByPlaceholderText('Buscar cliente por nombre…'), 'Punto')
+    await user.click(await screen.findByText('Punto Beauty'))
+    await user.click(screen.getByText('Asignar diseñador...'))
+    await user.click(await screen.findByText('Jesús García'))
+
+    await user.click(screen.getByRole('button', { name: 'Crear CNP' }))
+
+    await waitFor(() => expect(insertPayloadHolder.current).not.toBeNull())
+    expect(insertPayloadHolder.current.client_ids).toEqual(['client-1', 'client-2'])
+    expect(insertPayloadHolder.current.client_id).toBe('client-1')
   })
 })

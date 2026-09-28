@@ -90,6 +90,7 @@ export async function createTask({
   assignee_ids: assigneeIds,
   description,
   client_id: clientId,
+  client_ids: clientIds,
   client,
   due_date: dueDate,
   source,
@@ -102,6 +103,9 @@ export async function createTask({
     throw new ValidationError('assignee_ids debe ser un array con al menos un responsable')
   }
   const cleanAssignees = assigneeIds.map((id, i) => assertNonEmptyString(id, `assignee_ids[${i}]`))
+  // client_ids (varias marcas) manda sobre client_id (compat, una sola). Cliente sigue
+  // siendo opcional en tareas.
+  const ids = Array.isArray(clientIds) ? clientIds.filter(Boolean) : clientId ? [clientId] : []
 
   const companyId = requiredCompanyId()
 
@@ -109,14 +113,15 @@ export async function createTask({
   try {
     const result = await client_.query(
       `insert into public.tasks
-         (company_id, team_id, client_id, client, assignee_ids, description,
+         (company_id, team_id, client_id, client_ids, client, assignee_ids, description,
           source, request_date, due_date, status, created_by)
-       values ($1, $2, $3, $4, $5, $6, $7, current_date, $8, 'Pendiente', $9)
-       returning id, team_id, client, description, assignee_ids, due_date, status, created_at`,
+       values ($1, $2, $3, $4, $5, $6, $7, $8, current_date, $9, 'Pendiente', $10)
+       returning id, team_id, client, client_ids, description, assignee_ids, due_date, status, created_at`,
       [
         companyId,
         teamId,
-        clientId || null,
+        ids[0] ?? null,
+        ids,
         client || null,
         cleanAssignees,
         description.trim(),

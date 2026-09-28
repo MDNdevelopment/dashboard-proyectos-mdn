@@ -40,7 +40,7 @@ export default function FacturacionView({
     setOpening(true)
     const { data: opened } = await loadOrCreateMonth(companyId, year, month)
     if (opened) {
-      await seedRecurringInvoices(opened.id, year, month, clients)
+      await seedRecurringInvoices({ companyId, monthId: opened.id, year, month, clients })
     }
     setOpening(false)
     refetch()

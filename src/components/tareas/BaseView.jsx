@@ -16,6 +16,7 @@ import { checklistProgress } from './taskChecklist'
 import { Avatar } from './UserPickerSingle'
 import { teamMemberUsers, tasksForVisibleLines } from '../../utils/lineFilters'
 import { updateTaskStatus } from './taskStatus'
+import { clientNamesOf, clientDisplayName, matchesClient } from '../../utils/rowClients'
 
 // --- Status dropdown (portal-based to escape overflow:hidden table containers) ---
 
@@ -366,7 +367,9 @@ export default function BaseView({
         : []
   ).filter((t) => taskInMonth(t, monthIdx))
 
-  const clientList = [...new Set(baseTasks.map((t) => t.client).filter(Boolean))].sort()
+  const clientList = [
+    ...new Set(baseTasks.flatMap((t) => clientNamesOf(t, clientsById, { fallback: t.client }))),
+  ].sort()
 
   // Responsable: miembros del team seleccionado, o todos los usuarios en modo "Todos"
   const usersList = (() => {
@@ -386,16 +389,17 @@ export default function BaseView({
 
   const filtered = baseTasks.filter((t) => {
     const sq = q.toLowerCase()
+    const names = clientNamesOf(t, clientsById, { fallback: t.client })
     if (
       sq &&
       !(
-        (t.client ?? '').toLowerCase().includes(sq) ||
+        names.some((name) => name.toLowerCase().includes(sq)) ||
         (t.description ?? '').toLowerCase().includes(sq)
       )
     )
       return false
     if (fStatus && t.status !== fStatus) return false
-    if (fClient && t.client !== fClient) return false
+    if (fClient && !names.includes(fClient)) return false
     if (fSupportIds.length > 0 && !fSupportIds.includes(t.support_id)) return false
     if (fAlert === 'late' && !isLate(t)) return false
     if (fAlert === 'drag' && !isDragged(t)) return false
@@ -406,7 +410,7 @@ export default function BaseView({
       !(t.assignee_ids ?? (t.assignee_id ? [t.assignee_id] : [])).includes(fAssignee)
     )
       return false
-    if (fClientId && t.client_id !== fClientId) return false
+    if (fClientId && !matchesClient(t, fClientId)) return false
     if (hideCompleted && isClosed(t)) return false
     return true
   })
@@ -717,7 +721,10 @@ export default function BaseView({
                           {late && <span className="text-red-500 flex-shrink-0">⚠</span>}
                           {(() => {
                             const logo = t.client_id ? clientsById.get(t.client_id)?.logo_url : null
-                            const name = t.client
+                            const name = clientDisplayName(t, clientsById, {
+                              fallback: t.client,
+                              emptyLabel: null,
+                            })
                             if (!name) return <span className="text-[#bbb]">—</span>
                             return (
                               <>

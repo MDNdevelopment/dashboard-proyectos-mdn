@@ -21,6 +21,7 @@ import {
   cobradoPorMoneda,
   movimientoCartera,
   pctsEnterosPorPartida,
+  invoiceRowsForNewMonth,
 } from '../utils/finanzas'
 
 const PCTS_66_20_14 = { gastos: 0.66, socios: 0.2, ganancia: 0.14 }
@@ -297,5 +298,123 @@ describe('finanzas — pctsEnterosPorPartida', () => {
     const montos = { gastos: 360, socios: 90, ganancia: 50 }
     const pcts = pctsEnterosPorPartida(montos, 1000)
     expect(pcts.gastos + pcts.socios + pcts.ganancia).toBe(50)
+  })
+})
+
+describe('invoiceRowsForNewMonth', () => {
+  const CLIENTES = [
+    { id: 'c1', name: 'Turbopre', monthly_fee: 2600, mdn_since: '2025-01-01' },
+    { id: 'c2', name: 'Punto Fit', monthly_fee: 800, mdn_since: '2026-06-01' },
+  ]
+
+  function prevInvoice(overrides = {}) {
+    return {
+      clientId: 'c1',
+      clientName: 'Turbopre',
+      concept: 'Gestión de redes',
+      amount: 2600,
+      currency: 'USD',
+      recurring: true,
+      ...overrides,
+    }
+  }
+
+  it('sin mes anterior, cae al comportamiento original: un cargo por cliente activo con monthly_fee', () => {
+    const rows = invoiceRowsForNewMonth({
+      prevInvoices: [],
+      clients: CLIENTES,
+      year: 2026,
+      month: 9,
+    })
+    expect(rows).toEqual([
+      {
+        clientId: 'c1',
+        clientName: 'Turbopre',
+        concept: 'Gestión de redes',
+        amount: 2600,
+        currency: 'USD',
+        recurring: true,
+      },
+      {
+        clientId: 'c2',
+        clientName: 'Punto Fit',
+        concept: 'Gestión de redes',
+        amount: 800,
+        currency: 'USD',
+        recurring: true,
+      },
+    ])
+  })
+
+  it('con mes anterior, hereda el monto y el concepto editados a mano', () => {
+    const rows = invoiceRowsForNewMonth({
+      prevInvoices: [prevInvoice({ concept: 'Página web', amount: 3000 })],
+      clients: CLIENTES,
+      year: 2026,
+      month: 9,
+    })
+    // Turbopre viene del mes anterior con su monto/concepto editado; Punto Fit es alta
+    // nueva (no venía) y se siembra desde monthly_fee.
+    expect(rows).toContainEqual({
+      clientId: 'c1',
+      clientName: 'Turbopre',
+      concept: 'Página web',
+      amount: 3000,
+      currency: 'USD',
+      recurring: true,
+    })
+    expect(rows).toContainEqual(
+      expect.objectContaining({ clientId: 'c2', amount: 800, concept: 'Gestión de redes' }),
+    )
+    expect(rows).toHaveLength(2)
+  })
+
+  it('arrastra un cargo externo (client_id null) del mes anterior', () => {
+    const rows = invoiceRowsForNewMonth({
+      prevInvoices: [prevInvoice({ clientId: null, clientName: 'Freelance externo', amount: 300 })],
+      clients: [],
+      year: 2026,
+      month: 9,
+    })
+    expect(rows).toEqual([
+      {
+        clientId: null,
+        clientName: 'Freelance externo',
+        concept: 'Gestión de redes',
+        amount: 300,
+        currency: 'USD',
+        recurring: true,
+      },
+    ])
+  })
+
+  it('descarta la marca que ya no factura el mes nuevo (dada de baja)', () => {
+    const rows = invoiceRowsForNewMonth({
+      prevInvoices: [prevInvoice()],
+      clients: [{ ...CLIENTES[0], deleted_at: '2026-08-15', baja_incluye_mes: false }],
+      year: 2026,
+      month: 9,
+    })
+    expect(rows).toEqual([])
+  })
+
+  it('ignora los cargos puntuales (recurring: false) del mes anterior', () => {
+    const rows = invoiceRowsForNewMonth({
+      prevInvoices: [prevInvoice({ recurring: false })],
+      clients: [],
+      year: 2026,
+      month: 9,
+    })
+    expect(rows).toEqual([])
+  })
+
+  it('no duplica un cliente que ya viene del mes anterior aunque también tenga monthly_fee', () => {
+    const rows = invoiceRowsForNewMonth({
+      prevInvoices: [prevInvoice()],
+      clients: [CLIENTES[0]],
+      year: 2026,
+      month: 9,
+    })
+    expect(rows).toHaveLength(1)
   })
 })

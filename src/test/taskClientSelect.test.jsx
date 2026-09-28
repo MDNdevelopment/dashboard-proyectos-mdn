@@ -1,10 +1,11 @@
 /**
- * Tests del desplegable de cliente en TaskModal.
+ * Tests del selector de cliente en TaskModal (ClientPicker — buscador + chips,
+ * mismo patrón que Reuniones/CNP, ver ClientPicker.jsx).
  * Verifica que:
- * - El campo Cliente es un <select> (combobox), no un textbox.
- * - Lista solo los clientes de la línea seleccionada.
- * - Incluye la opción "Sin cliente".
- * - Al cambiar de Team el cliente se resetea.
+ * - El campo Cliente es el buscador de ClientPicker, no un <select>.
+ * - Lista (como sugerencias) solo los clientes de la línea seleccionada.
+ * - Se puede dejar sin ningún cliente (chips vacíos).
+ * - Al cambiar de Team las sugerencias cambian al filtro de la nueva línea.
  */
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -54,49 +55,40 @@ function renderModal(overrides = {}) {
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
-describe('TaskModal — desplegable de cliente', () => {
-  it('el campo Cliente es un combobox (select), no un input de texto', () => {
+describe('TaskModal — selector de cliente (ClientPicker)', () => {
+  it('el campo Cliente es el buscador de ClientPicker, no un <select>', () => {
     renderModal()
-    // Hay dos selects: Team y Cliente (y luego Estatus). El de Cliente debe tener 'Sin cliente'.
-    const selects = screen.getAllByRole('combobox')
-    const clientSelect = selects.find((s) =>
-      s.querySelector ? Array.from(s.options ?? []).some((o) => o.text === 'Sin cliente') : false,
-    )
-    // Si el querySelector no está disponible, buscamos por la option directamente
-    expect(screen.getByRole('option', { name: 'Sin cliente' })).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Buscar cliente por nombre…')).toBeInTheDocument()
+    expect(screen.getByText('Sin clientes agregados.')).toBeInTheDocument()
   })
 
-  it('lista solo los clientes de la línea por defecto (line-1)', () => {
+  it('lista solo los clientes de la línea por defecto (line-1) como sugerencia', async () => {
+    const user = userEvent.setup()
     renderModal()
-    // Clientes de line-1
-    expect(screen.getByRole('option', { name: 'Banco Exterior' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'Hotel Tamanaco' })).toBeInTheDocument()
-    // Cliente de line-2 no debe aparecer
-    expect(screen.queryByRole('option', { name: 'Pepsi' })).not.toBeInTheDocument()
+    await user.type(screen.getByPlaceholderText('Buscar cliente por nombre…'), 'a')
+    expect(await screen.findByText('Banco Exterior')).toBeInTheDocument()
+    expect(screen.getByText('Hotel Tamanaco')).toBeInTheDocument()
+    // Cliente de line-2 no debe sugerirse
+    expect(screen.queryByText('Pepsi')).not.toBeInTheDocument()
   })
 
-  it('incluye la opción "Sin cliente"', () => {
+  it('se puede dejar la tarea sin ningún cliente', () => {
     renderModal()
-    expect(screen.getByRole('option', { name: 'Sin cliente' })).toBeInTheDocument()
+    expect(screen.getByText('Sin clientes agregados.')).toBeInTheDocument()
   })
 
-  it('al cambiar de Team los clientes cambian al filtro de la nueva línea', async () => {
+  it('al cambiar de Team las sugerencias cambian al filtro de la nueva línea', async () => {
     const user = userEvent.setup()
     renderModal()
 
-    // Inicialmente se ven clientes de line-1
-    expect(screen.getByRole('option', { name: 'Banco Exterior' })).toBeInTheDocument()
-
-    // Los combobox son: [0] Team, [1] Cliente, [2] Estatus
     const [teamSelect] = screen.getAllByRole('combobox')
     await user.selectOptions(teamSelect, 'line-2')
 
-    // Ahora deben verse clientes de line-2
+    await user.type(screen.getByPlaceholderText('Buscar cliente por nombre…'), 'e')
     await waitFor(() => {
-      expect(screen.getByRole('option', { name: 'Pepsi' })).toBeInTheDocument()
+      expect(screen.getByText('Pepsi')).toBeInTheDocument()
     })
-    // Y los de line-1 ya no
-    expect(screen.queryByRole('option', { name: 'Banco Exterior' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Banco Exterior')).not.toBeInTheDocument()
   })
 
   it('muestra hint cuando la línea no tiene clientes', () => {
@@ -106,12 +98,13 @@ describe('TaskModal — desplegable de cliente', () => {
     expect(screen.getByText(/No hay clientes en esta línea/i)).toBeInTheDocument()
   })
 
-  it('muestra hint de cliente heredado cuando la tarea tiene nombre pero no client_id', () => {
+  it('muestra hint de cliente heredado cuando la tarea tiene nombre pero no client_ids', () => {
     const legacyTask = {
       id: 'task-old',
       company_id: 'co-1',
       team_id: 'line-1',
       client_id: null,
+      client_ids: [],
       client: 'Pepsi Antiguo',
       description: 'Hacer algo',
       status: 'En proceso',

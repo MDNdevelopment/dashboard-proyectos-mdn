@@ -62,7 +62,7 @@ describe('createTask', () => {
       created_by: 'writer-2',
     })
     const [, params] = queryMock.mock.calls[0]
-    expect(params[8]).toBe('writer-2')
+    expect(params[9]).toBe('writer-2')
   })
 
   it('inserta con company_id fijo desde env var (nunca desde los args) y el created_by recibido', async () => {
@@ -84,6 +84,7 @@ describe('createTask', () => {
       'company-1',
       'team-1',
       'client-1',
+      ['client-1'],
       'Ecopack',
       ['user-1', 'user-2'],
       'Armar propuesta',
@@ -104,7 +105,7 @@ describe('createTask', () => {
       source: 'Pedido por WhatsApp',
     })
     const [, params] = queryMock.mock.calls[0]
-    expect(params[6]).toBe('Pedido por WhatsApp')
+    expect(params[7]).toBe('Pedido por WhatsApp')
   })
 
   it('devuelve la fila creada', async () => {

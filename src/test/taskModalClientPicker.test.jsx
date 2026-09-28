@@ -1,8 +1,8 @@
 /**
- * Verifica el selector de "Cliente" en TaskModal:
- * - Con una línea normal, solo se listan los clientes de esa línea (line_id).
+ * Verifica el selector de "Cliente" en TaskModal (ClientPicker — buscador + chips):
+ * - Con una línea normal, solo se sugieren los clientes de esa línea (line_id).
  * - Con el grupo "Independientes" (is_general), no hay línea que acote, así que se
- *   listan TODOS los clientes de la empresa.
+ *   sugieren TODOS los clientes de la empresa.
  */
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -53,29 +53,35 @@ function renderModal(overrides = {}) {
   return render(<TaskModal {...props} />)
 }
 
-// El <select> de Team no tiene <label htmlFor>, así que se ubica por orden:
-// es el primer combobox del formulario (Team, luego Cliente).
+// El <select> de Team no tiene <label htmlFor>, así que se ubica por orden: es el
+// primer combobox del formulario.
 function teamSelectEl() {
   return screen.getAllByRole('combobox')[0]
 }
 
-describe('TaskModal — selector de Cliente', () => {
-  it('con una línea normal solo lista los clientes de esa línea', async () => {
+function clientSearchEl() {
+  return screen.getByPlaceholderText('Buscar cliente por nombre…')
+}
+
+describe('TaskModal — selector de Cliente (ClientPicker)', () => {
+  it('con una línea normal solo sugiere los clientes de esa línea', async () => {
     const user = userEvent.setup()
     renderModal()
     await user.selectOptions(teamSelectEl(), 'line-1')
+    await user.type(clientSearchEl(), 'a')
 
-    expect(screen.getByRole('option', { name: 'Banco Exterior' })).toBeInTheDocument()
-    expect(screen.queryByRole('option', { name: 'Farmacia Salud' })).not.toBeInTheDocument()
+    expect(await screen.findByText('Banco Exterior')).toBeInTheDocument()
+    expect(screen.queryByText('Farmacia Salud')).not.toBeInTheDocument()
   })
 
-  it('con "Independientes" lista todos los clientes de la empresa', async () => {
+  it('con "Independientes" sugiere todos los clientes de la empresa', async () => {
     const user = userEvent.setup()
     renderModal()
     await user.selectOptions(teamSelectEl(), 'line-general')
+    await user.type(clientSearchEl(), 'a')
 
-    expect(screen.getByRole('option', { name: 'Banco Exterior' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'Farmacia Salud' })).toBeInTheDocument()
+    expect(await screen.findByText('Banco Exterior')).toBeInTheDocument()
+    expect(screen.getByText('Farmacia Salud')).toBeInTheDocument()
   })
 
   it('al cambiar de "Independientes" a una línea normal, vuelve a acotar por línea', async () => {
@@ -83,10 +89,13 @@ describe('TaskModal — selector de Cliente', () => {
     renderModal()
 
     await user.selectOptions(teamSelectEl(), 'line-general')
-    expect(screen.getByRole('option', { name: 'Farmacia Salud' })).toBeInTheDocument()
+    await user.type(clientSearchEl(), 'a')
+    expect(await screen.findByText('Farmacia Salud')).toBeInTheDocument()
 
     await user.selectOptions(teamSelectEl(), 'line-1')
-    expect(screen.getByRole('option', { name: 'Banco Exterior' })).toBeInTheDocument()
-    expect(screen.queryByRole('option', { name: 'Farmacia Salud' })).not.toBeInTheDocument()
+    await user.clear(clientSearchEl())
+    await user.type(clientSearchEl(), 'a')
+    expect(await screen.findByText('Banco Exterior')).toBeInTheDocument()
+    expect(screen.queryByText('Farmacia Salud')).not.toBeInTheDocument()
   })
 })

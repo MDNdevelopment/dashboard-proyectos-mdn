@@ -13,7 +13,7 @@
  *                   kind: 'in'|'out', movedOn, concept, beneficiary, amount,
  *                   invoiceId, note }
  */
-import { PARTIDAS_PCT_DEFAULT } from '../components/finanzas/constants'
+import { PARTIDAS_PCT_DEFAULT, CONCEPTO_RECURRENTE } from '../components/finanzas/constants'
 import { clientInMonth } from './clientInMonth'
 
 /** Tolerancia usada en todo el módulo para tratar redondeos como iguales. */
@@ -160,6 +160,65 @@ export function desviacionEnPuntos(distsDelMes, partida, pcts) {
   const neutral = Math.abs(puntos) < 0.3
   const favorable = partida === 'gastos' ? puntos <= 0 : puntos >= 0
   return { puntos, neutral, favorable: neutral ? null : favorable }
+}
+
+// ─── Arrastre de facturación mes a mes ───────────────────────────────────────────
+
+/**
+ * Facturas a precargar en un mes nuevo, en el espíritu del carry-forward de
+ * Reportes (`initMetricReport.js`): se COPIA la facturación del mes anterior tal
+ * cual (montos y conceptos ya ajustados a mano, y los clientes externos que ni
+ * siquiera existen en `metric_clients`), en vez de derivarla de `monthly_fee` en
+ * cada apertura — así el mes nuevo no pierde los ajustes manuales del anterior.
+ * `monthly_fee` solo se usa como semilla para las marcas nuevas que no venían en
+ * el mes previo (alta de cartera).
+ *
+ * - Cada factura `recurring` del mes anterior se clona con sus mismos valores,
+ *   salvo que la marca ya no facture el mes nuevo (`clientInMonth` da falso o el
+ *   cliente ya no existe) — ahí se descarta.
+ * - Las facturas `recurring: false` (cargos puntuales) nunca se arrastran.
+ * - Los clientes activos con `monthly_fee > 0` que no vinieran ya en el mes
+ *   anterior se agregan con el concepto/monto por defecto (alta nueva).
+ * - Sin mes anterior (`prevInvoices` vacío/ausente), cae al comportamiento
+ *   original: un cargo por cliente activo con `monthly_fee > 0`.
+ *
+ * @returns {Array<{clientId, clientName, concept, amount, currency, recurring}>}
+ */
+export function invoiceRowsForNewMonth({ prevInvoices, clients, year, month }) {
+  const clientById = new Map((clients ?? []).map((c) => [c.id, c]))
+  const rows = []
+
+  for (const inv of prevInvoices ?? []) {
+    if (!inv.recurring) continue
+    if (inv.clientId != null) {
+      const client = clientById.get(inv.clientId)
+      if (!client || !clientInMonth(client, year, month)) continue
+    }
+    rows.push({
+      clientId: inv.clientId ?? null,
+      clientName: inv.clientName,
+      concept: inv.concept,
+      amount: inv.amount,
+      currency: inv.currency,
+      recurring: true,
+    })
+  }
+
+  const yaFacturados = new Set(rows.map((r) => r.clientId).filter(Boolean))
+  for (const c of clients ?? []) {
+    if (Number(c.monthly_fee) > 0 && clientInMonth(c, year, month) && !yaFacturados.has(c.id)) {
+      rows.push({
+        clientId: c.id,
+        clientName: c.name,
+        concept: CONCEPTO_RECURRENTE,
+        amount: c.monthly_fee,
+        currency: 'USD',
+        recurring: true,
+      })
+    }
+  }
+
+  return rows
 }
 
 // ─── Por cobrar / análisis ───────────────────────────────────────────────────────

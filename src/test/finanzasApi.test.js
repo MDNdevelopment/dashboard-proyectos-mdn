@@ -351,39 +351,51 @@ describe('finanzasApi — createSummaryMonth', () => {
 })
 
 describe('finanzasApi — seedRecurringInvoices', () => {
+  const CLIENTS = [
+    { id: 'c-1', name: 'Turbopre', monthly_fee: 2600, mdn_since: '2025-01-01' },
+    {
+      id: 'c-2',
+      name: 'Ex cliente',
+      monthly_fee: 500,
+      mdn_since: '2024-01-01',
+      contract_end: '2026-06-30',
+    },
+    { id: 'c-3', name: 'Sin fee', monthly_fee: 0, mdn_since: '2025-01-01' },
+  ]
+
   it('es idempotente: no inserta nada si el mes ya tiene alguna factura', async () => {
     const fromSpy = vi.spyOn(supabase, 'from')
     // 'm-1' ya tiene inv-1 en el fixture del mock.
-    const { error } = await seedRecurringInvoices('m-1', 2026, 9, [
-      { id: 'c-1', name: 'Turbopre', monthly_fee: 2600, mdn_since: '2025-01-01' },
-    ])
+    const { error } = await seedRecurringInvoices({
+      companyId: 'co-1',
+      monthId: 'm-1',
+      year: 2026,
+      month: 9,
+      clients: CLIENTS,
+    })
     expect(error).toBeNull()
     const finInvoicesCalls = fromSpy.mock.calls.filter(([table]) => table === 'fin_invoices')
     expect(finInvoicesCalls).toHaveLength(1) // solo el loadInvoices del chequeo, sin insert
     fromSpy.mockRestore()
   })
 
-  it('con el mes vacío, inserta un cargo por cada cliente activo con monthly_fee > 0', async () => {
+  it('sin mes anterior, inserta un cargo por cada cliente activo con monthly_fee > 0', async () => {
     const emptyInvoicesQuery = makeQuery([])
+    const noPrevMonthQuery = makeQuery([]) // maybeSingle → null, no hay mes anterior
     const insertQuery = makeQuery([])
     const fromSpy = vi.spyOn(supabase, 'from')
     fromSpy
-      .mockImplementationOnce(() => emptyInvoicesQuery)
-      .mockImplementationOnce(() => insertQuery)
+      .mockImplementationOnce(() => emptyInvoicesQuery) // loadInvoices('m-empty') — chequeo idempotencia
+      .mockImplementationOnce(() => noPrevMonthQuery) // loadMonth(companyId, año/mes anterior)
+      .mockImplementationOnce(() => insertQuery) // insert
 
-    const clients = [
-      { id: 'c-1', name: 'Turbopre', monthly_fee: 2600, mdn_since: '2025-01-01' },
-      {
-        id: 'c-2',
-        name: 'Ex cliente',
-        monthly_fee: 500,
-        mdn_since: '2024-01-01',
-        contract_end: '2026-06-30',
-      },
-      { id: 'c-3', name: 'Sin fee', monthly_fee: 0, mdn_since: '2025-01-01' },
-    ]
-
-    const { error } = await seedRecurringInvoices('m-empty', 2026, 9, clients)
+    const { error } = await seedRecurringInvoices({
+      companyId: 'co-1',
+      monthId: 'm-empty',
+      year: 2026,
+      month: 9,
+      clients: CLIENTS,
+    })
 
     expect(error).toBeNull()
     expect(insertQuery.insert).toHaveBeenCalledWith([
@@ -396,6 +408,86 @@ describe('finanzasApi — seedRecurringInvoices', () => {
         recurring: true,
       }),
     ])
+    fromSpy.mockRestore()
+  })
+
+  it('con mes anterior, copia su facturación tal cual en vez de derivarla de monthly_fee', async () => {
+    const emptyInvoicesQuery = makeQuery([])
+    // El mes anterior (m-1, 2026-08) tiene una sola factura de Turbopre en 2600 — el
+    // fixture global la trae con ese monto, que coincide con monthly_fee, así que un
+    // monto distinto (2800) deja claro que se copió la factura y no se recalculó.
+    const prevInvoicesQuery = makeQuery([
+      {
+        id: 'inv-1',
+        month_id: 'm-1',
+        client_id: 'c-1',
+        client_name: 'Turbopre',
+        concept: 'Página web',
+        amount: 2800,
+        currency: 'USD',
+        recurring: true,
+        payments: [],
+      },
+      {
+        // Cargo externo recurrente (sin cliente en metric_clients) — debe arrastrarse igual.
+        id: 'inv-2',
+        month_id: 'm-1',
+        client_id: null,
+        client_name: 'Freelance externo',
+        concept: 'Diseño puntual',
+        amount: 300,
+        currency: 'USD',
+        recurring: true,
+        payments: [],
+      },
+      {
+        // Cargo puntual (no recurrente) — no debe arrastrarse.
+        id: 'inv-3',
+        month_id: 'm-1',
+        client_id: 'c-1',
+        client_name: 'Turbopre',
+        concept: 'Cargo puntual',
+        amount: 100,
+        currency: 'USD',
+        recurring: false,
+        payments: [],
+      },
+    ])
+    const prevMonthQuery = makeQuery([{ id: 'm-1', company_id: 'co-1', year: 2026, month: 8 }])
+    const insertQuery = makeQuery([])
+    const fromSpy = vi.spyOn(supabase, 'from')
+    fromSpy
+      .mockImplementationOnce(() => emptyInvoicesQuery) // loadInvoices('m-new') — chequeo idempotencia
+      .mockImplementationOnce(() => prevMonthQuery) // loadMonth(companyId, 2026, 8)
+      .mockImplementationOnce(() => prevInvoicesQuery) // loadInvoices('m-1')
+      .mockImplementationOnce(() => insertQuery) // insert
+
+    const { error } = await seedRecurringInvoices({
+      companyId: 'co-1',
+      monthId: 'm-new',
+      year: 2026,
+      month: 9,
+      clients: CLIENTS,
+    })
+
+    expect(error).toBeNull()
+    const inserted = insertQuery.insert.mock.calls[0][0]
+    expect(inserted).toHaveLength(2)
+    expect(inserted).toContainEqual(
+      expect.objectContaining({
+        client_id: 'c-1',
+        concept: 'Página web',
+        amount: 2800,
+        recurring: true,
+      }),
+    )
+    expect(inserted).toContainEqual(
+      expect.objectContaining({
+        client_id: null,
+        client_name: 'Freelance externo',
+        amount: 300,
+      }),
+    )
     fromSpy.mockRestore()
   })
 })

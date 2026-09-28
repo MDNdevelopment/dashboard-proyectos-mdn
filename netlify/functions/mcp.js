@@ -83,9 +83,10 @@ const WRITER_TOOLS = [
           description: 'user_id(s) del/los responsable(s), al menos uno',
         },
         description: { type: 'string', description: 'Qué hay que hacer, redactado claro' },
-        client_id: {
-          type: 'string',
-          description: 'uuid de metric_clients, si la tarea es de una marca',
+        client_ids: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'uuids de metric_clients — varias marcas si la tarea cubre más de una',
         },
         client: { type: 'string', description: 'Nombre de la marca (snapshot), si aplica' },
         due_date: {
@@ -177,11 +178,21 @@ const WRITER_TOOLS = [
   {
     name: 'create_cnp',
     description:
-      'Crea una solicitud de Contenido No Planificado (CNP), a nombre de quien está usando esta conexión ahora mismo. Antes de llamarla, resuelve con query_database el client_id (metric_clients.id), el line_id (metric_lines.id) y el assignee_id (users.user_id), si aplican — nunca inventes esos IDs. Nace en estado Pendiente.',
+      'Crea una solicitud de Contenido No Planificado (CNP), a nombre de quien está usando esta conexión ahora mismo. Antes de llamarla, resuelve con query_database el/los client_id (metric_clients.id), el line_id (metric_lines.id) y el assignee_id (users.user_id), si aplican — nunca inventes esos IDs. Sin cliente (trabajo interno, ej. un favor que no es de ningún cliente de la línea): omite client_ids y describe para quién fue en no_client_note. Nace en estado Pendiente.',
     inputSchema: {
       type: 'object',
       properties: {
-        client_id: { type: 'string', description: 'uuid de metric_clients' },
+        client_ids: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'uuids de metric_clients — varias marcas si el mismo CNP las cubre. Omitir si no hay cliente.',
+        },
+        no_client_note: {
+          type: 'string',
+          description:
+            'Solo si no hay client_ids: para quién fue el trabajo (ej. "Favor para dirección")',
+        },
         title: { type: 'string', description: 'Qué se pidió' },
         line_id: { type: 'string', description: 'uuid de metric_lines' },
         content: { type: 'string', description: 'Copy/contenido redactado del pedido' },
@@ -192,16 +203,23 @@ const WRITER_TOOLS = [
             type: 'object',
             properties: { url: { type: 'string' }, note: { type: 'string' } },
           },
-          description: 'Referencias visuales (lista de {url, note})',
+          description:
+            'Referencias visuales (lista de {url, note}) — ignoradas si is_audiovisual es true',
         },
         notes: { type: 'string' },
         due_date: { type: 'string', description: 'Fecha límite, YYYY-MM-DD' },
         is_print: {
           type: 'boolean',
-          description: 'true si requiere impresión (activa el doble check antes de poder cerrarse)',
+          description:
+            'true si requiere impresión (activa el doble check antes de poder cerrarse). Ignorado si is_audiovisual es true.',
+        },
+        is_audiovisual: {
+          type: 'boolean',
+          description:
+            'true si es un CNP de audiovisual (Video/Reel) — nunca lleva impresión ni referencias',
         },
       },
-      required: ['client_id', 'title'],
+      required: ['title'],
       additionalProperties: false,
     },
   },
@@ -214,7 +232,13 @@ const WRITER_TOOLS = [
       properties: {
         id: { type: 'string', description: 'uuid del CNP (cnp_requests.id)' },
         line_id: { type: 'string' },
-        client_id: { type: 'string' },
+        client_ids: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'uuids de metric_clients — reemplaza las marcas actuales; [] lo deja sin cliente',
+        },
+        no_client_note: { type: 'string' },
         title: { type: 'string' },
         content: { type: 'string' },
         assignee_id: { type: 'string' },
@@ -228,6 +252,7 @@ const WRITER_TOOLS = [
         notes: { type: 'string' },
         due_date: { type: 'string' },
         is_print: { type: 'boolean' },
+        is_audiovisual: { type: 'boolean' },
         status: {
           type: 'string',
           enum: ['Pendiente', 'En proceso', 'Por revisar', 'Paralizado', 'Terminado'],

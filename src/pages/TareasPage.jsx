@@ -432,6 +432,7 @@ export default function TareasPage() {
                   tasks={tasks}
                   teams={teams}
                   usersMap={usersMap}
+                  clientsById={clientsById}
                   monthIdx={currentMonthIndex()}
                   onOpenTask={openEditTask}
                 />

@@ -1,6 +1,7 @@
 import { fmtMonth, lightOf, isClosed, ESTADOS, COL_META } from '../tareas/constants'
 import KpiCard from '../tareas/KpiCard'
 import { cnpMonthStats, cnpPieceCount, cnpPiecesDelivered } from './constants'
+import { clientIdsOf } from '../../utils/rowClients'
 
 /**
  * Dashboard de CNP para la línea/mes activos, calcado del TeamView de Gestión de
@@ -20,15 +21,21 @@ export default function CnpDashboardView({
   const counts = ESTADOS.map((e) => ({ e, n: cnps.filter((c) => c.status === e).length }))
   const tot = cnps.length
 
+  // Un CNP con varias marcas se cuenta en la fila de cada una — la suma de la tabla puede
+  // superar el total de CNP del mes por eso mismo. Sin ninguna marca, cae bajo su nota de
+  // trabajo interno (o "Sin cliente" si no la tiene) en vez de perderse del reporte.
   const byClient = new Map()
   for (const c of inMonth) {
-    const id = c.client_id ?? null
-    const entry = byClient.get(id) ?? { total: 0, closed: 0, piezas: 0, piezasEntregadas: 0 }
-    entry.total += 1
-    if (isClosed(c)) entry.closed += 1
-    entry.piezas += cnpPieceCount(c)
-    entry.piezasEntregadas += cnpPiecesDelivered(c)
-    byClient.set(id, entry)
+    const ids = clientIdsOf(c)
+    const keys = ids.length ? ids : [c.no_client_note ? `nota:${c.no_client_note}` : null]
+    for (const id of keys) {
+      const entry = byClient.get(id) ?? { total: 0, closed: 0, piezas: 0, piezasEntregadas: 0 }
+      entry.total += 1
+      if (isClosed(c)) entry.closed += 1
+      entry.piezas += cnpPieceCount(c)
+      entry.piezasEntregadas += cnpPiecesDelivered(c)
+      byClient.set(id, entry)
+    }
   }
 
   return (
@@ -169,16 +176,21 @@ export default function CnpDashboardView({
               <tbody>
                 {[...byClient.entries()]
                   .sort((a, b) => b[1].total - a[1].total)
-                  .map(([clientId, entry]) => {
+                  .map(([key, entry]) => {
+                    // `key` es un client_id real, o "nota:<texto>" para trabajo interno sin
+                    // cliente agrupado por su nota (ver byClient arriba) — esas filas no
+                    // navegan a Base filtradas por cliente, no hay un client_id que pasar.
+                    const isNote = typeof key === 'string' && key.startsWith('nota:')
+                    const clientId = isNote ? null : key
                     const client = clientId ? clientsById.get(clientId) : null
-                    const name = client?.name ?? 'Sin cliente'
+                    const name = isNote ? key.slice(5) : (client?.name ?? 'Sin cliente')
                     const pp = entry.total ? Math.round((entry.closed / entry.total) * 100) : 0
                     const lg = lightOf(pp, entry.total)
                     return (
                       <tr
-                        key={clientId ?? 'sin-cliente'}
-                        onClick={() => onNavigateToBase({ clientId })}
-                        className="border-b border-[#f5f3eb] last:border-0 hover:bg-[#faf9f5] cursor-pointer transition-colors"
+                        key={key ?? 'sin-cliente'}
+                        onClick={isNote ? undefined : () => onNavigateToBase({ clientId })}
+                        className={`border-b border-[#f5f3eb] last:border-0 hover:bg-[#faf9f5] transition-colors ${isNote ? '' : 'cursor-pointer'}`}
                       >
                         <td className="px-4 py-3 font-medium text-[#111]">
                           <div className="flex items-center gap-2 min-w-0">

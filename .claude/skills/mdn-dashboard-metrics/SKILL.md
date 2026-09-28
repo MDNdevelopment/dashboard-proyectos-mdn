@@ -127,10 +127,18 @@ exacto** (no el guardado la última vez que alguien miró la pantalla), recalcul
 directo desde `meetings`:
 
 ```sql
-select count(distinct coalesce(client_id::text, id::text)) as realizadas
-from meetings
-where line_id = '<line_id>' and status = 'realizada'
-  and date_trunc('month', starts_at) = date '<year>-<month>-01';
+-- OJO: usar los arreglos client_ids/line_ids (posicionales), no los escalares
+-- client_id/line_id — esos solo reflejan la primera marca de la reunión y una
+-- reunión con marcas de líneas distintas quedaría fuera si la línea buscada no es
+-- la posición 0 (mismo criterio que countMeetingsHeldForLine en meetingsApi.js).
+-- Esto mismo aplica a tasks.client_ids y cnp_requests.client_ids si se necesita
+-- contar por cliente en vez de por línea.
+select count(distinct coalesce(pair.client_id::text, m.id::text)) as realizadas
+from meetings m,
+     unnest(m.client_ids, m.line_ids) with ordinality as pair(client_id, line_id, ord)
+where m.status = 'realizada'
+  and pair.line_id = '<line_id>'::uuid
+  and date_trunc('month', m.starts_at) = date '<year>-<month>-01';
 ```
 
 Para meses **anteriores** a 2026-07, `meetings` no tiene filas (el módulo no existía)

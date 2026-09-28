@@ -160,7 +160,8 @@ describe('CnpPage', () => {
     expect(screen.getByRole('heading', { name: 'Nuevo CNP' })).toBeInTheDocument()
 
     await user.selectOptions(screen.getByRole('combobox', { name: /línea/i }), 'line-1')
-    await user.selectOptions(screen.getByRole('combobox', { name: /cliente/i }), 'client-1')
+    await user.type(screen.getByPlaceholderText('Buscar cliente por nombre…'), 'Punto')
+    await user.click(await within(screen.getByTestId('client-suggestions')).findByText('Punto Fit'))
     await user.type(
       screen.getByPlaceholderText(/creatina con sello de calidad/i),
       'Nuevo CNP de prueba',
@@ -177,10 +178,12 @@ describe('CnpPage', () => {
     expect(insertPayloadHolder.current).toMatchObject({
       company_id: 'co-1',
       line_id: 'line-1',
+      client_ids: ['client-1'],
       client_id: 'client-1',
       title: 'Nuevo CNP de prueba',
       assignee_id: 'u1',
       is_print: false,
+      is_audiovisual: false,
       status: 'Pendiente',
       created_by: 'u1',
     })
@@ -198,7 +201,8 @@ describe('CnpPage', () => {
     expect(screen.getByRole('heading', { name: 'Nuevo CNP' })).toBeInTheDocument()
 
     await user.selectOptions(screen.getByRole('combobox', { name: /línea/i }), 'line-1')
-    await user.selectOptions(screen.getByRole('combobox', { name: /cliente/i }), 'client-1')
+    await user.type(screen.getByPlaceholderText('Buscar cliente por nombre…'), 'Punto')
+    await user.click(await within(screen.getByTestId('client-suggestions')).findByText('Punto Fit'))
     await user.type(
       screen.getByPlaceholderText(/creatina con sello de calidad/i),
       'CNP creado por admin',

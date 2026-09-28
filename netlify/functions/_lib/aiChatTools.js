@@ -6,6 +6,7 @@ import { calcTotal, sumScore } from '../../../src/utils/metricsScore.js'
 import { calcFinanzas } from '../../../src/utils/metricsFinance.js'
 import { aggregateMetricsDashboard } from '../../../src/utils/aggregateMetricsDashboard.js'
 import { recentCheckStatus } from '../../../src/utils/chequeo.js'
+import { matchesClient, clientDisplayName } from '../../../src/utils/rowClients.js'
 import {
   isClosed,
   isLate,
@@ -1002,7 +1003,7 @@ export function consultarTareas(args, dataset) {
   if (args.cliente) {
     const { client, error } = resolveClient(args.cliente, dataset.clients)
     if (error) return { error }
-    scoped = scoped.filter((t) => t.client_id === client.id)
+    scoped = scoped.filter((t) => matchesClient(t, client.id))
   }
   if (args.desde) scoped = scoped.filter((t) => !t.due_date || t.due_date >= args.desde)
   if (args.hasta) scoped = scoped.filter((t) => !t.due_date || t.due_date <= args.hasta)
@@ -1481,7 +1482,7 @@ export function consultarCnp(args, dataset) {
   if (args.cliente) {
     const { client, error } = resolveClient(args.cliente, dataset.clients)
     if (error) return { error }
-    scoped = scoped.filter((c) => c.client_id === client.id)
+    scoped = scoped.filter((c) => matchesClient(c, client.id))
   }
   if (args.estado) scoped = scoped.filter((c) => c.status === args.estado)
   if (args.desde)
@@ -1489,12 +1490,16 @@ export function consultarCnp(args, dataset) {
   if (args.hasta)
     scoped = scoped.filter((c) => c.created_at && c.created_at.slice(0, 10) <= args.hasta)
 
+  const clientsById = new Map(dataset.clients.map((cl) => [cl.id, cl]))
   const byStatus = {}
   for (const c of scoped) byStatus[c.status] = (byStatus[c.status] ?? 0) + 1
   const items = scoped.slice(0, 30).map((c) => ({
     titulo: c.title,
     estado: c.status,
-    cliente: dataset.clients.find((cl) => cl.id === c.client_id)?.name ?? null,
+    cliente: clientDisplayName(c, clientsById, {
+      fallback: c.no_client_note,
+      emptyLabel: null,
+    }),
     linea: lineName(c.line_id, dataset),
     vence: c.due_date ?? null,
   }))

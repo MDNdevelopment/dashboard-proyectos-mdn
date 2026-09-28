@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import AttendeePicker from './AttendeePicker'
-import ClientPicker from './ClientPicker'
+import ClientPicker from '../common/ClientPicker'
 import { createMeeting, updateMeeting } from './meetingsApi'
 
 /**

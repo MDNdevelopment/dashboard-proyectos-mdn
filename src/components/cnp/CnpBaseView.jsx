@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { ESTADOS, COL_META, cnpPieceCount, cnpPiecesDelivered } from './constants'
 import { fmtShort, isLate } from '../tareas/constants'
 import { Avatar } from '../tareas/UserPickerSingle'
+import { clientIdsOf, clientDisplayName, matchesClient } from '../../utils/rowClients'
 
 /** Rango de "Impreso" para que el orden tenga sentido: sin impresión < pendiente < aprobado. */
 const PRINT_ORDER = { none: 0, pending: 1, approved: 2 }
@@ -11,7 +12,7 @@ const PRINT_ORDER = { none: 0, pending: 1, approved: 2 }
 function sortValue(c, key, clientsById, usersMap) {
   switch (key) {
     case 'client':
-      return (clientsById.get(c.client_id)?.name ?? '').toLowerCase()
+      return clientDisplayName(c, clientsById, { fallback: c.no_client_note }).toLowerCase()
     case 'title':
       return (c.title ?? '').toLowerCase()
     case 'pieces': {
@@ -96,7 +97,7 @@ export default function CnpBaseView({
   const [sortKey, setSortKey] = useState('created_at')
   const [sortAsc, setSortAsc] = useState(false)
 
-  const clientOptions = [...new Set(cnps.map((c) => c.client_id).filter(Boolean))]
+  const clientOptions = [...new Set(cnps.flatMap((c) => clientIdsOf(c)))]
     .map((id) => ({ id, name: clientsById.get(id)?.name ?? 'Sin cliente' }))
     .sort((a, b) => a.name.localeCompare(b.name))
 
@@ -109,7 +110,7 @@ export default function CnpBaseView({
 
   const filtered = cnps.filter((c) => {
     if (statusFilter !== 'all' && statusFilter && c.status !== statusFilter) return false
-    if (clientFilter && c.client_id !== clientFilter) return false
+    if (clientFilter && !matchesClient(c, clientFilter)) return false
     if (assigneeFilter && c.assignee_id !== assigneeFilter) return false
     if (printFilter === 'print' && !c.is_print) return false
     if (printFilter === 'noprint' && c.is_print) return false
@@ -117,7 +118,7 @@ export default function CnpBaseView({
     if (alertFilter === 'late' && !isLate(c)) return false
     if (search) {
       const q = search.toLowerCase()
-      const clientName = clientsById.get(c.client_id)?.name ?? ''
+      const clientName = clientDisplayName(c, clientsById, { fallback: c.no_client_note })
       if (!c.title.toLowerCase().includes(q) && !clientName.toLowerCase().includes(q)) return false
     }
     return true
@@ -339,12 +340,20 @@ export default function CnpBaseView({
                     >
                       <td className="px-4 py-2.5 font-medium text-[#111] max-w-[160px]">
                         {(() => {
-                          const client = clientsById.get(c.client_id)
-                          const name = client?.name
-                          if (!name) return <span className="text-[#bbb]">Sin cliente</span>
+                          const ids = clientIdsOf(c)
+                          if (ids.length === 0) {
+                            return (
+                              <span className="text-[#bbb]" title={c.no_client_note || undefined}>
+                                {c.no_client_note || 'Sin cliente'}
+                              </span>
+                            )
+                          }
+                          const client = clientsById.get(ids[0])
+                          const name = client?.name ?? 'Cliente'
+                          const extra = ids.length > 1 ? ` +${ids.length - 1}` : ''
                           return (
                             <div className="flex items-center gap-1.5 min-w-0">
-                              {client.logo_url ? (
+                              {client?.logo_url ? (
                                 <img
                                   src={client.logo_url}
                                   alt={name}
@@ -355,7 +364,10 @@ export default function CnpBaseView({
                                   {name[0]}
                                 </span>
                               )}
-                              <span className="truncate">{name}</span>
+                              <span className="truncate">
+                                {name}
+                                {extra}
+                              </span>
                             </div>
                           )
                         })()}

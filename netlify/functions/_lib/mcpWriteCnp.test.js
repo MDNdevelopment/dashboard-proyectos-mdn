@@ -32,10 +32,19 @@ describe('mcpWriteCnp', () => {
   })
 
   describe('createCnp', () => {
-    it('rechaza sin client_id ni title', async () => {
-      await expect(createCnp({ title: 'x' })).rejects.toThrow(ValidationError)
-      await expect(createCnp({ client_id: 'c1' })).rejects.toThrow(ValidationError)
+    it('rechaza sin title (cliente ya no es obligatorio — puede ser trabajo interno)', async () => {
+      await expect(createCnp({})).rejects.toThrow(ValidationError)
       expect(connectMock).not.toHaveBeenCalled()
+    })
+
+    it('acepta crear sin ningún cliente (trabajo interno) con no_client_note', async () => {
+      queryMock.mockResolvedValue({ rows: [{ id: 'cnp-1', status: 'Pendiente' }] })
+      await createCnp({ title: 'Favor para dirección', no_client_note: 'Favor para Georgina' })
+      const [, params] = queryMock.mock.calls[0]
+      // orden: company_id, line_id, client_id, client_ids, no_client_note, title, ...
+      expect(params[2]).toBeNull()
+      expect(params[3]).toEqual([])
+      expect(params[4]).toBe('Favor para Georgina')
     })
 
     it('nace en Pendiente, is_print default false, company_id siempre de env', async () => {
