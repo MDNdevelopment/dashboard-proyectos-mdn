@@ -400,6 +400,39 @@ export default function CnpModal({
               )}
             </div>
 
+            {/* Tipo de CNP va primero, antes de cualquier campo que dependa de él
+                (Referencias, ¿Es impreso?) — así no se llena algo que luego se oculta al
+                marcar Audiovisual. Segmentado (no un toggle más, como ¿Es impreso?) para que
+                se lea como una decisión inicial sobre el CNP, no como una opción secundaria. */}
+            <div>
+              <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+                Tipo de CNP
+              </label>
+              <div className="flex bg-[#f5f3eb] border border-[#e0ddd4] rounded-xl p-1">
+                <button
+                  type="button"
+                  onClick={() => set('is_audiovisual', false)}
+                  className={`flex-1 px-3 py-1.5 rounded-lg text-[14px] font-semibold transition-all ${
+                    !form.is_audiovisual ? 'bg-[#111] text-white' : 'text-[#666] hover:text-[#111]'
+                  }`}
+                >
+                  Diseño
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, is_audiovisual: true, is_print: false }))}
+                  className={`flex-1 px-3 py-1.5 rounded-lg text-[14px] font-semibold transition-all ${
+                    form.is_audiovisual ? 'bg-[#111] text-white' : 'text-[#666] hover:text-[#111]'
+                  }`}
+                >
+                  Audiovisual
+                </button>
+              </div>
+              <p className="text-[12.5px] text-[#bbb] mt-1">
+                Audiovisual (Video/Reel) no usa Referencias ni el check de impresión.
+              </p>
+            </div>
+
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888]">
@@ -656,38 +689,8 @@ export default function CnpModal({
               <DateInput value={form.due_date} onChange={(v) => set('due_date', v)} />
             </div>
 
-            <div className="flex items-center justify-between rounded-xl border border-[#ece9df] bg-[#fafaf8] px-3 py-2.5">
-              <div>
-                <p className="text-[15px] font-medium text-[#111]">¿Es audiovisual?</p>
-                <p className="text-[12.5px] text-[#888]">
-                  Video o Reel: sin referencias ni doble check de impresión.
-                </p>
-              </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={form.is_audiovisual}
-                onClick={() =>
-                  setForm((f) => ({
-                    ...f,
-                    is_audiovisual: !f.is_audiovisual,
-                    is_print: f.is_audiovisual ? f.is_print : false,
-                  }))
-                }
-                className={`inline-flex items-center flex-shrink-0 w-11 h-6 rounded-full p-0.5 transition-colors ${
-                  form.is_audiovisual ? 'bg-[#FFB800]' : 'bg-[#e0ddd4]'
-                }`}
-              >
-                <span
-                  className={`inline-block w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                    form.is_audiovisual ? 'translate-x-[20px]' : 'translate-x-0'
-                  }`}
-                />
-              </button>
-            </div>
-
             {/* Un CNP audiovisual nunca se imprime — el toggle y el doble check que
-                depende de él quedan ocultos en vez de deshabilitados. */}
+                depende de él quedan ocultos en vez de deshabilitados (ver Tipo de CNP arriba). */}
             {!form.is_audiovisual && (
               <div className="flex items-center justify-between rounded-xl border border-[#ece9df] bg-[#fafaf8] px-3 py-2.5">
                 <div>

@@ -398,9 +398,7 @@ describe('CnpModal — ¿Es audiovisual?', () => {
     expect(screen.getByText('Referencias')).toBeInTheDocument()
     expect(screen.getByText('¿Es impreso?')).toBeInTheDocument()
 
-    // El switch no tiene aria-label propio (mismo patrón que "¿Es impreso?"): se ubica
-    // por su fila (el primero de los dos switches, "Es audiovisual" va antes de "Es impreso").
-    await user.click(screen.getAllByRole('switch')[0])
+    await user.click(screen.getByRole('button', { name: 'Audiovisual' }))
 
     expect(screen.queryByText('Referencias')).not.toBeInTheDocument()
     expect(screen.queryByText('¿Es impreso?')).not.toBeInTheDocument()
@@ -428,7 +426,7 @@ describe('CnpModal — ¿Es audiovisual?', () => {
       screen.getByPlaceholderText('Ej. Creatina con sello de calidad'),
       'Reel de lanzamiento',
     )
-    await user.click(screen.getAllByRole('switch')[0])
+    await user.click(screen.getByRole('button', { name: 'Audiovisual' }))
     await user.type(screen.getByPlaceholderText('Buscar cliente por nombre…'), 'Punto')
     await user.click(await screen.findByText('Punto Fit'))
     await user.click(screen.getByText('Asignar diseñador...'))
