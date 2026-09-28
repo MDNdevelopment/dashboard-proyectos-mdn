@@ -70,7 +70,11 @@ export const MODULES = [
       { key: 'audiovisual.ver_todo', label: 'Ver pautas audiovisuales de todas las líneas' },
       {
         key: 'audiovisual.piezas',
-        label: 'Gestionar piezas y editores de pautas realizadas',
+        label: 'Ver piezas de pautas de todas las líneas',
+      },
+      {
+        key: 'audiovisual.pautas.gestion',
+        label: 'Gestionar recursos y piezas de pautas',
       },
       { key: 'chequeo.manage', label: 'Registrar fechas de última publicación (Chequeo)' },
       { key: 'chequeo.ver_todo', label: 'Ver Chequeo de todas las líneas' },

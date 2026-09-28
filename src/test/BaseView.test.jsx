@@ -361,3 +361,59 @@ describe('BaseView — checkbox "Ocultar completadas"', () => {
     expect(screen.getByText('Tarea terminada')).toBeInTheDocument()
   })
 })
+
+describe('BaseView — logos de todos los clientes de una tarea multi-cliente', () => {
+  const CLIENTS_BY_ID = new Map([
+    ['c1', { id: 'c1', name: 'Marca A', logo_url: 'https://logos.test/a.png' }],
+    ['c2', { id: 'c2', name: 'Marca B', logo_url: null }],
+  ])
+
+  function renderWithClients(tasks) {
+    return render(
+      <MemoryRouter>
+        <BaseView
+          tasks={tasks}
+          teams={[TEAM]}
+          team={TEAM}
+          usersMap={USERS_MAP}
+          clientsById={CLIENTS_BY_ID}
+          onOpenTask={() => {}}
+          onUpdated={() => {}}
+        />
+      </MemoryRouter>,
+    )
+  }
+
+  it('tarea con un solo cliente: un logo y el nombre, sin regresión', () => {
+    renderWithClients([makeTask({ id: 'task-1', client_id: 'c1', client_ids: ['c1'] })])
+    expect(screen.getAllByRole('img', { name: 'Marca A' })).toHaveLength(1)
+    expect(
+      within(screen.getByRole('row', { name: /Marca A/ })).getByText('Marca A'),
+    ).toBeInTheDocument()
+  })
+
+  it('tarea con varios client_ids: se ven los logos de todos, apilados', () => {
+    renderWithClients([makeTask({ id: 'task-1', client_id: 'c1', client_ids: ['c1', 'c2'] })])
+    const row = screen.getByRole('row', { name: /Marca A/ })
+    expect(within(row).getByRole('img', { name: 'Marca A' })).toBeInTheDocument()
+    // Marca B no tiene logo_url: se pinta como inicial, no como <img>.
+    expect(within(row).getByText('M', { selector: 'span' })).toBeInTheDocument()
+    expect(within(row).getByText('Marca A +1')).toBeInTheDocument()
+  })
+
+  it('usa client_ids[0] para el primer logo aunque difiera del legacy client_id', () => {
+    // client_id (legado) apunta a c2, pero la posición 0 real de client_ids es c1: el
+    // logo mostrado debe ser el de c1, no el de client_id.
+    renderWithClients([makeTask({ id: 'task-1', client_id: 'c2', client_ids: ['c1', 'c2'] })])
+    const row = screen.getByRole('row', { name: /Marca A/ })
+    expect(within(row).getByText('Marca A +1')).toBeInTheDocument()
+    expect(within(row).getByRole('img', { name: 'Marca A' })).toBeInTheDocument()
+  })
+
+  it('cliente sin logo_url se pinta como inicial', () => {
+    renderWithClients([makeTask({ id: 'task-1', client_id: 'c2', client_ids: ['c2'] })])
+    expect(screen.queryByRole('img')).not.toBeInTheDocument()
+    const row = screen.getByRole('row', { name: /Marca B/ })
+    expect(within(row).getByText('M', { selector: 'span' })).toBeInTheDocument()
+  })
+})

@@ -215,18 +215,20 @@ export function resourceNames(pauta, usersById) {
 }
 
 /**
- * Determina si `userId` puede editar la lista de piezas de una pauta realizada:
- * quien coordina (admin o Lizdania, vía `audiovisual.coordina`) o el recurso que
- * grabó esa pauta (`recurso_ids`). Reemplaza el booleano global que antes abría la
- * edición a todo el depto Audiovisual — ver commit 19e5bbc.
+ * Determina si `userId` puede gestionar los recursos y la lista de piezas de una pauta:
+ * quien coordina (admin o Lizdania, vía `audiovisual.coordina`), quien tenga la capability
+ * configurable `audiovisual.pautas.gestion` (Empresa > Accesos), o el recurso que grabó
+ * esa pauta (`recurso_ids`). Reemplaza el booleano global que antes abría la edición a
+ * todo el depto Audiovisual — ver commit 19e5bbc.
  * @param {object} params
  * @param {boolean} params.canCoordinate  — resultado de `can('audiovisual.coordina')`
+ * @param {boolean} [params.canGestionPautas]  — resultado de `can('audiovisual.pautas.gestion')`
  * @param {string|null|undefined} params.userId  — user_id del usuario actual
  * @param {object|null|undefined} params.pauta
  * @returns {boolean}
  */
-export function canEditPiezasForPauta({ canCoordinate, userId, pauta }) {
-  if (canCoordinate) return true
+export function canEditPiezasForPauta({ canCoordinate, canGestionPautas, userId, pauta }) {
+  if (canCoordinate || canGestionPautas) return true
   if (!userId || !pauta) return false
   return (pauta.recurso_ids ?? []).includes(userId)
 }
@@ -569,7 +571,11 @@ export function briefComplete(pauta) {
 export function pautaErrorMessage(err) {
   if (!err) return null
   const raw = err.message || ''
-  if (err.code === '42501' || /row-level security/i.test(raw)) {
+  if (
+    err.code === '42501' ||
+    /row-level security/i.test(raw) ||
+    /no autorizado para modificar los recursos/i.test(raw)
+  ) {
     return 'No tienes permiso para editar esta pauta.'
   }
   return 'No se pudo guardar el cambio. Vuelve a intentarlo; si sigue pasando, avisa a soporte.'

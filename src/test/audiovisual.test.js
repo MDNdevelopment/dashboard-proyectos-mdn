@@ -239,6 +239,30 @@ describe('canEditPiezasForPauta', () => {
     expect(canEditPiezasForPauta({ canCoordinate: false, userId: null, pauta: p })).toBe(false)
     expect(canEditPiezasForPauta({ canCoordinate: false, userId: 'yo', pauta: null })).toBe(false)
   })
+
+  it('quien tiene audiovisual.pautas.gestion puede editar sin ser el recurso asignado', () => {
+    const p = pauta({ recurso_ids: ['otro'] })
+    expect(
+      canEditPiezasForPauta({
+        canCoordinate: false,
+        canGestionPautas: true,
+        userId: 'yo',
+        pauta: p,
+      }),
+    ).toBe(true)
+  })
+
+  it('sin canCoordinate ni canGestionPautas, y sin ser el recurso asignado → false', () => {
+    const p = pauta({ recurso_ids: ['otro'] })
+    expect(
+      canEditPiezasForPauta({
+        canCoordinate: false,
+        canGestionPautas: false,
+        userId: 'yo',
+        pauta: p,
+      }),
+    ).toBe(false)
+  })
 })
 
 describe('canActOnEditorGroup', () => {

@@ -38,6 +38,7 @@ function currentYearMonth() {
 export default function AudiovisualView({ companyId, userProfile, can, lines, clients }) {
   const canManage = can('audiovisual.manage')
   const canCoordinate = can('audiovisual.coordina')
+  const canGestionPautas = can('audiovisual.pautas.gestion')
   const editMode = avEditMode({ canCoordinate, canManage })
   // "Ver todo" (todas las líneas) es una capability aparte de "coordina" (agendar/
   // declinar/marcar realizada): antes cualquier coordinador del depto Audiovisual veía
@@ -398,6 +399,7 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
           userId={userProfile?.user_id}
           defaultLineId={defaultLineId}
           editMode={editMode}
+          canGestionPautas={canGestionPautas}
           phase={phase}
           onPhaseChange={(p) => {
             setPhase(p)
@@ -431,6 +433,7 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
           piezas={piezas.filter((pz) => pz.pauta_id === detailPauta.id)}
           canEditPiezas={canEditPiezasForPauta({
             canCoordinate,
+            canGestionPautas,
             userId: userProfile?.user_id,
             pauta: detailPauta,
           })}

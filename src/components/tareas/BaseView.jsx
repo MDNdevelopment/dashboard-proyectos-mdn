@@ -16,7 +16,12 @@ import { checklistProgress } from './taskChecklist'
 import { Avatar } from './UserPickerSingle'
 import { teamMemberUsers, tasksForVisibleLines } from '../../utils/lineFilters'
 import { updateTaskStatus } from './taskStatus'
-import { clientNamesOf, clientDisplayName, matchesClient } from '../../utils/rowClients'
+import {
+  clientNamesOf,
+  clientDisplayName,
+  clientIdsOf,
+  matchesClient,
+} from '../../utils/rowClients'
 
 // --- Status dropdown (portal-based to escape overflow:hidden table containers) ---
 
@@ -720,25 +725,40 @@ export default function BaseView({
                         <div className="flex items-center gap-1.5 min-w-0">
                           {late && <span className="text-red-500 flex-shrink-0">⚠</span>}
                           {(() => {
-                            const logo = t.client_id ? clientsById.get(t.client_id)?.logo_url : null
+                            const taskClients = clientIdsOf(t)
+                              .map((id) => clientsById.get(id))
+                              .filter(Boolean)
                             const name = clientDisplayName(t, clientsById, {
                               fallback: t.client,
                               emptyLabel: null,
                             })
                             if (!name) return <span className="text-[#bbb]">—</span>
+                            if (taskClients.length === 0) {
+                              return <span className="truncate">{name}</span>
+                            }
                             return (
                               <>
-                                {logo ? (
-                                  <img
-                                    src={logo}
-                                    alt={name}
-                                    className="w-7 h-7 rounded-full object-cover flex-shrink-0 border border-[#e0ddd4]"
-                                  />
-                                ) : (
-                                  <span className="w-7 h-7 rounded-full bg-[#f0ede3] flex items-center justify-center flex-shrink-0 text-[12px] font-bold text-[#aaa] uppercase">
-                                    {name[0]}
-                                  </span>
-                                )}
+                                <div className="flex items-center flex-shrink-0">
+                                  {taskClients.map((c, i) => (
+                                    <div
+                                      key={c.id}
+                                      title={c.name}
+                                      className={`rounded-full ring-2 ring-white flex-shrink-0${i > 0 ? ' -ml-2' : ''}`}
+                                    >
+                                      {c.logo_url ? (
+                                        <img
+                                          src={c.logo_url}
+                                          alt={c.name}
+                                          className="w-7 h-7 rounded-full object-cover border border-[#e0ddd4]"
+                                        />
+                                      ) : (
+                                        <span className="w-7 h-7 rounded-full bg-[#f0ede3] flex items-center justify-center text-[12px] font-bold text-[#aaa] uppercase">
+                                          {c.name?.[0]}
+                                        </span>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
                                 <span className="truncate">{name}</span>
                               </>
                             )

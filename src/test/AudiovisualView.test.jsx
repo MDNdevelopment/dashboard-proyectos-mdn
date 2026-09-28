@@ -330,6 +330,28 @@ describe('AudiovisualView', () => {
     // No editable: 'otro-editor' no está en recurso_ids de p4.
     expect(screen.queryByPlaceholderText('Buscar empleado por nombre…')).not.toBeInTheDocument()
   })
+
+  it('con audiovisual.pautas.gestion puede editar piezas de cualquier pauta sin ser recurso ni coordinar', async () => {
+    renderView({
+      userProfile: {
+        user_id: 'gestor-1',
+        company_id: 'co-1',
+        access_level: 1,
+        admin: false,
+        department_id: 2,
+      },
+      can: (key) => key === 'audiovisual.pautas.gestion',
+      lines: [],
+      initialEntries: ['/tareas/pautas?pautaId=p4'],
+    })
+    await waitFor(() => {
+      expect(screen.getByText('Edición de piezas')).toBeInTheDocument()
+    })
+    // Editable aunque 'gestor-1' no está en recurso_ids de p4 y no tiene audiovisual.coordina.
+    expect(screen.getByText('+ Agregar editor')).toBeInTheDocument()
+    expect(screen.queryByText('Agendar')).not.toBeInTheDocument()
+    expect(screen.queryByText('Declinar')).not.toBeInTheDocument()
+  })
 })
 
 describe('AudiovisualView — SummaryCard (Todas/Agendadas/Realizadas) filtra SOLO el calendario', () => {

@@ -34,6 +34,7 @@ import {
   isOutOfMonth,
   monthLabel,
   pautaErrorMessage,
+  canEditPiezasForPauta,
 } from '../../utils/audiovisual'
 
 /** Campos que, al cambiar, pueden crear un conflicto de disponibilidad de recursos. */
@@ -65,6 +66,7 @@ export default function AvPhaseTable({
   userId,
   defaultLineId,
   editMode,
+  canGestionPautas,
   phase,
   onPhaseChange,
   viewYear,
@@ -444,6 +446,8 @@ export default function AvPhaseTable({
             allEmployees={allEmployees}
             employeesById={employeesById}
             canCoordinate={canCoordinate}
+            canGestionPautas={canGestionPautas}
+            userId={userId}
             confirmingId={confirmingId}
             expandedAttendeesId={expandedAttendeesId}
             onToggleAttendees={toggleAttendees}
@@ -1125,6 +1129,8 @@ function AgendaTable({
   allEmployees,
   employeesById,
   canCoordinate,
+  canGestionPautas,
+  userId,
   confirmingId,
   expandedAttendeesId,
   onToggleAttendees,
@@ -1171,6 +1177,8 @@ function AgendaTable({
             allEmployees={allEmployees}
             employeesById={employeesById}
             canCoordinate={canCoordinate}
+            canGestionPautas={canGestionPautas}
+            userId={userId}
             confirming={confirmingId === p.id}
             expandedAttendees={expandedAttendeesId === p.id}
             onToggleAttendees={onToggleAttendees}
@@ -1196,6 +1204,8 @@ function AgendaRow({
   allEmployees,
   employeesById,
   canCoordinate,
+  canGestionPautas,
+  userId,
   confirming,
   expandedAttendees,
   onToggleAttendees,
@@ -1210,6 +1220,12 @@ function AgendaRow({
   onGoToMonth,
 }) {
   const gStatus = grillaStatus(p)
+  const canEditRecursos = canEditPiezasForPauta({
+    canCoordinate,
+    canGestionPautas,
+    userId,
+    pauta: p,
+  })
   const expanded = expandedAttendees || expandedRecursos
   const rowRef = useRef(null)
   useScrollIntoViewWhenHighlighted(rowRef, highlighted)
@@ -1292,14 +1308,22 @@ function AgendaRow({
           )}
         </td>
         <td className="px-2 py-1.5">
-          <button
-            onClick={() => onToggleRecursos(expandedRecursos ? null : p.id)}
-            className="input-base input-compact text-left leading-tight"
-          >
-            {(p.recurso_ids ?? []).length > 0
-              ? `${p.recurso_ids.length} recurso(s)`
-              : 'Seleccionar…'}
-          </button>
+          {canEditRecursos ? (
+            <button
+              onClick={() => onToggleRecursos(expandedRecursos ? null : p.id)}
+              className="input-base input-compact text-left leading-tight"
+            >
+              {(p.recurso_ids ?? []).length > 0
+                ? `${p.recurso_ids.length} recurso(s)`
+                : 'Seleccionar…'}
+            </button>
+          ) : (
+            <span className="text-[12px] text-[#888]">
+              {(p.recurso_ids ?? []).length > 0
+                ? `${p.recurso_ids.length} recurso(s)`
+                : 'Sin asignar'}
+            </span>
+          )}
         </td>
         <td className="px-2 py-1.5">
           <button

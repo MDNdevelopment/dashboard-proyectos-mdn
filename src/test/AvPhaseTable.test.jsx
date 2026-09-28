@@ -373,6 +373,71 @@ describe('AvPhaseTable — Agenda: "Recursos" (selección múltiple, reemplaza a
     expect(screen.queryByText('Recursos (quién graba fotos/video)')).not.toBeInTheDocument()
     expect(screen.getByText('Buscar por nombre')).toBeInTheDocument()
   })
+
+  it('sin coordinar, sin audiovisual.pautas.gestion y sin ser el recurso asignado: Recursos es solo lectura', () => {
+    const pauta = {
+      id: 'p1',
+      client_name: 'Cliente A',
+      status: 'programada',
+      formats: [],
+      recurso_ids: ['otro'],
+    }
+    renderTable({
+      initialPhase: 'agenda',
+      editMode: 'solicita',
+      userId: 'yo',
+      audiovisualUsers: AV_USERS,
+      pautas: [pauta],
+    })
+
+    expect(screen.getByText('1 recurso(s)')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '1 recurso(s)' })).not.toBeInTheDocument()
+  })
+
+  it('con audiovisual.pautas.gestion, sin coordinar ni ser el recurso: Recursos queda editable', async () => {
+    mockUpdatePauta.mockResolvedValue({ data: { id: 'p1' }, error: null })
+    const pauta = {
+      id: 'p1',
+      client_name: 'Cliente A',
+      status: 'programada',
+      formats: [],
+      recurso_ids: [],
+    }
+    renderTable({
+      initialPhase: 'agenda',
+      editMode: 'solicita',
+      canGestionPautas: true,
+      userId: 'yo',
+      audiovisualUsers: AV_USERS,
+      pautas: [pauta],
+    })
+
+    fireEvent.click(screen.getAllByText('Seleccionar…')[0])
+    const search = screen.getByPlaceholderText('Buscar empleado por nombre…')
+    fireEvent.change(search, { target: { value: 'Nadia' } })
+    fireEvent.click(screen.getByRole('button', { name: /Nadia Torres/ }))
+
+    await waitFor(() => expect(mockUpdatePauta).toHaveBeenCalledWith('p1', { recurso_ids: ['r1'] }))
+  })
+
+  it('el recurso ya asignado a la pauta puede editar Recursos aunque no coordine ni tenga la capability', () => {
+    const pauta = {
+      id: 'p1',
+      client_name: 'Cliente A',
+      status: 'programada',
+      formats: [],
+      recurso_ids: ['yo'],
+    }
+    renderTable({
+      initialPhase: 'agenda',
+      editMode: 'solicita',
+      userId: 'yo',
+      audiovisualUsers: AV_USERS,
+      pautas: [pauta],
+    })
+
+    expect(screen.getByRole('button', { name: '1 recurso(s)' })).toBeInTheDocument()
+  })
 })
 
 describe('AvPhaseTable — Solicitudes: columna "Asistentes" (quien solicita elige quién va)', () => {
