@@ -397,6 +397,9 @@ export default function EmployeesView({ companyId }) {
   // Diálogo de confirmación de archivado: null=cerrado, objeto=empleado
   const [confirmArchive, setConfirmArchive] = useState(null)
   const [archiving, setArchiving] = useState(false)
+  // ¿El mes de la baja todavía cuenta en los reportes mensuales? Espejo del radio de
+  // clientes en ClientsView. Se resetea a true al abrir cada diálogo.
+  const [incluyeMes, setIncluyeMes] = useState(true)
   const [error, setError] = useState(null)
 
   // Calendario de fechas del equipo: mes visible, vacaciones del rango y día expandido.
@@ -527,7 +530,9 @@ export default function EmployeesView({ companyId }) {
 
   // Archivar/restaurar van a la Netlify function (service role): banea/desbanea el
   // login en auth.users además de marcar/desmarcar deleted_at en el perfil.
-  async function callManage(user_id, action) {
+  // `incluyeMes` solo aplica al archivar: decide si el mes de la baja todavía cuenta en los
+  // reportes mensuales (ver utils/employeeInMonth.js). Al restaurar no se envía.
+  async function callManage(user_id, action, { incluyeMes } = {}) {
     const {
       data: { session },
     } = await supabase.auth.getSession()
@@ -537,11 +542,22 @@ export default function EmployeesView({ companyId }) {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify({ user_id, action }),
+      body: JSON.stringify(
+        action === 'archive'
+          ? { user_id, action, incluye_mes: incluyeMes !== false }
+          : { user_id, action },
+      ),
     })
     const payload = await res.json()
     if (!res.ok) throw new Error(payload.error ?? 'Error al procesar el empleado')
     return payload
+  }
+
+  // Abre el diálogo de baja reseteando el radio: cada baja decide lo suyo, sin arrastrar
+  // la elección de la anterior.
+  function openArchiveDialog(employee) {
+    setIncluyeMes(true)
+    setConfirmArchive(employee)
   }
 
   async function handleArchive() {
@@ -549,7 +565,7 @@ export default function EmployeesView({ companyId }) {
     setArchiving(true)
     setError(null)
     try {
-      const updated = await callManage(confirmArchive.user_id, 'archive')
+      const updated = await callManage(confirmArchive.user_id, 'archive', { incluyeMes })
       handleEmployeeSaved(updated)
       setConfirmArchive(null)
     } catch (err) {
@@ -783,7 +799,7 @@ export default function EmployeesView({ companyId }) {
               onEdit={setEditModal}
               onVacations={setVacEmployee}
               onOpen={setInfoEmployee}
-              onDelete={setConfirmArchive}
+              onDelete={openArchiveDialog}
               onRestore={handleRestore}
               canDelete={canManageEmployees && emp.user_id !== userProfile?.user_id}
               canManage={canManageEmployees}
@@ -814,7 +830,7 @@ export default function EmployeesView({ companyId }) {
                       onEdit={setEditModal}
                       onVacations={setVacEmployee}
                       onOpen={setInfoEmployee}
-                      onDelete={setConfirmArchive}
+                      onDelete={openArchiveDialog}
                       onRestore={handleRestore}
                       canDelete={canManageEmployees && emp.user_id !== userProfile?.user_id}
                       canManage={canManageEmployees}
@@ -843,7 +859,7 @@ export default function EmployeesView({ companyId }) {
                     onEdit={setEditModal}
                     onVacations={setVacEmployee}
                     onOpen={setInfoEmployee}
-                    onDelete={setConfirmArchive}
+                    onDelete={openArchiveDialog}
                     onRestore={handleRestore}
                     canDelete={canManageEmployees && emp.user_id !== userProfile?.user_id}
                     canManage={canManageEmployees}
@@ -925,7 +941,41 @@ export default function EmployeesView({ companyId }) {
           onConfirm={handleArchive}
           onCancel={() => setConfirmArchive(null)}
           confirming={archiving}
-        />
+        >
+          {/* Espejo del radio de clientes en ClientsView: decide si el mes de la baja
+              todavía cuenta en los reportes mensuales (utils/employeeInMonth.js). */}
+          <fieldset className="rounded-xl border border-[#ece9df] bg-[#faf9f4] p-3">
+            <legend className="px-1 text-[13px] font-mono font-bold tracking-[0.08em] uppercase text-[#888]">
+              Reportes del mes de la baja
+            </legend>
+            <label className="flex items-start gap-2.5 py-1 cursor-pointer">
+              <input
+                type="radio"
+                name="incluyeMesEmpleado"
+                className="mt-1 accent-[#FFB800]"
+                checked={incluyeMes === true}
+                onChange={() => setIncluyeMes(true)}
+              />
+              <span className="text-[14px] text-[#333]">
+                <strong>Sí, trabajó este mes.</strong> Se mantiene en la nómina del reporte de este
+                mes y desaparece a partir del próximo.
+              </span>
+            </label>
+            <label className="flex items-start gap-2.5 py-1 cursor-pointer">
+              <input
+                type="radio"
+                name="incluyeMesEmpleado"
+                className="mt-1 accent-[#FFB800]"
+                checked={incluyeMes === false}
+                onChange={() => setIncluyeMes(false)}
+              />
+              <span className="text-[14px] text-[#333]">
+                <strong>No, sacarlo también de este mes.</strong> Se excluye de la nómina desde el
+                mes de la baja (se fue en los primeros días). Los meses anteriores no se tocan.
+              </span>
+            </label>
+          </fieldset>
+        </ConfirmDeleteDialog>
       )}
 
       {/* Recursos externos (grabación/edición/ads): no son empleados, viven en su propia

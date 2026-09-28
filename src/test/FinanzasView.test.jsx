@@ -4,7 +4,8 @@
  * sin re-sincronizar contra la cartera actual: un cliente archivado después de ese
  * mes debe seguir apareciendo, y uno agregado después no debe aparecer retroactivamente.
  */
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { vi } from 'vitest'
 
@@ -124,5 +125,133 @@ describe('FinanzasView — meses pasados congelados no reconcilian contra el ros
     })
     expect(await screen.findByText('Marca Archivada')).toBeInTheDocument()
     expect(screen.queryByText('Marca Nueva')).not.toBeInTheDocument()
+  })
+})
+
+describe('FinanzasView — nómina heredada por carry-forward en un mes ya pasado', () => {
+  // Regresión del bug real: el reporte de agosto de Team Bianca se creó en septiembre, ya
+  // congelado, así que heredó la nómina de julio sin que syncReportClients la depurara.
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date('2026-07-17T12:00:00'))
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  // Baja el 20 de mayo: en junio ya no debería cobrar.
+  const SALIENTE = {
+    user_id: 'u-saliente',
+    first_name: 'Andres',
+    last_name: 'Barboza',
+    deleted_at: '2026-05-20T00:00:00Z',
+    baja_incluye_mes: false,
+    monthly_salary: 300,
+  }
+  const ACTIVA = {
+    user_id: 'u-activa',
+    first_name: 'Bianca',
+    last_name: 'Rodríguez',
+    deleted_at: null,
+    monthly_salary: 750,
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockLoadClients.mockResolvedValue({ data: [], error: null })
+    mockLoadCompanyEmployees.mockResolvedValue({ data: [SALIENTE, ACTIVA], error: null })
+    mockUpsertReport.mockResolvedValue({ data: null, error: null })
+    mockUpdateEmployeeSalaries.mockResolvedValue({ error: null })
+    mockLoadRecentReports.mockResolvedValue({ data: [], error: null })
+    // Junio no tiene reporte guardado: se inicializa por carry-forward desde mayo.
+    mockLoadReport.mockResolvedValue({ data: null, error: null })
+    const mayo = makeReportData([])
+    mayo.finanzas.sueldos = [
+      { id: 'sue-u-saliente', empleadoId: 'u-saliente', descripcion: 'Andres Barboza', monto: 300 },
+      { id: 'sue-u-activa', empleadoId: 'u-activa', descripcion: 'Bianca Rodríguez', monto: 750 },
+    ]
+    mockLoadPrevReport.mockResolvedValue({ data: { data: mayo }, error: null })
+  })
+
+  it('no arrastra al empleado dado de baja antes de ese mes', async () => {
+    renderView({ month: 6, line: { ...LINE, member_user_ids: ['u-activa'] } })
+    expect(await screen.findByText('Bianca Rodríguez')).toBeInTheDocument()
+    expect(screen.queryByText('Andres Barboza')).not.toBeInTheDocument()
+  })
+})
+
+describe('FinanzasView — eliminar una fila de sueldo ligada a empleado', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date('2026-07-17T12:00:00'))
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockLoadPrevReport.mockResolvedValue({ data: null, error: null })
+    mockLoadClients.mockResolvedValue({ data: [], error: null })
+    mockLoadCompanyEmployees.mockResolvedValue({ data: [], error: null })
+    mockUpsertReport.mockResolvedValue({ data: null, error: null })
+    mockUpdateEmployeeSalaries.mockResolvedValue({ error: null })
+    mockLoadRecentReports.mockResolvedValue({ data: [], error: null })
+    const junio = makeReportData([])
+    junio.finanzas.sueldos = [
+      { id: 'sue-u-x', empleadoId: 'u-x', descripcion: 'Paula Viloria', monto: 225 },
+    ]
+    mockLoadReport.mockResolvedValue({ data: { data: junio }, error: null })
+  })
+
+  async function borrarPaula(user) {
+    expect(await screen.findByText('Paula Viloria')).toBeInTheDocument()
+    const fila = screen.getByText('Paula Viloria').closest('div')
+    await user.click(within(fila.parentElement).getByTitle('Eliminar'))
+  }
+
+  it('la fila de empleado tiene botón de eliminar y al usarlo desaparece', async () => {
+    const user = userEvent.setup()
+    // Junio es mes pasado: congelado, la fila se muestra tal cual se guardó.
+    renderView({ month: 6 })
+
+    await borrarPaula(user)
+
+    await waitFor(() => {
+      expect(screen.queryByText('Paula Viloria')).not.toBeInTheDocument()
+    })
+  })
+
+  it('tras eliminar avisa dentro del bloque que falta guardar el reporte', async () => {
+    const user = userEvent.setup()
+    renderView({ month: 6 })
+
+    expect(await screen.findByText('Paula Viloria')).toBeInTheDocument()
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+
+    await borrarPaula(user)
+
+    const aviso = await screen.findByRole('status')
+    expect(aviso).toHaveTextContent(/no está guardado/i)
+    expect(aviso).toHaveTextContent(/Guardar finanzas/i)
+    // El aviso vive dentro de la tarjeta de Sueldos, no al pie de la vista.
+    expect(within(aviso.closest('div')).getByText(/Sueldos \/ Nómina/)).toBeInTheDocument()
+  })
+
+  it('el aviso desaparece al guardar', async () => {
+    const user = userEvent.setup()
+    renderView({ month: 6 })
+
+    await borrarPaula(user)
+    expect(await screen.findByRole('status')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /Guardar finanzas/i }))
+
+    await waitFor(() => {
+      expect(mockUpsertReport).toHaveBeenCalled()
+    })
+    await waitFor(() => {
+      expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    })
   })
 })

@@ -79,6 +79,55 @@ describe('archive-employee.js handler', () => {
     expect(updateUserByIdMock).toHaveBeenCalledWith('u1', { ban_duration: '876000h' })
   })
 
+  it('persiste baja_incluye_mes: false cuando el body lo pide', async () => {
+    requireCapabilityMock.mockResolvedValue({
+      caller: { user_id: 'rrhh-1', admin: false, access_level: 2, company_id: 'c1' },
+    })
+    const chain = updateChain()
+    fromMock
+      .mockReturnValueOnce(targetChain({ data: { user_id: 'u1', company_id: 'c1' }, error: null }))
+      .mockReturnValueOnce(chain)
+      .mockReturnValueOnce(deleteMembersChain())
+    updateUserByIdMock.mockResolvedValue({ error: null })
+
+    const res = await handler(makeEvent({ ...BODY, incluye_mes: false }))
+
+    expect(res.statusCode).toBe(200)
+    expect(chain._payload.baja_incluye_mes).toBe(false)
+    expect(chain._payload.deleted_at).toBeTruthy()
+  })
+
+  it('por defecto el mes de la baja sigue contando (baja_incluye_mes: true)', async () => {
+    requireCapabilityMock.mockResolvedValue({
+      caller: { user_id: 'rrhh-1', admin: false, access_level: 2, company_id: 'c1' },
+    })
+    const chain = updateChain()
+    fromMock
+      .mockReturnValueOnce(targetChain({ data: { user_id: 'u1', company_id: 'c1' }, error: null }))
+      .mockReturnValueOnce(chain)
+      .mockReturnValueOnce(deleteMembersChain())
+    updateUserByIdMock.mockResolvedValue({ error: null })
+
+    await handler(makeEvent(BODY))
+
+    expect(chain._payload.baja_incluye_mes).toBe(true)
+  })
+
+  it('al restaurar, deleted_at vuelve a null y baja_incluye_mes a true', async () => {
+    requireCapabilityMock.mockResolvedValue({
+      caller: { user_id: 'rrhh-1', admin: false, access_level: 2, company_id: 'c1' },
+    })
+    const chain = updateChain()
+    fromMock
+      .mockReturnValueOnce(targetChain({ data: { user_id: 'u1', company_id: 'c1' }, error: null }))
+      .mockReturnValueOnce(chain)
+    updateUserByIdMock.mockResolvedValue({ error: null })
+
+    await handler(makeEvent({ user_id: 'u1', action: 'restore' }))
+
+    expect(chain._payload).toEqual({ deleted_at: null, baja_incluye_mes: true })
+  })
+
   it('al archivar, saca al empleado de metric_line_members (ya no pertenece a ningún equipo)', async () => {
     requireCapabilityMock.mockResolvedValue({
       caller: { user_id: 'rrhh-1', admin: false, access_level: 2, company_id: 'c1' },

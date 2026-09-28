@@ -26,7 +26,9 @@ export const handler = async (event) => {
     return json(400, { error: 'Body JSON inválido' })
   }
 
-  const { user_id, action } = body
+  // incluye_mes = true  → el empleado cuenta en el reporte del mes de su baja (trabajó parte del mes).
+  // incluye_mes = false → se excluye también de ese mes (ver src/utils/employeeInMonth.js).
+  const { user_id, action, incluye_mes = true } = body
 
   if (!user_id?.trim()) return json(400, { error: 'user_id es obligatorio' })
   if (action !== 'archive' && action !== 'restore') {
@@ -55,7 +57,11 @@ export const handler = async (event) => {
   // 2. Marcar/desmarcar el perfil en la tabla users.
   const { data: employee, error: updateErr } = await supabase
     .from('users')
-    .update({ deleted_at: action === 'archive' ? new Date().toISOString() : null })
+    .update(
+      action === 'archive'
+        ? { deleted_at: new Date().toISOString(), baja_incluye_mes: incluye_mes !== false }
+        : { deleted_at: null, baja_incluye_mes: true },
+    )
     .eq('user_id', user_id)
     .select('*, department:departments(department_name), position:positions(position_name)')
     .maybeSingle()

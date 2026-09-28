@@ -563,7 +563,8 @@ describe('EmployeesView', () => {
           '/api/employees/manage',
           expect.objectContaining({
             method: 'POST',
-            body: JSON.stringify({ user_id: 'u10', action: 'archive' }),
+            // incluye_mes: por defecto el mes de la baja sigue contando en los reportes.
+            body: JSON.stringify({ user_id: 'u10', action: 'archive', incluye_mes: true }),
           }),
         )
       })
@@ -572,6 +573,33 @@ describe('EmployeesView', () => {
         expect(screen.queryByText('Ana Pérez')).not.toBeInTheDocument()
       })
       expect(screen.getByText('Carlos López')).toBeInTheDocument()
+    })
+
+    it('envía incluye_mes: false al elegir "sacarlo también de este mes"', async () => {
+      const user = userEvent.setup()
+      const ana = MOCK_USERS.find((u) => u.user_id === 'u10')
+      global.fetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ ...ana, deleted_at: '2026-07-15T00:00:00.000Z' }),
+      })
+      renderAsAdmin()
+      await waitFor(() => {
+        expect(screen.getByText('Ana Pérez')).toBeInTheDocument()
+      })
+
+      await user.click(screen.getByRole('button', { name: 'Eliminar Ana Pérez' }))
+      await user.click(screen.getByRole('radio', { name: /sacarlo también de este mes/i }))
+      await user.type(screen.getByPlaceholderText('Ana Pérez'), 'Ana Pérez')
+      await user.click(screen.getByRole('button', { name: 'Eliminar' }))
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledWith(
+          '/api/employees/manage',
+          expect.objectContaining({
+            body: JSON.stringify({ user_id: 'u10', action: 'archive', incluye_mes: false }),
+          }),
+        )
+      })
     })
 
     it('el toggle "Ver eliminados" muestra solo a los empleados eliminados', async () => {

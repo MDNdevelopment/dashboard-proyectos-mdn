@@ -1,203 +1,254 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
-import { useSearchParams } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
-import { isFinancePrivileged } from "../../lib/permissions";
+import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { useAuth } from '../../context/AuthContext'
+import { isFinancePrivileged } from '../../lib/permissions'
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid,
-} from "recharts";
-import { loadReport, loadPrevReport, upsertReport, loadClients, loadCompanyEmployees, updateEmployeeSalaries, loadRecentReports } from "./metricsApi";
-import { initMetricReport } from "../../utils/initMetricReport";
-import { syncReportClients } from "../../utils/syncReportClients";
-import { clientInMonth } from "../../utils/clientInMonth";
-import { employeeActiveInMonth } from "../../utils/employeeInMonth";
-import { isReportFrozen } from "../../utils/reportPeriod";
-import { pickSalaryUpdates } from "../../utils/salaryWriteback";
-import { calcFinanzas, calcConsolidado, calcConsolidadoConGasto, ensureFinanzas, fmtUSD, buildFinanceTrend } from "../../utils/metricsFinance";
-import SectionTotal from "../common/SectionTotal";
-import { MONTHS } from "./constants";
-import ClientFichaModal from "./ClientFichaModal";
-import EmployeeInfoModal from "./EmployeeInfoModal";
-import { Avatar } from "../tareas/UserPickerSingle";
-import { useUnsavedChanges } from "../../hooks/useUnsavedChanges";
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  CartesianGrid,
+} from 'recharts'
+import {
+  loadReport,
+  loadPrevReport,
+  upsertReport,
+  loadClients,
+  loadCompanyEmployees,
+  updateEmployeeSalaries,
+  loadRecentReports,
+} from './metricsApi'
+import { initMetricReport } from '../../utils/initMetricReport'
+import { syncReportClients } from '../../utils/syncReportClients'
+import { clientInMonth } from '../../utils/clientInMonth'
+import { employeeActiveInMonth } from '../../utils/employeeInMonth'
+import { isReportFrozen } from '../../utils/reportPeriod'
+import { pruneCarryForward } from '../../utils/pruneCarryForward'
+import { pickSalaryUpdates } from '../../utils/salaryWriteback'
+import {
+  calcFinanzas,
+  calcConsolidado,
+  calcConsolidadoConGasto,
+  ensureFinanzas,
+  fmtUSD,
+  buildFinanceTrend,
+} from '../../utils/metricsFinance'
+import SectionTotal from '../common/SectionTotal'
+import { MONTHS } from './constants'
+import ClientFichaModal from './ClientFichaModal'
+import EmployeeInfoModal from './EmployeeInfoModal'
+import { Avatar } from '../tareas/UserPickerSingle'
+import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 
 /** Adapta un objeto cliente (logo_url) al shape que espera <Avatar> (avatar_url). */
 function clientAvatar(c) {
   return {
-    first_name: c?.name ?? "",
-    last_name: "",
+    first_name: c?.name ?? '',
+    last_name: '',
     avatar_url: c?.logo_url ?? null,
     user_id: c?.id,
-  };
+  }
 }
 
 function uid() {
-  return Math.random().toString(36).slice(2, 10);
+  return Math.random().toString(36).slice(2, 10)
 }
 
 const SECCIONES = [
-  { key: "ingresos",         label: "Ingresos",          color: "#10B981", totalLabel: "ingresos" },
-  { key: "gastosOperativos", label: "Gastos operativos",  color: "#F97316", totalLabel: "gastos" },
-  { key: "sueldos",          label: "Sueldos / Nómina",   color: "#EF4444", totalLabel: "sueldos" },
-  { key: "otrosGastos",      label: "Otros gastos",       color: "#8B5CF6", totalLabel: "otros gastos" },
-];
+  { key: 'ingresos', label: 'Ingresos', color: '#10B981', totalLabel: 'ingresos' },
+  { key: 'gastosOperativos', label: 'Gastos operativos', color: '#F97316', totalLabel: 'gastos' },
+  { key: 'sueldos', label: 'Sueldos / Nómina', color: '#EF4444', totalLabel: 'sueldos' },
+  { key: 'otrosGastos', label: 'Otros gastos', color: '#8B5CF6', totalLabel: 'otros gastos' },
+]
 
 export default function FinanzasView({ line, companyId, year, month, closed = false }) {
-  const { can = () => true, userProfile } = useAuth();
-  const privileged = isFinancePrivileged(userProfile);
+  const { can = () => true, userProfile } = useAuth()
+  const privileged = isFinancePrivileged(userProfile)
 
-  const [report, setReport]           = useState(null);
-  const [recentReports, setRecentReports] = useState([]);
-  const [lineClients, setLineClients] = useState([]);
-  const [lineEmployees, setLineEmployees] = useState([]);
-  const [companyEmployees, setCompanyEmployees] = useState([]);
-  const [loading, setLoading]         = useState(true);
-  const [saving, setSaving]           = useState(false);
-  const [saved, setSaved]             = useState(false);
-  const [error, setError]             = useState(null);
-  const [cliModal, setCliModal]       = useState(null); // null=cerrado, objeto=cliente
-  const [empModal, setEmpModal]       = useState(null); // null=cerrado, objeto=empleado
-  const [ingresosView, setIngresosView] = useState("tarjetas"); // "lista" | "tarjetas" — tarjetas por defecto
-  const [sueldosView,  setSueldosView]  = useState("tarjetas"); // "lista" | "tarjetas" — tarjetas por defecto
+  const [report, setReport] = useState(null)
+  const [recentReports, setRecentReports] = useState([])
+  const [lineClients, setLineClients] = useState([])
+  const [lineEmployees, setLineEmployees] = useState([])
+  const [companyEmployees, setCompanyEmployees] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState(null)
+  // Se quitó al menos una fila de la nómina y todavía no se guardó el reporte.
+  const [removedSueldo, setRemovedSueldo] = useState(false)
+  const [cliModal, setCliModal] = useState(null) // null=cerrado, objeto=cliente
+  const [empModal, setEmpModal] = useState(null) // null=cerrado, objeto=empleado
+  const [ingresosView, setIngresosView] = useState('tarjetas') // "lista" | "tarjetas" — tarjetas por defecto
+  const [sueldosView, setSueldosView] = useState('tarjetas') // "lista" | "tarjetas" — tarjetas por defecto
 
   // Snapshot del reporte tal como vino del servidor (o quedó tras un save).
   // Se usa para detectar cambios sin guardar y mostrar aviso al recargar/cerrar.
-  const baselineRef = useRef(null);
+  const baselineRef = useRef(null)
 
   // Refs para scroll de KPIs
-  const ingresosRef = useRef(null);
-  const gastosRef   = useRef(null);
+  const ingresosRef = useRef(null)
+  const gastosRef = useRef(null)
 
   // Deep-link ?section=ingresos|gastos (p.ej. desde LineFichaModal en Empresa):
   // scroll one-shot a la sección tras la primera carga, luego se limpia el param.
-  const [searchParams, setSearchParams] = useSearchParams();
-  const pendingSection = useRef(searchParams.get("section"));
+  const [searchParams, setSearchParams] = useSearchParams()
+  const pendingSection = useRef(searchParams.get('section'))
 
   const load = useCallback(async () => {
-    if (!line?.id || !companyId) return;
-    setLoading(true);
-    setError(null);
+    if (!line?.id || !companyId) return
+    setLoading(true)
+    setError(null)
     const [reportRes, prevRes, clientsRes, employeesRes, recentRes] = await Promise.all([
       loadReport(line.id, year, month),
       loadPrevReport(line.id, year, month),
       loadClients(companyId, line.id, { includeArchived: true }),
       loadCompanyEmployees(companyId),
       loadRecentReports(line.id, year, month),
-    ]);
-    setRecentReports(recentRes.data ?? []);
+    ])
+    setRecentReports(recentRes.data ?? [])
     // Todos (incl. archivados) para resolver nombres en reportes guardados;
     // solo activos EN ESE MES para syncReportClients (no re-agregar archivados
     // al reporte actual, pero sin perder al que se dio de baja durante este mismo mes).
-    const allClients = clientsRes.data ?? [];
-    const activeClients = allClients.filter(c => clientInMonth(c, year, month));
-    setLineClients(allClients);
+    const allClients = clientsRes.data ?? []
+    const activeClients = allClients.filter((c) => clientInMonth(c, year, month))
+    setLineClients(allClients)
 
     // Lista completa de empleados de la empresa (para resolver apoyo_ids fuera de la línea)
-    const allEmployees = employeesRes.data ?? [];
-    setCompanyEmployees(allEmployees);
+    const allEmployees = employeesRes.data ?? []
+    setCompanyEmployees(allEmployees)
     // Filtrar empleados del team de esta línea (member_user_ids es un array reconstruido
     // en loadLines a partir de la tabla relacional metric_line_members). Excluye a quienes
     // ya estaban de baja ANTES de este mes, por la misma razón que activeClients: no
     // re-sembrar su fila de sueldo en el reporte actual; los reportes ya cerrados/pasados
     // conservan la suya (ver frozen más abajo).
-    const memberIds = new Set(line.member_user_ids ?? []);
-    const employees = allEmployees.filter(e => memberIds.has(e.user_id) && employeeActiveInMonth(e, year, month));
-    setLineEmployees(employees);
+    const memberIds = new Set(line.member_user_ids ?? [])
+    const employees = allEmployees.filter(
+      (e) => memberIds.has(e.user_id) && employeeActiveInMonth(e, year, month),
+    )
+    setLineEmployees(employees)
 
     // Un mes ya pasado (o cerrado) es de solo lectura: se muestra tal cual se guardó,
     // sin reconciliar contra el roster actual (que puede tener altas/bajas posteriores
     // a ese mes). Ver utils/reportPeriod.js.
-    const frozen = isReportFrozen(year, month, closed);
+    const frozen = isReportFrozen(year, month, closed)
 
     if (reportRes.data) {
-      const d = reportRes.data.data;
-      ensureFinanzas(d);
-      const synced = frozen ? d : syncReportClients(d, activeClients, employees);
-      setReport(synced);
-      baselineRef.current = synced;
+      const d = reportRes.data.data
+      ensureFinanzas(d)
+      const synced = frozen ? d : syncReportClients(d, activeClients, employees)
+      setReport(synced)
+      baselineRef.current = synced
     } else {
-      const fresh = initMetricReport(prevRes.data?.data ?? null, activeClients, {}, employees);
-      ensureFinanzas(fresh);
-      const synced = frozen ? fresh : syncReportClients(fresh, activeClients, employees);
-      setReport(synced);
-      baselineRef.current = synced;
+      // El carry-forward copia sueldos/ingresos del mes anterior tal cual. Si este mes ya pasó
+      // (frozen) no hay syncReportClients que los reconcilie, así que hay que podar a quien no
+      // corresponde a ESTE mes antes de mostrarlo/guardarlo. Ver utils/pruneCarryForward.js.
+      const carried = initMetricReport(prevRes.data?.data ?? null, activeClients, {}, employees)
+      const fresh = pruneCarryForward(carried, { allEmployees, allClients, year, month })
+      ensureFinanzas(fresh)
+      const synced = frozen ? fresh : syncReportClients(fresh, activeClients, employees)
+      setReport(synced)
+      baselineRef.current = synced
     }
-    setLoading(false);
-  }, [line?.id, line?.member_user_ids, companyId, year, month, closed]);
-
-  useEffect(() => { load(); }, [load]);
-
-  // Aviso nativo del navegador si se intenta recargar/cerrar con cambios sin guardar.
-  useUnsavedChanges({ value: report, baseline: baselineRef.current, onClose: () => {} });
+    setRemovedSueldo(false) // el aviso pertenece a la edición en curso, no al mes que se abre
+    setLoading(false)
+  }, [line?.id, line?.member_user_ids, companyId, year, month, closed])
 
   useEffect(() => {
-    if (loading || !pendingSection.current) return;
-    const ref = pendingSection.current === "ingresos" ? ingresosRef
-              : pendingSection.current === "gastos"   ? gastosRef : null;
-    pendingSection.current = null; // one-shot: no re-scrollear al cambiar mes/año
-    ref?.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    setSearchParams(prev => {
-      const p = new URLSearchParams(prev);
-      p.delete("section");
-      return p;
-    }, { replace: true });
-  }, [loading, setSearchParams]);
+    load()
+  }, [load])
+
+  // Aviso nativo del navegador si se intenta recargar/cerrar con cambios sin guardar.
+  useUnsavedChanges({ value: report, baseline: baselineRef.current, onClose: () => {} })
+
+  useEffect(() => {
+    if (loading || !pendingSection.current) return
+    const ref =
+      pendingSection.current === 'ingresos'
+        ? ingresosRef
+        : pendingSection.current === 'gastos'
+          ? gastosRef
+          : null
+    pendingSection.current = null // one-shot: no re-scrollear al cambiar mes/año
+    ref?.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setSearchParams(
+      (prev) => {
+        const p = new URLSearchParams(prev)
+        p.delete('section')
+        return p
+      },
+      { replace: true },
+    )
+  }, [loading, setSearchParams])
 
   async function handleSave() {
-    if (!report || closed) return;
-    setSaving(true);
-    const { error: err } = await upsertReport(companyId, line.id, year, month, report);
-    setSaving(false);
-    if (err) { setError(err.message); return; }
+    if (!report || closed) return
+    setSaving(true)
+    const { error: err } = await upsertReport(companyId, line.id, year, month, report)
+    setSaving(false)
+    if (err) {
+      setError(err.message)
+      return
+    }
 
     // Write-back: persistir sueldos editados al sueldo maestro del empleado (users.monthly_salary).
     // Solo para usuarios privilegiados, solo montos > 0 que difieran del maestro actual.
     if (privileged) {
-      const salaryUpdates = pickSalaryUpdates(report.finanzas?.sueldos, lineEmployees);
+      const salaryUpdates = pickSalaryUpdates(report.finanzas?.sueldos, lineEmployees)
       if (salaryUpdates.length) {
-        const { error: salErr } = await updateEmployeeSalaries(salaryUpdates);
+        const { error: salErr } = await updateEmployeeSalaries(salaryUpdates)
         if (salErr) {
           // El reporte ya se guardó; informar pero no bloquear
-          setError(`Reporte guardado. Error al actualizar sueldos maestros: ${salErr.message}`);
+          setError(`Reporte guardado. Error al actualizar sueldos maestros: ${salErr.message}`)
         } else {
           // Reflejar nuevo maestro en memoria para evitar re-disparar updates en el próximo save
-          setLineEmployees(prev => prev.map(e => {
-            const u = salaryUpdates.find(x => x.user_id === e.user_id);
-            return u ? { ...e, monthly_salary: u.monto } : e;
-          }));
+          setLineEmployees((prev) =>
+            prev.map((e) => {
+              const u = salaryUpdates.find((x) => x.user_id === e.user_id)
+              return u ? { ...e, monthly_salary: u.monto } : e
+            }),
+          )
         }
       }
     }
 
     // Actualizar baseline para que el aviso desaparezca tras guardar
-    baselineRef.current = report;
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    baselineRef.current = report
+    setRemovedSueldo(false)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
   }
 
   function addItem(seccion) {
-    setReport(prev => {
-      const next = structuredClone(prev);
-      const item = { id: uid(), descripcion: "", monto: null };
-      if (seccion === "gastosOperativos") item.clienteId = null;
-      next.finanzas[seccion].push(item);
-      return next;
-    });
+    setReport((prev) => {
+      const next = structuredClone(prev)
+      const item = { id: uid(), descripcion: '', monto: null }
+      if (seccion === 'gastosOperativos') item.clienteId = null
+      next.finanzas[seccion].push(item)
+      return next
+    })
   }
 
   function removeItem(seccion, idx) {
-    setReport(prev => {
-      const next = structuredClone(prev);
-      next.finanzas[seccion].splice(idx, 1);
-      return next;
-    });
+    setReport((prev) => {
+      const next = structuredClone(prev)
+      next.finanzas[seccion].splice(idx, 1)
+      return next
+    })
+    // Sacar a alguien de la nómina solo queda en memoria hasta que se guarde el reporte:
+    // se avisa dentro del bloque de Sueldos para que no se pierda el cambio al salir.
+    if (seccion === 'sueldos') setRemovedSueldo(true)
   }
 
   function updateItem(seccion, idx, field, value) {
-    setReport(prev => {
-      const next = structuredClone(prev);
-      next.finanzas[seccion][idx][field] = field === "monto" ? (value === "" ? null : Number(value)) : value;
-      return next;
-    });
+    setReport((prev) => {
+      const next = structuredClone(prev)
+      next.finanzas[seccion][idx][field] =
+        field === 'monto' ? (value === '' ? null : Number(value)) : value
+      return next
+    })
   }
 
   if (loading) {
@@ -205,20 +256,18 @@ export default function FinanzasView({ line, companyId, year, month, closed = fa
       <div className="flex items-center justify-center py-16">
         <div className="w-6 h-6 border-2 border-[#FFB800] border-t-transparent rounded-full animate-spin" />
       </div>
-    );
+    )
   }
-  if (!report) return null;
+  if (!report) return null
 
-  const f = calcFinanzas(report);
-  const positivo = f.diferencia >= 0;
+  const f = calcFinanzas(report)
+  const positivo = f.diferencia >= 0
 
   // Tendencia de ingresos vs egresos de los últimos 5 meses (incluye el seleccionado)
-  const trendData = buildFinanceTrend(recentReports, year, month);
+  const trendData = buildFinanceTrend(recentReports, year, month)
 
   // Secciones visibles (sueldos solo para privilegiados)
-  const seccionesVisibles = SECCIONES.filter(
-    sec => sec.key !== "sueldos" || privileged
-  );
+  const seccionesVisibles = SECCIONES.filter((sec) => sec.key !== 'sueldos' || privileged)
 
   return (
     <fieldset disabled={closed} className="space-y-5 border-0 p-0 m-0 min-w-0">
@@ -231,20 +280,22 @@ export default function FinanzasView({ line, companyId, year, month, closed = fa
           label="Ingresos brutos"
           value={fmtUSD(f.totIngresos)}
           color="text-green-600"
-          onClick={() => ingresosRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+          onClick={() =>
+            ingresosRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }
           title="Ir a ingresos"
         />
         <KpiCard
           label="Total egresos"
           value={fmtUSD(f.totEgresos)}
           color="text-red-500"
-          onClick={() => gastosRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+          onClick={() => gastosRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
           title="Ir a gastos"
         />
         <KpiCard
           label="Diferencia"
           value={fmtUSD(f.diferencia)}
-          color={positivo ? "text-green-600" : "text-red-500"}
+          color={positivo ? 'text-green-600' : 'text-red-500'}
         />
       </div>
 
@@ -256,39 +307,69 @@ export default function FinanzasView({ line, companyId, year, month, closed = fa
         <ResponsiveContainer width="100%" height={240}>
           <LineChart data={trendData} margin={{ top: 8, right: 140, left: 0, bottom: 4 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0ede3" />
-            <XAxis dataKey="label" tick={{ fontSize: 11, fontFamily: "DM Mono, monospace", fill: "#555" }} />
-            <YAxis tick={{ fontSize: 10, fontFamily: "DM Mono, monospace", fill: "#888" }}
-              tickFormatter={v => Math.abs(v) >= 1000 ? `$${(v/1000).toFixed(0)}k` : `$${v}`}
+            <XAxis
+              dataKey="label"
+              tick={{ fontSize: 11, fontFamily: 'DM Mono, monospace', fill: '#555' }}
+            />
+            <YAxis
+              tick={{ fontSize: 10, fontFamily: 'DM Mono, monospace', fill: '#888' }}
+              tickFormatter={(v) => (Math.abs(v) >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`)}
             />
             <Tooltip
-              contentStyle={{ fontSize: 12, fontFamily: "DM Mono, monospace", borderRadius: 8, border: "1px solid #e0ddd4" }}
+              contentStyle={{
+                fontSize: 12,
+                fontFamily: 'DM Mono, monospace',
+                borderRadius: 8,
+                border: '1px solid #e0ddd4',
+              }}
               formatter={(val) => fmtUSD(val)}
-              itemSorter={item => ["Ingresos", "Egresos", "Diferencia"].indexOf(item.name)}
+              itemSorter={(item) => ['Ingresos', 'Egresos', 'Diferencia'].indexOf(item.name)}
             />
             <Legend
               layout="vertical"
               align="right"
               verticalAlign="middle"
-              itemSorter={item => ["Ingresos", "Egresos", "Diferencia"].indexOf(item.value)}
-              wrapperStyle={{ fontSize: 12, fontFamily: "DM Mono, monospace", paddingLeft: 24 }}
+              itemSorter={(item) => ['Ingresos', 'Egresos', 'Diferencia'].indexOf(item.value)}
+              wrapperStyle={{ fontSize: 12, fontFamily: 'DM Mono, monospace', paddingLeft: 24 }}
             />
-            <Line type="monotone" dataKey="ingresos" name="Ingresos" stroke="#10B981" strokeWidth={2} dot={{ r: 3 }} />
-            <Line type="monotone" dataKey="egresos" name="Egresos" stroke="#EF4444" strokeWidth={2} dot={{ r: 3 }} />
-            <Line type="monotone" dataKey="diferencia" name="Diferencia" stroke="#FAB51A" strokeWidth={2} dot={{ r: 3 }} />
+            <Line
+              type="monotone"
+              dataKey="ingresos"
+              name="Ingresos"
+              stroke="#10B981"
+              strokeWidth={2}
+              dot={{ r: 3 }}
+            />
+            <Line
+              type="monotone"
+              dataKey="egresos"
+              name="Egresos"
+              stroke="#EF4444"
+              strokeWidth={2}
+              dot={{ r: 3 }}
+            />
+            <Line
+              type="monotone"
+              dataKey="diferencia"
+              name="Diferencia"
+              stroke="#FAB51A"
+              strokeWidth={2}
+              dot={{ r: 3 }}
+            />
           </LineChart>
         </ResponsiveContainer>
       </div>
 
       {/* Secciones editables */}
       {seccionesVisibles.map((sec) => {
-        const isIngresos     = sec.key === "ingresos";
-        const isSueldos      = sec.key === "sueldos";
-        const isFirstGastos  = sec.key === "gastosOperativos";
-        const items = report.finanzas[sec.key] ?? [];
+        const isIngresos = sec.key === 'ingresos'
+        const isSueldos = sec.key === 'sueldos'
+        const isFirstGastos = sec.key === 'gastosOperativos'
+        const items = report.finanzas[sec.key] ?? []
 
         // Vista-toggle compartida: ingresos y sueldos tienen Lista/Tarjetas
-        const sectionView    = isIngresos ? ingresosView : sueldosView;
-        const setSectionView = isIngresos ? setIngresosView : setSueldosView;
+        const sectionView = isIngresos ? ingresosView : sueldosView
+        const setSectionView = isIngresos ? setIngresosView : setSueldosView
 
         const seccionCard = (
           <div
@@ -298,7 +379,10 @@ export default function FinanzasView({ line, companyId, year, month, closed = fa
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: sec.color }} />
+                <span
+                  className="w-3 h-3 rounded-full flex-shrink-0"
+                  style={{ background: sec.color }}
+                />
                 <p className="text-[15px] font-bold text-[#111]">{sec.label}</p>
               </div>
               <div className="flex items-center gap-3">
@@ -307,11 +391,11 @@ export default function FinanzasView({ line, companyId, year, month, closed = fa
                   <div className="flex bg-[#f5f3eb] border border-[#e0ddd4] rounded-lg p-0.5">
                     <button
                       type="button"
-                      onClick={() => setSectionView("lista")}
+                      onClick={() => setSectionView('lista')}
                       className={`px-2.5 py-1 rounded-md text-[12px] font-semibold transition-all ${
-                        sectionView === "lista"
-                          ? "bg-white text-[#111] shadow-sm"
-                          : "text-[#888] hover:text-[#555]"
+                        sectionView === 'lista'
+                          ? 'bg-white text-[#111] shadow-sm'
+                          : 'text-[#888] hover:text-[#555]'
                       }`}
                       title="Vista lista"
                     >
@@ -319,11 +403,11 @@ export default function FinanzasView({ line, companyId, year, month, closed = fa
                     </button>
                     <button
                       type="button"
-                      onClick={() => setSectionView("tarjetas")}
+                      onClick={() => setSectionView('tarjetas')}
                       className={`px-2.5 py-1 rounded-md text-[12px] font-semibold transition-all ${
-                        sectionView === "tarjetas"
-                          ? "bg-white text-[#111] shadow-sm"
-                          : "text-[#888] hover:text-[#555]"
+                        sectionView === 'tarjetas'
+                          ? 'bg-white text-[#111] shadow-sm'
+                          : 'text-[#888] hover:text-[#555]'
                       }`}
                       title="Vista tarjetas"
                     >
@@ -339,12 +423,14 @@ export default function FinanzasView({ line, companyId, year, month, closed = fa
 
             {items.length === 0 ? (
               <p className="text-[13px] text-[#bbb]">Sin entradas aún.</p>
-            ) : isIngresos && sectionView === "tarjetas" ? (
+            ) : isIngresos && sectionView === 'tarjetas' ? (
               /* ── Vista tarjetas para ingresos — editable ── */
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                 {items.map((item, idx) => {
-                  const isClientRow = item.clienteId != null;
-                  const clientObj   = isClientRow ? lineClients.find(c => c.id === item.clienteId) : null;
+                  const isClientRow = item.clienteId != null
+                  const clientObj = isClientRow
+                    ? lineClients.find((c) => c.id === item.clienteId)
+                    : null
                   return (
                     <div
                       key={item.id ?? idx}
@@ -362,14 +448,18 @@ export default function FinanzasView({ line, companyId, year, month, closed = fa
                           <span className="truncate">{item.descripcion}</span>
                         </button>
                       ) : isClientRow ? (
-                        <span className="text-[13px] font-semibold text-[#333] truncate">{item.descripcion || "—"}</span>
+                        <span className="text-[13px] font-semibold text-[#333] truncate">
+                          {item.descripcion || '—'}
+                        </span>
                       ) : (
                         <input
                           type="text"
                           className="input-base !py-1 text-[13px]"
                           placeholder="Descripción"
-                          value={item.descripcion ?? ""}
-                          onChange={e => updateItem("ingresos", idx, "descripcion", e.target.value)}
+                          value={item.descripcion ?? ''}
+                          onChange={(e) =>
+                            updateItem('ingresos', idx, 'descripcion', e.target.value)
+                          }
                         />
                       )}
                       {/* Monto editable */}
@@ -380,32 +470,41 @@ export default function FinanzasView({ line, companyId, year, month, closed = fa
                           step="0.01"
                           className="input-base !py-1 flex-1 min-w-0 text-[13px] font-mono"
                           placeholder="0.00"
-                          value={item.monto ?? ""}
-                          onChange={e => updateItem("ingresos", idx, "monto", e.target.value)}
+                          value={item.monto ?? ''}
+                          onChange={(e) => updateItem('ingresos', idx, 'monto', e.target.value)}
                         />
                         {!isClientRow && (
                           <button
                             type="button"
-                            onClick={() => removeItem("ingresos", idx)}
+                            onClick={() => removeItem('ingresos', idx)}
                             className="text-[#ccc] hover:text-red-400 transition-colors flex-shrink-0"
                             title="Eliminar"
                           >
-                            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
-                              <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round"/>
+                            <svg
+                              width="13"
+                              height="13"
+                              viewBox="0 0 16 16"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.7"
+                            >
+                              <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
                             </svg>
                           </button>
                         )}
                       </div>
                     </div>
-                  );
+                  )
                 })}
               </div>
-            ) : isSueldos && sectionView === "tarjetas" ? (
+            ) : isSueldos && sectionView === 'tarjetas' ? (
               /* ── Vista tarjetas para sueldos — con foto de perfil ── */
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                 {items.map((item, idx) => {
-                  const isEmployeeRow = item.empleadoId != null;
-                  const employeeObj   = isEmployeeRow ? lineEmployees.find(e => e.user_id === item.empleadoId) : null;
+                  const isEmployeeRow = item.empleadoId != null
+                  const employeeObj = isEmployeeRow
+                    ? lineEmployees.find((e) => e.user_id === item.empleadoId)
+                    : null
                   return (
                     <div
                       key={item.id ?? idx}
@@ -421,21 +520,29 @@ export default function FinanzasView({ line, companyId, year, month, closed = fa
                         >
                           <Avatar user={employeeObj} size={28} />
                           <span className="flex flex-col min-w-0">
-                            <span className="text-[13px] font-semibold text-[#333] truncate">{item.descripcion}</span>
+                            <span className="text-[13px] font-semibold text-[#333] truncate">
+                              {item.descripcion}
+                            </span>
                             {employeeObj.position?.position_name && (
-                              <span className="text-[11px] text-[#999] truncate">{employeeObj.position.position_name}</span>
+                              <span className="text-[11px] text-[#999] truncate">
+                                {employeeObj.position.position_name}
+                              </span>
                             )}
                           </span>
                         </button>
                       ) : isEmployeeRow ? (
-                        <span className="text-[13px] font-semibold text-[#333] truncate">{item.descripcion || "—"}</span>
+                        <span className="text-[13px] font-semibold text-[#333] truncate">
+                          {item.descripcion || '—'}
+                        </span>
                       ) : (
                         <input
                           type="text"
                           className="input-base !py-1 text-[13px]"
                           placeholder="Descripción"
-                          value={item.descripcion ?? ""}
-                          onChange={e => updateItem("sueldos", idx, "descripcion", e.target.value)}
+                          value={item.descripcion ?? ''}
+                          onChange={(e) =>
+                            updateItem('sueldos', idx, 'descripcion', e.target.value)
+                          }
                         />
                       )}
                       {/* Monto editable */}
@@ -446,34 +553,47 @@ export default function FinanzasView({ line, companyId, year, month, closed = fa
                           step="0.01"
                           className="input-base !py-1 flex-1 min-w-0 text-[13px] font-mono"
                           placeholder="0.00"
-                          value={item.monto ?? ""}
-                          onChange={e => updateItem("sueldos", idx, "monto", e.target.value)}
+                          value={item.monto ?? ''}
+                          onChange={(e) => updateItem('sueldos', idx, 'monto', e.target.value)}
                         />
-                        {!isEmployeeRow && (
-                          <button
-                            type="button"
-                            onClick={() => removeItem("sueldos", idx)}
-                            className="text-[#ccc] hover:text-red-400 transition-colors flex-shrink-0"
-                            title="Eliminar"
+                        {/* Las filas de empleado también se pueden eliminar: un reporte de un mes
+                            ya pasado puede haber heredado por carry-forward a alguien que ya no
+                            estaba (ver utils/pruneCarryForward.js). En el mes en curso, borrar a un
+                            miembro activo es temporal: syncReportClients lo vuelve a sembrar. */}
+                        <button
+                          type="button"
+                          onClick={() => removeItem('sueldos', idx)}
+                          className="text-[#ccc] hover:text-red-400 transition-colors flex-shrink-0"
+                          title="Eliminar"
+                        >
+                          <svg
+                            width="13"
+                            height="13"
+                            viewBox="0 0 16 16"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.7"
                           >
-                            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
-                              <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round"/>
-                            </svg>
-                          </button>
-                        )}
+                            <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
+                          </svg>
+                        </button>
                       </div>
                     </div>
-                  );
+                  )
                 })}
               </div>
             ) : (
               /* ── Vista lista (default para todas las secciones no-ingresos + ingresos en lista) ── */
               <div className="space-y-2">
                 {items.map((item, idx) => {
-                  const isClientRow   = isIngresos  && item.clienteId  != null;
-                  const isEmployeeRow = isSueldos   && item.empleadoId != null;
-                  const clientObj     = isClientRow   ? lineClients.find(c => c.id === item.clienteId)     : null;
-                  const employeeObj   = isEmployeeRow ? lineEmployees.find(e => e.user_id === item.empleadoId) : null;
+                  const isClientRow = isIngresos && item.clienteId != null
+                  const isEmployeeRow = isSueldos && item.empleadoId != null
+                  const clientObj = isClientRow
+                    ? lineClients.find((c) => c.id === item.clienteId)
+                    : null
+                  const employeeObj = isEmployeeRow
+                    ? lineEmployees.find((e) => e.user_id === item.empleadoId)
+                    : null
                   return (
                     <div key={item.id ?? idx} className="flex items-center gap-2">
                       {isClientRow ? (
@@ -506,7 +626,9 @@ export default function FinanzasView({ line, companyId, year, month, closed = fa
                             <span className="flex flex-col min-w-0 leading-tight">
                               <span className="truncate">{item.descripcion}</span>
                               {employeeObj.position?.position_name && (
-                                <span className="text-[11.5px] text-[#999] truncate">{employeeObj.position.position_name}</span>
+                                <span className="text-[11.5px] text-[#999] truncate">
+                                  {employeeObj.position.position_name}
+                                </span>
                               )}
                             </span>
                           </button>
@@ -520,12 +642,16 @@ export default function FinanzasView({ line, companyId, year, month, closed = fa
                           {isFirstGastos && (
                             <select
                               className="input-base !w-36 flex-none text-[14px]"
-                              value={item.clienteId ?? ""}
-                              onChange={e => updateItem(sec.key, idx, "clienteId", e.target.value || null)}
+                              value={item.clienteId ?? ''}
+                              onChange={(e) =>
+                                updateItem(sec.key, idx, 'clienteId', e.target.value || null)
+                              }
                             >
                               <option value="">Sin cliente</option>
-                              {lineClients.map(c => (
-                                <option key={c.id} value={c.id}>{c.name}</option>
+                              {lineClients.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                  {c.name}
+                                </option>
                               ))}
                             </select>
                           )}
@@ -533,8 +659,10 @@ export default function FinanzasView({ line, companyId, year, month, closed = fa
                             type="text"
                             className="input-base flex-1 min-w-0 text-[14px]"
                             placeholder="Justificación"
-                            value={item.descripcion ?? ""}
-                            onChange={e => updateItem(sec.key, idx, "descripcion", e.target.value)}
+                            value={item.descripcion ?? ''}
+                            onChange={(e) =>
+                              updateItem(sec.key, idx, 'descripcion', e.target.value)
+                            }
                           />
                         </>
                       )}
@@ -544,59 +672,98 @@ export default function FinanzasView({ line, companyId, year, month, closed = fa
                         step="0.01"
                         className="input-base !w-28 flex-none text-[14px]"
                         placeholder="0.00"
-                        value={item.monto ?? ""}
-                        onChange={e => updateItem(sec.key, idx, "monto", e.target.value)}
+                        value={item.monto ?? ''}
+                        onChange={(e) => updateItem(sec.key, idx, 'monto', e.target.value)}
                       />
-                      {!isClientRow && !isEmployeeRow && (
+                      {/* Las filas de cliente (Ingresos) NO se borran a mano: se reconcilian
+                          solas contra la cartera. Las de empleado sí — ver comentario en la
+                          vista de tarjetas. */}
+                      {!isClientRow && (
                         <button
                           onClick={() => removeItem(sec.key, idx)}
                           className="text-[#ccc] hover:text-red-400 transition-colors flex-shrink-0"
                           title="Eliminar"
                         >
-                          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7">
-                            <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round"/>
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 16 16"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.7"
+                          >
+                            <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
                           </svg>
                         </button>
                       )}
                     </div>
-                  );
+                  )
                 })}
               </div>
             )}
 
             <button
               onClick={() => {
-                if (sec.key === "ingresos") {
-                  setReport(prev => {
-                    const next = structuredClone(prev);
-                    next.finanzas.ingresos.push({ id: uid(), clienteId: null, descripcion: "", monto: null });
-                    return next;
-                  });
+                if (sec.key === 'ingresos') {
+                  setReport((prev) => {
+                    const next = structuredClone(prev)
+                    next.finanzas.ingresos.push({
+                      id: uid(),
+                      clienteId: null,
+                      descripcion: '',
+                      monto: null,
+                    })
+                    return next
+                  })
                 } else {
-                  addItem(sec.key);
+                  addItem(sec.key)
                 }
               }}
               className="text-[13px] text-[#888] hover:text-[#111] font-medium flex items-center gap-1"
             >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M6 1v10M1 6h10" strokeLinecap="round"/>
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 12 12"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+              >
+                <path d="M6 1v10M1 6h10" strokeLinecap="round" />
               </svg>
               Agregar entrada
             </button>
+            {/* Quitar a alguien de la nómina solo vive en memoria hasta guardar: si se sale
+                o se cambia de mes sin guardar, la fila vuelve. */}
+            {isSueldos && removedSueldo && (
+              <p
+                role="status"
+                className="mt-2 text-[13px] text-[#8a6d00] bg-[#fff8e1] border border-[#f0e0a8] rounded-lg px-3 py-2"
+              >
+                Quitaste a alguien de la nómina. El cambio <strong>no está guardado</strong>: baja
+                hasta el final y pulsa <strong>Guardar finanzas</strong>.
+              </p>
+            )}
             <SectionTotal label={sec.totalLabel} count={items.length} />
           </div>
-        );
+        )
 
-        if (!isFirstGastos) return seccionCard;
+        if (!isFirstGastos) return seccionCard
 
         // ── Consolidado de gastos (solo debajo de Gastos Operativos) ──
-        const { rows: consolidadoRows, totals: consolidadoTotals } = calcConsolidadoConGasto(report, lineClients);
+        const { rows: consolidadoRows, totals: consolidadoTotals } = calcConsolidadoConGasto(
+          report,
+          lineClients,
+        )
         return (
           <React.Fragment key={sec.key}>
             {seccionCard}
             <div className="bg-white rounded-2xl border border-[#e0ddd4] px-5 py-4 space-y-3">
               <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: "#6366F1" }} />
+                <span
+                  className="w-3 h-3 rounded-full flex-shrink-0"
+                  style={{ background: '#6366F1' }}
+                />
                 <p className="text-[15px] font-bold text-[#111]">Consolidado de gastos</p>
               </div>
               {consolidadoRows.length === 0 ? (
@@ -605,33 +772,58 @@ export default function FinanzasView({ line, companyId, year, month, closed = fa
                 <div className="space-y-1">
                   {/* Encabezado */}
                   <div className="grid grid-cols-[1fr_auto_auto_auto] gap-3 items-center pb-1 border-b border-[#f0ede3]">
-                    <span className="text-[11px] font-mono font-bold uppercase tracking-[0.1em] text-[#aaa]">Cliente</span>
-                    <span className="text-[11px] font-mono font-bold uppercase tracking-[0.1em] text-[#10B981] w-24 text-right">Ingresos</span>
-                    <span className="text-[11px] font-mono font-bold uppercase tracking-[0.1em] text-[#F97316] w-24 text-right">G. Oper.</span>
-                    <span className="text-[11px] font-mono font-bold uppercase tracking-[0.1em] text-[#888] w-24 text-right">Diferencia</span>
+                    <span className="text-[11px] font-mono font-bold uppercase tracking-[0.1em] text-[#aaa]">
+                      Cliente
+                    </span>
+                    <span className="text-[11px] font-mono font-bold uppercase tracking-[0.1em] text-[#10B981] w-24 text-right">
+                      Ingresos
+                    </span>
+                    <span className="text-[11px] font-mono font-bold uppercase tracking-[0.1em] text-[#F97316] w-24 text-right">
+                      G. Oper.
+                    </span>
+                    <span className="text-[11px] font-mono font-bold uppercase tracking-[0.1em] text-[#888] w-24 text-right">
+                      Diferencia
+                    </span>
                   </div>
-                  {consolidadoRows.map(fila => {
-                    const pos = fila.diferencia >= 0;
-                    const filaClient = lineClients.find(c => c.id === fila.id);
+                  {consolidadoRows.map((fila) => {
+                    const pos = fila.diferencia >= 0
+                    const filaClient = lineClients.find((c) => c.id === fila.id)
                     return (
-                      <div key={fila.id} className="grid grid-cols-[1fr_auto_auto_auto] gap-3 items-center py-1.5">
+                      <div
+                        key={fila.id}
+                        className="grid grid-cols-[1fr_auto_auto_auto] gap-3 items-center py-1.5"
+                      >
                         <div className="flex items-center gap-2 min-w-0">
-                          <Avatar user={clientAvatar(filaClient ?? { name: fila.nombre, id: fila.id })} size={20} />
+                          <Avatar
+                            user={clientAvatar(filaClient ?? { name: fila.nombre, id: fila.id })}
+                            size={20}
+                          />
                           <span className="text-[14px] text-[#333] truncate">{fila.nombre}</span>
                         </div>
-                        <span className="text-[13px] font-mono text-[#10B981] w-24 text-right tabular-nums">{fmtUSD(fila.ingresos)}</span>
-                        <span className="text-[13px] font-mono text-[#F97316] w-24 text-right tabular-nums">{fmtUSD(fila.gastos)}</span>
-                        <span className={`text-[13px] font-mono font-semibold w-24 text-right tabular-nums ${pos ? "text-green-600" : "text-red-500"}`}>
-                          {pos ? "+" : ""}{fmtUSD(fila.diferencia)}
+                        <span className="text-[13px] font-mono text-[#10B981] w-24 text-right tabular-nums">
+                          {fmtUSD(fila.ingresos)}
+                        </span>
+                        <span className="text-[13px] font-mono text-[#F97316] w-24 text-right tabular-nums">
+                          {fmtUSD(fila.gastos)}
+                        </span>
+                        <span
+                          className={`text-[13px] font-mono font-semibold w-24 text-right tabular-nums ${pos ? 'text-green-600' : 'text-red-500'}`}
+                        >
+                          {pos ? '+' : ''}
+                          {fmtUSD(fila.diferencia)}
                         </span>
                       </div>
-                    );
+                    )
                   })}
                   {/* Fila de totales — solo Total de G. Oper. */}
                   <div className="grid grid-cols-[1fr_auto_auto_auto] gap-3 items-center pt-2 mt-1 border-t border-[#e0ddd4]">
-                    <span className="text-[13px] font-mono font-bold text-[#555]">Total G. Oper.</span>
+                    <span className="text-[13px] font-mono font-bold text-[#555]">
+                      Total G. Oper.
+                    </span>
                     <span className="w-24" />
-                    <span className="text-[13px] font-mono font-bold text-[#F97316] w-24 text-right tabular-nums">{fmtUSD(consolidadoTotals.gastos)}</span>
+                    <span className="text-[13px] font-mono font-bold text-[#F97316] w-24 text-right tabular-nums">
+                      {fmtUSD(consolidadoTotals.gastos)}
+                    </span>
                     <span className="w-24" />
                   </div>
                   <SectionTotal label="marcas" count={consolidadoRows.length} />
@@ -639,11 +831,13 @@ export default function FinanzasView({ line, companyId, year, month, closed = fa
               )}
             </div>
           </React.Fragment>
-        );
+        )
       })}
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-[14px] rounded-xl px-4 py-3">{error}</div>
+        <div className="bg-red-50 border border-red-200 text-red-700 text-[14px] rounded-xl px-4 py-3">
+          {error}
+        </div>
       )}
 
       {/* Guardar */}
@@ -652,19 +846,24 @@ export default function FinanzasView({ line, companyId, year, month, closed = fa
           onClick={handleSave}
           disabled={saving}
           className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-[15px] transition-all ${
-            saved
-              ? "bg-green-500 text-white"
-              : "bg-[#FAB51A] text-[#111] hover:bg-[#e8a315]"
+            saved ? 'bg-green-500 text-white' : 'bg-[#FAB51A] text-[#111] hover:bg-[#e8a315]'
           } disabled:opacity-60`}
         >
           {saving ? (
             <div className="w-4 h-4 border-2 border-[#111] border-t-transparent rounded-full animate-spin" />
           ) : saved ? (
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 8l3 3 7-7" strokeLinecap="round" strokeLinejoin="round"/>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path d="M3 8l3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           ) : null}
-          {saved ? "Guardado" : saving ? "Guardando..." : "Guardar finanzas"}
+          {saved ? 'Guardado' : saving ? 'Guardando...' : 'Guardar finanzas'}
         </button>
       </div>
 
@@ -680,30 +879,35 @@ export default function FinanzasView({ line, companyId, year, month, closed = fa
 
       {/* Modal ficha empleado */}
       {empModal && (
-        <EmployeeInfoModal
-          employee={empModal}
-          line={line}
-          onClose={() => setEmpModal(null)}
-        />
+        <EmployeeInfoModal employee={empModal} line={line} onClose={() => setEmpModal(null)} />
       )}
     </fieldset>
-  );
+  )
 }
 
 function KpiCard({ label, value, color, onClick, title }) {
-  const base = "bg-white rounded-2xl border border-[#e0ddd4] px-4 py-4";
+  const base = 'bg-white rounded-2xl border border-[#e0ddd4] px-4 py-4'
   const interactive = onClick
     ? `${base} cursor-pointer hover:bg-[#fafaf7] hover:border-[#d0ccc0] transition-colors`
-    : base;
+    : base
   return onClick ? (
-    <button type="button" onClick={onClick} title={title} className={`${interactive} text-left w-full`}>
-      <p className="text-[12px] font-mono font-bold uppercase tracking-[0.12em] text-[#aaa] mb-1">{label}</p>
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className={`${interactive} text-left w-full`}
+    >
+      <p className="text-[12px] font-mono font-bold uppercase tracking-[0.12em] text-[#aaa] mb-1">
+        {label}
+      </p>
       <p className={`text-[22px] font-bold tabular-nums ${color}`}>{value}</p>
     </button>
   ) : (
     <div className={base}>
-      <p className="text-[12px] font-mono font-bold uppercase tracking-[0.12em] text-[#aaa] mb-1">{label}</p>
+      <p className="text-[12px] font-mono font-bold uppercase tracking-[0.12em] text-[#aaa] mb-1">
+        {label}
+      </p>
       <p className={`text-[22px] font-bold tabular-nums ${color}`}>{value}</p>
     </div>
-  );
+  )
 }

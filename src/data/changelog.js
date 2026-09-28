@@ -286,6 +286,12 @@ export const CHANGELOG = [
       'La tasa BCV en Finanzas ahora se trae sola de una fuente en vivo en vez de cargarse a mano; se quitó el botón de carga manual de Caja Bs.',
       'En Finanzas → Facturación se agregó una card con el total facturado del mes y su desglose en dólares y bolívares, además de un filtro para ver solo las facturas en una de las dos monedas y una columna que la muestra en cada fila.',
       'Corregido: en Finanzas → Facturación, al elegir "Bs" y esperar a que cargue la tasa, la pantalla se refrescaba sola y el formulario volvía a moneda dólares, perdiendo lo que se había llenado.',
+      'Ahora se puede configurar desde Empresa → Accesos quién puede cambiar los recursos (quién graba) y las piezas de una pauta audiovisual, sin tener que hacerla coordinadora.',
+      'Nairim ya aparece como opción de responsable al registrar un Ad en Campañas.',
+      'En la tabla Base de Tareas, las tareas con más de un cliente ahora muestran el logo de cada marca involucrada, no solo el de la primera.',
+      'Al eliminar un empleado ahora se pregunta si el mes de su salida todavía cuenta en los reportes: elige "sí trabajó este mes" o "sacarlo también de este mes" según cuándo se fue.',
+      'Corregido: en Reportes → Finanzas, si el reporte de un mes ya pasado se abría por primera vez tiempo después, nacía copiando la nómina y los ingresos del mes anterior sin filtrar — aparecían empleados y cuentas que ya se habían dado de baja. Ahora se descartan solos.',
+      'En Reportes → Finanzas ya se puede eliminar a mano una fila de sueldo de un empleado, para corregir la nómina de un mes pasado. Al quitar a alguien aparece un aviso en el mismo bloque recordando que hay que bajar y pulsar "Guardar finanzas" para que el cambio quede.',
     ],
   },
   {

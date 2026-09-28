@@ -15,6 +15,7 @@ import { syncReportClients } from '../../utils/syncReportClients'
 import { clientInMonth } from '../../utils/clientInMonth'
 import { employeeActiveInMonth } from '../../utils/employeeInMonth'
 import { isReportFrozen } from '../../utils/reportPeriod'
+import { pruneCarryForward } from '../../utils/pruneCarryForward'
 import { calcTotal, sumScore, crecimientoCliente } from '../../utils/metricsScore'
 import { buildFixedWeeks, computeProductividad } from '../../utils/fixedTasks'
 import { computePlataformasProductividad } from '../../utils/chequeo'
@@ -187,7 +188,7 @@ export default function OperacionesView({ line, companyId, year, month, closed =
     } else {
       // Inicializar con carry-forward y metas de la línea
       const lineMetas = line?.metas ?? {}
-      const fresh = initMetricReport(
+      const carried = initMetricReport(
         prevRes.data?.data ?? null,
         activeLineClients,
         lineMetas,
@@ -196,6 +197,16 @@ export default function OperacionesView({ line, companyId, year, month, closed =
           metaAuto: isReunionesMetaEra,
         },
       )
+      // El carry-forward hereda sueldos/ingresos del mes anterior tal cual. Si este mes ya pasó
+      // (frozen) no corre syncReportClients, así que hay que podar a quien no corresponde a ESTE
+      // mes antes de mostrarlo/guardarlo — esta vista persiste el `data` completo, nómina
+      // incluida, aunque no la pinte. Ver utils/pruneCarryForward.js.
+      const fresh = pruneCarryForward(carried, {
+        allEmployees,
+        allClients: allLineClients,
+        year,
+        month,
+      })
       synced = frozen ? fresh : syncReportClients(fresh, activeLineClients, lineEmployees)
     }
     // "Realizadas" ya no es editable — siempre refleja el conteo automático (clientes

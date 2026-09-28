@@ -33,4 +33,34 @@ describe('employeeActiveInMonth', () => {
     const e = make({ deleted_at: '2026-06-30T23:59:59Z' })
     expect(employeeActiveInMonth(e, 2026, 7)).toBe(false)
   })
+
+  describe('bandera baja_incluye_mes', () => {
+    it('baja_incluye_mes: true se comporta igual que ausente (el mes de baja cuenta)', () => {
+      const e = make({ deleted_at: '2026-08-04T19:34:04Z', baja_incluye_mes: true })
+      expect(employeeActiveInMonth(e, 2026, 8)).toBe(true)
+    })
+
+    it('baja_incluye_mes: false excluye el mes de la baja', () => {
+      // Caso real: Andrés Barboza, archivado el 4 de agosto tras 3 días trabajados.
+      const e = make({ deleted_at: '2026-08-04T19:34:04Z', baja_incluye_mes: false })
+      expect(employeeActiveInMonth(e, 2026, 8)).toBe(false)
+    })
+
+    it('baja_incluye_mes: false conserva los meses ANTERIORES a la baja', () => {
+      const e = make({ deleted_at: '2026-08-04T19:34:04Z', baja_incluye_mes: false })
+      expect(employeeActiveInMonth(e, 2026, 7)).toBe(true)
+      expect(employeeActiveInMonth(e, 2026, 6)).toBe(true)
+    })
+
+    it('baja_incluye_mes: false excluye también los meses posteriores', () => {
+      const e = make({ deleted_at: '2026-08-04T19:34:04Z', baja_incluye_mes: false })
+      expect(employeeActiveInMonth(e, 2026, 9)).toBe(false)
+    })
+
+    it('la baja el último día del mes con incluye_mes false excluye ese mes', () => {
+      const e = make({ deleted_at: '2026-08-31T13:31:12Z', baja_incluye_mes: false })
+      expect(employeeActiveInMonth(e, 2026, 8)).toBe(false)
+      expect(employeeActiveInMonth(e, 2026, 7)).toBe(true)
+    })
+  })
 })
