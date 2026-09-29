@@ -481,10 +481,17 @@ export function resourceConflicts(candidate, sameDayPautas, usersById, previousR
 
 // ─── Alcance por línea ──────────────────────────────────────────────────────
 
-/** Pautas dentro del alcance de una línea, o todas si `lineId` es null/undefined. */
-export function pautasInScope(pautas, lineId) {
+/**
+ * Pautas dentro del alcance de una línea, o todas si `lineId` es null/undefined.
+ *
+ * `generalLineId` es el id de la línea general "Independientes" (`metric_lines.is_general`):
+ * las pautas sin línea (cuentas con `line_id = null`) se resuelven a ella en lectura, igual
+ * que hace Chequeo con las cuentas (ver `effectiveLineId` en utils/lineFilters.js). El
+ * snapshot guardado en `av_pautas.line_id` no cambia — sigue siendo null.
+ */
+export function pautasInScope(pautas, lineId, generalLineId = null) {
   if (!lineId) return pautas
-  return pautas.filter((p) => p.line_id === lineId)
+  return pautas.filter((p) => (p.line_id ?? generalLineId) === lineId)
 }
 
 /**
@@ -611,22 +618,25 @@ function hasFormatoBreakdown(pauta) {
  *   porGrupo: {av:{totales:number,editadas:number}, foto:{totales:number,editadas:number},
  *              sinDesglose:{totales:number,editadas:number}}}>}
  */
-export function aggregatePiezasByLine(pautas, lines) {
+export function aggregatePiezasByLine(pautas, lines, generalLineId = null) {
   const byLine = new Map()
   const emptyGrupo = () => ({ totales: 0, editadas: 0 })
   pautas.forEach((p) => {
-    if (p.status !== 'realizada' || !p.line_id) return
-    if (!byLine.has(p.line_id)) {
-      const line = lines.find((l) => l.id === p.line_id)
-      byLine.set(p.line_id, {
-        lineId: p.line_id,
+    // Las pautas sin línea cuentan para la línea general "Independientes" (si la empresa la
+    // tiene); sin ella se siguen ignorando, como antes.
+    const lineId = p.line_id ?? generalLineId
+    if (p.status !== 'realizada' || !lineId) return
+    if (!byLine.has(lineId)) {
+      const line = lines.find((l) => l.id === lineId)
+      byLine.set(lineId, {
+        lineId,
         label: line?.name ?? 'Sin línea',
         totales: 0,
         editadas: 0,
         porGrupo: { av: emptyGrupo(), foto: emptyGrupo(), sinDesglose: emptyGrupo() },
       })
     }
-    const entry = byLine.get(p.line_id)
+    const entry = byLine.get(lineId)
     entry.totales += Number(p.piezas_totales) || 0
     entry.editadas += Number(p.piezas_editadas) || 0
 
@@ -1142,7 +1152,13 @@ function pautaLine(pauta, usersById) {
  * @param {Date} today
  * @returns {string}
  */
-export function generateAgendaText(pautas, lines, usersById, today = new Date()) {
+export function generateAgendaText(
+  pautas,
+  lines,
+  usersById,
+  today = new Date(),
+  generalLineId = null,
+) {
   const todayKey = isoDateKey(today)
   const programadas = pautas.filter((p) => p.status === 'programada')
   const dated = programadas.filter((p) => p.pauta_date && p.pauta_date >= todayKey)
@@ -1171,8 +1187,9 @@ export function generateAgendaText(pautas, lines, usersById, today = new Date())
 
   out += '⏩ Pautas por Team\n'
   lines.forEach((l) => {
-    const agendadas = dated.filter((p) => p.line_id === l.id).length
-    const porAgendar = undated.filter((p) => p.line_id === l.id).length
+    // Fallback a la línea general para las pautas de cuentas sin línea (ver pautasInScope).
+    const agendadas = dated.filter((p) => (p.line_id ?? generalLineId) === l.id).length
+    const porAgendar = undated.filter((p) => (p.line_id ?? generalLineId) === l.id).length
     out += `🔵 - ${l.name.toUpperCase()}: ${agendadas}${porAgendar ? ` Y ${porAgendar} P.A` : ''}\n`
   })
   out += `⏩ TOTAL DE PAUTAS: ${dated.length + undated.length}\n`

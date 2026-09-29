@@ -2,8 +2,14 @@ import { generateAgendaText } from '../../utils/audiovisual'
 import WhatsAppTextPanel from './WhatsAppTextPanel'
 
 /** Genera el texto de agenda semanal de pautas programadas, listo para copiar a WhatsApp. */
-export default function WhatsAppAgendaModal({ pautas, lines, usersById, onClose }) {
-  const text = generateAgendaText(pautas, lines, usersById)
+export default function WhatsAppAgendaModal({
+  pautas,
+  lines,
+  usersById,
+  onClose,
+  generalLineId = null,
+}) {
+  const text = generateAgendaText(pautas, lines, usersById, new Date(), generalLineId)
 
   return (
     <div

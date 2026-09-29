@@ -14,6 +14,8 @@
  * `periodEndDate`/`checkReferenceDate`).
  */
 
+import { effectiveLineId } from './lineFilters'
+
 /** Los 3 tipos de contenido que se registran por cada red social del cliente. */
 export const CONTENT_TYPES = ['publicaciones', 'reels', 'highlights']
 
@@ -172,21 +174,10 @@ export function formatCheckDate(dateISO) {
 // ─── Cuentas sin línea → línea general "Independientes" (metric_lines.is_general) ──────
 
 /**
- * Id de línea "efectivo" de una cuenta para el módulo Chequeo: las cuentas sin línea
- * asignada (`line_id = null`, p. ej. tras borrar su línea — la FK es `ON DELETE SET
- * NULL`) cuentan como pertenecientes a la línea general "Independientes", igual que ya
- * pasa en Tareas (ver `crossLineUserIds`/`withDerivedGeneralMembers` en
- * utils/lineMembers.js, mismo concepto aplicado a empleados en vez de a cuentas).
- * Se calcula en lectura y también al guardar un chequeo, para que la fila de
- * `publication_checks` no quede con `line_id = null` (rompería las policies de
- * escritura, que exigen pertenencia a una línea concreta).
- * @param {object|null} client        cuenta (metric_clients), con line_id
- * @param {string|null} generalLineId id de la línea is_general de la empresa (o null si no existe)
- * @returns {string|null}
+ * `effectiveLineId` vive ahora en utils/lineFilters.js (la usan también Pautas y Chequeo).
+ * Se re-exporta desde aquí para no romper los imports existentes de este módulo.
  */
-export function effectiveLineId(client, generalLineId) {
-  return client?.line_id ?? generalLineId ?? null
-}
+export { effectiveLineId }
 
 /**
  * Cuentas que pertenecen a una línea, incluyendo en la línea general las que no tienen

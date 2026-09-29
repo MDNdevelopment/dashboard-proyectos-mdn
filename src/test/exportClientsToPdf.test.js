@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { buildClientGroups, computeClientPdfLayout, wrapToWidth } from '../utils/exportClientsToPdf'
+import {
+  buildClientColumns,
+  computeClientSheetLayout,
+  wrapToWidth,
+} from '../utils/exportClientsToPdf'
 
 const client = (overrides) => ({
   id: overrides.id ?? 'c',
@@ -16,8 +20,8 @@ const employee = (overrides) => ({
   ...overrides,
 })
 
-describe('buildClientGroups', () => {
-  it('agrupa clientes por social_manager_id y resuelve el nombre desde employees', () => {
+describe('buildClientColumns', () => {
+  it('agrupa clientes por social_manager_id y resuelve el nombre (primer nombre) desde employees', () => {
     const employees = [
       employee({ user_id: 'u1', first_name: 'Daniellys', last_name: 'Pérez' }),
       employee({ user_id: 'u2', first_name: 'Bianca', last_name: 'Gómez' }),
@@ -27,10 +31,12 @@ describe('buildClientGroups', () => {
       client({ id: '2', name: 'SuperFina', social_manager_id: 'u1' }),
       client({ id: '3', name: 'Gelarttesano', social_manager_id: 'u2' }),
     ]
-    const groups = buildClientGroups(clients, employees)
-    expect(groups).toEqual([
-      { manager: 'Bianca Gómez', clients: ['Gelarttesano'] },
-      { manager: 'Daniellys Pérez', clients: ['ENCCO', 'SuperFina'] },
+    // Sin líneas, todos son "sin línea" y caen juntos en la única columna.
+    expect(buildClientColumns(clients, employees)).toEqual([
+      [
+        { manager: 'Bianca', clients: ['Gelarttesano'] },
+        { manager: 'Daniellys', clients: ['ENCCO', 'SuperFina'] },
+      ],
     ])
   })
 
@@ -38,10 +44,11 @@ describe('buildClientGroups', () => {
     const employees = [employee({ user_id: 'u1', first_name: 'Ana', last_name: 'Ruiz' })]
     const clients = [
       client({ id: '1', name: 'Activo', social_manager_id: 'u1' }),
-      client({ id: '2', name: 'Archivado', social_manager_id: 'u1', deleted_at: '2026-01-01T00:00:00Z' }),
+      client({ id: '2', name: 'Archivado', social_manager_id: 'u1', deleted_at: '2026-01-01' }),
     ]
-    const groups = buildClientGroups(clients, employees)
-    expect(groups).toEqual([{ manager: 'Ana Ruiz', clients: ['Activo'] }])
+    expect(buildClientColumns(clients, employees)).toEqual([
+      [{ manager: 'Ana', clients: ['Activo'] }],
+    ])
   })
 
   it('clientes sin social asignado caen en "Sin social asignado" al final', () => {
@@ -50,14 +57,15 @@ describe('buildClientGroups', () => {
       client({ id: '1', name: 'ConSocial', social_manager_id: 'u1' }),
       client({ id: '2', name: 'SinSocial', social_manager_id: null }),
     ]
-    const groups = buildClientGroups(clients, employees)
-    expect(groups).toEqual([
-      { manager: 'Ana Ruiz', clients: ['ConSocial'] },
-      { manager: 'Sin social asignado', clients: ['SinSocial'] },
+    expect(buildClientColumns(clients, employees)).toEqual([
+      [
+        { manager: 'Ana', clients: ['ConSocial'] },
+        { manager: 'Sin social asignado', clients: ['SinSocial'] },
+      ],
     ])
   })
 
-  it('sin líneas, ordena alfabéticamente las cuentas dentro de cada grupo y los grupos entre sí', () => {
+  it('ordena alfabéticamente las cuentas dentro de cada grupo y los grupos entre sí', () => {
     const employees = [
       employee({ user_id: 'u1', first_name: 'Zulay', last_name: 'Soto' }),
       employee({ user_id: 'u2', first_name: 'Ana', last_name: 'Ruiz' }),
@@ -67,40 +75,47 @@ describe('buildClientGroups', () => {
       client({ id: '2', name: 'Blu', social_manager_id: 'u1' }),
       client({ id: '3', name: 'Push', social_manager_id: 'u2' }),
     ]
-    const groups = buildClientGroups(clients, employees)
-    expect(groups).toEqual([
-      { manager: 'Ana Ruiz', clients: ['Push'] },
-      { manager: 'Zulay Soto', clients: ['Blu', 'Zurca'] },
+    expect(buildClientColumns(clients, employees)).toEqual([
+      [
+        { manager: 'Ana', clients: ['Push'] },
+        { manager: 'Zulay', clients: ['Blu', 'Zurca'] },
+      ],
     ])
   })
 
-  it('pone primero a la jefa de línea y debajo al resto de socials de esa línea', () => {
+  it('una columna por línea, con la jefa de línea PRIMERA y el resto alfabético debajo', () => {
     const employees = [
-      employee({ user_id: 'u1', first_name: 'Bianca', last_name: 'Gómez' }), // jefa
-      employee({ user_id: 'u2', first_name: 'Ana', last_name: 'Ruiz' }), // otra social de la misma línea
-      employee({ user_id: 'u3', first_name: 'Zulay', last_name: 'Soto' }), // social de otra línea
+      employee({ user_id: 'u1', first_name: 'Bianca' }),
+      employee({ user_id: 'u2', first_name: 'Zulay' }),
+      employee({ user_id: 'u3', first_name: 'Ana' }),
+      employee({ user_id: 'u4', first_name: 'Georgina' }),
     ]
     const clients = [
       client({ id: '1', name: 'Gelarttesano', social_manager_id: 'u1' }),
-      client({ id: '2', name: 'Blu', social_manager_id: 'u2' }),
-      client({ id: '3', name: 'Zurca', social_manager_id: 'u3' }),
+      client({ id: '2', name: 'Zurca', social_manager_id: 'u2' }),
+      client({ id: '3', name: 'Blu', social_manager_id: 'u3' }),
+      client({ id: '4', name: 'ALSA', social_manager_id: 'u4' }),
     ]
     const lines = [
-      { id: 'l1', sort_order: 1, lead_user_id: 'u1', member_user_ids: ['u1', 'u2'] },
-      { id: 'l2', sort_order: 2, lead_user_id: 'u3', member_user_ids: ['u3'] },
+      // Bianca es la jefa de l1 aunque alfabéticamente iría después de Ana.
+      { id: 'l1', sort_order: 2, lead_user_id: 'u1', member_user_ids: ['u1', 'u2', 'u3'] },
+      { id: 'l2', sort_order: 1, lead_user_id: 'u4', member_user_ids: ['u4'] },
     ]
-    const groups = buildClientGroups(clients, employees, lines)
-    expect(groups).toEqual([
-      { manager: 'Bianca Gómez', clients: ['Gelarttesano'] },
-      { manager: 'Ana Ruiz', clients: ['Blu'] },
-      { manager: 'Zulay Soto', clients: ['Zurca'] },
+    expect(buildClientColumns(clients, employees, lines)).toEqual([
+      // sort_order manda el orden de las columnas: l2 (1) antes que l1 (2).
+      [{ manager: 'Georgina', clients: ['ALSA'] }],
+      [
+        { manager: 'Bianca', clients: ['Gelarttesano'] },
+        { manager: 'Ana', clients: ['Blu'] },
+        { manager: 'Zulay', clients: ['Zurca'] },
+      ],
     ])
   })
 
-  it('socials sin línea asociada quedan al final, antes de "Sin social asignado"', () => {
+  it('socials sin línea y "Sin social asignado" se agregan al final de la última columna', () => {
     const employees = [
-      employee({ user_id: 'u1', first_name: 'Bianca', last_name: 'Gómez' }),
-      employee({ user_id: 'u2', first_name: 'Suelta', last_name: 'Zzz' }),
+      employee({ user_id: 'u1', first_name: 'Bianca' }),
+      employee({ user_id: 'u2', first_name: 'Suelta' }),
     ]
     const clients = [
       client({ id: '1', name: 'Gelarttesano', social_manager_id: 'u1' }),
@@ -108,16 +123,47 @@ describe('buildClientGroups', () => {
       client({ id: '3', name: 'HuérfanoCliente', social_manager_id: null }),
     ]
     const lines = [{ id: 'l1', sort_order: 1, lead_user_id: 'u1', member_user_ids: ['u1'] }]
-    const groups = buildClientGroups(clients, employees, lines)
-    expect(groups).toEqual([
-      { manager: 'Bianca Gómez', clients: ['Gelarttesano'] },
-      { manager: 'Suelta Zzz', clients: ['Independiente'] },
-      { manager: 'Sin social asignado', clients: ['HuérfanoCliente'] },
+    expect(buildClientColumns(clients, employees, lines)).toEqual([
+      [
+        { manager: 'Bianca', clients: ['Gelarttesano'] },
+        { manager: 'Suelta', clients: ['Independiente'] },
+        { manager: 'Sin social asignado', clients: ['HuérfanoCliente'] },
+      ],
     ])
+  })
+
+  it('una línea sin ningún social con cuentas no genera columna', () => {
+    const employees = [employee({ user_id: 'u1', first_name: 'Bianca' })]
+    const clients = [client({ id: '1', name: 'Gelarttesano', social_manager_id: 'u1' })]
+    const lines = [
+      { id: 'l-vacia', sort_order: 1, lead_user_id: 'u9', member_user_ids: ['u9'] },
+      { id: 'l1', sort_order: 2, lead_user_id: 'u1', member_user_ids: ['u1'] },
+    ]
+    expect(buildClientColumns(clients, employees, lines)).toHaveLength(1)
+  })
+
+  it('marca "(de vacaciones)" al social que hoy está de vacaciones, y solo a ese', () => {
+    const employees = [
+      employee({ user_id: 'u1', first_name: 'Daniellys' }),
+      employee({ user_id: 'u2', first_name: 'Bianca' }),
+    ]
+    const clients = [
+      client({ id: '1', name: 'ENCCO', social_manager_id: 'u1' }),
+      client({ id: '2', name: 'Gelarttesano', social_manager_id: 'u2' }),
+    ]
+    const [column] = buildClientColumns(clients, employees, [], ['u1'])
+    expect(column.map((g) => g.manager)).toEqual(['Bianca', 'Daniellys (de vacaciones)'])
+  })
+
+  it('sin vacaciones, ningún nombre lleva el sufijo', () => {
+    const employees = [employee({ user_id: 'u1', first_name: 'Daniellys' })]
+    const clients = [client({ id: '1', name: 'ENCCO', social_manager_id: 'u1' })]
+    const [column] = buildClientColumns(clients, employees)
+    expect(column[0].manager).toBe('Daniellys')
   })
 })
 
-// ── computeClientPdfLayout / wrapToWidth ──────────────────────────────────────
+// ── computeClientSheetLayout / wrapToWidth ────────────────────────────────────
 // Medición determinista sin jsPDF: cada caracter mide 6pt, sin importar el
 // fontSize (alcanza para verificar que nada excede el ancho de columna).
 const measureText = (text) => text.length * 6
@@ -125,23 +171,17 @@ const measureText = (text) => text.length * 6
 const LAYOUT_OPTS = {
   pageWidth: 595,
   pageHeight: 842,
-  marginX: 36,
-  marginTop: 70,
-  marginBottom: 36,
-  columns: 3,
-  gap: 16,
-  lineHeight: 14,
-  groupGap: 10,
-  headerFontSize: 11,
-  bodyFontSize: 10.5,
+  marginX: 28,
+  marginTop: 56,
+  marginBottom: 28,
+  columns: 4,
+  rowHeight: 17,
+  cellPadX: 4,
+  headerFontSize: 8.5,
+  bodyFontSize: 8.5,
 }
-const COL_WIDTH =
-  (LAYOUT_OPTS.pageWidth - LAYOUT_OPTS.marginX * 2 - LAYOUT_OPTS.gap * (LAYOUT_OPTS.columns - 1)) /
-  LAYOUT_OPTS.columns
-
-function colXFor(col) {
-  return LAYOUT_OPTS.marginX + col * (COL_WIDTH + LAYOUT_OPTS.gap)
-}
+const COL_WIDTH = (LAYOUT_OPTS.pageWidth - LAYOUT_OPTS.marginX * 2) / LAYOUT_OPTS.columns
+const TEXT_WIDTH = COL_WIDTH - LAYOUT_OPTS.cellPadX * 2
 
 describe('wrapToWidth', () => {
   it('no envuelve texto que ya cabe', () => {
@@ -161,62 +201,115 @@ describe('wrapToWidth', () => {
   })
 })
 
-describe('computeClientPdfLayout', () => {
-  it('ningún texto excede el ancho de su columna (sin solapamiento horizontal)', () => {
-    const groups = [
-      { manager: 'Maria Antonella Romero', clients: ['Cow Rodizio', 'DomiSalud', 'Udimed'] },
-      { manager: 'Bianca Rodríguez', clients: ['Agrolago', 'Fein Kaffee', 'Gelarttesano'] },
-      { manager: 'Maria Almarza', clients: ['Maderas Adidas', 'Minipets'] },
+describe('computeClientSheetLayout', () => {
+  const columnOf = (manager, n, prefix = 'C') => [
+    { manager, clients: Array.from({ length: n }, (_, i) => `${prefix}${i}`) },
+  ]
+
+  it('ningún texto excede el ancho útil de su celda (sin invadir la columna vecina)', () => {
+    const columns = [
+      [{ manager: 'Georgina', clients: ['Cow Rodizio', 'DomiSalud', 'Udimed'] }],
+      [{ manager: 'Bianca', clients: ['Agrolago', 'Fein Kaffee', 'Gelarttesano'] }],
+      [{ manager: 'Maria', clients: ['Maderas Adidas', 'Minipets'] }],
     ]
-    const { ops } = computeClientPdfLayout(groups, LAYOUT_OPTS, measureText)
-    expect(ops.length).toBeGreaterThan(0)
-    ops.forEach((op) => {
-      const rightEdge = colXFor(op.col) + COL_WIDTH
-      const textWidth = measureText(op.text, op.fontSize)
-      expect(op.x + textWidth).toBeLessThanOrEqual(rightEdge + 0.001)
+    const { cells } = computeClientSheetLayout(columns, LAYOUT_OPTS, measureText)
+    expect(cells.length).toBeGreaterThan(0)
+    cells.forEach((cell) => {
+      expect(cell.indent + measureText(cell.text, cell.fontSize)).toBeLessThanOrEqual(
+        TEXT_WIDTH + 0.001,
+      )
     })
   })
 
-  it('un nombre de social largo se envuelve en varias líneas dentro de su columna', () => {
-    const groups = [{ manager: 'Maria Antonella Romero Fernandez', clients: ['Cow Rodizio'] }]
-    const { ops } = computeClientPdfLayout(groups, LAYOUT_OPTS, measureText)
-    const headerOps = ops.filter((op) => op.bold)
-    expect(headerOps.length).toBeGreaterThan(1)
-    for (let i = 1; i < headerOps.length; i++) {
-      expect(headerOps[i].y).toBeGreaterThan(headerOps[i - 1].y)
-    }
+  it('cada línea ocupa su propia columna, en el orden recibido', () => {
+    const columns = [
+      [{ manager: 'Georgina', clients: ['ALSA'] }],
+      [{ manager: 'Daniellys', clients: ['ENCCO'] }],
+      [{ manager: 'Sabrina', clients: ['TurboPre'] }],
+      [{ manager: 'Bianca', clients: ['Agrolago'] }],
+    ]
+    const { cells } = computeClientSheetLayout(columns, LAYOUT_OPTS, measureText)
+    const headers = cells.filter((c) => c.bold)
+    expect(headers.map((h) => [h.text, h.col, h.row, h.page])).toEqual([
+      ['GEORGINA', 0, 0, 0],
+      ['DANIELLYS', 1, 0, 0],
+      ['SABRINA', 2, 0, 0],
+      ['BIANCA', 3, 0, 0],
+    ])
   })
 
-  it('usa 3 columnas: todas las x pertenecen a las 3 posiciones esperadas', () => {
-    const groups = [
-      { manager: 'Social Uno', clients: Array.from({ length: 30 }, (_, i) => `Cliente ${i + 1}`) },
-      { manager: 'Social Dos', clients: Array.from({ length: 30 }, (_, i) => `Cliente ${i + 1}`) },
-    ]
-    const { ops } = computeClientPdfLayout(groups, LAYOUT_OPTS, measureText)
-    const usedCols = new Set(ops.map((op) => op.col))
-    expect(usedCols.size).toBeGreaterThan(1)
-    ops.forEach((op) => {
-      expect(op.col).toBeGreaterThanOrEqual(0)
-      expect(op.col).toBeLessThan(3)
+  it('nunca se sale de la rejilla de la página', () => {
+    const columns = [columnOf('Uno', 30), columnOf('Dos', 30)]
+    const { cells, rows } = computeClientSheetLayout(columns, LAYOUT_OPTS, measureText)
+    cells.forEach((cell) => {
+      expect(cell.col).toBeGreaterThanOrEqual(0)
+      expect(cell.col).toBeLessThan(4)
+      expect(cell.row).toBeGreaterThanOrEqual(0)
+      expect(cell.row).toBeLessThan(rows)
     })
   })
 
-  it('sangría francesa: la segunda línea de una cuenta envuelta arranca más a la derecha que la primera', () => {
-    const groups = [{ manager: 'Social', clients: ['Nombre De Cuenta Muy Largo Que No Cabe'] }]
-    const { ops } = computeClientPdfLayout(groups, LAYOUT_OPTS, measureText)
-    const bodyOps = ops.filter((op) => !op.bold)
-    expect(bodyOps.length).toBeGreaterThan(1)
-    expect(bodyOps[1].x).toBeGreaterThan(bodyOps[0].x)
+  it('el encabezado de cada social va centrado y en negritas; las cuentas, a la izquierda', () => {
+    const columns = [[{ manager: 'Georgina', clients: ['ALSA', 'Smashack'] }]]
+    const { cells } = computeClientSheetLayout(columns, LAYOUT_OPTS, measureText)
+    expect(cells[0]).toMatchObject({ text: 'GEORGINA', bold: true, align: 'center', row: 0 })
+    expect(cells[1]).toMatchObject({ text: '1. ALSA', bold: false, align: 'left', row: 1 })
+    expect(cells[2]).toMatchObject({ text: '2. Smashack', row: 2 })
   })
 
-  it('salta de columna y de página cuando el contenido excede el alto útil', () => {
-    const groups = Array.from({ length: 20 }, (_, gi) => ({
-      manager: `Social ${gi + 1}`,
-      clients: Array.from({ length: 15 }, (_, i) => `Cliente ${gi}-${i}`),
-    }))
-    const { ops, pageCount } = computeClientPdfLayout(groups, LAYOUT_OPTS, measureText)
-    expect(pageCount).toBeGreaterThan(1)
-    const usedPages = new Set(ops.map((op) => op.page))
-    expect(usedPages.size).toBe(pageCount)
+  it('deja una fila en blanco entre grupos de la misma columna', () => {
+    const columns = [
+      [
+        { manager: 'Georgina', clients: ['ALSA'] },
+        { manager: 'Madelaine', clients: ['PLI'] },
+      ],
+    ]
+    const { cells } = computeClientSheetLayout(columns, LAYOUT_OPTS, measureText)
+    // GEORGINA fila 0, ALSA fila 1, fila 2 en blanco, MADELAINE fila 3.
+    expect(cells.find((c) => c.text === 'MADELAINE')).toMatchObject({ col: 0, row: 3 })
+    expect(cells.some((c) => c.col === 0 && c.row === 2)).toBe(false)
+  })
+
+  it('la numeración es continua dentro de la columna y reinicia en la siguiente', () => {
+    const columns = [
+      [
+        { manager: 'Georgina', clients: ['ALSA', 'Smashack'] },
+        { manager: 'Madelaine', clients: ['PLI'] },
+      ],
+      [{ manager: 'Bianca', clients: ['Agrolago'] }],
+    ]
+    const { cells } = computeClientSheetLayout(columns, LAYOUT_OPTS, measureText)
+    const body = cells.filter((c) => !c.bold)
+    expect(body.map((c) => c.text)).toEqual(['1. ALSA', '2. Smashack', '3. PLI', '1. Agrolago'])
+  })
+
+  it('sangría francesa: la segunda línea de una cuenta envuelta se indenta y ocupa su propia fila', () => {
+    const columns = [[{ manager: 'Social', clients: ['Nombre De Cuenta Muy Largo Que No Cabe'] }]]
+    const { cells } = computeClientSheetLayout(columns, LAYOUT_OPTS, measureText)
+    const body = cells.filter((c) => !c.bold)
+    expect(body.length).toBeGreaterThan(1)
+    expect(body[1].indent).toBeGreaterThan(body[0].indent)
+    expect(body[1].row).toBe(body[0].row + 1)
+  })
+
+  it('una columna que no cabe en la página continúa en LA MISMA columna de la página siguiente', () => {
+    const columns = [columnOf('Larga', 80), [{ manager: 'Corta', clients: ['Uno'] }]]
+    const { cells, pageCount } = computeClientSheetLayout(columns, LAYOUT_OPTS, measureText)
+    expect(pageCount).toBe(2)
+    // Todo lo de la línea larga vive en la columna 0, repartido en 2 páginas.
+    const larga = cells.filter((c) => c.col === 0)
+    expect(new Set(larga.map((c) => c.page))).toEqual(new Set([0, 1]))
+    // La línea vecina nunca se ve invadida: sigue entera en la página 0.
+    cells.filter((c) => c.col === 1).forEach((c) => expect(c.page).toBe(0))
+  })
+
+  it('con más líneas que columnas por página, las que sobran pasan a la página siguiente', () => {
+    const columns = Array.from({ length: 6 }, (_, i) => [
+      { manager: `Social${i}`, clients: ['Uno'] },
+    ])
+    const { cells, pageCount } = computeClientSheetLayout(columns, LAYOUT_OPTS, measureText)
+    expect(pageCount).toBe(2)
+    expect(cells.find((c) => c.text === 'SOCIAL4')).toMatchObject({ page: 1, col: 0, row: 0 })
+    expect(cells.find((c) => c.text === 'SOCIAL5')).toMatchObject({ page: 1, col: 1, row: 0 })
   })
 })

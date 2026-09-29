@@ -312,6 +312,23 @@ describe('pautasInScope', () => {
   it('con lineId, filtra por línea', () => {
     expect(pautasInScope(pautas, 'l1').map((p) => p.id)).toEqual(['p1'])
   })
+
+  describe('línea general "Independientes" (cuentas sin línea)', () => {
+    const conYSin = [pauta({ id: 'p1', line_id: 'l1' }), pauta({ id: 'p-sin', line_id: null })]
+
+    it('resuelve las pautas sin línea a la línea general', () => {
+      expect(pautasInScope(conYSin, 'l-gen', 'l-gen').map((p) => p.id)).toEqual(['p-sin'])
+    })
+
+    it('una línea real no absorbe las pautas sin línea', () => {
+      expect(pautasInScope(conYSin, 'l1', 'l-gen').map((p) => p.id)).toEqual(['p1'])
+    })
+
+    it('sin generalLineId, las pautas sin línea no caen en ninguna línea (comportamiento previo)', () => {
+      expect(pautasInScope(conYSin, 'l1')).toHaveLength(1)
+      expect(pautasInScope(conYSin, null)).toHaveLength(2)
+    })
+  })
 })
 
 describe('pautasInMonth', () => {
@@ -565,6 +582,29 @@ describe('aggregatePiezasByLine', () => {
       foto: { totales: 40, editadas: 32 },
       sinDesglose: { totales: 0, editadas: 0 },
     })
+  })
+
+  it('con generalLineId, las pautas sin línea suman a "Independientes"', () => {
+    const pautas = [
+      pauta({
+        id: 'p-sin',
+        line_id: null,
+        status: 'realizada',
+        piezas_totales: 6,
+        piezas_editadas: 5,
+      }),
+    ]
+    const withGeneral = [...lines, { id: 'l-gen', name: 'Independientes' }]
+    expect(aggregatePiezasByLine(pautas, withGeneral, 'l-gen')).toContainEqual(
+      expect.objectContaining({
+        lineId: 'l-gen',
+        label: 'Independientes',
+        totales: 6,
+        editadas: 5,
+      }),
+    )
+    // Sin generalLineId se siguen ignorando, como antes.
+    expect(aggregatePiezasByLine(pautas, lines)).toEqual([])
   })
 })
 

@@ -14,6 +14,7 @@ import {
   externalUsersForRole,
   canEditPiezasForPauta,
 } from '../../utils/audiovisual'
+import { effectiveLineId } from '../../utils/lineFilters'
 import AvCalendar from './AvCalendar'
 import AvPhaseTable from './AvPhaseTable'
 import AvAnalytics from './AvAnalytics'
@@ -35,7 +36,16 @@ function currentYearMonth() {
  * sub-sección Redes-Diseño); gestiona su propio estado de pautas + empleados + realtime,
  * igual que ReunionesPage.
  */
-export default function AudiovisualView({ companyId, userProfile, can, lines, clients }) {
+export default function AudiovisualView({
+  companyId,
+  userProfile,
+  can,
+  lines,
+  clients,
+  // Línea general "Independientes" (metric_lines.is_general), cargada aparte de `lines` por
+  // PautasPage: agrupa las cuentas con `line_id = null`. Ver `effectiveLineId`/`pautasInScope`.
+  generalLine = null,
+}) {
   const canManage = can('audiovisual.manage')
   const canCoordinate = can('audiovisual.coordina')
   const canGestionPautas = can('audiovisual.pautas.gestion')
@@ -228,11 +238,17 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
     return { error: null }
   }
 
-  const scopedPautas = pautasInScope(pautas, scopeLine)
+  const generalLineId = generalLine?.id ?? null
+  // Para los resúmenes por línea (analítica y agenda de WhatsApp): las líneas reales más
+  // "Independientes" al final, de modo que las pautas de cuentas sin línea tengan dónde caer.
+  const linesWithGeneral = generalLine ? [...lines, generalLine] : lines
+  const scopedPautas = pautasInScope(pautas, scopeLine, generalLineId)
   // Sin las borradas: el calendario y el generador de agenda de WhatsApp no deben pintar ni
   // listar una pauta que está en la papelera.
   const visibleScopedPautas = scopedPautas.filter((p) => !p.deleted_at)
-  const scopedClients = clients.filter((c) => !scopeLine || c.line_id === scopeLine)
+  const scopedClients = clients.filter(
+    (c) => !scopeLine || effectiveLineId(c, generalLineId) === scopeLine,
+  )
   const audiovisualUsers = employees.filter((u) => u.department_id === 2 && !u.deleted_at)
   // Recursos externos (no son empleados, ver ARQUITECTURA.md): se modelan como
   // pseudo-usuarios (`ext:<uuid>`) e inyectan en los mismos pickers/usersById que los
@@ -339,6 +355,20 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
                 {l.name}
               </button>
             ))}
+            {/* "Independientes": cuentas sin línea asignada (metric_lines.is_general). Va
+                al final, después de las líneas reales, como en Chequeo y CNP. */}
+            {generalLine && (
+              <button
+                onClick={() => setScopeLineId(generalLine.id)}
+                className={`px-3 py-1 rounded-full text-[14.5px] font-semibold transition-all ${
+                  scopeLineId === generalLine.id
+                    ? 'bg-[#FFB800] text-[#111]'
+                    : 'bg-white border border-[#e0ddd4] text-[#555] hover:border-[#FFB800] hover:text-[#111]'
+                }`}
+              >
+                {generalLine.name}
+              </button>
+            )}
           </>
         )}
         <button
@@ -419,7 +449,8 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
 
       <AvAnalytics
         pautas={visiblePautas}
-        lines={lines}
+        lines={linesWithGeneral}
+        generalLineId={generalLineId}
         usersById={usersById}
         piezasByPauta={piezasByPautaMap}
       />
@@ -462,7 +493,8 @@ export default function AudiovisualView({ companyId, userProfile, can, lines, cl
       {waOpen && (
         <WhatsAppAgendaModal
           pautas={visibleScopedPautas}
-          lines={lines}
+          lines={linesWithGeneral}
+          generalLineId={generalLineId}
           usersById={usersById}
           onClose={() => setWaOpen(false)}
         />

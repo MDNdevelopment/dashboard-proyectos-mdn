@@ -12,6 +12,7 @@ import {
 import { MONTHS } from '../metricas/constants'
 import { clientInMonth } from '../../utils/clientInMonth'
 import { exportClientsToPdf } from '../../utils/exportClientsToPdf'
+import { fetchUserIdsOnVacationToday } from '../../lib/vacations'
 import ClientModal from './ClientModal'
 import ConfirmDeleteDialog from '../common/ConfirmDeleteDialog'
 import DateInput from '../common/DateInput'
@@ -139,7 +140,9 @@ export default function ClientsView({ companyId, canManage = true }) {
   async function handleExportPdf() {
     setGeneratingPdf(true)
     try {
-      await exportClientsToPdf({ clients, employees, lines })
+      // Quién está de vacaciones hoy: se marca en el encabezado de la hoja.
+      const onVacationIds = await fetchUserIdsOnVacationToday()
+      await exportClientsToPdf({ clients, employees, lines, onVacationIds })
     } finally {
       setGeneratingPdf(false)
     }

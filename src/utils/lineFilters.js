@@ -5,6 +5,25 @@
  */
 
 /**
+ * Id de línea "efectivo" de una cuenta: las cuentas sin línea asignada (`line_id = null`,
+ * p. ej. tras borrar su línea — la FK es `ON DELETE SET NULL`) cuentan como pertenecientes
+ * a la línea general "Independientes", igual que ya pasa con los empleados sin línea (ver
+ * `crossLineUserIds` más abajo y `withDerivedGeneralMembers` en utils/lineMembers.js, mismo
+ * concepto aplicado a empleados en vez de a cuentas).
+ *
+ * La usan Chequeo (`clientsForLine` en utils/chequeo.js, que la re-exporta; también al
+ * guardar, para que la fila de `publication_checks` no quede con `line_id = null`) y Pautas
+ * (alcance del calendario por línea, solo en lectura).
+ *
+ * @param {object|null} client        cuenta (metric_clients), con line_id
+ * @param {string|null} generalLineId id de la línea is_general de la empresa (o null si no existe)
+ * @returns {string|null}
+ */
+export function effectiveLineId(client, generalLineId) {
+  return client?.line_id ?? generalLineId ?? null
+}
+
+/**
  * Devuelve los usuarios que son miembros del team dado.
  * Si se indica `currentUserId`, ese usuario se incluye siempre aunque no sea miembro
  * (evita romper ediciones de tareas con responsable de otra línea).

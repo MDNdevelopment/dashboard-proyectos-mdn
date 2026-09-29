@@ -41,3 +41,20 @@ export async function fetchVacationsByYear(userIds, year) {
   if (error) throw error
   return data ?? []
 }
+
+/**
+ * user_ids de la empresa que HOY están de vacaciones, vía el RPC
+ * `users_on_vacation_today` (migración `20260929120000`). Se usa el RPC y no un select
+ * sobre `vacations` porque esa tabla tiene el SELECT restringido a
+ * 'empresa.vacaciones.manage' (nivel ≥ 4 + RRHH): la hoja de "Clientes por social" la
+ * descarga cualquier empleado y debe salir igual para todos. El RPC (security definer)
+ * devuelve solo los ids, sin fechas ni estado.
+ *
+ * Nunca lanza: si falla, devuelve [] y la hoja sale sin la marca "(de vacaciones)" en vez
+ * de quedarse sin PDF.
+ */
+export async function fetchUserIdsOnVacationToday() {
+  const { data, error } = await supabase.rpc('users_on_vacation_today')
+  if (error) return []
+  return (data ?? []).map((row) => (typeof row === 'string' ? row : row.users_on_vacation_today))
+}

@@ -12,6 +12,9 @@ export const CHANGELOG = [
     version: '1.2.0',
     title: 'Mejoras en Campañas y Empresa',
     changes: [
+      'En Pautas ahora se puede filtrar por el team "Independientes", igual que en CNP y en Gestión de Tareas: agrupa las cuentas que no tienen una línea asignada, que antes solo se veían eligiendo "Todos".',
+      'Lizdania ya puede entrar a Empresa → Clientes y editar una marca, para asignar quién es su empleado audiovisual. De paso se corrigió un error en los permisos que impedía a cualquier persona (fuera de los administradores) modificar clientes.',
+      'La hoja de "Clientes por social" que se descarga en Empresa → Clientes ahora sale con el formato de la hoja impresa que usa el equipo: una cuadrícula de 4 columnas, con el nombre de cada social centrado, sus cuentas numeradas y espacio libre a la derecha para ir marcándolas a mano. Cada columna es una línea y arranca con su jefa, y a quien esté de vacaciones ese día le sale "(de vacaciones)" al lado del nombre.',
       'En Finanzas → Facturación, el modal de Registrar cobro ahora funciona igual que el de Agregar facturación: el monto se escribe siempre en dólares y, si el cobro entró en bolívares, solo eliges la tasa (la del BCV o una personalizada). Antes había que escribir los bolívares recibidos y no se podía cambiar la tasa.',
       'En Finanzas → Facturación, si un cliente factura en dólares pero el cobro se registra en bolívares, ahora la columna "Moneda", el monto de "Cobrado" y el filtro de moneda de esa factura reflejan bolívares en vez de dólares (el monto "Facturado" se mantiene siempre en dólares).',
       'En Finanzas ahora se puede cargar un mes histórico como "resumen": solo los montos totales (facturado, cobrado y reparto por partida), sin tener que registrar factura por factura. Ideal para meses pasados que no vienen desglosados por cliente.',

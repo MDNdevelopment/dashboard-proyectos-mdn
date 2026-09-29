@@ -13,8 +13,16 @@ function formatoDesglose({ av, foto, sinDesglose }) {
 }
 
 /** «Piezas totales vs. editadas por línea» + «Rendimiento por recurso» (quién captura/edita). */
-export default function AvAnalytics({ pautas, lines, usersById, piezasByPauta }) {
-  const byLine = aggregatePiezasByLine(pautas, lines).filter((l) => l.totales || l.editadas)
+export default function AvAnalytics({
+  pautas,
+  lines,
+  usersById,
+  piezasByPauta,
+  generalLineId = null,
+}) {
+  const byLine = aggregatePiezasByLine(pautas, lines, generalLineId).filter(
+    (l) => l.totales || l.editadas,
+  )
   const byResource = aggregateResourcePerformance(pautas, usersById, piezasByPauta)
   const anyEstimado = byResource.some((r) => r.grabaEstimado)
 

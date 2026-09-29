@@ -8,6 +8,7 @@ export default function PautasPage() {
   const { userProfile, can = () => true } = useAuth()
 
   const [lines, setLines] = useState([])
+  const [generalLine, setGeneralLine] = useState(null)
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -17,9 +18,17 @@ export default function PautasPage() {
     const companyId = userProfile.company_id
 
     const [linesRes, clientsRes] = await Promise.all([
-      loadLines(companyId, { includeGeneral: false }),
+      loadLines(companyId, { includeGeneral: true }),
       loadClients(companyId),
     ])
+
+    // La línea general "Independientes" (is_general) agrupa a las cuentas sin línea asignada.
+    // Va aparte de `lines` a propósito: `AudiovisualView` deriva el alcance de quien no tiene
+    // "ver todo" de `lines[0]`, así que meterla en ese array haría que un empleado sin línea
+    // real pasara de ver todas las pautas a ver solo las cuentas sin línea.
+    const allLines = linesRes.data ?? []
+    setGeneralLine(allLines.find((l) => l.is_general) ?? null)
+    const realLines = allLines.filter((l) => !l.is_general)
 
     // extraViewAll: `visibleLinesForUser` solo conoce access_level/admin/tasks_view_all —
     // sin esto, alguien con la capability `audiovisual.ver_todo` (p. ej. Lizdania, nivel 2
@@ -27,7 +36,7 @@ export default function PautasPage() {
     // por línea ni en el calendario ni en el mensaje de WhatsApp, aunque AudiovisualView ya
     // calculaba `canViewAll=true` para ella con la prop que sí le llegaba.
     setLines(
-      visibleLinesForUser(linesRes.data ?? [], userProfile, {
+      visibleLinesForUser(realLines, userProfile, {
         // audiovisual.piezas también levanta el filtro por línea: un editor de
         // Audiovisual gestiona piezas de cualquier cliente, no solo el de su línea.
         extraViewAll: can('audiovisual.ver_todo') || can('audiovisual.piezas'),
@@ -64,6 +73,7 @@ export default function PautasPage() {
             userProfile={userProfile}
             can={can}
             lines={lines}
+            generalLine={generalLine}
             clients={clients}
           />
         )}
