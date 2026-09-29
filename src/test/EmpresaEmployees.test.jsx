@@ -553,8 +553,7 @@ describe('EmployeesView', () => {
 
       await user.click(screen.getByRole('button', { name: 'Eliminar Ana Pérez' }))
 
-      const input = screen.getByPlaceholderText('Ana Pérez')
-      await user.type(input, 'Ana Pérez')
+      // El diálogo de baja confirma con un solo botón, sin teclear el nombre.
       // Dentro del diálogo, el botón de confirmación es el único con nombre accesible "Eliminar"
       await user.click(screen.getByRole('button', { name: 'Eliminar' }))
 
@@ -589,7 +588,6 @@ describe('EmployeesView', () => {
 
       await user.click(screen.getByRole('button', { name: 'Eliminar Ana Pérez' }))
       await user.click(screen.getByRole('radio', { name: /sacarlo también de este mes/i }))
-      await user.type(screen.getByPlaceholderText('Ana Pérez'), 'Ana Pérez')
       await user.click(screen.getByRole('button', { name: 'Eliminar' }))
 
       await waitFor(() => {
@@ -615,7 +613,6 @@ describe('EmployeesView', () => {
       })
 
       await user.click(screen.getByRole('button', { name: 'Eliminar Ana Pérez' }))
-      await user.type(screen.getByPlaceholderText('Ana Pérez'), 'Ana Pérez')
       await user.click(screen.getByRole('button', { name: 'Eliminar' }))
       await waitFor(() => {
         expect(screen.queryByText('Ana Pérez')).not.toBeInTheDocument()
@@ -646,7 +643,6 @@ describe('EmployeesView', () => {
       })
 
       await user.click(screen.getByRole('button', { name: 'Eliminar Ana Pérez' }))
-      await user.type(screen.getByPlaceholderText('Ana Pérez'), 'Ana Pérez')
       await user.click(screen.getByRole('button', { name: 'Eliminar' }))
       await waitFor(() => {
         expect(screen.queryByText('Ana Pérez')).not.toBeInTheDocument()

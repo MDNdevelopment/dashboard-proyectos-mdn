@@ -193,8 +193,8 @@ export const MODULES = [
       { key: 'facturacion', label: 'Facturación' },
       { key: 'clientes', label: 'Clientes' },
       { key: 'distribucion', label: 'Distribución' },
-      { key: 'porcobrar', label: 'Por cobrar' },
-      { key: 'cajabs', label: 'Caja Bs' },
+      { key: 'divisas', label: 'Divisas' },
+      { key: 'movimientos', label: 'Movimientos' },
     ],
     manageActions: [
       { key: 'finanzas.facturacion.manage', label: 'Crear / editar / eliminar facturación' },

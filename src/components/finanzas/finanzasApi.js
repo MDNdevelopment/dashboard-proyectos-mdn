@@ -41,6 +41,10 @@ function normalizePayment(row) {
     note: row.note,
     currency: row.currency,
     rateSource: row.rate_source,
+    // `paidOn` es una fecha sin hora, así que no desempata dos cobros del mismo día;
+    // `createdAt` sí (lo necesita el orden de la tab Movimientos — mismo problema que
+    // ya documenta DistribucionView con movedOn).
+    createdAt: row.created_at,
   }
 }
 

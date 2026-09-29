@@ -397,9 +397,6 @@ describe('ClientsView (sección Clientes en Empresa) — lista plana', () => {
     // Aparece el diálogo de confirmación
     expect(screen.getByRole('heading', { name: 'Eliminar cliente' })).toBeInTheDocument()
 
-    const confirmInput = screen.getByPlaceholderText('ALSA')
-    await user.type(confirmInput, 'ALSA')
-
     const allEliminar = screen.getAllByRole('button', { name: 'Eliminar' })
     await user.click(allEliminar[allEliminar.length - 1])
 
@@ -428,8 +425,6 @@ describe('ClientsView (sección Clientes en Empresa) — lista plana', () => {
     const reasonInput = screen.getByPlaceholderText(/por qué terminó el contrato/i)
     await user.type(reasonInput, 'Cierre de operaciones')
 
-    const confirmInput = screen.getByPlaceholderText('ALSA')
-    await user.type(confirmInput, 'ALSA')
     const allEliminar = screen.getAllByRole('button', { name: 'Eliminar' })
     await user.click(allEliminar[allEliminar.length - 1])
 
@@ -453,9 +448,6 @@ describe('ClientsView (sección Clientes en Empresa) — lista plana', () => {
 
     // Seleccionar la opción de excluir del mes en curso
     await user.click(screen.getByRole('radio', { name: /sacarlo también de este mes/i }))
-
-    const confirmInput = screen.getByPlaceholderText('ALSA')
-    await user.type(confirmInput, 'ALSA')
 
     const allEliminar = screen.getAllByRole('button', { name: 'Eliminar' })
     await user.click(allEliminar[allEliminar.length - 1])
@@ -496,8 +488,6 @@ describe('ClientsView (sección Clientes en Empresa) — lista plana', () => {
 
     const archiveBtns = screen.getAllByRole('button', { name: 'Archivar' })
     await user.click(archiveBtns[0])
-    const confirmInput = screen.getByPlaceholderText('ALSA')
-    await user.type(confirmInput, 'ALSA')
     const allEliminar = screen.getAllByRole('button', { name: 'Eliminar' })
     await user.click(allEliminar[allEliminar.length - 1])
 

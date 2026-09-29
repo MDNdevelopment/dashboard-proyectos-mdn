@@ -206,7 +206,7 @@ export default function ExternalResourcesView({ companyId }) {
             <>
               <strong>{confirmDelete.full_name}</strong> dejará de aparecer en los selectores de
               Pautas. Su historial en pautas pasadas se conserva. Esta acción se puede revertir
-              restaurando el recurso. Para confirmar, escribe su nombre completo a continuación.
+              restaurando el recurso.
             </>
           }
           onConfirm={handleDelete}

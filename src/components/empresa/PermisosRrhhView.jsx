@@ -230,14 +230,12 @@ export default function PermisosRrhhView({ companyId }) {
         <ConfirmDeleteDialog
           itemName={isoToDdmmyyyy(deleteRow.start_date)}
           itemLabel="registro"
-          fieldLabel="Fecha de inicio"
           message={
             <>
               Esta acción <strong>no se puede deshacer</strong>. Vas a eliminar el registro de{' '}
               <strong>{PERMISSION_TYPES[deleteRow.type]?.label ?? deleteRow.type}</strong> del{' '}
               <strong>{isoToDdmmyyyy(deleteRow.start_date)}</strong> al{' '}
-              <strong>{isoToDdmmyyyy(deleteRow.end_date)}</strong>. Para confirmar, escribe la fecha
-              de inicio ({isoToDdmmyyyy(deleteRow.start_date)}) a continuación.
+              <strong>{isoToDdmmyyyy(deleteRow.end_date)}</strong>.
             </>
           }
           onConfirm={handleDelete}

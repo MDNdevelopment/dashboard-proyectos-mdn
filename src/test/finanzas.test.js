@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   cobradoDe,
-  cobradoMostradoDe,
+  cobrosPorMonedaDe,
   pendienteDe,
   estadoFactura,
   totalFacturado,
@@ -15,7 +15,6 @@ import {
   metaPartida,
   realPct,
   desviacionEnPuntos,
-  cuentasPorCobrar,
   tasaCobranza,
   ticketPromedio,
   pctsDelMes,
@@ -34,8 +33,15 @@ import {
   pagosRealesUsd,
   cuadreDivisas,
   brechaPromedioPonderada,
+  movimientosDelMes,
+  totalesMovimientos,
 } from '../utils/finanzas'
-import { PARTIDA_KEYS, partidaMeta, PARTIDA_CAMBIO_META } from '../components/finanzas/constants'
+import {
+  PARTIDA_KEYS,
+  partidaMeta,
+  PARTIDA_CAMBIO_META,
+  NOTA_TRASPASO_PARTIDA,
+} from '../components/finanzas/constants'
 
 const PCTS_66_20_14 = { gastos: 0.66, socios: 0.2, ganancia: 0.14 }
 
@@ -90,39 +96,39 @@ describe('finanzas — facturas y cobros', () => {
   })
 })
 
-describe('finanzas — cobradoMostradoDe', () => {
-  it('sin abonos, cae a la moneda de la factura y 0', () => {
+describe('finanzas — cobrosPorMonedaDe', () => {
+  it('sin abonos, no hay ninguna moneda (la factura no es un cobro)', () => {
     const inv = invoice({ currency: 'USD', payments: [] })
-    expect(cobradoMostradoDe(inv)).toEqual({ currency: 'USD', amount: 0 })
+    expect(cobrosPorMonedaDe(inv)).toEqual({ usd: 0, bs: 0, monedas: [] })
   })
 
-  it('factura en USD pagada en Bs: badge Bs, monto = suma de amount_bs', () => {
+  it('factura en USD pagada en Bs: solo Bs, con la suma de amount_bs', () => {
     const inv = invoice({
       currency: 'USD',
       payments: [{ amount: 750, amountBs: 612000, rate: 816 }],
     })
-    expect(cobradoMostradoDe(inv)).toEqual({ currency: 'Bs', amount: 612000 })
+    expect(cobrosPorMonedaDe(inv)).toEqual({ usd: 0, bs: 612000, monedas: ['Bs'] })
   })
 
-  it('factura en USD pagada en USD: se queda en USD con el total exacto', () => {
+  it('factura en USD pagada en USD: solo divisa', () => {
     const inv = invoice({ currency: 'USD', payments: [{ amount: 400 }] })
-    expect(cobradoMostradoDe(inv)).toEqual({ currency: 'USD', amount: 400 })
+    expect(cobrosPorMonedaDe(inv)).toEqual({ usd: 400, bs: 0, monedas: ['USD'] })
   })
 
-  it('factura en Bs pagada en Bs: sigue mostrando Bs', () => {
+  it('factura en Bs pagada en Bs: la moneda de facturación no cambia nada', () => {
     const inv = invoice({
       currency: 'Bs',
       payments: [{ amount: 300, amountBs: 244800, rate: 816 }],
     })
-    expect(cobradoMostradoDe(inv)).toEqual({ currency: 'Bs', amount: 244800 })
+    expect(cobrosPorMonedaDe(inv)).toEqual({ usd: 0, bs: 244800, monedas: ['Bs'] })
   })
 
-  it('con abonos en monedas mixtas, cae al total exacto en USD (no mezcla Bs de uno con USD del otro)', () => {
+  it('con abonos mixtos, reporta las dos monedas por separado', () => {
     const inv = invoice({
       currency: 'USD',
       payments: [{ amount: 400, amountBs: 326400, rate: 816 }, { amount: 350 }],
     })
-    expect(cobradoMostradoDe(inv)).toEqual({ currency: 'USD', amount: 750 })
+    expect(cobrosPorMonedaDe(inv)).toEqual({ usd: 350, bs: 326400, monedas: ['USD', 'Bs'] })
   })
 })
 
@@ -290,34 +296,7 @@ describe('finanzas — movimientoCartera', () => {
   })
 })
 
-describe('finanzas — por cobrar y análisis', () => {
-  it('cuentasPorCobrar aplana varios meses e ignora lo ya cobrado', () => {
-    const months = [
-      {
-        year: 2026,
-        month: 6,
-        invoices: [invoice({ id: 'a', amount: 500, payments: [{ amount: 500 }] })],
-      },
-      {
-        year: 2026,
-        month: 7,
-        invoices: [
-          invoice({ id: 'b', amount: 300, payments: [{ amount: 100 }] }),
-          invoice({ id: 'c', amount: 200, payments: [] }),
-        ],
-      },
-    ]
-    const ar = cuentasPorCobrar(months)
-    expect(ar).toHaveLength(2)
-    expect(ar[0]).toMatchObject({ year: 2026, month: 7, cobrado: 100, pendiente: 200 })
-    expect(ar[1]).toMatchObject({ year: 2026, month: 7, cobrado: 0, pendiente: 200 })
-  })
-
-  it('cuentasPorCobrar devuelve vacío si no hay meses', () => {
-    expect(cuentasPorCobrar([])).toEqual([])
-    expect(cuentasPorCobrar(undefined)).toEqual([])
-  })
-
+describe('finanzas — análisis', () => {
   it('tasaCobranza es cobrado/facturado, 0 sin facturación', () => {
     const invoices = [invoice({ amount: 1000, payments: [{ amount: 500 }] })]
     expect(tasaCobranza(invoices)).toBeCloseTo(0.5)
@@ -853,5 +832,468 @@ describe('finanzas — divisas: guard de regresión de la partida técnica cambi
       { partida: 'cambio', kind: 'in', amount: 1000 },
     ]
     expect(realPct(dists, 'gastos')).toBe(1)
+  })
+})
+
+// ─── Movimientos consolidados (tab Movimientos) ──────────────────────────────────
+
+const MES = { year: 2026, month: 9 }
+
+function invoiceCon(payments, extra = {}) {
+  return {
+    id: 'inv-1',
+    clientName: 'Jugos Los Ángeles',
+    concept: 'Gestión de redes',
+    amount: 750,
+    currency: 'USD',
+    payments,
+    ...extra,
+  }
+}
+
+describe('movimientosDelMes — deduplicación de filas derivadas', () => {
+  /**
+   * El caso real del bug de septiembre: una compra de 637.500 Bs por $708 a BCV 850
+   * deja 3 filas en la BD (la operación, su movimiento del libro de Bs y su
+   * resultado por cambio de −$42). En Movimientos debe ser UNA.
+   */
+  it('una compra de divisas es una sola fila, con su pata en Bs y su resultado por cambio', () => {
+    const rows = movimientosDelMes({
+      ...MES,
+      invoices: [],
+      distributions: [
+        {
+          id: 'd-cambio',
+          partida: 'cambio',
+          kind: 'out',
+          movedOn: '2026-09-28',
+          concept: 'Resultado por cambio · compra',
+          amount: 42,
+          currency: 'USD',
+          fxOperationId: 'fx-1',
+        },
+      ],
+      fxOperations: [
+        {
+          id: 'fx-1',
+          opType: 'compra',
+          movedOn: '2026-09-28',
+          amountBs: 637500,
+          amountUsd: 708,
+          rateReal: 900.42,
+          rateBcv: 850,
+          purpose: 'Nómina',
+        },
+      ],
+      bsLedger: [
+        {
+          id: 'l-fx',
+          movedOn: '2026-09-28',
+          kind: 'out',
+          source: 'compra_divisa',
+          amountBs: 637500,
+          rate: 900.42,
+          amountUsdRef: 708,
+          fxOperationId: 'fx-1',
+          concept: 'Compra de divisas',
+        },
+      ],
+    })
+
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      tipo: 'compra_divisa',
+      naturaleza: 'conversion',
+      montoUsd: 708,
+      montoBs: -637500,
+      resultadoCambioUsd: -42,
+      afectaCaja: 'ambas',
+    })
+    // La fila 'cambio' no se emite aparte: la pliega su operación.
+    expect(rows.some((r) => r.tipo === 'cambio')).toBe(false)
+  })
+
+  it('un cobro en Bs es una sola fila (no también la del libro de Bs)', () => {
+    const rows = movimientosDelMes({
+      ...MES,
+      invoices: [
+        invoiceCon([{ id: 'p-1', paidOn: '2026-09-23', amount: 750, amountBs: 637500, rate: 850 }]),
+      ],
+      distributions: [],
+      fxOperations: [],
+      bsLedger: [
+        {
+          id: 'l-cobro',
+          movedOn: '2026-09-23',
+          kind: 'in',
+          source: 'cobro',
+          amountBs: 637500,
+          rate: 850,
+          amountUsdRef: 750,
+          paymentId: 'p-1',
+          concept: 'Cobro Jugos Los Ángeles',
+        },
+      ],
+    })
+
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      tipo: 'cobro',
+      naturaleza: 'ingreso',
+      moneda: 'Bs',
+      montoUsd: 750,
+      montoBs: 637500,
+      contraparte: 'Jugos Los Ángeles',
+      afectaCaja: 'bs',
+    })
+  })
+
+  it('un pago directo en Bs es una sola fila (no también la del libro de Bs)', () => {
+    const rows = movimientosDelMes({
+      ...MES,
+      invoices: [],
+      distributions: [
+        {
+          id: 'd-1',
+          partida: 'gastos',
+          kind: 'out',
+          movedOn: '2026-09-15',
+          concept: 'Nómina',
+          amount: 100,
+          currency: 'Bs',
+          amountBs: 85000,
+          rate: 850,
+        },
+      ],
+      fxOperations: [],
+      bsLedger: [
+        {
+          id: 'l-pago',
+          movedOn: '2026-09-15',
+          kind: 'out',
+          source: 'pago_directo',
+          amountBs: 85000,
+          rate: 850,
+          amountUsdRef: 100,
+          distributionId: 'd-1',
+          concept: 'Nómina',
+        },
+      ],
+    })
+
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      tipo: 'pago',
+      naturaleza: 'egreso',
+      montoUsd: -100,
+      montoBs: -85000,
+      afectaCaja: 'bs',
+    })
+  })
+
+  it('el ajuste de cuadre sí se lista: es la única fila del libro sin fuente', () => {
+    const rows = movimientosDelMes({
+      ...MES,
+      invoices: [],
+      distributions: [],
+      fxOperations: [],
+      bsLedger: [
+        {
+          id: 'l-aj',
+          movedOn: '2026-09-10',
+          kind: 'in',
+          source: 'ajuste',
+          amountBs: 1700,
+          rate: 850,
+          amountUsdRef: 2,
+          concept: 'Intereses del banco',
+        },
+      ],
+    })
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      tipo: 'ajuste_bs',
+      naturaleza: 'ajuste',
+      montoBs: 1700,
+      montoUsd: 2,
+    })
+  })
+
+  it('una fila de cambio huérfana (sin su operación) se muestra igual, no se pierde', () => {
+    const rows = movimientosDelMes({
+      ...MES,
+      invoices: [],
+      distributions: [
+        {
+          id: 'd-cambio',
+          partida: 'cambio',
+          kind: 'out',
+          movedOn: '2026-09-28',
+          concept: 'Resultado por cambio · compra',
+          amount: 42,
+          currency: 'USD',
+          fxOperationId: 'fx-borrado',
+        },
+      ],
+      fxOperations: [],
+      bsLedger: [],
+    })
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ tipo: 'cambio', naturaleza: 'interno', montoUsd: -42 })
+  })
+
+  it('el id es único aunque un cobro y una distribución compartan el mismo uuid', () => {
+    const rows = movimientosDelMes({
+      ...MES,
+      invoices: [invoiceCon([{ id: 'x-1', paidOn: '2026-09-02', amount: 500 }])],
+      distributions: [
+        {
+          id: 'x-1',
+          partida: 'gastos',
+          kind: 'out',
+          movedOn: '2026-09-03',
+          concept: 'Pago',
+          amount: 50,
+          currency: 'USD',
+        },
+      ],
+      fxOperations: [],
+      bsLedger: [],
+    })
+    expect(new Set(rows.map((r) => r.id)).size).toBe(2)
+    expect(rows.map((r) => r.id).sort()).toEqual(['dist:x-1', 'pay:x-1'])
+  })
+})
+
+describe('movimientosDelMes — pertenencia al mes y orden', () => {
+  it('manda la fecha del movimiento: un cobro de septiembre sobre factura de agosto entra', () => {
+    const rows = movimientosDelMes({
+      ...MES,
+      // Factura de agosto (llega porque invoices viene ACUMULADO hasta el mes).
+      invoices: [
+        invoiceCon([{ id: 'p-tarde', paidOn: '2026-09-03', amount: 300 }], { id: 'inv-ago' }),
+      ],
+      distributions: [],
+      fxOperations: [],
+      bsLedger: [],
+    })
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ tipo: 'cobro', fecha: '2026-09-03', montoUsd: 300 })
+  })
+
+  it('un cobro de octubre sobre una factura de septiembre NO entra en septiembre', () => {
+    const rows = movimientosDelMes({
+      ...MES,
+      invoices: [invoiceCon([{ id: 'p-oct', paidOn: '2026-10-02', amount: 300 }])],
+      distributions: [],
+      fxOperations: [],
+      bsLedger: [],
+    })
+    expect(rows).toHaveLength(0)
+  })
+
+  it('las operaciones de divisas de meses anteriores (llegan acumuladas) quedan fuera', () => {
+    const rows = movimientosDelMes({
+      ...MES,
+      invoices: [],
+      distributions: [],
+      fxOperations: [
+        { id: 'fx-ago', opType: 'compra', movedOn: '2026-08-20', amountBs: 100, amountUsd: 1 },
+        { id: 'fx-sep', opType: 'compra', movedOn: '2026-09-20', amountBs: 100, amountUsd: 1 },
+      ],
+      bsLedger: [],
+    })
+    expect(rows.map((r) => r.sourceId)).toEqual(['fx-sep'])
+  })
+
+  it('ordena de más reciente a más antiguo, desempatando el mismo día por createdAt', () => {
+    const dist = (id, movedOn, createdAt) => ({
+      id,
+      partida: 'gastos',
+      kind: 'out',
+      movedOn,
+      createdAt,
+      concept: id,
+      amount: 10,
+      currency: 'USD',
+    })
+    const rows = movimientosDelMes({
+      ...MES,
+      invoices: [],
+      distributions: [
+        dist('viejo', '2026-09-01', '2026-09-01T10:00:00Z'),
+        dist('mismo-dia-temprano', '2026-09-10', '2026-09-10T08:00:00Z'),
+        dist('mismo-dia-tarde', '2026-09-10', '2026-09-10T18:00:00Z'),
+      ],
+      fxOperations: [],
+      bsLedger: [],
+    })
+    expect(rows.map((r) => r.sourceId)).toEqual(['mismo-dia-tarde', 'mismo-dia-temprano', 'viejo'])
+  })
+
+  it('tolera entradas vacías o ausentes', () => {
+    expect(movimientosDelMes({ ...MES })).toEqual([])
+    expect(
+      movimientosDelMes({
+        ...MES,
+        invoices: [],
+        distributions: [],
+        fxOperations: [],
+        bsLedger: [],
+      }),
+    ).toEqual([])
+  })
+})
+
+describe('movimientosDelMes — internos vs dinero real', () => {
+  it('un traspaso entre partidas son 2 filas internas que no mueven caja', () => {
+    const rows = movimientosDelMes({
+      ...MES,
+      invoices: [],
+      distributions: [
+        {
+          id: 'd-out',
+          partida: 'socios',
+          kind: 'out',
+          movedOn: '2026-09-12',
+          concept: 'Traspaso a Gastos',
+          amount: 100,
+          currency: 'USD',
+          note: NOTA_TRASPASO_PARTIDA,
+        },
+        {
+          id: 'd-in',
+          partida: 'gastos',
+          kind: 'in',
+          movedOn: '2026-09-12',
+          concept: 'Traspaso desde Socios',
+          amount: 100,
+          currency: 'USD',
+          note: NOTA_TRASPASO_PARTIDA,
+        },
+      ],
+      fxOperations: [],
+      bsLedger: [],
+    })
+    expect(rows).toHaveLength(2)
+    for (const r of rows) {
+      expect(r.tipo).toBe('traspaso')
+      expect(r.naturaleza).toBe('interno')
+      expect(r.interno).toBe(true)
+      expect(r.afectaCaja).toBe('ninguna')
+    }
+  })
+
+  it('una asignación a partida es interna; un pago es egreso real', () => {
+    const rows = movimientosDelMes({
+      ...MES,
+      invoices: [],
+      distributions: [
+        {
+          id: 'd-asig',
+          partida: 'gastos',
+          kind: 'in',
+          movedOn: '2026-09-05',
+          concept: 'Asignación',
+          amount: 720,
+          currency: 'USD',
+        },
+        {
+          id: 'd-pago',
+          partida: 'gastos',
+          kind: 'out',
+          movedOn: '2026-09-06',
+          concept: 'Pago proveedor',
+          amount: 300,
+          currency: 'USD',
+        },
+      ],
+      fxOperations: [],
+      bsLedger: [],
+    })
+    const porId = Object.fromEntries(rows.map((r) => [r.sourceId, r]))
+    expect(porId['d-asig']).toMatchObject({
+      tipo: 'asignacion',
+      naturaleza: 'interno',
+      montoUsd: 720,
+      afectaCaja: 'ninguna',
+    })
+    expect(porId['d-pago']).toMatchObject({
+      tipo: 'pago',
+      naturaleza: 'egreso',
+      montoUsd: -300,
+      afectaCaja: 'divisa',
+    })
+  })
+})
+
+describe('totalesMovimientos', () => {
+  /**
+   * El test que impide que alguien "arregle" las cards sumando todo: solo los cobros
+   * y los pagos reales mueven el neto. Si las asignaciones contaran, el mes se
+   * infla ~1.72× (el dólar ya entró en su cobro).
+   */
+  it('solo suma cobros y pagos reales: internos, conversiones y ajustes quedan fuera', () => {
+    const rows = movimientosDelMes({
+      ...MES,
+      invoices: [invoiceCon([{ id: 'p-1', paidOn: '2026-09-02', amount: 1000 }])],
+      distributions: [
+        {
+          id: 'd-asig',
+          partida: 'gastos',
+          kind: 'in',
+          movedOn: '2026-09-03',
+          concept: 'Asignación',
+          amount: 720,
+          currency: 'USD',
+        },
+        {
+          id: 'd-tras',
+          partida: 'socios',
+          kind: 'out',
+          movedOn: '2026-09-04',
+          concept: 'Traspaso',
+          amount: 100,
+          currency: 'USD',
+          note: NOTA_TRASPASO_PARTIDA,
+        },
+        {
+          id: 'd-pago',
+          partida: 'gastos',
+          kind: 'out',
+          movedOn: '2026-09-05',
+          concept: 'Pago',
+          amount: 300,
+          currency: 'USD',
+        },
+      ],
+      fxOperations: [
+        { id: 'fx-1', opType: 'compra', movedOn: '2026-09-06', amountBs: 637500, amountUsd: 708 },
+      ],
+      bsLedger: [
+        {
+          id: 'l-aj',
+          movedOn: '2026-09-07',
+          kind: 'in',
+          source: 'ajuste',
+          amountBs: 1700,
+          rate: 850,
+          amountUsdRef: 2,
+          concept: 'Intereses',
+        },
+      ],
+    })
+
+    expect(totalesMovimientos(rows)).toEqual({
+      entradas: 1000,
+      salidas: 300,
+      neto: 700,
+      cuenta: 6,
+    })
+  })
+
+  it('sin filas devuelve todo en cero', () => {
+    expect(totalesMovimientos([])).toEqual({ entradas: 0, salidas: 0, neto: 0, cuenta: 0 })
+    expect(totalesMovimientos()).toEqual({ entradas: 0, salidas: 0, neto: 0, cuenta: 0 })
   })
 })

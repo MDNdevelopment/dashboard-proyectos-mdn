@@ -22,16 +22,16 @@ import FacturacionView from '../components/finanzas/FacturacionView'
 import ClientesView from '../components/finanzas/ClientesView'
 import DistribucionView from '../components/finanzas/DistribucionView'
 import PartidaView from '../components/finanzas/PartidaView'
-import PorCobrarView from '../components/finanzas/PorCobrarView'
 import CajaBsView from '../components/finanzas/CajaBsView'
+import MovimientosView from '../components/finanzas/MovimientosView'
 
 const ALL_TABS = [
   { key: 'dashboard', label: 'Dashboard', path: '/finanzas' },
   { key: 'facturacion', label: 'Facturación', path: '/finanzas/facturacion' },
   { key: 'clientes', label: 'Clientes', path: '/finanzas/clientes' },
   { key: 'distribucion', label: 'Distribución', path: '/finanzas/distribucion' },
-  { key: 'porcobrar', label: 'Por cobrar', path: '/finanzas/por-cobrar' },
-  { key: 'cajabs', label: 'Caja Bs', path: '/finanzas/caja-bs' },
+  { key: 'divisas', label: 'Divisas', path: '/finanzas/divisas' },
+  { key: 'movimientos', label: 'Movimientos', path: '/finanzas/movimientos' },
 ]
 
 function tabCapability(key) {
@@ -43,7 +43,10 @@ function pathToKey(pathname) {
   if (pathname.startsWith('/finanzas/clientes')) return 'clientes'
   if (pathname.startsWith('/finanzas/distribucion')) return 'distribucion'
   if (pathname.startsWith('/finanzas/por-cobrar')) return 'porcobrar'
-  if (pathname.startsWith('/finanzas/caja-bs')) return 'cajabs'
+  if (pathname.startsWith('/finanzas/movimientos')) return 'movimientos'
+  if (pathname.startsWith('/finanzas/divisas')) return 'divisas'
+  // Alias del nombre viejo de la tab ("Caja Bs"), para no romper enlaces guardados.
+  if (pathname.startsWith('/finanzas/caja-bs')) return 'divisas'
   return 'dashboard'
 }
 
@@ -265,7 +268,7 @@ export default function FinanzasPage() {
               Facturación, cobranza y reparto en partidas
             </p>
           </div>
-          {activeKey !== 'clientes' && activeKey !== 'porcobrar' && (
+          {activeKey !== 'clientes' && (
             <MonthPeriodPicker value={monthStr} onChange={setMonthStr} />
           )}
         </div>
@@ -319,12 +322,13 @@ export default function FinanzasPage() {
             />
           ))}
 
-        {activeKey === 'porcobrar' && can('finanzas.porcobrar') && (
-          <PorCobrarView companyId={companyId} canManageCobros={canManageCobros} />
+        {activeKey === 'divisas' && can('finanzas.divisas') && (
+          <CajaBsView {...shared} canManage={canManageDivisas} />
         )}
 
-        {activeKey === 'cajabs' && can('finanzas.cajabs') && (
-          <CajaBsView {...shared} canManage={canManageDivisas} />
+        {/* Solo lectura: no recibe ninguna capability de escritura. */}
+        {activeKey === 'movimientos' && can('finanzas.movimientos') && (
+          <MovimientosView {...shared} />
         )}
       </div>
     </main>

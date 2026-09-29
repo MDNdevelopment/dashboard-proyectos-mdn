@@ -922,13 +922,11 @@ describe('AvPhaseTable — Papelera (soft delete + restaurar)', () => {
     expect(mockPermanentlyDeletePauta).not.toHaveBeenCalled()
   })
 
-  it('el botón "Eliminar" del diálogo queda deshabilitado hasta teclear el nombre exacto del cliente', () => {
+  it('el diálogo nombra la pauta que se va a eliminar y confirma con un solo botón', () => {
     renderTable({ initialPhase: 'papelera', editMode: 'coordina', pautas: [PAUTA_BORRADA] })
     fireEvent.click(screen.getByText('Eliminar definitivamente'))
-    const confirmBtn = screen.getByRole('button', { name: 'Eliminar' })
-    expect(confirmBtn).toBeDisabled()
-    fireEvent.change(screen.getByPlaceholderText('Cliente B'), { target: { value: 'Cliente B' } })
-    expect(confirmBtn).not.toBeDisabled()
+    expect(screen.getByText(/Se eliminará la pauta de/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Eliminar' })).toBeEnabled()
   })
 
   it('confirmar el diálogo llama a permanentlyDeletePauta y propaga por onDeleted (no onChanged)', async () => {
@@ -943,7 +941,6 @@ describe('AvPhaseTable — Papelera (soft delete + restaurar)', () => {
       onChanged,
     })
     fireEvent.click(screen.getByText('Eliminar definitivamente'))
-    fireEvent.change(screen.getByPlaceholderText('Cliente B'), { target: { value: 'Cliente B' } })
     fireEvent.click(screen.getByRole('button', { name: 'Eliminar' }))
     await waitFor(() => expect(mockPermanentlyDeletePauta).toHaveBeenCalledWith('p2'))
     await waitFor(() => expect(onDeleted).toHaveBeenCalledWith('p2'))

@@ -179,7 +179,7 @@ describe('VacationsDialog — borrado con fecha legible y aviso de año', () => 
     await user.click(screen.getByRole('button', { name: 'Eliminar vacación 2025-08-08' }))
 
     // Mismo formato dd/mm/aaaa que la lista (no el ISO crudo que mostraba antes)
-    expect(screen.getByPlaceholderText('08/08/2025')).toBeInTheDocument()
+    expect(screen.getAllByText('08/08/2025').length).toBeGreaterThan(0)
     expect(screen.getByText(/del año/)).toBeInTheDocument()
     expect(screen.getAllByText('2025').length).toBeGreaterThan(0)
     expect(screen.getByText(/ya pasada/)).toBeInTheDocument()

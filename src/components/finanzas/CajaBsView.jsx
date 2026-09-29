@@ -3,8 +3,10 @@ import { fmtUSD } from '../../utils/metricsFinance'
 import { fmtDate } from '../../utils/formatDate'
 import { ledgerConSaldo, cuadreDivisas } from '../../utils/finanzas'
 import { BS_LEDGER_SOURCES } from './constants'
+import { deleteFxOperation, deleteBsLedgerEntry } from './finanzasApi'
 import FxOperacionModal from './FxOperacionModal'
 import AjusteCajaBsModal from './AjusteCajaBsModal'
+import ConfirmDeleteDialog from '../common/ConfirmDeleteDialog'
 
 /** Bolívares no llevan símbolo de dólar — mismo formato que fmtUSD pero sin '$'. */
 function fmtBs(n) {
@@ -12,6 +14,26 @@ function fmtBs(n) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })
+}
+
+/**
+ * Cómo se borra una fila del libro, según de dónde salió. El libro es DERIVADO:
+ * nunca se borra la fila en sí (el trigger la volvería a dejar inconsistente con
+ * su fuente), se borra la fila FUENTE y el `on delete cascade` limpia el libro.
+ *   - compra/venta de divisas → se borra `fin_fx_operations`; el cascade se lleva
+ *     esta fila Y la fila 'cambio' de `fin_distributions` (si no, quedaba un
+ *     resultado por cambio huérfano que descuadra para siempre — el bug que hacía
+ *     imposible "borrar todo" un mes).
+ *   - ajuste de cuadre → no tiene fuente, se borra la fila del libro.
+ *   - cobro en Bs / pago directo en Bs → su fuente vive en Cobros y en
+ *     Distribución; se borra desde ahí, no desde aquí.
+ * @returns {{ label: string, hint: string|null }} `label` vacío = sin botón.
+ */
+function accionBorrado(entry) {
+  if (entry.fxOperationId) return { label: 'Eliminar', hint: null }
+  if (entry.source === 'ajuste') return { label: 'Eliminar', hint: null }
+  if (entry.source === 'cobro') return { label: '', hint: 'desde Cobros' }
+  return { label: '', hint: 'desde Distribución' }
 }
 
 /**
@@ -37,6 +59,9 @@ export default function CajaBsView({
 }) {
   const [fxOpen, setFxOpen] = useState(null) // null=cerrado, 'compra'|'venta'
   const [ajusteOpen, setAjusteOpen] = useState(false)
+  const [toDelete, setToDelete] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState(null)
 
   const closed = !!finMonth?.closed
   const monthKey = `${year}-${String(month).padStart(2, '0')}`
@@ -160,6 +185,7 @@ export default function CajaBsView({
                   <th className="text-right px-4 py-2">Entrada</th>
                   <th className="text-right px-4 py-2">Salida</th>
                   <th className="text-right px-4 py-2">Saldo</th>
+                  {canManage && !closed && <th className="text-center px-4 py-2">Acciones</th>}
                 </tr>
               </thead>
               <tbody>
@@ -177,6 +203,24 @@ export default function CajaBsView({
                       {l.kind === 'out' ? fmtBs(l.amountBs) : ''}
                     </td>
                     <td className="text-right px-4 py-2.5 font-mono font-bold">{fmtBs(l.saldo)}</td>
+                    {canManage && !closed && (
+                      <td className="text-center px-4 py-2.5">
+                        {accionBorrado(l).label ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDeleteError(null)
+                              setToDelete(l)
+                            }}
+                            className="text-[12.5px] text-[#D6453F] hover:underline"
+                          >
+                            {accionBorrado(l).label}
+                          </button>
+                        ) : (
+                          <span className="text-[12px] text-[#bbb]">{accionBorrado(l).hint}</span>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -212,6 +256,42 @@ export default function CajaBsView({
             refetch()
           }}
         />
+      )}
+
+      {toDelete && (
+        <ConfirmDeleteDialog
+          itemLabel={toDelete.fxOperationId ? 'operación de divisas' : 'ajuste'}
+          itemName={toDelete.concept}
+          confirming={deleting}
+          message={
+            toDelete.fxOperationId ? (
+              <>
+                Se elimina la <strong>operación de divisas completa</strong>: este movimiento de la
+                Caja Bs y su resultado por cambio. Esta acción <strong>no se puede deshacer</strong>
+                .
+              </>
+            ) : undefined
+          }
+          onCancel={() => {
+            setToDelete(null)
+            setDeleteError(null)
+          }}
+          onConfirm={async () => {
+            setDeleting(true)
+            const { error } = toDelete.fxOperationId
+              ? await deleteFxOperation(toDelete.fxOperationId)
+              : await deleteBsLedgerEntry(toDelete.id)
+            setDeleting(false)
+            if (error) {
+              setDeleteError(error.message ?? 'No se pudo eliminar.')
+              return
+            }
+            setToDelete(null)
+            refetch()
+          }}
+        >
+          {deleteError && <p className="text-[13px] text-[#D6453F]">{deleteError}</p>}
+        </ConfirmDeleteDialog>
       )}
     </div>
   )

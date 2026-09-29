@@ -11,7 +11,8 @@ import { vi } from 'vitest'
 
 vi.mock('../components/finanzas/finanzasApi', () => ({
   loadDistributionsBefore: vi.fn().mockResolvedValue({ data: [], error: null }),
-  deleteDistribution: vi.fn(),
+  deleteDistribution: vi.fn().mockResolvedValue({ error: null }),
+  deleteFxOperation: vi.fn().mockResolvedValue({ error: null }),
 }))
 vi.mock('../context/AuthContext', () => ({
   useAuth: () => ({ userProfile: { user_id: 'u-1' } }),
@@ -54,5 +55,59 @@ describe('PartidaView — partida técnica "cambio" en solo lectura', () => {
     renderView('cambio')
     expect(await screen.findByText(/Partida técnica/)).toBeInTheDocument()
     expect(screen.queryByText('+ Registrar pago')).not.toBeInTheDocument()
+  })
+})
+
+describe('PartidaView — borrar un "Resultado por cambio" borra su operación de divisas', () => {
+  const filaCambio = {
+    id: 'd-cambio',
+    partida: 'cambio',
+    kind: 'out',
+    movedOn: '2026-09-28',
+    concept: 'Resultado por cambio · compra',
+    amount: 42,
+    fxOperationId: 'fx-1',
+  }
+
+  it('borra la operación de divisas (fuente), no solo la fila de la partida', async () => {
+    const { deleteFxOperation, deleteDistribution } =
+      await import('../components/finanzas/finanzasApi')
+    deleteFxOperation.mockClear()
+    deleteDistribution.mockClear()
+
+    renderView('cambio', [filaCambio])
+    fireEvent.click(await screen.findByText('Eliminar'))
+    // El diálogo de Finanzas confirma con un solo botón, sin teclear nada.
+    // Hay dos "Eliminar": el de la fila y el de confirmación del diálogo.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Eliminar' }).at(-1))
+
+    await vi.waitFor(() => expect(deleteFxOperation).toHaveBeenCalledWith('fx-1'))
+    // Si se borrara solo la distribución, la compra y su movimiento de Caja Bs
+    // quedarían vivos y el cuadre nunca volvería a cero.
+    expect(deleteDistribution).not.toHaveBeenCalled()
+  })
+
+  it('un movimiento normal (sin operación de divisas) sí borra la distribución', async () => {
+    const { deleteFxOperation, deleteDistribution } =
+      await import('../components/finanzas/finanzasApi')
+    deleteFxOperation.mockClear()
+    deleteDistribution.mockClear()
+
+    const pago = {
+      id: 'd-1',
+      partida: 'gastos',
+      kind: 'out',
+      movedOn: '2026-09-10',
+      concept: 'Pago de nómina',
+      amount: 100,
+      fxOperationId: null,
+    }
+    renderView('gastos', [pago])
+    fireEvent.click(await screen.findByText('Eliminar'))
+    // Hay dos "Eliminar": el de la fila y el de confirmación del diálogo.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Eliminar' }).at(-1))
+
+    await vi.waitFor(() => expect(deleteDistribution).toHaveBeenCalledWith('d-1'))
+    expect(deleteFxOperation).not.toHaveBeenCalled()
   })
 })

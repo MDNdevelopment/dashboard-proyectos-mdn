@@ -934,8 +934,7 @@ export default function EmployeesView({ companyId }) {
               </strong>{' '}
               dejará de aparecer en selectores y conteos, y no podrá iniciar sesión. Su historial
               (tareas, reuniones, evaluaciones, reportes) se conserva intacto. Esta acción se puede
-              revertir restaurando al empleado. Para confirmar, escribe su nombre completo a
-              continuación.
+              revertir restaurando al empleado.
             </>
           }
           onConfirm={handleArchive}

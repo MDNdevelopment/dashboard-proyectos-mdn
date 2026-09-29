@@ -13,7 +13,7 @@ import {
   resultadoCambio,
 } from '../../utils/finanzas'
 import { loadDistributionsBefore, updateMonthPcts } from './finanzasApi'
-import { PARTIDA_KEYS, PARTIDA_CAMBIO, partidaMeta } from './constants'
+import { PARTIDA_KEYS, PARTIDA_CAMBIO, NOTA_TRASPASO_PARTIDA, partidaMeta } from './constants'
 import DistribucionModal from './DistribucionModal'
 import PagoPartidaModal from './PagoPartidaModal'
 import CerrarMesButton from './CerrarMesButton'
@@ -361,6 +361,11 @@ export default function DistribucionView({
                             <span className="ml-1.5 text-[11px] text-[#999]">
                               ({fmtUSD(d.amountBs)} Bs · {d.rate})
                             </span>
+                          )}
+                          {/* `note` también aloja el centinela de traspaso, que no es
+                              texto para mostrar. */}
+                          {d.note && d.note !== NOTA_TRASPASO_PARTIDA && (
+                            <div className="text-[12px] text-[#999]">{d.note}</div>
                           )}
                         </td>
                         <td className="text-right px-4 py-2.5 font-mono">

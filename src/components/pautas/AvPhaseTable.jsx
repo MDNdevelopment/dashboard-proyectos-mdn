@@ -491,9 +491,9 @@ export default function AvPhaseTable({
           itemLabel="pauta"
           message={
             <>
-              Esta acción <strong>no se puede deshacer</strong>. Se eliminará la pauta y todo su
-              checklist de piezas. Para confirmar, escribe el nombre exacto del cliente a
-              continuación.
+              Esta acción <strong>no se puede deshacer</strong>. Se eliminará la pauta de{' '}
+              <strong>{permanentDeleteTarget.client_name || 'sin cliente'}</strong> y todo su
+              checklist de piezas.
             </>
           }
           confirming={permanentDeleting}

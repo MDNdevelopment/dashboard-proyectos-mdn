@@ -231,8 +231,8 @@ describe('QuestionsView', () => {
 
     // ConfirmDeleteDialog muestra el heading "Eliminar pregunta" y el input de confirmación
     expect(screen.getByRole('heading', { name: 'Eliminar pregunta' })).toBeInTheDocument()
-    // El input tiene el texto de la pregunta como placeholder
-    expect(screen.getByPlaceholderText('¿Cumple con los plazos de entrega?')).toBeInTheDocument()
+    // El diálogo confirma con un solo botón, sin teclear nada.
+    expect(screen.getByRole('button', { name: 'Eliminar' })).toBeEnabled()
   })
 
   it('no-admin no ve el tab Preguntas', () => {

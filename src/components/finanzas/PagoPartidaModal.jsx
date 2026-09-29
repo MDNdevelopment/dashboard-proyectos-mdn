@@ -8,7 +8,8 @@ import {
   resolveRateBcv,
   upsertRate,
 } from './finanzasApi'
-import { PARTIDAS, PARTIDA_KEYS, NOTA_TRASPASO_PARTIDA } from './constants'
+import { PARTIDAS, PARTIDA_KEYS, NOTA_TRASPASO_PARTIDA, CATEGORIAS_GASTO } from './constants'
+import DescribedSelect from '../common/DescribedSelect'
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10)
@@ -22,10 +23,17 @@ function fmtBs(n) {
 }
 
 const LABEL_BY_PARTIDA = {
-  gastos: '¿En qué? (nómina, alquiler, pauta…)',
+  gastos: 'Categoría',
   socios: '¿A qué socio?',
   ganancia: 'Destino / detalle',
 }
+
+/**
+ * Gastos elige de una lista cerrada de rubros (`CATEGORIAS_GASTO`); Socios y
+ * Ganancia siguen con texto libre, porque ahí el campo es un nombre propio o un
+ * detalle, no una clasificación agrupable.
+ */
+const USA_CATEGORIAS = { gastos: true, socios: false, ganancia: false }
 
 const PLACEHOLDER_BY_PARTIDA = {
   gastos: 'Ej. nómina de septiembre',
@@ -52,6 +60,7 @@ export default function PagoPartidaModal({
 }) {
   const { userProfile } = useAuth()
   const [concept, setConcept] = useState('')
+  const [note, setNote] = useState('')
   const [payIn, setPayIn] = useState('usd') // 'usd' | 'bs' — §6.5 de la spec
   const [amount, setAmount] = useState('')
   const [amountBs, setAmountBs] = useState('')
@@ -135,6 +144,7 @@ export default function PagoPartidaModal({
       kind: 'out',
       movedOn: date,
       concept: concept.trim(),
+      note: note.trim() || null,
       beneficiary,
       amount: amt,
       createdBy: userProfile?.user_id,
@@ -195,12 +205,41 @@ export default function PagoPartidaModal({
             <label className="block text-[12px] font-mono font-bold uppercase tracking-wide text-[#888] mb-1.5">
               {LABEL_BY_PARTIDA[partida]}
             </label>
+            {USA_CATEGORIAS[partida] ? (
+              // Se guarda el `label` del rubro, no su key — es lo que va a
+              // `fin_distributions.concept` y se muestra tal cual en las otras vistas.
+              <DescribedSelect
+                value={CATEGORIAS_GASTO.find((c) => c.label === concept)?.key ?? ''}
+                options={CATEGORIAS_GASTO}
+                onChange={(key) =>
+                  setConcept(CATEGORIAS_GASTO.find((c) => c.key === key)?.label ?? '')
+                }
+                placeholder="Elige un rubro…"
+                ariaLabel={LABEL_BY_PARTIDA[partida]}
+              />
+            ) : (
+              <input
+                type="text"
+                className="input-base"
+                value={concept}
+                onChange={(e) => setConcept(e.target.value)}
+                placeholder={PLACEHOLDER_BY_PARTIDA[partida]}
+              />
+            )}
+          </div>
+
+          {/* La categoría clasifica (lista cerrada, para poder agrupar); la nota es el
+              detalle libre de ESE pago, que antes se metía a la fuerza en el concepto. */}
+          <div>
+            <label className="block text-[12px] font-mono font-bold uppercase tracking-wide text-[#888] mb-1.5">
+              Nota <span className="font-sans font-normal normal-case text-[#bbb]">(opcional)</span>
+            </label>
             <input
               type="text"
               className="input-base"
-              value={concept}
-              onChange={(e) => setConcept(e.target.value)}
-              placeholder={PLACEHOLDER_BY_PARTIDA[partida]}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Ej. quincena del 15, factura 1042…"
             />
           </div>
 

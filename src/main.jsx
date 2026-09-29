@@ -373,6 +373,24 @@ createRoot(document.getElementById('root')).render(
               }
             />
             <Route
+              path="/finanzas/movimientos"
+              element={
+                <RequireModule moduleKey="finanzas">
+                  <FinanzasPage />
+                </RequireModule>
+              }
+            />
+            <Route
+              path="/finanzas/divisas"
+              element={
+                <RequireModule moduleKey="finanzas">
+                  <FinanzasPage />
+                </RequireModule>
+              }
+            />
+            {/* Ruta vieja de la tab (se llamaba "Caja Bs"): se mantiene para no romper
+                enlaces guardados — pathToKey() en FinanzasPage la resuelve a 'divisas'. */}
+            <Route
               path="/finanzas/caja-bs"
               element={
                 <RequireModule moduleKey="finanzas">

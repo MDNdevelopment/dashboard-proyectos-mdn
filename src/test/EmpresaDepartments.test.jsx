@@ -137,45 +137,7 @@ describe('EmpresaPage', () => {
 
 // ── Tests ConfirmDeleteDialog ─────────────────────────────────────────────────
 describe('ConfirmDeleteDialog', () => {
-  it('el botón Eliminar está deshabilitado hasta escribir el nombre exacto', async () => {
-    const user = userEvent.setup()
-    const onConfirm = vi.fn()
-    const onCancel = vi.fn()
-
-    render(
-      <ConfirmDeleteDialog
-        itemName="Diseño"
-        itemLabel="departamento"
-        onConfirm={onConfirm}
-        onCancel={onCancel}
-      />,
-    )
-
-    const deleteBtn = screen.getByRole('button', { name: /^eliminar$/i })
-    expect(deleteBtn).toBeDisabled()
-
-    await user.type(screen.getByPlaceholderText('Diseño'), 'Diseño')
-    expect(deleteBtn).not.toBeDisabled()
-  })
-
-  it('el botón permanece deshabilitado con un nombre incorrecto', async () => {
-    const user = userEvent.setup()
-
-    render(
-      <ConfirmDeleteDialog
-        itemName="Diseño"
-        itemLabel="departamento"
-        onConfirm={vi.fn()}
-        onCancel={vi.fn()}
-      />,
-    )
-
-    const deleteBtn = screen.getByRole('button', { name: /^eliminar$/i })
-    await user.type(screen.getByPlaceholderText('Diseño'), 'diseño') // minúscula, no coincide
-    expect(deleteBtn).toBeDisabled()
-  })
-
-  it('llama a onConfirm al hacer click con el nombre correcto', async () => {
+  it('nombra el elemento y llama a onConfirm con un solo click', async () => {
     const user = userEvent.setup()
     const onConfirm = vi.fn()
 
@@ -188,7 +150,8 @@ describe('ConfirmDeleteDialog', () => {
       />,
     )
 
-    await user.type(screen.getByPlaceholderText('Diseño'), 'Diseño')
+    expect(screen.getByRole('heading', { name: 'Eliminar departamento' })).toBeInTheDocument()
+    expect(screen.getByText('Diseño')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /^eliminar$/i }))
     expect(onConfirm).toHaveBeenCalledTimes(1)
   })

@@ -70,12 +70,10 @@ const MOCK_REPORTS = [
 const mockLoadLines = vi.fn().mockResolvedValue({ data: MOCK_LINES, error: null })
 const mockUpdateLine = vi.fn().mockResolvedValue({ data: MOCK_LINES[0], error: null })
 const mockDeleteLine = vi.fn().mockResolvedValue({ data: null, error: null })
-const mockCreateLine = vi
-  .fn()
-  .mockResolvedValue({
-    data: { id: 'line-new', name: 'Nueva', color: '#FAB51A', sort_order: 2, member_user_ids: [] },
-    error: null,
-  })
+const mockCreateLine = vi.fn().mockResolvedValue({
+  data: { id: 'line-new', name: 'Nueva', color: '#FAB51A', sort_order: 2, member_user_ids: [] },
+  error: null,
+})
 const mockLoadCompanyUsers = vi.fn().mockResolvedValue({ data: MOCK_USERS, error: null })
 // loadClients ahora se usa en LinesView para mostrar el conteo de marcas por línea
 const mockLoadClients = vi.fn().mockResolvedValue({ data: MOCK_CLIENTS, error: null })
@@ -259,9 +257,6 @@ describe('LinesView (sección Líneas en Empresa)', () => {
     await user.click(deleteBtns[0])
 
     expect(screen.getByRole('heading', { name: 'Eliminar línea' })).toBeInTheDocument()
-
-    const confirmInput = screen.getByPlaceholderText('Georgina')
-    await user.type(confirmInput, 'Georgina')
 
     const allEliminar = screen.getAllByRole('button', { name: 'Eliminar' })
     await user.click(allEliminar[allEliminar.length - 1])

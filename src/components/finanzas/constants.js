@@ -59,6 +59,82 @@ export function partidaMeta(key) {
   return PARTIDAS[key] ?? (key === PARTIDA_CAMBIO ? PARTIDA_CAMBIO_META : null)
 }
 
+/**
+ * Rubros de gasto operativo: el "¿En qué?" de un pago de la partida Gastos
+ * (`PagoPartidaModal.jsx`). Es una lista CERRADA a propósito — antes era texto
+ * libre, y el mismo gasto entraba escrito de cinco formas distintas ("nomina",
+ * "Nómina sept", "pago quincena"), lo que hacía imposible agrupar por rubro.
+ *
+ * El `label` es lo que se guarda en `fin_distributions.concept`, no la key: esa
+ * columna se muestra tal cual en Distribución, Partida y Movimientos, así que
+ * guardar el nombre legible mantiene esas 3 vistas sin cambios y deja los pagos
+ * históricos (texto libre) perfectamente legibles al lado de los nuevos.
+ *
+ * 'Sin clasificar' es la vía de escape cuando nada encaja; si empieza a crecer, a
+ * esta lista le falta un rubro.
+ */
+export const CATEGORIAS_GASTO = [
+  {
+    key: 'nomina',
+    label: 'Nómina y personal',
+    description:
+      'Sueldos, quincenas, bonos, utilidades, liquidaciones, horas extra, freelancers y colaboradores externos.',
+  },
+  {
+    key: 'beneficios',
+    label: 'Beneficios y bienestar',
+    description:
+      'Comida y refrigerios, transporte de personal, cobertura médica, actividades internas, cumpleaños, celebraciones.',
+  },
+  {
+    key: 'sede',
+    label: 'Sede y servicios',
+    description:
+      'Alquiler, condominio, electricidad, agua, aseo, vigilancia, mantenimiento del local, limpieza.',
+  },
+  {
+    key: 'conectividad',
+    label: 'Conectividad y software',
+    description:
+      'Internet y respaldo, telefonía, Adobe, Canva, Make, Higgsfield, Claude, hosting, dominios, licencias y suscripciones.',
+  },
+  {
+    key: 'equipos',
+    label: 'Equipos y producción',
+    description:
+      'Cámaras, lentes, luces, micrófonos, computadoras, teléfonos, discos, reparaciones, utilería y ambientación.',
+  },
+  {
+    key: 'movilidad',
+    label: 'Movilidad y pautas',
+    description:
+      'Combustible, mantenimiento de vehículos, traslados para grabaciones, viáticos, peajes, estacionamiento.',
+  },
+  {
+    key: 'impuestos',
+    label: 'Impuestos y legales',
+    description:
+      'ISLR, IVA por enterar, impuestos municipales, IVSS y parafiscales, contador, abogado, permisos, trámites.',
+  },
+  {
+    key: 'financieros',
+    label: 'Financieros',
+    description:
+      'Comisiones bancarias y de plataformas de pago, transferencias, costos de mover dinero (sin confundir con resultado por cambio, que tiene partida propia).',
+  },
+  {
+    key: 'marca',
+    label: 'Marca propia y comercial',
+    description:
+      'Pauta propia, material POP, regalos a clientes, eventos, ferias, gastos de representación.',
+  },
+  {
+    key: 'sin_clasificar',
+    label: 'Sin clasificar',
+    description: 'El cubo por defecto; si crece mucho, a la lista le falta un rubro.',
+  },
+]
+
 /** Métodos disponibles cuando el cobro se registra en USD (ver CobroModal.jsx). */
 export const METODOS_PAGO_USD = ['Zelle', 'Efectivo $', 'Otro']
 
@@ -76,6 +152,55 @@ export const METODOS_PAGO = [...new Set([...METODOS_PAGO_USD, ...METODOS_PAGO_BS
 export const FX_OP_TYPES = {
   compra: { key: 'compra', label: 'Compra de dólares' },
   venta: { key: 'venta', label: 'Venta de dólares' },
+}
+
+/**
+ * Tipos de fila de la tab Movimientos (el diario consolidado del módulo). `orden`
+ * es el orden de exhibición cuando se ordena por tipo — de flujo del dinero, no
+ * alfabético (mismo criterio que ordenar estados de tarea por su secuencia).
+ *
+ * `naturaleza` dice QUÉ PUEDE SUMARSE y es la clave de que los totales no mientan:
+ *   - `ingreso` / `egreso`: dinero que entra o sale de la empresa.
+ *   - `conversion`: compra/venta de divisas. No suma ni resta patrimonio, cambia
+ *     de bolsillo (Bs ↔ divisa).
+ *   - `interno`: asignación a partida y traspaso entre partidas. El dólar ya entró
+ *     en su cobro; contarlo otra vez al etiquetarlo infla el mes ~1.72×.
+ *   - `ajuste`: conciliación de la Caja Bs contra el banco.
+ */
+export const MOVIMIENTO_TIPOS = {
+  cobro: { key: 'cobro', label: 'Cobro', naturaleza: 'ingreso', orden: 0 },
+  asignacion: { key: 'asignacion', label: 'Asignación a partida', naturaleza: 'interno', orden: 1 },
+  pago: { key: 'pago', label: 'Pago', naturaleza: 'egreso', orden: 2 },
+  traspaso: {
+    key: 'traspaso',
+    label: 'Traspaso entre partidas',
+    naturaleza: 'interno',
+    orden: 3,
+  },
+  compra_divisa: {
+    key: 'compra_divisa',
+    label: 'Compra de divisas',
+    naturaleza: 'conversion',
+    orden: 4,
+  },
+  venta_divisa: {
+    key: 'venta_divisa',
+    label: 'Venta de divisas',
+    naturaleza: 'conversion',
+    orden: 5,
+  },
+  cambio: { key: 'cambio', label: 'Resultado por cambio', naturaleza: 'interno', orden: 6 },
+  ajuste_bs: { key: 'ajuste_bs', label: 'Ajuste de Caja Bs', naturaleza: 'ajuste', orden: 7 },
+}
+
+export const MOVIMIENTO_TIPO_KEYS = Object.keys(MOVIMIENTO_TIPOS)
+
+/** Qué caja toca un movimiento, para la columna "Caja" de Movimientos. */
+export const CAJA_LABELS = {
+  divisa: 'Divisa',
+  bs: 'Caja Bs',
+  ambas: 'Divisa + Caja Bs',
+  ninguna: '—',
 }
 
 /** Etiquetas en español para la columna "origen" del libro de Caja Bs. */

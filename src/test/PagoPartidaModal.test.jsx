@@ -29,10 +29,14 @@ import { NOTA_TRASPASO_PARTIDA } from '../components/finanzas/constants'
 
 const saldos = { gastos: 100, socios: 500, ganancia: 300 }
 
+/**
+ * La "Categoría" de Gastos es un selector de rubros con descripción, no texto libre:
+ * se abre el menú y se elige una opción. Lo que se guarda en `concept` es el nombre
+ * del rubro.
+ */
 function fillCommon() {
-  fireEvent.change(screen.getByPlaceholderText('Ej. nómina de septiembre'), {
-    target: { value: 'Nómina' },
-  })
+  fireEvent.click(screen.getByRole('button', { name: 'Categoría' }))
+  fireEvent.click(screen.getByRole('option', { name: /Nómina y personal/ }))
 }
 
 describe('PagoPartidaModal — pago con saldo suficiente', () => {
@@ -117,7 +121,7 @@ describe('PagoPartidaModal — pago que excede el disponible', () => {
         partida: 'gastos',
         kind: 'out',
         amount: 150,
-        concept: 'Nómina',
+        concept: 'Nómina y personal',
       }),
     ])
   })
@@ -206,6 +210,134 @@ describe('PagoPartidaModal — pago en bolívares (§6.5)', () => {
     expect(rows[1]).toEqual(expect.objectContaining({ partida: 'gastos', kind: 'in' }))
     expect(rows[2]).toEqual(
       expect.objectContaining({ partida: 'gastos', kind: 'out', currency: 'Bs', amountBs: 122400 }),
+    )
+  })
+})
+
+/**
+ * El "¿En qué?" de Gastos pasó de texto libre a una lista cerrada de rubros: el mismo
+ * gasto entraba escrito de cinco formas distintas y no se podía agrupar. Socios y
+ * Ganancia siguen con texto libre porque ahí el campo es un nombre propio o un
+ * detalle, no una clasificación.
+ */
+describe('PagoPartidaModal — rubro de gasto', () => {
+  function renderPara(partida) {
+    render(
+      <PagoPartidaModal
+        monthId="m-1"
+        partida={partida}
+        saldos={saldos}
+        onClose={() => {}}
+        onSaved={() => {}}
+      />,
+    )
+  }
+
+  it('Gastos ofrece los 10 rubros, cada uno con su descripción', () => {
+    renderPara('gastos')
+    fireEvent.click(screen.getByRole('button', { name: 'Categoría' }))
+
+    const opciones = screen.getAllByRole('option')
+    expect(opciones).toHaveLength(10)
+    expect(opciones[0]).toHaveTextContent('Nómina y personal')
+    expect(opciones[0]).toHaveTextContent(/Sueldos, quincenas, bonos/)
+    // 'Sin clasificar' es la vía de escape, y va al final.
+    expect(opciones.at(-1)).toHaveTextContent('Sin clasificar')
+  })
+
+  it('Gastos no acepta texto libre: no hay input de concepto', () => {
+    renderPara('gastos')
+    expect(screen.queryByPlaceholderText(/nómina de septiembre/i)).not.toBeInTheDocument()
+  })
+
+  it('guarda el nombre del rubro en concept, no su key interna', async () => {
+    mockCreateDistribution.mockClear()
+    renderPara('gastos')
+    fireEvent.click(screen.getByRole('button', { name: 'Categoría' }))
+    fireEvent.click(screen.getByRole('option', { name: /Conectividad y software/ }))
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '50' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar pago' }))
+
+    await waitFor(() =>
+      expect(mockCreateDistribution).toHaveBeenCalledWith(
+        'm-1',
+        expect.objectContaining({ concept: 'Conectividad y software' }),
+      ),
+    )
+  })
+
+  it('sin elegir rubro, no registra nada y avisa', async () => {
+    mockCreateDistribution.mockClear()
+    renderPara('gastos')
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '50' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar pago' }))
+
+    expect(await screen.findByText('Este campo es obligatorio')).toBeInTheDocument()
+    expect(mockCreateDistribution).not.toHaveBeenCalled()
+  })
+
+  it('Socios y Ganancia conservan el texto libre', () => {
+    renderPara('socios')
+    expect(screen.getByPlaceholderText('Ej. Marlon, Paola…')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '¿A qué socio?' })).not.toBeInTheDocument()
+  })
+})
+
+/**
+ * La nota es el detalle libre de ESE pago, aparte de la categoría que lo clasifica.
+ * Va a `fin_distributions.note` — la misma columna donde vive el centinela de
+ * traspaso, pero la fila del pago nunca lo lleva, así que no hay colisión.
+ */
+describe('PagoPartidaModal — nota del pago', () => {
+  it('guarda la nota en note, junto a la categoría en concept', async () => {
+    mockCreateDistribution.mockClear()
+    render(
+      <PagoPartidaModal
+        monthId="m-1"
+        partida="gastos"
+        saldos={saldos}
+        onClose={() => {}}
+        onSaved={() => {}}
+      />,
+    )
+    fillCommon()
+    fireEvent.change(screen.getByPlaceholderText(/quincena del 15/), {
+      target: { value: 'Quincena del 15, Ovidio' },
+    })
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '50' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar pago' }))
+
+    await waitFor(() =>
+      expect(mockCreateDistribution).toHaveBeenCalledWith(
+        'm-1',
+        expect.objectContaining({
+          concept: 'Nómina y personal',
+          note: 'Quincena del 15, Ovidio',
+        }),
+      ),
+    )
+  })
+
+  it('es opcional: sin nota guarda null, no una cadena vacía', async () => {
+    mockCreateDistribution.mockClear()
+    render(
+      <PagoPartidaModal
+        monthId="m-1"
+        partida="gastos"
+        saldos={saldos}
+        onClose={() => {}}
+        onSaved={() => {}}
+      />,
+    )
+    fillCommon()
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '50' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar pago' }))
+
+    await waitFor(() =>
+      expect(mockCreateDistribution).toHaveBeenCalledWith(
+        'm-1',
+        expect.objectContaining({ note: null }),
+      ),
     )
   })
 })

@@ -18,6 +18,8 @@ import {
   CONCEPTO_RECURRENTE,
   PARTIDA_CAMBIO,
   NOTA_TRASPASO_PARTIDA,
+  MOVIMIENTO_TIPOS,
+  FX_OP_TYPES,
 } from '../components/finanzas/constants'
 import { clientInMonth } from './clientInMonth'
 
@@ -50,24 +52,41 @@ export function estadoFactura(invoice) {
 }
 
 /**
- * Moneda y monto en los que se muestra lo COBRADO de una factura en tablas
- * como FacturacionView.jsx — distinto de `invoice.currency`, que es solo la
- * moneda en la que se FACTURÓ. Un cliente puede facturar en USD y pagar en
- * bolívares: si TODOS los abonos registrados están en Bs, se suma
- * `amount_bs` y se etiqueta 'Bs' (aunque la factura se haya emitido en USD —
- * el monto facturado no cambia, sigue siendo el USD original). Sin abonos
- * aún, o con una mezcla de monedas entre abonos, cae al total exacto en USD
- * (`cobradoDe`) y a la moneda de la factura, que es lo único inequívoco en
- * ese caso.
+ * Desglose de lo cobrado de una factura por la moneda en la que ENTRÓ el
+ * dinero (`fin_payments`), nunca por `invoice.currency` — la moneda de
+ * facturación es configuración (casi todas las marcas están en USD) y no dice
+ * nada de cómo pagó el cliente. Esto es lo que alimenta la vista Cobros de
+ * `FacturacionView.jsx`: su columna "Moneda", el monto mostrado y el filtro
+ * Todas/USD/Bs.
+ *
+ * Un abono cuenta como Bs si tiene `amountBs` cargado (mismo criterio que
+ * `cobradoPorMoneda()`); si no, es divisa.
+ *
+ * @returns {{ usd: number, bs: number, monedas: ('USD'|'Bs')[] }}
+ *   `usd` suma en dólares de los abonos en divisa; `bs` suma en bolívares de
+ *   los abonos en Bs; `monedas` las monedas realmente presentes — vacío si la
+ *   factura no tiene abonos, y con las dos si el cobro fue mixto (ahí la
+ *   factura aparece tanto al filtrar USD como al filtrar Bs, porque entró
+ *   dinero en ambas).
  */
-export function cobradoMostradoDe(invoice) {
-  const payments = invoice?.payments ?? []
-  const allBs = payments.length > 0 && payments.every((p) => p.amountBs != null)
-  if (allBs) {
-    const bs = payments.reduce((a, p) => a + Number(p.amountBs ?? 0), 0)
-    return { currency: 'Bs', amount: bs }
+export function cobrosPorMonedaDe(invoice) {
+  let usd = 0
+  let bs = 0
+  let hayUsd = false
+  let hayBs = false
+  for (const p of invoice?.payments ?? []) {
+    if (p.amountBs != null) {
+      bs += Number(p.amountBs ?? 0)
+      hayBs = true
+    } else {
+      usd += Number(p.amount ?? 0)
+      hayUsd = true
+    }
   }
-  return { currency: invoice?.currency ?? 'USD', amount: cobradoDe(invoice) }
+  const monedas = []
+  if (hayUsd) monedas.push('USD')
+  if (hayBs) monedas.push('Bs')
+  return { usd, bs, monedas }
 }
 
 export function totalFacturado(invoices) {
@@ -268,25 +287,7 @@ export function invoiceRowsForNewMonth({ prevInvoices, clients, year, month }) {
   return rows
 }
 
-// ─── Por cobrar / análisis ───────────────────────────────────────────────────────
-
-/**
- * Aplana las facturas de varios meses en una sola lista de cuentas por cobrar,
- * incluyendo solo las que aún tienen pendiente > tolerancia.
- * @param {Array<{year:number, month:number, invoices:Array}>} monthsWithInvoices
- * @returns {Array<{year, month, invoice, cobrado, pendiente}>}
- */
-export function cuentasPorCobrar(monthsWithInvoices) {
-  const out = []
-  for (const { year, month, invoices } of monthsWithInvoices ?? []) {
-    for (const invoice of invoices ?? []) {
-      const cobrado = cobradoDe(invoice)
-      const pendiente = Number(invoice.amount ?? 0) - cobrado
-      if (pendiente > EPS) out.push({ year, month, invoice, cobrado, pendiente })
-    }
-  }
-  return out
-}
+// ─── Análisis ───────────────────────────────────────────────────────────────────
 
 /** Tasa de cobranza del mes: cobrado / facturado (0 si no hay facturación). */
 export function tasaCobranza(invoices) {
@@ -529,6 +530,228 @@ export function cuadreDivisas({ invoices, distributions, fxOperations, ledger, r
       : Math.round((cobrado - pagosReales + cambio - (divisaFisicaVal + saldoBsUsdRef)) * 100) /
         100,
   }
+}
+
+// ─── Movimientos consolidados (tab Movimientos) ─────────────────────────────────
+//
+// Diario único del módulo Finanzas: cobros, asignaciones y pagos de partida,
+// traspasos, compras/ventas de divisas y ajustes de la Caja Bs, en una sola lista.
+// Es SOLO LECTURA — borrar y editar sigue siendo cosa de la tab de origen.
+
+/** `true` si una fecha ISO (`YYYY-MM-DD`) cae dentro de `monthKey` (`YYYY-MM`). */
+function enMes(fecha, monthKey) {
+  return String(fecha ?? '').slice(0, 7) === monthKey
+}
+
+/** Monto firmado: positivo si entra, negativo si sale. */
+function firmado(monto, kind) {
+  const n = Math.abs(Number(monto ?? 0))
+  return kind === 'out' ? -n : n
+}
+
+/**
+ * Aplana en UNA sola lista todos los movimientos de dinero del mes, ordenados de
+ * más reciente a más antiguo.
+ *
+ * REGLA DE DEDUPLICACIÓN — una fila por HECHO económico, emitida desde la tabla
+ * donde el usuario lo creó. Las filas que escriben los triggers (`fin_bs_ledger` y
+ * la partida técnica `cambio`) nunca son filas propias: se pliegan como columnas de
+ * su fuente. Es la misma doctrina que ya rige el borrado (ver `accionBorrado()` en
+ * CajaBsView.jsx). Sin esto, una compra de divisas ocuparía 3 renglones y cualquier
+ * suma daría basura.
+ *   - compra/venta de divisas → 1 fila desde `fin_fx_operations`; su pata en Bs va
+ *     en `montoBs` y su resultado por cambio en `resultadoCambioUsd`.
+ *   - cobro en Bs / pago directo en Bs → 1 fila desde su fuente (`amountBs`/`rate`
+ *     ya viven ahí).
+ *   - del libro de Bs SOLO entra `source === 'ajuste'`, que es la única fila del
+ *     libro sin fila fuente (la única excepción manual del módulo).
+ *
+ * REGLA DE PERTENENCIA AL MES — manda la fecha DEL MOVIMIENTO (`paidOn`/`movedOn`),
+ * no su `month_id`. Movimientos es un diario de caja: importa cuándo se movió el
+ * dinero. Un cobro de la factura de agosto pagado el 3 de septiembre es un
+ * movimiento de septiembre. Por eso `invoices`/`distributions` deben venir
+ * ACUMULADOS hasta el mes (`loadInvoicesUpTo`/`loadDistributionsUpTo`), igual que
+ * `fxOperations`/`bsLedger`: con solo el mes activo, ese cobro tardío no estaría en
+ * memoria y desaparecería de las dos tabs.
+ *
+ * Límite conocido: la regla de fecha manda para MOSTRAR, pero solo dentro del
+ * universo `month_id <= mes activo`. Un movimiento fechado en el mes M y guardado
+ * bajo un `month_id` posterior (prepago) no aparece. Hoy no existe ese flujo en el
+ * módulo (se factura a inicio de mes y se cobra después).
+ *
+ * @returns {Array<object>} filas con { id, tipo, naturaleza, sourceTable, sourceId,
+ *   fecha, createdAt, concepto, contraparte, partida, moneda, montoUsd (firmado),
+ *   montoBs (firmado), tasa, tasaBcv, resultadoCambioUsd, afectaCaja, interno }
+ */
+export function movimientosDelMes({
+  invoices,
+  distributions,
+  fxOperations,
+  bsLedger,
+  year,
+  month,
+}) {
+  const monthKey = `${year}-${String(month).padStart(2, '0')}`
+  const rows = []
+
+  const fila = (tipo, extra) => ({
+    tipo,
+    naturaleza: MOVIMIENTO_TIPOS[tipo].naturaleza,
+    interno: MOVIMIENTO_TIPOS[tipo].naturaleza === 'interno',
+    partida: null,
+    contraparte: null,
+    nota: null,
+    montoBs: null,
+    tasa: null,
+    tasaBcv: null,
+    resultadoCambioUsd: null,
+    ...extra,
+  })
+
+  // 1. Cobros (fin_payments), por su fecha de pago.
+  for (const inv of invoices ?? []) {
+    for (const p of inv.payments ?? []) {
+      if (!enMes(p.paidOn, monthKey)) continue
+      // Mismo criterio de moneda que cobrosPorMonedaDe(): un abono cuenta como Bs si
+      // trae amountBs, no por invoice.currency (que es configuración del cliente).
+      const enBs = p.amountBs != null
+      rows.push(
+        fila('cobro', {
+          id: `pay:${p.id}`,
+          sourceTable: 'fin_payments',
+          sourceId: p.id,
+          fecha: p.paidOn,
+          createdAt: p.createdAt ?? null,
+          concepto: inv.concept ?? 'Cobro',
+          contraparte: inv.clientName ?? null,
+          moneda: enBs ? 'Bs' : 'USD',
+          montoUsd: firmado(p.amount, 'in'),
+          montoBs: enBs ? firmado(p.amountBs, 'in') : null,
+          tasa: p.rate ?? null,
+          afectaCaja: enBs ? 'bs' : 'divisa',
+        }),
+      )
+    }
+  }
+
+  // 2. Distribuciones: asignaciones, pagos y traspasos. Una fila 'cambio' se excluye
+  //    SOLO si su operación de divisas está presente para plegarla; si la operación
+  //    no aparece (borrado a medias, o fuera del rango cargado) se muestra como fila
+  //    propia: mejor una fila rara visible que un dólar invisible.
+  const fxIds = new Set((fxOperations ?? []).map((op) => op.id))
+  const cambioPorFx = new Map()
+  for (const d of distributions ?? []) {
+    if (d.partida === PARTIDA_CAMBIO && d.fxOperationId && fxIds.has(d.fxOperationId)) {
+      cambioPorFx.set(d.fxOperationId, d)
+      continue
+    }
+    if (!enMes(d.movedOn, monthKey)) continue
+
+    const tipo =
+      d.partida === PARTIDA_CAMBIO
+        ? 'cambio'
+        : d.note === NOTA_TRASPASO_PARTIDA
+          ? 'traspaso'
+          : d.kind === 'out'
+            ? 'pago'
+            : 'asignacion'
+    const enBs = d.currency === 'Bs'
+    const mueveCaja = tipo === 'pago'
+    rows.push(
+      fila(tipo, {
+        id: `dist:${d.id}`,
+        sourceTable: 'fin_distributions',
+        sourceId: d.id,
+        fecha: d.movedOn,
+        createdAt: d.createdAt ?? null,
+        concepto: d.concept ?? '',
+        contraparte: d.beneficiary ?? null,
+        nota: d.note === NOTA_TRASPASO_PARTIDA ? null : (d.note ?? null),
+        partida: d.partida,
+        moneda: enBs ? 'Bs' : 'USD',
+        montoUsd: firmado(d.amount, d.kind),
+        montoBs: enBs && mueveCaja ? firmado(d.amountBs, d.kind) : null,
+        tasa: enBs ? (d.rate ?? null) : null,
+        afectaCaja: mueveCaja ? (enBs ? 'bs' : 'divisa') : 'ninguna',
+      }),
+    )
+  }
+
+  // 3. Compras y ventas de divisas: una fila que ya lleva su pata en Bs y su
+  //    resultado por cambio. El delta se LEE de la fila 'cambio' que insertó el
+  //    trigger, no se recalcula con deltaCambio(): una sola fórmula por número.
+  for (const op of fxOperations ?? []) {
+    if (!enMes(op.movedOn, monthKey)) continue
+    const esCompra = op.opType === 'compra'
+    const cambio = cambioPorFx.get(op.id)
+    rows.push(
+      fila(esCompra ? 'compra_divisa' : 'venta_divisa', {
+        id: `fx:${op.id}`,
+        sourceTable: 'fin_fx_operations',
+        sourceId: op.id,
+        fecha: op.movedOn,
+        createdAt: op.createdAt ?? null,
+        // El destino, no el tipo: la columna Tipo ya dice "Compra/Venta de divisas",
+        // así que repetirlo en el concepto no aporta nada.
+        concepto: op.purpose || (FX_OP_TYPES[op.opType]?.label ?? 'Operación de divisas'),
+        contraparte: op.counterparty ?? null,
+        moneda: 'Bs',
+        // Una compra mete divisa y saca bolívares; una venta, al revés.
+        montoUsd: firmado(op.amountUsd, esCompra ? 'in' : 'out'),
+        montoBs: firmado(op.amountBs, esCompra ? 'out' : 'in'),
+        tasa: op.rateReal ?? null,
+        tasaBcv: op.rateBcv ?? null,
+        resultadoCambioUsd: cambio ? firmado(cambio.amount, cambio.kind) : 0,
+        afectaCaja: 'ambas',
+      }),
+    )
+  }
+
+  // 4. Ajustes de cuadre de la Caja Bs: su propia fuente.
+  for (const l of bsLedger ?? []) {
+    if (l.source !== 'ajuste' || !enMes(l.movedOn, monthKey)) continue
+    rows.push(
+      fila('ajuste_bs', {
+        id: `bsl:${l.id}`,
+        sourceTable: 'fin_bs_ledger',
+        sourceId: l.id,
+        fecha: l.movedOn,
+        createdAt: l.createdAt ?? null,
+        concepto: l.concept ?? 'Ajuste de cuadre',
+        moneda: 'Bs',
+        montoUsd: l.amountUsdRef == null ? null : firmado(l.amountUsdRef, l.kind),
+        montoBs: firmado(l.amountBs, l.kind),
+        tasa: l.rate ?? null,
+        afectaCaja: 'bs',
+      }),
+    )
+  }
+
+  // Más reciente primero. `fecha` no tiene hora, así que dos movimientos del mismo
+  // día empatarían y quedarían en el orden en que se cargaron (los más viejos
+  // primero) — `createdAt` sí es un timestamp real y desempata bien. Mismo bug y
+  // misma solución que DistribucionView.
+  return rows.sort((a, b) => {
+    if (a.fecha !== b.fecha) return a.fecha < b.fecha ? 1 : -1
+    return String(a.createdAt ?? '') < String(b.createdAt ?? '') ? 1 : -1
+  })
+}
+
+/**
+ * Totales de un conjunto de filas de `movimientosDelMes()`. Solo agrega lo que de
+ * verdad entra y sale de la empresa: las conversiones de divisa, las asignaciones,
+ * los traspasos y los ajustes quedan fuera del neto a propósito — si se sumaran, el
+ * neto contradiría el cuadre de caja que publica la tab Divisas (`cuadreDivisas()`),
+ * que es el dueño de ese número.
+ */
+export function totalesMovimientos(rows) {
+  let entradas = 0
+  let salidas = 0
+  for (const r of rows ?? []) {
+    if (r.naturaleza === 'ingreso') entradas += Math.abs(Number(r.montoUsd ?? 0))
+    else if (r.naturaleza === 'egreso') salidas += Math.abs(Number(r.montoUsd ?? 0))
+  }
+  return { entradas, salidas, neto: entradas - salidas, cuenta: (rows ?? []).length }
 }
 
 /**

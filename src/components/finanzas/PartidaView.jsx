@@ -9,8 +9,8 @@ import {
   saldoPartida,
   pctsDelMes,
 } from '../../utils/finanzas'
-import { loadDistributionsBefore, deleteDistribution } from './finanzasApi'
-import { PARTIDA_KEYS, PARTIDA_CAMBIO, partidaMeta } from './constants'
+import { loadDistributionsBefore, deleteDistribution, deleteFxOperation } from './finanzasApi'
+import { PARTIDA_KEYS, PARTIDA_CAMBIO, NOTA_TRASPASO_PARTIDA, partidaMeta } from './constants'
 import PagoPartidaModal from './PagoPartidaModal'
 import ConfirmDeleteDialog from '../common/ConfirmDeleteDialog'
 
@@ -155,6 +155,9 @@ export default function PartidaView({
                 <td className="px-4 py-2.5">
                   {d.concept}
                   {d.beneficiary && <div className="text-[12px] text-[#999]">{d.beneficiary}</div>}
+                  {d.note && d.note !== NOTA_TRASPASO_PARTIDA && (
+                    <div className="text-[12px] text-[#999]">{d.note}</div>
+                  )}
                 </td>
                 <td className="px-4 py-2.5">
                   <span
@@ -214,9 +217,23 @@ export default function PartidaView({
         <ConfirmDeleteDialog
           itemLabel="movimiento"
           itemName={toDelete.concept}
+          message={
+            toDelete.fxOperationId ? (
+              <>
+                Este movimiento lo generó una <strong>operación de divisas</strong>, así que se
+                elimina la operación completa: también su movimiento en la Caja Bs. Esta acción{' '}
+                <strong>no se puede deshacer</strong>.
+              </>
+            ) : undefined
+          }
           onCancel={() => setToDelete(null)}
           onConfirm={async () => {
-            await deleteDistribution(toDelete.id)
+            // Una fila 'cambio' es DERIVADA de fin_fx_operations: borrarla sola
+            // dejaría viva la compra/venta y su movimiento de Caja Bs, y el cuadre
+            // quedaría descuadrado para siempre. Se borra la fuente y el cascade
+            // limpia las dos filas derivadas.
+            if (toDelete.fxOperationId) await deleteFxOperation(toDelete.fxOperationId)
+            else await deleteDistribution(toDelete.id)
             setToDelete(null)
             refetch()
           }}

@@ -1,20 +1,25 @@
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
 
 /**
- * Diálogo de confirmación de borrado reutilizable.
- * El usuario debe escribir el nombre exacto del elemento para habilitar el botón.
+ * Diálogo de confirmación de borrado reutilizable: nombra lo que se va a eliminar y
+ * se confirma con UN botón.
+ *
+ * Antes exigía teclear el nombre exacto del elemento para habilitar el botón. Se
+ * quitó en todo el sistema: no protegía de nada real (quien abre el diálogo ya eligió
+ * la fila y va a copiar el nombre que tiene delante) y cobraba fricción en cada
+ * borrado. Lo que protege de verdad es que el diálogo diga con claridad QUÉ se
+ * elimina y qué se puede deshacer — de ahí `itemName` en el mensaje por defecto y los
+ * `message` propios de cada llamador.
  *
  * Props:
- *   itemName   — texto exacto que el usuario debe teclear para confirmar
- *   itemLabel  — "departamento", "cargo", "empleado", etc. (para el texto del diálogo)
+ *   itemName   — nombre de lo que se elimina; aparece en el mensaje por defecto
+ *   itemLabel  — "departamento", "cargo", "empleado", etc. (para el título del diálogo)
  *   message    — mensaje alternativo (opcional; reemplaza el texto por defecto)
  *   onConfirm  — callback cuando el usuario confirma
  *   onCancel   — callback cuando cancela o cierra
  *   confirming — bool; muestra "Eliminando…" y deshabilita botones mientras se procesa
- *   children   — contenido opcional que se renderiza en el body, sobre el input de confirmación
+ *   children   — contenido opcional que se renderiza en el body, bajo el mensaje
  *                (p.ej. opciones extra específicas del elemento a eliminar)
- *   fieldLabel — texto del label sobre el input (default "Nombre del {itemLabel}"); útil cuando
- *                lo que se teclea no es un nombre sino, p.ej., una fecha ("Fecha de inicio").
  */
 export default function ConfirmDeleteDialog({
   itemName,
@@ -24,15 +29,7 @@ export default function ConfirmDeleteDialog({
   onCancel,
   confirming = false,
   children,
-  fieldLabel,
 }) {
-  const [typed, setTyped] = useState('')
-  const normalize = (s) =>
-    String(s ?? '')
-      .replace(/\s+/g, ' ')
-      .trim()
-  const canDelete = normalize(typed) === normalize(itemName)
-
   useEffect(() => {
     const fn = (e) => {
       if (e.key === 'Escape') onCancel()
@@ -71,27 +68,13 @@ export default function ConfirmDeleteDialog({
           <p className="text-[15px] text-[#555]">
             {message ?? (
               <>
-                Esta acción <strong>no se puede deshacer</strong>. Para confirmar, escribe el nombre
-                exacto del {itemLabel} a continuación.
+                Se eliminará <strong>{itemName}</strong>. Esta acción{' '}
+                <strong>no se puede deshacer</strong>.
               </>
             )}
           </p>
 
           {children}
-
-          <div>
-            <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
-              {fieldLabel ?? `Nombre del ${itemLabel}`}
-            </label>
-            <input
-              type="text"
-              className="input-base"
-              value={typed}
-              onChange={(e) => setTyped(e.target.value)}
-              placeholder={itemName}
-              autoFocus
-            />
-          </div>
 
           <div className="flex items-center justify-end gap-2 pt-1">
             <button
@@ -105,7 +88,7 @@ export default function ConfirmDeleteDialog({
             <button
               type="button"
               onClick={onConfirm}
-              disabled={!canDelete || confirming}
+              disabled={confirming}
               className="px-4 py-2 rounded-xl text-[15px] font-bold bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {confirming ? 'Eliminando…' : 'Eliminar'}

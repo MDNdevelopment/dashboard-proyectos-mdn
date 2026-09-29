@@ -97,7 +97,6 @@ describe('ExternalResourcesView', () => {
     await waitFor(() => expect(screen.getByText('Alan Puentes')).toBeInTheDocument())
 
     await user.click(screen.getByRole('button', { name: 'Eliminar Alan Puentes' }))
-    await user.type(screen.getByPlaceholderText('Alan Puentes'), 'Alan Puentes')
     await user.click(screen.getByRole('button', { name: 'Eliminar' }))
 
     await waitFor(() => {

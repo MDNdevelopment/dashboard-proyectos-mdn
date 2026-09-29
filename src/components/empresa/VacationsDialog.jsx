@@ -550,7 +550,6 @@ export default function VacationsDialog({ employee, onClose, onChange, canManage
         <ConfirmDeleteDialog
           itemName={fmtDate(deleteDialog.start_date)}
           itemLabel="vacación"
-          fieldLabel="Fecha de inicio"
           message={
             <>
               Esta acción <strong>no se puede deshacer</strong>. Vas a eliminar la vacación del{' '}
@@ -564,9 +563,7 @@ export default function VacationsDialog({ employee, onClose, onChange, canManage
                   Es una vacación <strong>ya pasada</strong> — estás borrando historial, no una
                   vacación planificada.
                 </>
-              )}{' '}
-              Para confirmar, escribe la fecha de inicio ({fmtDate(deleteDialog.start_date)}) a
-              continuación.
+              )}
             </>
           }
           onConfirm={handleDeleteVacation}
