@@ -295,6 +295,7 @@ export const CHANGELOG = [
       'Al eliminar un empleado ahora se pregunta si el mes de su salida todavía cuenta en los reportes: elige "sí trabajó este mes" o "sacarlo también de este mes" según cuándo se fue.',
       'Corregido: en Reportes → Finanzas, si el reporte de un mes ya pasado se abría por primera vez tiempo después, nacía copiando la nómina y los ingresos del mes anterior sin filtrar — aparecían empleados y cuentas que ya se habían dado de baja. Ahora se descartan solos.',
       'En Reportes → Finanzas ya se puede eliminar a mano una fila de sueldo de un empleado, para corregir la nómina de un mes pasado. Al quitar a alguien aparece un aviso en el mismo bloque recordando que hay que bajar y pulsar "Guardar finanzas" para que el cambio quede.',
+      'Nuevo aviso para las jefas de línea: al entrar a la herramienta salta un mensaje si alguna de tus cuentas todavía tiene asignado como social, diseñador, audiovisual o apoyo a alguien que ya no trabaja en MDN. Se reasigna desde el mismo aviso, cuenta por cuenta, y vuelve a aparecer cada vez que entres hasta que no quede ninguno — así la hoja de "Clientes por social" siempre sale con los nombres correctos.',
     ],
   },
   {

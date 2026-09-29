@@ -10,10 +10,12 @@ import InstallBanner from './InstallBanner'
 import NotificationBell from './notifications/NotificationBell'
 import WhatsNewModal from './WhatsNewModal'
 import ReportCloseReminderModal from './ReportCloseReminderModal'
+import StaleClientResourcesModal from './StaleClientResourcesModal'
 import AiChatWidget from './ai/AiChatWidget'
 import { AiChatProvider } from '../context/AiChatContext'
 import { useWhatsNew } from '../hooks/useWhatsNew'
 import { useReportCloseReminder } from '../hooks/useReportCloseReminder'
+import { useStaleClientResources } from '../hooks/useStaleClientResources'
 import { exportProjectsToMarkdown, downloadMarkdown } from '../utils/exportProjectsToMarkdown'
 
 const normalize = (row) => ({ ...row, createdAt: row.created_at })
@@ -30,6 +32,7 @@ export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { entries: whatsNewEntries, dismiss: dismissWhatsNew } = useWhatsNew()
   const reportReminder = useReportCloseReminder(userProfile?.company_id, userProfile?.user_id)
+  const staleResources = useStaleClientResources(userProfile?.company_id, userProfile?.user_id)
   const detailProject = detailId ? projects.find((p) => p.id === detailId) : null
 
   useEffect(() => {
@@ -211,6 +214,19 @@ export default function AppLayout() {
           period={reportReminder.period}
           daysLeft={reportReminder.daysLeft}
           onClose={reportReminder.dismiss}
+        />
+
+        {/* Tercer eslabón de la cola de avisos globales: solo cuando los dos
+            anteriores no están en pantalla, para no apilar modales. */}
+        <StaleClientResourcesModal
+          show={whatsNewEntries.length === 0 && !reportReminder.show && staleResources.show}
+          items={staleResources.items}
+          employees={staleResources.employees}
+          lines={staleResources.lines}
+          savingKey={staleResources.savingKey}
+          error={staleResources.error}
+          onReassign={staleResources.reassign}
+          onClose={staleResources.dismiss}
         />
 
         <AiChatWidget />

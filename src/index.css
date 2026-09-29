@@ -67,6 +67,18 @@ select option {
   font-size: 13px;
 }
 
+/* Misma variante compacta, aplicada por el PADRE a los .input-base anidados. Es para
+   los pickers reutilizados (UserPickerSingle/Multi), que no aceptan className propia:
+   así se compactan donde hace falta sin tocar el componente compartido. El selector
+   descendiente gana por especificidad al `min-h-[40px]` de UserPickerMulti. */
+.pickers-compact .input-base {
+  padding: 5px 8px;
+  border-radius: 8px;
+  /* !important porque UserPickerSingle fija minHeight con estilo inline, que de otro
+     modo le gana a cualquier clase. */
+  min-height: 0 !important;
+}
+
 @media (max-width: 768px) {
   .input-base {
     font-size: 18px;
