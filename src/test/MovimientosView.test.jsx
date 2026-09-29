@@ -112,9 +112,9 @@ describe('MovimientosView — carga y estados', () => {
     expect(screen.getByText('Cargando…')).toBeInTheDocument()
   })
 
-  it('sin mes abierto avisa que hay que abrirlo', async () => {
+  it('sin mes abierto remite a Facturación, que lo prepara sola', async () => {
     renderView({ finMonth: null })
-    expect(await screen.findByText('Este mes aún no se ha abierto.')).toBeInTheDocument()
+    expect(await screen.findByText(/Entra a Facturación y se prepara solo/)).toBeInTheDocument()
   })
 
   it('un mes cargado como resumen no tiene movimientos fila por fila', async () => {

@@ -193,7 +193,10 @@ export default function DashboardView({
     <div className="space-y-6">
       {!finMonth && (
         <div className="bg-white border border-[#e0ddd4] rounded-xl p-4 text-[14px] text-[#666] flex items-center justify-between gap-3 flex-wrap">
-          <span>Este mes todavía no se ha abierto. Genera su facturación desde Facturación.</span>
+          <span>
+            Este mes todavía no tiene datos. Entra a Facturación y se prepara solo, con la
+            facturación de todos los clientes activos.
+          </span>
           {canCerrarMes && (
             <button
               type="button"
@@ -221,7 +224,9 @@ export default function DashboardView({
             year={year}
             month={month}
             clients={clients}
-            onDone={refetch}
+            // Envuelto: si el callback llega con un argumento, caería en el
+            // parámetro `showLoading` de fetchPeriod.
+            onDone={() => refetch()}
           />
         </div>
       )}

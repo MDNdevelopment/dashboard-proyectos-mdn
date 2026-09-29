@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import { fmtDate } from '../../utils/formatDate'
-import { createInvoice, updateInvoice, resolveRateBcv } from './finanzasApi'
+import { createInvoice, updateInvoice, resolveRateBcv, clearInvoiceExclusions } from './finanzasApi'
 import { CONCEPTOS_SUGERIDOS, CONCEPTO_RECURRENTE } from './constants'
 
 const OTHER = '__other__'
@@ -19,7 +19,16 @@ function fmtBs(n) {
 }
 
 /** Modal crear/editar facturación. Convención: invoice=null → crear, invoice=objeto → editar. */
-export default function InvoiceModal({ invoice, monthId, companyId, clients, onClose, onSaved }) {
+export default function InvoiceModal({
+  invoice,
+  monthId,
+  companyId,
+  clients,
+  year,
+  month,
+  onClose,
+  onSaved,
+}) {
   const { userProfile } = useAuth()
   const isEdit = invoice != null
   const activeClients = (clients ?? []).filter((c) => !c.deleted_at && !c.contract_end)
@@ -145,6 +154,12 @@ export default function InvoiceModal({ invoice, monthId, companyId, clients, onC
     const { error: err } = isEdit
       ? await updateInvoice(invoice.id, fields)
       : await createInvoice(monthId, fields)
+    if (!err && fields.clientId && companyId && year && month) {
+      // Volver a darle facturación a una marca levanta la exclusión que dejó su
+      // borrado anterior; si no, la reconciliación seguiría saltándosela en los
+      // meses siguientes (la exclusión aplica de su mes en adelante).
+      await clearInvoiceExclusions(companyId, fields.clientId, year, month)
+    }
     setSaving(false)
     if (err) {
       setError(err.message)

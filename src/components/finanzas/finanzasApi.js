@@ -8,7 +8,12 @@
  * duplicar mensualidad/línea/fechas de alta-baja que ya mantiene Empresa → Clientes.
  */
 import { supabase } from '../../supabase'
-import { invoiceRowsForNewMonth, cuadreDivisas } from '../../utils/finanzas'
+import {
+  invoiceRowsForNewMonth,
+  cuadreDivisas,
+  hoyISO,
+  ultimoDiaDelMesISO,
+} from '../../utils/finanzas'
 
 function normalizeInvoice(row) {
   if (!row) return row
@@ -557,6 +562,21 @@ export async function deleteDistributionsForInvoice(invoiceId) {
  * lanza: devuelve `null` ante cualquier falla (sin sesión, red, 502, forma
  * inesperada) para que `resolveRateBcv()` caiga sola al histórico de `fin_rates`.
  */
+/**
+ * Memo de sesión de la tasa en vivo. `resolveRateBcv` corre dentro de CADA
+ * recarga del periodo, y sin esto cada una repetía `getSession()` + el fetch a
+ * `/api/bcv-rate` (que a su vez pega contra APIs externas desde la Netlify
+ * Function) + el upsert a `fin_rates`. La tasa BCV del día no cambia dentro de
+ * una sesión de trabajo; el TTL cubre el caso raro de que sí.
+ */
+const liveRateCache = new Map() // `${companyId}|${date}` -> { rate, at }
+const LIVE_RATE_TTL_MS = 10 * 60 * 1000
+
+/** Vacía el memo — solo para tests, que comparten el módulo entre casos. */
+export function __resetLiveRateCache() {
+  liveRateCache.clear()
+}
+
 async function fetchLiveBcvRate() {
   const {
     data: { session },
@@ -589,10 +609,16 @@ async function fetchLiveBcvRate() {
  *  - 'missing': no hay ninguna fila anterior — el caller debe pedir la tasa a mano.
  */
 export async function resolveRateBcv(companyId, date) {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = hoyISO()
   if (date === today) {
+    const cacheKey = `${companyId}|${date}`
+    const cached = liveRateCache.get(cacheKey)
+    if (cached && Date.now() - cached.at < LIVE_RATE_TTL_MS) {
+      return { data: { rate: cached.rate, rateDate: date, source: 'bcv' }, error: null }
+    }
     const live = await fetchLiveBcvRate()
     if (live) {
+      liveRateCache.set(cacheKey, { rate: live, at: Date.now() })
       try {
         await upsertRate({ companyId, rateDate: date, rateBcv: live, userId: null })
       } catch {
@@ -827,30 +853,89 @@ function prevYearMonth(year, month) {
   return month <= 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 }
 }
 
+// ─── Exclusiones de facturación ─────────────────────────────────────────────────
+//
+// Marcas cuya facturación se borró a propósito. Sin esto, la reconciliación de
+// `syncMonthInvoices` volvería a crearla en la siguiente visita y no habría forma
+// de sacar a una marca del mes salvo darle de baja en Empresa.
+
 /**
- * Precarga la facturación de un mes copiando la del mes anterior tal cual
- * (montos/conceptos ya ajustados, incluidos los clientes externos), sembrando
- * solo las altas nuevas desde `monthly_fee` — ver `invoiceRowsForNewMonth`. La
- * factura siempre sale a inicio de mes independientemente de cuándo se cobre,
- * así que el mes debe abrir con sus clientes ya cargados. Idempotente: si el
- * mes ya tiene alguna factura no inserta nada, para no duplicar cuando
- * `closeMonth` ya la precargó.
+ * clientIds excluidos para (year, month): la exclusión aplica desde el mes en
+ * que se registró hacia adelante, así que basta con que su (year, month) sea
+ * <= al consultado — borrar el cargo de una marca en octubre la deja fuera
+ * también de noviembre, en vez de reaparecer sola cada mes.
  */
-export async function seedRecurringInvoices({ companyId, monthId, year, month, clients }) {
+export async function loadInvoiceExclusions(companyId, year, month) {
+  const { data, error } = await supabase
+    .from('fin_invoice_exclusions')
+    .select('client_id, year, month')
+    .eq('company_id', companyId)
+    .or(`year.lt.${year},and(year.eq.${year},month.lte.${month})`)
+  if (error) return { data: [], error }
+  return { data: (data ?? []).map((r) => r.client_id), error: null }
+}
+
+export async function addInvoiceExclusion({ companyId, clientId, year, month, userId = null }) {
+  const { error } = await supabase
+    .from('fin_invoice_exclusions')
+    .upsert(
+      { company_id: companyId, client_id: clientId, year, month, created_by: userId },
+      { onConflict: 'company_id,client_id,year,month' },
+    )
+  return { error }
+}
+
+/**
+ * Levanta la exclusión de una marca al volver a darle facturación. Borra también
+ * las de meses anteriores: si no, la exclusión vieja (que aplica "de ahí en
+ * adelante") seguiría tapando a la marca en los meses siguientes.
+ */
+export async function clearInvoiceExclusions(companyId, clientId, year, month) {
+  const { error } = await supabase
+    .from('fin_invoice_exclusions')
+    .delete()
+    .eq('company_id', companyId)
+    .eq('client_id', clientId)
+    .or(`year.lt.${year},and(year.eq.${year},month.lte.${month})`)
+  return { error }
+}
+
+/**
+ * Deja el mes con la facturación de TODOS sus clientes activos, insertando solo
+ * los que falten (ver `invoiceRowsForNewMonth`, que decide monto y descarta
+ * excluidos). Idempotente y sin efecto sobre las facturas ya cargadas, así que
+ * puede correrse en cada visita a Facturación: es lo que hace que la lista esté
+ * siempre fija sin agregar marcas a mano, incluso en un mes que se creó vacío
+ * por otro camino (antes `seedRecurringInvoices` abortaba en cuanto el mes tenía
+ * una sola factura, y solo corría desde el botón "Abrir mes").
+ *
+ * @returns {{ inserted: number, error: any }} `inserted` = filas creadas, para
+ *   que la vista solo refresque cuando algo cambió.
+ */
+export async function syncMonthInvoices({ companyId, monthId, year, month, clients, userId }) {
   const { data: existing, error: existingErr } = await loadInvoices(monthId)
-  if (existingErr) return { error: existingErr }
-  if (existing?.length) return { error: null }
+  if (existingErr) return { inserted: 0, error: existingErr }
 
   const prev = prevYearMonth(year, month)
-  const { data: prevMonth } = await loadMonth(companyId, prev.year, prev.month)
+  const [{ data: prevMonth }, { data: excludedClientIds }] = await Promise.all([
+    loadMonth(companyId, prev.year, prev.month),
+    loadInvoiceExclusions(companyId, year, month),
+  ])
   let prevInvoices = []
   if (prevMonth) {
     const { data } = await loadInvoices(prevMonth.id)
     prevInvoices = data ?? []
   }
 
-  const rows = invoiceRowsForNewMonth({ prevInvoices, clients, year, month })
-  if (!rows.length) return { error: null }
+  const rows = invoiceRowsForNewMonth({
+    prevInvoices,
+    clients,
+    year,
+    month,
+    existingInvoices: existing ?? [],
+    excludedClientIds: excludedClientIds ?? [],
+  })
+  if (!rows.length) return { inserted: 0, error: null }
 
   const { error } = await supabase.from('fin_invoices').insert(
     rows.map((r) => ({
@@ -860,17 +945,20 @@ export async function seedRecurringInvoices({ companyId, monthId, year, month, c
       concept: r.concept,
       amount: r.amount,
       currency: r.currency,
+      amount_bs: r.amountBs ?? null,
+      rate: r.rate ?? null,
       recurring: r.recurring,
+      created_by: userId ?? null,
     })),
   )
-  return { error }
+  return { inserted: error ? 0 : rows.length, error }
 }
 
 /**
  * Cierra el mes actual y abre el siguiente, precargando su facturación vía
- * `seedRecurringInvoices` — que ya copia también los cargos externos
- * recurrentes del mes cerrado, así que no hace falta un segundo camino para
- * ellos (antes duplicaba la lógica de `seedRecurringInvoices` para esto).
+ * `syncMonthInvoices` — que ya copia también los cargos externos recurrentes del
+ * mes cerrado, así que no hace falta un segundo camino para ellos (antes
+ * duplicaba la lógica del sembrado para esto).
  *
  * Antes de cerrar, snapshotea en `fin_month_totals` las 4 cifras de composición
  * en divisas del mes que se cierra (§10 de la spec): divisa física, saldo de
@@ -892,7 +980,7 @@ export async function closeMonth({ companyId, monthId, year, month, userId, clie
     loadFxOperationsUpTo(companyId, year, month),
     loadBsLedgerUpTo(companyId, year, month),
   ])
-  const lastDayOfMonth = new Date(year, month, 0).toISOString().slice(0, 10)
+  const lastDayOfMonth = ultimoDiaDelMesISO(year, month)
   const { data: rateInfo } = await resolveRateBcv(companyId, lastDayOfMonth)
   const cuadre = cuadreDivisas({
     invoices: invoicesUpTo,
@@ -928,12 +1016,13 @@ export async function closeMonth({ companyId, monthId, year, month, userId, clie
   )
   if (nextErr) return { data: null, error: nextErr }
 
-  const { error: seedErr } = await seedRecurringInvoices({
+  const { error: seedErr } = await syncMonthInvoices({
     companyId,
     monthId: nextMonth.id,
     year: next.year,
     month: next.month,
     clients,
+    userId,
   })
   if (seedErr) return { data: null, error: seedErr }
 

@@ -226,37 +226,79 @@ export function desviacionEnPuntos(distsDelMes, partida, pcts) {
 // ─── Arrastre de facturación mes a mes ───────────────────────────────────────────
 
 /**
- * Facturas a precargar en un mes nuevo, en el espíritu del carry-forward de
- * Reportes (`initMetricReport.js`): se COPIA la facturación del mes anterior tal
- * cual (montos y conceptos ya ajustados a mano, y los clientes externos que ni
- * siquiera existen en `metric_clients`), en vez de derivarla de `monthly_fee` en
- * cada apertura — así el mes nuevo no pierde los ajustes manuales del anterior.
- * `monthly_fee` solo se usa como semilla para las marcas nuevas que no venían en
- * el mes previo (alta de cartera).
+ * Facturas que le FALTAN a un mes para que estén TODOS los clientes activos, sin
+ * que nadie los agregue a mano. Es un reconciliador, no un sembrado de una sola
+ * vez: recibe lo que el mes ya tiene (`existingInvoices`) y devuelve solo lo que
+ * hay que insertar, así que correrlo dos veces no duplica nada. Eso es lo que
+ * permite llamarlo en cada visita a Facturación y que un mes creado por otro
+ * camino (el que abre `closeMonth`, o una visita a otra tab) no se quede vacío.
  *
- * - Cada factura `recurring` del mes anterior se clona con sus mismos valores,
- *   salvo que la marca ya no facture el mes nuevo (`clientInMonth` da falso o el
- *   cliente ya no existe) — ahí se descarta.
+ * Monto de cada cliente que falta, por orden de prioridad:
+ *   1. Su factura recurrente del mes anterior (conserva los ajustes hechos a
+ *      mano: descuentos, conceptos editados, facturación en Bs con su tasa).
+ *   2. `monthly_fee` del perfil de la marca (alta nueva, sin mes anterior).
+ *   3. 0 — "Sin monto": el cargo aparece igual, marcado en la UI para que le
+ *      asignen el monto. Antes estas marcas simplemente no aparecían y había que
+ *      agregarlas a mano cada mes.
+ *
+ * Reglas:
  * - Las facturas `recurring: false` (cargos puntuales) nunca se arrastran.
- * - Los clientes activos con `monthly_fee > 0` que no vinieran ya en el mes
- *   anterior se agregan con el concepto/monto por defecto (alta nueva).
- * - Sin mes anterior (`prevInvoices` vacío/ausente), cae al comportamiento
- *   original: un cargo por cliente activo con `monthly_fee > 0`.
+ * - Una marca que ya no factura el mes (`clientInMonth` falso o cliente
+ *   inexistente) se descarta, venga del mes anterior o de la cartera.
+ * - `excludedClientIds` son las marcas cuya facturación se borró a propósito
+ *   (`fin_invoice_exclusions`): no se vuelven a crear.
+ * - Los cargos externos del mes anterior (sin `clientId`) solo se copian cuando
+ *   el mes está todavía VACÍO. En un mes ya poblado no hay forma de saber si
+ *   falta uno o si lo borraron a propósito — no tienen id estable contra el que
+ *   comparar, como sí lo tienen los clientes.
  *
  * @returns {Array<{clientId, clientName, concept, amount, currency, recurring}>}
  */
-export function invoiceRowsForNewMonth({ prevInvoices, clients, year, month }) {
+export function invoiceRowsForNewMonth({
+  prevInvoices,
+  clients,
+  year,
+  month,
+  existingInvoices = [],
+  excludedClientIds = [],
+}) {
   const clientById = new Map((clients ?? []).map((c) => [c.id, c]))
+  const excluidos = new Set(excludedClientIds ?? [])
+  const mesVacio = (existingInvoices ?? []).length === 0
+  // Un cliente ya facturado este mes no se vuelve a agregar, tenga el concepto
+  // que tenga: la unidad de reconciliación es la marca, no el cargo.
+  const yaFacturados = new Set(
+    (existingInvoices ?? []).map((inv) => inv.clientId).filter((id) => id != null),
+  )
   const rows = []
+
+  function puedeFacturar(clientId) {
+    if (excluidos.has(clientId)) return false
+    if (yaFacturados.has(clientId)) return false
+    const client = clientById.get(clientId)
+    return !!client && clientInMonth(client, year, month)
+  }
 
   for (const inv of prevInvoices ?? []) {
     if (!inv.recurring) continue
-    if (inv.clientId != null) {
-      const client = clientById.get(inv.clientId)
-      if (!client || !clientInMonth(client, year, month)) continue
+    if (inv.clientId == null) {
+      if (!mesVacio) continue
+      rows.push({
+        clientId: null,
+        clientName: inv.clientName,
+        concept: inv.concept,
+        amount: inv.amount,
+        currency: inv.currency,
+        amountBs: inv.amountBs ?? null,
+        rate: inv.rate ?? null,
+        recurring: true,
+      })
+      continue
     }
+    if (!puedeFacturar(inv.clientId)) continue
+    yaFacturados.add(inv.clientId)
     rows.push({
-      clientId: inv.clientId ?? null,
+      clientId: inv.clientId,
       clientName: inv.clientName,
       concept: inv.concept,
       amount: inv.amount,
@@ -270,21 +312,67 @@ export function invoiceRowsForNewMonth({ prevInvoices, clients, year, month }) {
     })
   }
 
-  const yaFacturados = new Set(rows.map((r) => r.clientId).filter(Boolean))
   for (const c of clients ?? []) {
-    if (Number(c.monthly_fee) > 0 && clientInMonth(c, year, month) && !yaFacturados.has(c.id)) {
-      rows.push({
-        clientId: c.id,
-        clientName: c.name,
-        concept: CONCEPTO_RECURRENTE,
-        amount: c.monthly_fee,
-        currency: 'USD',
-        recurring: true,
-      })
-    }
+    if (!puedeFacturar(c.id)) continue
+    yaFacturados.add(c.id)
+    rows.push({
+      clientId: c.id,
+      clientName: c.name,
+      concept: CONCEPTO_RECURRENTE,
+      amount: Number(c.monthly_fee) > 0 ? Number(c.monthly_fee) : 0,
+      currency: 'USD',
+      recurring: true,
+    })
   }
 
   return rows
+}
+
+/** Un cargo sin monto asignado: aparece en la lista para que lo editen, y suma 0. */
+export function sinMonto(invoice) {
+  return Number(invoice?.amount ?? 0) === 0
+}
+
+// ─── Fechas del módulo (locales, nunca vía toISOString) ─────────────────────────
+//
+// `toISOString()` convierte a UTC: `new Date(2026, 9, 0).toISOString()` es
+// medianoche LOCAL serializada en UTC, así que en cualquier huso con offset
+// positivo devuelve el día ANTERIOR, y `new Date().toISOString()` en Caracas
+// (UTC-4) pasadas las 20:00 ya devuelve MAÑANA. Con esas dos cosas, comparar
+// "último día del mes" contra "hoy" se desalinea justo en el borde de mes —
+// que es cuando más importa. Estos dos helpers formatean a mano desde los
+// componentes locales, que es el mismo marco en el que se eligió el periodo.
+
+function isoLocal(date) {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+/** Hoy como 'YYYY-MM-DD' en hora local. */
+export function hoyISO(ref = new Date()) {
+  return isoLocal(ref)
+}
+
+/** Último día de (year, month) como 'YYYY-MM-DD'. `month` es 1-12. */
+export function ultimoDiaDelMesISO(year, month) {
+  return isoLocal(new Date(year, month, 0))
+}
+
+/**
+ * Si un periodo puede prepararse solo (crear su mes y sembrar la facturación).
+ * Solo el mes en curso y los anteriores: navegar por el selector hasta un mes
+ * futuro no debe materializarlo — pasó, y quedaron meses de 2027 creados con la
+ * facturación completa de una cartera que para entonces será otra.
+ *
+ * Compara año y mes como ENTEROS: nada de restar `Date`s ni de strings ISO, por
+ * lo explicado arriba.
+ */
+export function esMesPreparable(year, month, ref = new Date()) {
+  const y = ref.getFullYear()
+  const m = ref.getMonth() + 1
+  return year < y || (year === y && month <= m)
 }
 
 // ─── Análisis ───────────────────────────────────────────────────────────────────

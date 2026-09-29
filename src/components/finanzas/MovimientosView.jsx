@@ -212,7 +212,7 @@ export default function MovimientosView({
   if (!finMonth) {
     return (
       <div className="bg-white border border-[#e0ddd4] rounded-xl p-10 text-center text-[13.5px] text-[#999]">
-        Este mes aún no se ha abierto.
+        Este mes todavía no tiene movimiento. Entra a Facturación y se prepara solo.
       </div>
     )
   }

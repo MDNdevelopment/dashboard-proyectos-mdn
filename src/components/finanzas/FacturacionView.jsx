@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { fmtUSD } from '../../utils/metricsFinance'
 import {
   cobrosPorMonedaDe,
@@ -8,8 +8,15 @@ import {
   totalCobrado,
   cobradoPorMoneda,
   facturadoPorMoneda,
+  sinMonto,
+  esMesPreparable,
 } from '../../utils/finanzas'
-import { loadOrCreateMonth, seedRecurringInvoices, deleteInvoice } from './finanzasApi'
+import {
+  loadOrCreateMonth,
+  syncMonthInvoices,
+  deleteInvoice,
+  addInvoiceExclusion,
+} from './finanzasApi'
 import InvoiceModal from './InvoiceModal'
 import CobroModal from './CobroModal'
 import ConfirmDeleteDialog from '../common/ConfirmDeleteDialog'
@@ -45,25 +52,76 @@ export default function FacturacionView({
   refetch,
   canManage,
   canManageCobros,
+  userId = null,
 }) {
   const [modal, setModal] = useState(undefined) // undefined=cerrado, null=crear, obj=editar
   const [cobroInvoice, setCobroInvoice] = useState(null)
   const [toDelete, setToDelete] = useState(null)
-  const [opening, setOpening] = useState(false)
   const [sort, setSort] = useState({ key: '', dir: 1 })
   const [vista, setVista] = useState('facturacion') // 'facturacion' | 'cobros'
   const [monedaFiltro, setMonedaFiltro] = useState('Todas')
   const enCobros = vista === 'cobros'
 
-  async function handleOpenMonth() {
-    setOpening(true)
-    const { data: opened } = await loadOrCreateMonth(companyId, year, month)
-    if (opened) {
-      await seedRecurringInvoices({ companyId, monthId: opened.id, year, month, clients })
+  // El mes se prepara solo al entrar: se crea su fila en `fin_months` si no
+  // existe y se reconcilia su facturación con la cartera activa. Antes esto era
+  // un botón "Abrir mes", un paso manual que no decidía nada (los meses pasan
+  // igual) y que además solo corría una vez: un mes creado por otro camino — el
+  // que abre `closeMonth()`, o una visita a otra tab — se quedaba vacío para
+  // siempre, sin botón que lo llenara porque el mes ya existía.
+  //
+  // Las dos operaciones son seguras de repetir: `loadOrCreateMonth` no duplica
+  // (unique por company/year/month) y `syncMonthInvoices` solo INSERTA lo que
+  // falta. Aun así el ref corta el reintento mientras no cambie el periodo,
+  // porque los refetch de realtime rehacen `clients`/`invoices` sin parar.
+  // Crear el mes exige `finanzas.facturacion.manage` desde la migración
+  // `20260929150000`; cerrarlo sigue siendo de `finanzas.cerrar_mes`.
+  const preparedRef = useRef(null)
+  useEffect(() => {
+    if (!companyId || !canManage || loading || !clients?.length) return
+    if (finMonth === undefined) return // aún cargando el mes
+    if (finMonth?.closed || finMonth?.summaryOnly) return
+    // Solo el mes en curso y los anteriores. Sin esto, pasear por el selector
+    // materializaba meses futuros con la facturación completa: así aparecieron
+    // solos noviembre 2026, enero 2027 y marzo 2027. Va ANTES de marcar el ref,
+    // para que un mes futuro que pase a ser el actual sí se prepare.
+    if (!esMesPreparable(year, month)) return
+    const key = `${year}-${month}`
+    if (preparedRef.current === key) return
+    preparedRef.current = key
+    let cancelled = false
+    ;(async () => {
+      let mes = finMonth
+      if (!mes) {
+        const { data: creado } = await loadOrCreateMonth(companyId, year, month)
+        mes = creado
+      }
+      // Sin fila de mes no hay dónde colgar la facturación: se sale y la vista
+      // queda en su estado vacío (p. ej. si el insert lo rechazó la RLS).
+      if (!mes) return
+      const { inserted } = await syncMonthInvoices({
+        companyId,
+        monthId: mes.id,
+        year,
+        month,
+        clients,
+        userId,
+      })
+      if (cancelled) return
+      // `finMonth` nulo implica recargar sí o sí: la fila del mes es nueva y la
+      // página todavía la tiene como "no abierto".
+      //
+      // Va con `false` (sin spinner) y es red de seguridad, no el camino
+      // normal: el realtime ya refresca tras los inserts. Se mantiene porque si
+      // el websocket no conecta (proxy, pestaña dormida) la vista se quedaría
+      // en "Preparando el mes…" sin causa visible. Con `true` pondría
+      // `loading`, y eso desmonta el contenido de la vista y cualquier modal
+      // abierto.
+      if (inserted > 0 || !finMonth) refetch(false)
+    })()
+    return () => {
+      cancelled = true
     }
-    setOpening(false)
-    refetch()
-  }
+  }, [companyId, finMonth, canManage, loading, clients, year, month, userId, refetch])
 
   function sortBy(key) {
     setSort((s) => ({ key, dir: s.key === key ? -s.dir : 1 }))
@@ -83,6 +141,9 @@ export default function FacturacionView({
     () => cobradoPorMoneda(invoices),
     [invoices],
   )
+  // Marcas que entraron por la reconciliación sin monto que copiar (ni en su
+  // perfil ni en el mes anterior): facturan 0 hasta que alguien las edite.
+  const faltanMonto = useMemo(() => invoices.filter(sinMonto), [invoices])
 
   // En Facturación se listan TODAS las facturas del mes, sin filtro de moneda:
   // `invoice.currency` es la moneda configurada del cliente (casi siempre USD),
@@ -113,21 +174,39 @@ export default function FacturacionView({
 
   if (loading) return <div className="text-[14px] text-[#999] py-10 text-center">Cargando…</div>
 
+  // Sin fila de mes se llega aquí en tres casos: el mes todavía no llegó,
+  // mientras el efecto de arriba lo está preparando, o sin permiso para crearlo
+  // (la lectura del módulo no alcanza). Ya no hay botón: el mes se abre solo.
+  //
+  // El aviso de mes futuro exige `!finMonth` a propósito: un mes futuro que SÍ
+  // tiene fila —el siguiente, que crea `closeMonth()` al cerrar— se sigue
+  // viendo normal, con su facturación.
+  if (!finMonth && !esMesPreparable(year, month)) {
+    return (
+      <div className="bg-white border border-[#e0ddd4] rounded-xl p-10 text-center">
+        <p className="text-[15px] font-semibold text-[#888] mb-3">Este mes todavía no llegó</p>
+        <p className="text-[13.5px] text-[#bbb]">
+          Su facturación se prepara sola cuando empiece el mes, con los clientes activos que haya
+          entonces.
+        </p>
+      </div>
+    )
+  }
+
   if (!finMonth) {
     return (
       <div className="bg-white border border-[#e0ddd4] rounded-xl p-10 text-center">
-        <p className="text-[15px] font-semibold text-[#888] mb-3">Este mes aún no se ha abierto</p>
         {canManage ? (
-          <button
-            type="button"
-            onClick={handleOpenMonth}
-            disabled={opening}
-            className="px-4 py-2 rounded-xl text-[14px] font-semibold bg-[#111] text-white hover:bg-[#333] disabled:opacity-50"
-          >
-            {opening ? 'Abriendo…' : 'Abrir mes'}
-          </button>
+          <p className="text-[15px] font-semibold text-[#888]">Preparando el mes…</p>
         ) : (
-          <p className="text-[13.5px] text-[#bbb]">Pide a un administrador que lo abra.</p>
+          <>
+            <p className="text-[15px] font-semibold text-[#888] mb-3">
+              Este mes todavía no tiene facturación
+            </p>
+            <p className="text-[13.5px] text-[#bbb]">
+              Se carga sola cuando entra alguien con permiso para gestionar la facturación.
+            </p>
+          </>
         )}
       </div>
     )
@@ -147,6 +226,18 @@ export default function FacturacionView({
       {closed && (
         <div className="bg-white border border-[#e0ddd4] rounded-xl p-3 text-[13.5px] text-[#888]">
           Este mes está cerrado — solo lectura.
+        </div>
+      )}
+
+      {!enCobros && faltanMonto.length > 0 && (
+        <div className="bg-[#fff8e6] border border-[#f0dfae] rounded-xl p-3 text-[13.5px] text-[#9a6800]">
+          <span className="font-semibold">
+            {faltanMonto.length === 1
+              ? '1 marca sin monto asignado'
+              : `${faltanMonto.length} marcas sin monto asignado`}
+          </span>{' '}
+          — no tienen mensualidad en su perfil ni facturación el mes pasado. Edita cada una para
+          ponerle el monto: {faltanMonto.map((inv) => inv.clientName).join(', ')}.
         </div>
       )}
 
@@ -305,7 +396,15 @@ export default function FacturacionView({
                         {!inv.clientId && ' · externo'}
                       </div>
                     </td>
-                    <td className="text-right px-4 py-2.5 font-mono">{fmtUSD(inv.amount)}</td>
+                    <td className="text-right px-4 py-2.5 font-mono">
+                      {sinMonto(inv) ? (
+                        <span className="inline-block px-2 py-0.5 rounded-full text-[11.5px] font-semibold bg-[#fff4d6] text-[#9a6800]">
+                          Sin monto
+                        </span>
+                      ) : (
+                        fmtUSD(inv.amount)
+                      )}
+                    </td>
                     {enCobros ? (
                       <>
                         <td className="text-right px-4 py-2.5 font-mono text-[#1F9D57]">
@@ -386,6 +485,8 @@ export default function FacturacionView({
           monthId={finMonth.id}
           companyId={companyId}
           clients={clients}
+          year={year}
+          month={month}
           onClose={() => setModal(undefined)}
           onSaved={() => {
             setModal(undefined)
@@ -413,6 +514,19 @@ export default function FacturacionView({
           onCancel={() => setToDelete(null)}
           onConfirm={async () => {
             await deleteInvoice(toDelete.id)
+            // Sin esto, la reconciliación volvería a crear el cargo en la
+            // siguiente visita: hay que recordar que se borró a propósito. La
+            // exclusión vale de este mes en adelante y se levanta sola al
+            // volver a agregarle facturación a la marca (ver InvoiceModal).
+            if (toDelete.clientId) {
+              await addInvoiceExclusion({
+                companyId,
+                clientId: toDelete.clientId,
+                year,
+                month,
+                userId,
+              })
+            }
             setToDelete(null)
             refetch()
           }}

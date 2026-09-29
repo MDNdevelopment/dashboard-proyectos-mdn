@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { vi } from 'vitest'
@@ -39,6 +39,7 @@ vi.mock('../supabase', () => {
 vi.mock('../context/AuthContext', () => ({ useAuth: vi.fn() }))
 
 import { useAuth } from '../context/AuthContext'
+import { supabase } from '../supabase'
 import FinanzasPage from '../pages/FinanzasPage'
 
 function renderAt(path, can) {
@@ -104,7 +105,7 @@ describe('FinanzasPage — tabs por capability', () => {
     const can = () => true
     renderAt('/finanzas', can)
     await waitFor(() =>
-      expect(screen.getByText(/Este mes todavía no se ha abierto/)).toBeInTheDocument(),
+      expect(screen.getByText(/Este mes todavía no tiene datos/)).toBeInTheDocument(),
     )
   })
 
@@ -420,5 +421,59 @@ describe('FinanzasPage — tab Divisas', () => {
       expect(screen.getByRole('button', { name: 'Comprar dólares' })).toBeInTheDocument(),
     )
     expect(screen.getByRole('button', { name: 'Vender dólares' })).toBeInTheDocument()
+  })
+})
+
+// Los fake timers viven SOLO en este bloque: los demás tests del archivo usan
+// userEvent y waitFor con timers reales, y se colgarían si los compartieran.
+describe('FinanzasPage — el realtime no dispara una recarga por fila', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  /** Los callbacks que la página registró en el canal, por tabla. */
+  function callbacksDelCanal() {
+    const mapa = {}
+    for (const [, filtro, cb] of supabase.channel.mock.results.at(-1).value.on.mock.calls) {
+      mapa[filtro.table] = cb
+    }
+    return mapa
+  }
+
+  it('agrupa los 67 eventos de una facturación sembrada en UNA sola recarga', async () => {
+    renderAt('/finanzas', () => true)
+    await vi.waitFor(() => expect(mockLoadMonth).toHaveBeenCalled())
+
+    const { fin_invoices: onInvoice } = callbacksDelCanal()
+    const antes = mockLoadMonth.mock.calls.length
+
+    // Un `.insert([...])` de 67 facturas emite 67 eventos, uno por fila.
+    for (let i = 0; i < 67; i++) onInvoice({ eventType: 'INSERT' })
+    await act(() => vi.advanceTimersByTimeAsync(500))
+
+    expect(mockLoadMonth.mock.calls.length - antes).toBe(1)
+  })
+
+  it('dos cambios separados en el tiempo sí son dos recargas', async () => {
+    renderAt('/finanzas', () => true)
+    await vi.waitFor(() => expect(mockLoadMonth).toHaveBeenCalled())
+
+    const { fin_payments: onPayment } = callbacksDelCanal()
+    const antes = mockLoadMonth.mock.calls.length
+
+    onPayment({ eventType: 'INSERT' })
+    await act(() => vi.advanceTimersByTimeAsync(500))
+    onPayment({ eventType: 'INSERT' })
+    await act(() => vi.advanceTimersByTimeAsync(500))
+
+    expect(mockLoadMonth.mock.calls.length - antes).toBe(2)
+  })
+
+  it('no se suscribe a fin_rates: la escribe la propia recarga y se realimentaría', async () => {
+    renderAt('/finanzas', () => true)
+    await vi.waitFor(() => expect(mockLoadMonth).toHaveBeenCalled())
+
+    const tablas = Object.keys(callbacksDelCanal())
+    expect(tablas).not.toContain('fin_rates')
+    expect(tablas).toContain('fin_invoices')
   })
 })

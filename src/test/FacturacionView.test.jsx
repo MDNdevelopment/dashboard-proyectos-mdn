@@ -4,13 +4,20 @@ import { vi } from 'vitest'
 import FacturacionView from '../components/finanzas/FacturacionView'
 
 const mockLoadOrCreateMonth = vi.fn()
-const mockSeedRecurringInvoices = vi.fn().mockResolvedValue({ error: null })
+const mockSyncMonthInvoices = vi.fn().mockResolvedValue({ inserted: 0, error: null })
+const mockDeleteInvoice = vi.fn().mockResolvedValue({ error: null })
+const mockAddInvoiceExclusion = vi.fn().mockResolvedValue({ error: null })
 
 vi.mock('../components/finanzas/finanzasApi', () => ({
   loadOrCreateMonth: (...a) => mockLoadOrCreateMonth(...a),
-  seedRecurringInvoices: (...a) => mockSeedRecurringInvoices(...a),
-  deleteInvoice: vi.fn(),
+  syncMonthInvoices: (...a) => mockSyncMonthInvoices(...a),
+  deleteInvoice: (...a) => mockDeleteInvoice(...a),
+  addInvoiceExclusion: (...a) => mockAddInvoiceExclusion(...a),
 }))
+
+// InvoiceModal y CobroModal tocan Supabase al montarse; la vista se prueba sola.
+vi.mock('../components/finanzas/InvoiceModal', () => ({ default: () => null }))
+vi.mock('../components/finanzas/CobroModal', () => ({ default: () => null }))
 
 const BASE_INVOICE = {
   id: 'inv-1',
@@ -36,6 +43,7 @@ function renderView(invoices, overrides = {}) {
       refetch={vi.fn()}
       canManage={false}
       canManageCobros={false}
+      userId="u-1"
       {...overrides}
     />,
   )
@@ -73,13 +81,13 @@ describe('FacturacionView', () => {
     expect(screen.getByText('+ Agregar facturación')).toBeInTheDocument()
   })
 
-  it('pide abrir el mes cuando finMonth es null', () => {
-    renderView([], { finMonth: null, canManage: true })
-    expect(screen.getByText(/Este mes aún no se ha abierto/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Abrir mes' })).toBeInTheDocument()
+  it('sin permiso de gestión, un mes sin abrir se explica sin ofrecer ningún botón', () => {
+    renderView([], { finMonth: null, canManage: false })
+    expect(screen.getByText(/Este mes todavía no tiene facturación/)).toBeInTheDocument()
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 
-  it('al abrir el mes, precarga la facturación recurrente de los clientes activos', async () => {
+  it('un mes sin abrir se crea y se llena solo al entrar, sin pulsar nada', async () => {
     mockLoadOrCreateMonth.mockResolvedValueOnce({
       data: { id: 'm-new' },
       error: null,
@@ -88,18 +96,121 @@ describe('FacturacionView', () => {
     const refetch = vi.fn()
     renderView([], { finMonth: null, canManage: true, clients, refetch })
 
-    await userEvent.click(screen.getByRole('button', { name: 'Abrir mes' }))
-
+    await waitFor(() => expect(mockLoadOrCreateMonth).toHaveBeenCalledWith('co-1', 2026, 7))
     await waitFor(() =>
-      expect(mockSeedRecurringInvoices).toHaveBeenCalledWith({
+      expect(mockSyncMonthInvoices).toHaveBeenCalledWith({
         companyId: 'co-1',
         monthId: 'm-new',
         year: 2026,
         month: 7,
         clients,
+        userId: 'u-1',
       }),
     )
-    expect(refetch).toHaveBeenCalled()
+    // Recarga aunque no se insertara nada: la fila del mes es nueva y la página
+    // todavía lo tiene como "no abierto".
+    await waitFor(() => expect(refetch).toHaveBeenCalled())
+  })
+})
+
+describe('FacturacionView — facturación fija de los clientes activos', () => {
+  const CLIENTS = [{ id: 'c-1', name: 'Turbopre', monthly_fee: 2600, mdn_since: '2025-01-01' }]
+
+  beforeEach(() => {
+    mockSyncMonthInvoices.mockClear()
+    mockAddInvoiceExclusion.mockClear()
+    mockDeleteInvoice.mockClear()
+    mockLoadOrCreateMonth.mockClear()
+    mockSyncMonthInvoices.mockResolvedValue({ inserted: 0, error: null })
+  })
+
+  it('reconcilia el mes abierto al entrar, sin que nadie pulse nada', async () => {
+    renderView([BASE_INVOICE], { canManage: true, clients: CLIENTS })
+    await waitFor(() =>
+      expect(mockSyncMonthInvoices).toHaveBeenCalledWith(
+        expect.objectContaining({ companyId: 'co-1', monthId: 'm-1', year: 2026, month: 7 }),
+      ),
+    )
+  })
+
+  it('refresca la vista solo si la reconciliación insertó algo', async () => {
+    mockSyncMonthInvoices.mockResolvedValue({ inserted: 3, error: null })
+    const refetch = vi.fn()
+    renderView([BASE_INVOICE], { canManage: true, clients: CLIENTS, refetch })
+    await waitFor(() => expect(refetch).toHaveBeenCalled())
+  })
+
+  it('no reconcilia un mes cerrado ni sin permiso de gestión', async () => {
+    renderView([BASE_INVOICE], {
+      canManage: true,
+      clients: CLIENTS,
+      finMonth: { id: 'm-1', closed: true },
+    })
+    renderView([BASE_INVOICE], { canManage: false, clients: CLIENTS })
+    await waitFor(() => expect(screen.getAllByText('Turbopre').length).toBeGreaterThan(0))
+    expect(mockSyncMonthInvoices).not.toHaveBeenCalled()
+  })
+
+  it('un mes futuro no se prepara ni escribe nada, y lo explica', async () => {
+    const dentroDeDosAnios = new Date().getFullYear() + 2
+    renderView([], {
+      finMonth: null,
+      canManage: true,
+      clients: CLIENTS,
+      year: dentroDeDosAnios,
+      month: 3,
+    })
+
+    expect(screen.getByText('Este mes todavía no llegó')).toBeInTheDocument()
+    await waitFor(() => expect(mockSyncMonthInvoices).not.toHaveBeenCalled())
+    expect(mockLoadOrCreateMonth).not.toHaveBeenCalled()
+  })
+
+  it('un mes futuro que YA tiene fila se sigue viendo normal (el que abre el cierre de mes)', () => {
+    const dentroDeDosAnios = new Date().getFullYear() + 2
+    renderView([BASE_INVOICE], {
+      finMonth: { id: 'm-next', closed: false },
+      canManage: true,
+      clients: CLIENTS,
+      year: dentroDeDosAnios,
+      month: 3,
+    })
+
+    expect(screen.queryByText('Este mes todavía no llegó')).not.toBeInTheDocument()
+    expect(screen.getByText('Turbopre')).toBeInTheDocument()
+  })
+
+  it('tras preparar el mes recarga sin spinner, para no desmontar la vista', async () => {
+    mockSyncMonthInvoices.mockResolvedValue({ inserted: 5, error: null })
+    const refetch = vi.fn()
+    renderView([BASE_INVOICE], { canManage: true, clients: CLIENTS, refetch })
+    await waitFor(() => expect(refetch).toHaveBeenCalledWith(false))
+  })
+
+  it('una marca sin monto sale con el badge "Sin monto" y el aviso para editarla', () => {
+    renderView([{ ...BASE_INVOICE, id: 'inv-0', clientName: 'Ecopack', amount: 0 }], {
+      clients: CLIENTS,
+    })
+    expect(screen.getByText('Sin monto')).toBeInTheDocument()
+    expect(screen.getByText('1 marca sin monto asignado')).toBeInTheDocument()
+    // Dos veces: en la fila de la tabla y en la lista del aviso.
+    expect(screen.getAllByText(/Ecopack/)).toHaveLength(2)
+  })
+
+  it('al eliminar la facturación de una marca se registra la exclusión para no recrearla', async () => {
+    renderView([BASE_INVOICE], { canManage: true, clients: CLIENTS })
+    await userEvent.click(screen.getByRole('button', { name: 'Eliminar' }))
+    // El segundo "Eliminar" es el de confirmación del diálogo.
+    await userEvent.click(screen.getAllByRole('button', { name: 'Eliminar' })[1])
+
+    await waitFor(() => expect(mockDeleteInvoice).toHaveBeenCalledWith('inv-1'))
+    expect(mockAddInvoiceExclusion).toHaveBeenCalledWith({
+      companyId: 'co-1',
+      clientId: 'c-1',
+      year: 2026,
+      month: 7,
+      userId: 'u-1',
+    })
   })
 })
 

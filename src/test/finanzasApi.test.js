@@ -63,6 +63,7 @@ vi.mock('../supabase', () => ({
           created_at: '2026-09-22T00:00:00Z',
         },
       ],
+      fin_invoice_exclusions: [],
       fin_rates: [],
       fin_fx_operations: [],
       fin_bs_ledger: [],
@@ -97,15 +98,21 @@ import {
   loadMonthTotals,
   loadAllMonthTotals,
   createSummaryMonth,
-  seedRecurringInvoices,
+  syncMonthInvoices,
+  loadInvoiceExclusions,
+  addInvoiceExclusion,
   closeMonth,
   resolveRateBcv,
   createFxOperation,
   createBsAdjustment,
+  __resetLiveRateCache,
 } from '../components/finanzas/finanzasApi'
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // El memo de la tasa en vivo es estado de módulo: sin limpiarlo, el primer
+  // test que resuelve una tasa se la sirve cacheada a todos los siguientes.
+  __resetLiveRateCache()
 })
 
 describe('finanzasApi — loadInvoices', () => {
@@ -434,7 +441,7 @@ describe('finanzasApi — createSummaryMonth', () => {
   })
 })
 
-describe('finanzasApi — seedRecurringInvoices', () => {
+describe('finanzasApi — syncMonthInvoices', () => {
   const CLIENTS = [
     { id: 'c-1', name: 'Turbopre', monthly_fee: 2600, mdn_since: '2025-01-01' },
     {
@@ -447,41 +454,104 @@ describe('finanzasApi — seedRecurringInvoices', () => {
     { id: 'c-3', name: 'Sin fee', monthly_fee: 0, mdn_since: '2025-01-01' },
   ]
 
-  it('es idempotente: no inserta nada si el mes ya tiene alguna factura', async () => {
+  it('en un mes ya poblado no duplica lo cargado, pero agrega al cliente activo que falta', async () => {
     const fromSpy = vi.spyOn(supabase, 'from')
-    // 'm-1' ya tiene inv-1 en el fixture del mock.
-    const { error } = await seedRecurringInvoices({
+    // 'm-1' ya tiene inv-1 (Turbopre, c-1) en el fixture del mock; falta c-3.
+    const { inserted, error } = await syncMonthInvoices({
       companyId: 'co-1',
       monthId: 'm-1',
       year: 2026,
       month: 9,
       clients: CLIENTS,
+      userId: 'u-1',
     })
     expect(error).toBeNull()
-    const finInvoicesCalls = fromSpy.mock.calls.filter(([table]) => table === 'fin_invoices')
-    expect(finInvoicesCalls).toHaveLength(1) // solo el loadInvoices del chequeo, sin insert
+    expect(inserted).toBe(1)
+    const insertCall = fromSpy.mock.results
+      .map((r) => r.value)
+      .find((q) => q.insert.mock.calls.length)
+    expect(insertCall.insert).toHaveBeenCalledWith([
+      expect.objectContaining({ client_id: 'c-3', amount: 0, created_by: 'u-1' }),
+    ])
     fromSpy.mockRestore()
   })
 
-  it('sin mes anterior, inserta un cargo por cada cliente activo con monthly_fee > 0', async () => {
+  it('no inserta nada cuando ya están todos los clientes activos del mes', async () => {
+    const fullInvoicesQuery = makeQuery([
+      { id: 'inv-1', month_id: 'm-1', client_id: 'c-1', amount: 2600, payments: [] },
+      { id: 'inv-9', month_id: 'm-1', client_id: 'c-3', amount: 0, payments: [] },
+    ])
+    const noPrevMonthQuery = makeQuery([])
+    const noExclusionsQuery = makeQuery([])
+    const fromSpy = vi.spyOn(supabase, 'from')
+    fromSpy
+      .mockImplementationOnce(() => fullInvoicesQuery) // loadInvoices('m-1')
+      .mockImplementationOnce(() => noPrevMonthQuery) // loadMonth(co-1, 2026, 8)
+      .mockImplementationOnce(() => noExclusionsQuery) // loadInvoiceExclusions
+
+    const { inserted, error } = await syncMonthInvoices({
+      companyId: 'co-1',
+      monthId: 'm-1',
+      year: 2026,
+      month: 9,
+      clients: CLIENTS,
+      userId: 'u-1',
+    })
+    expect(error).toBeNull()
+    expect(inserted).toBe(0)
+    expect(fromSpy).toHaveBeenCalledTimes(3) // sin insert
+    fromSpy.mockRestore()
+  })
+
+  it('no recrea la facturación de un cliente excluido a propósito', async () => {
     const emptyInvoicesQuery = makeQuery([])
-    const noPrevMonthQuery = makeQuery([]) // maybeSingle → null, no hay mes anterior
+    const noPrevMonthQuery = makeQuery([])
+    const exclusionsQuery = makeQuery([{ client_id: 'c-1', year: 2026, month: 9 }])
     const insertQuery = makeQuery([])
     const fromSpy = vi.spyOn(supabase, 'from')
     fromSpy
-      .mockImplementationOnce(() => emptyInvoicesQuery) // loadInvoices('m-empty') — chequeo idempotencia
-      .mockImplementationOnce(() => noPrevMonthQuery) // loadMonth(companyId, año/mes anterior)
-      .mockImplementationOnce(() => insertQuery) // insert
+      .mockImplementationOnce(() => emptyInvoicesQuery)
+      .mockImplementationOnce(() => noPrevMonthQuery)
+      .mockImplementationOnce(() => exclusionsQuery)
+      .mockImplementationOnce(() => insertQuery)
 
-    const { error } = await seedRecurringInvoices({
+    const { error } = await syncMonthInvoices({
       companyId: 'co-1',
       monthId: 'm-empty',
       year: 2026,
       month: 9,
       clients: CLIENTS,
+      userId: 'u-1',
+    })
+    expect(error).toBeNull()
+    const inserted = insertQuery.insert.mock.calls[0][0]
+    expect(inserted.map((r) => r.client_id)).toEqual(['c-3'])
+    fromSpy.mockRestore()
+  })
+
+  it('sin mes anterior, siembra a TODOS los clientes activos (los que no tienen fee, en 0)', async () => {
+    const emptyInvoicesQuery = makeQuery([])
+    const noPrevMonthQuery = makeQuery([]) // maybeSingle → null, no hay mes anterior
+    const noExclusionsQuery = makeQuery([])
+    const insertQuery = makeQuery([])
+    const fromSpy = vi.spyOn(supabase, 'from')
+    fromSpy
+      .mockImplementationOnce(() => emptyInvoicesQuery) // loadInvoices('m-empty')
+      .mockImplementationOnce(() => noPrevMonthQuery) // loadMonth(companyId, año/mes anterior)
+      .mockImplementationOnce(() => noExclusionsQuery) // loadInvoiceExclusions
+      .mockImplementationOnce(() => insertQuery) // insert
+
+    const { inserted, error } = await syncMonthInvoices({
+      companyId: 'co-1',
+      monthId: 'm-empty',
+      year: 2026,
+      month: 9,
+      clients: CLIENTS,
+      userId: 'u-1',
     })
 
     expect(error).toBeNull()
+    expect(inserted).toBe(2) // c-1 y c-3; c-2 está de baja
     expect(insertQuery.insert).toHaveBeenCalledWith([
       expect.objectContaining({
         month_id: 'm-empty',
@@ -490,6 +560,12 @@ describe('finanzasApi — seedRecurringInvoices', () => {
         amount: 2600,
         currency: 'USD',
         recurring: true,
+      }),
+      expect.objectContaining({
+        month_id: 'm-empty',
+        client_id: 'c-3',
+        client_name: 'Sin fee',
+        amount: 0, // sin monto en el perfil ni mes anterior: aparece para que lo editen
       }),
     ])
     fromSpy.mockRestore()
@@ -538,25 +614,28 @@ describe('finanzasApi — seedRecurringInvoices', () => {
       },
     ])
     const prevMonthQuery = makeQuery([{ id: 'm-1', company_id: 'co-1', year: 2026, month: 8 }])
+    const noExclusionsQuery = makeQuery([])
     const insertQuery = makeQuery([])
     const fromSpy = vi.spyOn(supabase, 'from')
     fromSpy
-      .mockImplementationOnce(() => emptyInvoicesQuery) // loadInvoices('m-new') — chequeo idempotencia
+      .mockImplementationOnce(() => emptyInvoicesQuery) // loadInvoices('m-new')
       .mockImplementationOnce(() => prevMonthQuery) // loadMonth(companyId, 2026, 8)
+      .mockImplementationOnce(() => noExclusionsQuery) // loadInvoiceExclusions
       .mockImplementationOnce(() => prevInvoicesQuery) // loadInvoices('m-1')
       .mockImplementationOnce(() => insertQuery) // insert
 
-    const { error } = await seedRecurringInvoices({
+    const { error } = await syncMonthInvoices({
       companyId: 'co-1',
       monthId: 'm-new',
       year: 2026,
       month: 9,
       clients: CLIENTS,
+      userId: 'u-1',
     })
 
     expect(error).toBeNull()
     const inserted = insertQuery.insert.mock.calls[0][0]
-    expect(inserted).toHaveLength(2)
+    expect(inserted).toHaveLength(3) // los 2 arrastrados + c-3 (activo sin fee, en 0)
     expect(inserted).toContainEqual(
       expect.objectContaining({
         client_id: 'c-1',
@@ -571,6 +650,46 @@ describe('finanzasApi — seedRecurringInvoices', () => {
         client_name: 'Freelance externo',
         amount: 300,
       }),
+    )
+    expect(inserted).toContainEqual(expect.objectContaining({ client_id: 'c-3', amount: 0 }))
+    fromSpy.mockRestore()
+  })
+})
+
+describe('finanzasApi — exclusiones de facturación', () => {
+  it('loadInvoiceExclusions devuelve solo los clientIds, filtrando hasta el mes consultado', async () => {
+    const query = makeQuery([
+      { client_id: 'c-1', year: 2026, month: 8 },
+      { client_id: 'c-5', year: 2026, month: 9 },
+    ])
+    const fromSpy = vi.spyOn(supabase, 'from').mockImplementationOnce(() => query)
+    const { data, error } = await loadInvoiceExclusions('co-1', 2026, 9)
+    expect(error).toBeNull()
+    expect(data).toEqual(['c-1', 'c-5'])
+    // La exclusión aplica de su mes en adelante: se piden las <= (2026, 9).
+    expect(query.or).toHaveBeenCalledWith('year.lt.2026,and(year.eq.2026,month.lte.9)')
+    fromSpy.mockRestore()
+  })
+
+  it('addInvoiceExclusion hace upsert con la clave (empresa, cliente, año, mes)', async () => {
+    const query = makeQuery([])
+    const fromSpy = vi.spyOn(supabase, 'from').mockImplementationOnce(() => query)
+    await addInvoiceExclusion({
+      companyId: 'co-1',
+      clientId: 'c-1',
+      year: 2026,
+      month: 10,
+      userId: 'u-1',
+    })
+    expect(query.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        company_id: 'co-1',
+        client_id: 'c-1',
+        year: 2026,
+        month: 10,
+        created_by: 'u-1',
+      }),
+      expect.objectContaining({ onConflict: 'company_id,client_id,year,month' }),
     )
     fromSpy.mockRestore()
   })
@@ -711,6 +830,49 @@ describe('finanzasApi — resolveRateBcv con la API en vivo (solo para la fecha 
       expect.objectContaining({ company_id: 'co-1', rate_date: today, rate_bcv: 197.6 }),
       expect.anything(),
     )
+    fromSpy.mockRestore()
+  })
+
+  it('memoriza la tasa del día: la segunda llamada no repite el fetch ni el upsert', async () => {
+    supabase.auth.getSession.mockResolvedValue({
+      data: { session: { access_token: 'tok' } },
+      error: null,
+    })
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({ rate: 197.6, source: 'pydolarve' }) })
+    vi.stubGlobal('fetch', fetchMock)
+    const upsertQuery = makeQuery({})
+    const fromSpy = vi.spyOn(supabase, 'from').mockImplementation(() => upsertQuery)
+
+    const primera = await resolveRateBcv('co-1', today)
+    const segunda = await resolveRateBcv('co-1', today)
+
+    // Sin el memo, cada recarga del periodo repetía getSession + fetch a la API
+    // externa + upsert — y ese upsert era el que realimentaba el realtime.
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(upsertQuery.upsert).toHaveBeenCalledTimes(1)
+    expect(segunda.data).toEqual(primera.data)
+    fromSpy.mockRestore()
+  })
+
+  it('el memo es por fecha: otra fecha vuelve a resolverse', async () => {
+    supabase.auth.getSession.mockResolvedValue({
+      data: { session: { access_token: 'tok' } },
+      error: null,
+    })
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({ rate: 197.6, source: 'pydolarve' }) })
+    vi.stubGlobal('fetch', fetchMock)
+    const query = makeQuery({})
+    const fromSpy = vi.spyOn(supabase, 'from').mockImplementation(() => query)
+
+    await resolveRateBcv('co-1', today)
+    // Una fecha que no es hoy ni siquiera pasa por la API en vivo: va al histórico.
+    await resolveRateBcv('co-1', '2026-01-15')
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
     fromSpy.mockRestore()
   })
 

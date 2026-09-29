@@ -23,6 +23,9 @@ import {
   movimientoCartera,
   pctsEnterosPorPartida,
   invoiceRowsForNewMonth,
+  esMesPreparable,
+  hoyISO,
+  ultimoDiaDelMesISO,
   deltaCambio,
   brechaPct,
   tasaRealFx,
@@ -345,6 +348,42 @@ describe('finanzas — pctsEnterosPorPartida', () => {
   })
 })
 
+describe('fechas del módulo y periodo preparable', () => {
+  const HOY = new Date(2026, 8, 29) // 29 de septiembre de 2026, hora local
+
+  it('esMesPreparable acepta el mes en curso y los anteriores', () => {
+    expect(esMesPreparable(2026, 9, HOY)).toBe(true)
+    expect(esMesPreparable(2026, 8, HOY)).toBe(true)
+    expect(esMesPreparable(2025, 12, HOY)).toBe(true)
+  })
+
+  it('esMesPreparable rechaza meses futuros', () => {
+    expect(esMesPreparable(2026, 10, HOY)).toBe(false)
+    expect(esMesPreparable(2026, 11, HOY)).toBe(false)
+    expect(esMesPreparable(2027, 3, HOY)).toBe(false)
+  })
+
+  it('esMesPreparable compara el año, no solo el número de mes', () => {
+    // Enero de 2027 (mes 1) NO es preparable en septiembre de 2026 aunque 1 <= 9.
+    expect(esMesPreparable(2027, 1, HOY)).toBe(false)
+    // Y en enero de 2027, diciembre de 2026 sí lo es.
+    expect(esMesPreparable(2026, 12, new Date(2027, 0, 5))).toBe(true)
+  })
+
+  it('ultimoDiaDelMesISO da el último día real, sin corrimiento de huso', () => {
+    expect(ultimoDiaDelMesISO(2026, 9)).toBe('2026-09-30')
+    expect(ultimoDiaDelMesISO(2026, 10)).toBe('2026-10-31')
+    expect(ultimoDiaDelMesISO(2026, 2)).toBe('2026-02-28')
+    expect(ultimoDiaDelMesISO(2028, 2)).toBe('2028-02-29') // bisiesto
+    expect(ultimoDiaDelMesISO(2026, 12)).toBe('2026-12-31')
+  })
+
+  it('hoyISO formatea la fecha local con ceros a la izquierda', () => {
+    expect(hoyISO(new Date(2026, 0, 5))).toBe('2026-01-05')
+    expect(hoyISO(new Date(2026, 11, 31))).toBe('2026-12-31')
+  })
+})
+
 describe('invoiceRowsForNewMonth', () => {
   const CLIENTES = [
     { id: 'c1', name: 'Turbopre', monthly_fee: 2600, mdn_since: '2025-01-01' },
@@ -413,6 +452,54 @@ describe('invoiceRowsForNewMonth', () => {
       expect.objectContaining({ clientId: 'c2', amount: 800, concept: 'Gestión de redes' }),
     )
     expect(rows).toHaveLength(2)
+  })
+
+  it('incluye a un cliente activo SIN mensualidad en el perfil, con monto 0 para editar', () => {
+    const rows = invoiceRowsForNewMonth({
+      prevInvoices: [],
+      clients: [
+        ...CLIENTES,
+        { id: 'c3', name: 'Ecopack', monthly_fee: null, mdn_since: '2026-07-01' },
+      ],
+      year: 2026,
+      month: 9,
+    })
+    expect(rows).toContainEqual(
+      expect.objectContaining({ clientId: 'c3', clientName: 'Ecopack', amount: 0 }),
+    )
+  })
+
+  it('solo devuelve lo que FALTA: no repite a los clientes que el mes ya tiene', () => {
+    const rows = invoiceRowsForNewMonth({
+      prevInvoices: [prevInvoice()],
+      clients: CLIENTES,
+      year: 2026,
+      month: 9,
+      existingInvoices: [{ id: 'inv-x', clientId: 'c1', amount: 2600 }],
+    })
+    expect(rows.map((r) => r.clientId)).toEqual(['c2'])
+  })
+
+  it('no recrea la facturación de un cliente excluido a propósito', () => {
+    const rows = invoiceRowsForNewMonth({
+      prevInvoices: [prevInvoice()],
+      clients: CLIENTES,
+      year: 2026,
+      month: 9,
+      excludedClientIds: ['c1'],
+    })
+    expect(rows.map((r) => r.clientId)).toEqual(['c2'])
+  })
+
+  it('en un mes ya poblado no re-copia los cargos externos del mes anterior', () => {
+    const rows = invoiceRowsForNewMonth({
+      prevInvoices: [prevInvoice({ clientId: null, clientName: 'Freelance externo' })],
+      clients: [],
+      year: 2026,
+      month: 9,
+      existingInvoices: [{ id: 'inv-x', clientId: 'c9', amount: 100 }],
+    })
+    expect(rows).toEqual([])
   })
 
   it('arrastra un cargo externo (client_id null) del mes anterior', () => {

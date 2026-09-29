@@ -106,7 +106,7 @@ export default function DistribucionView({
   if (!finMonth) {
     return (
       <div className="bg-white border border-[#e0ddd4] rounded-xl p-10 text-center text-[13.5px] text-[#999]">
-        Este mes aún no se ha abierto.
+        Este mes todavía no tiene movimiento. Entra a Facturación y se prepara solo.
       </div>
     )
   }
@@ -154,7 +154,10 @@ export default function DistribucionView({
             pcts={pcts}
             canManage={canManagePartidas}
             closed={closed}
-            onSaved={refetch}
+            // Envuelto y no `refetch` a secas: el callback puede invocarse con
+            // un argumento, y ese argumento caería en el parámetro
+            // `showLoading` de fetchPeriod.
+            onSaved={() => refetch()}
           />
           {canCerrarMes && (
             <CerrarMesButton
@@ -163,7 +166,7 @@ export default function DistribucionView({
               year={year}
               month={month}
               clients={clients}
-              onDone={refetch}
+              onDone={() => refetch()}
             />
           )}
           {canManage && !closed && (

@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useCoalescedRefetch } from '../hooks/useCoalescedRefetch'
+import { ultimoDiaDelMesISO } from '../utils/finanzas'
 import { supabase } from '../supabase'
 import { loadClients, loadLines } from '../components/metricas/metricsApi'
 import {
@@ -138,7 +140,7 @@ export default function FinanzasPage() {
         setMonthTotals(null)
       }
 
-      const lastDayOfMonth = new Date(year, month, 0).toISOString().slice(0, 10)
+      const lastDayOfMonth = ultimoDiaDelMesISO(year, month)
       const [{ data: fx }, { data: ledger }, { data: rts }, { data: rateInfo }] = await Promise.all(
         [
           loadFxOperationsUpTo(companyId, year, month),
@@ -175,12 +177,20 @@ export default function FinanzasPage() {
     fetchPeriod()
   }, [fetchPeriod])
 
+  const scheduleRefetch = useCoalescedRefetch(() => fetchPeriod(false))
+
   useEffect(() => {
     if (!companyId) return
-    // fetchPeriod(false): Supabase invoca el callback con el payload del cambio
-    // como argumento — sin este wrapper, ese payload (truthy) caería en el
-    // parámetro `showLoading` y reactivaría el "Cargando…" que se quería evitar.
-    const backgroundRefetch = () => fetchPeriod(false)
+    // Una sola recarga por ráfaga de eventos (ver useCoalescedRefetch): un
+    // `.insert([...])` de 67 facturas emite 67 eventos —Postgres notifica por
+    // fila— y antes cada uno recargaba el periodo entero (~7 consultas), así que
+    // preparar un mes costaba ~470 requests por sesión abierta.
+    //
+    // `backgroundRefetch` sigue siendo un wrapper y no `fetchPeriod` a secas:
+    // Supabase invoca el callback con el payload del cambio como argumento, y
+    // sin el wrapper ese payload (truthy) caería en el parámetro `showLoading`
+    // reactivando el "Cargando…" que se quería evitar.
+    const backgroundRefetch = () => scheduleRefetch()
     const channel = supabase
       .channel('finanzas-view')
       .on(
@@ -218,14 +228,19 @@ export default function FinanzasPage() {
         { event: '*', schema: 'public', table: 'fin_bs_ledger' },
         backgroundRefetch,
       )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'fin_rates' },
-        backgroundRefetch,
-      )
+      // OJO: `fin_rates` NO va aquí, a propósito. Su único escritor en el flujo
+      // normal es resolveRateBcv(), que corre DENTRO de fetchPeriod — escuchar
+      // una tabla que solo escribe la propia recarga es un bucle por
+      // construcción (recarga → upsert de la tasa → evento → recarga…). Cada
+      // fetchPeriod ya relee la tasa por su cuenta; lo único que se pierde es
+      // ver en vivo la tasa que cargó otro usuario, y eso llega igual con
+      // cualquier otro cambio del módulo.
       .subscribe()
-    return () => supabase.removeChannel(channel)
-  }, [companyId, fetchPeriod])
+    return () => {
+      scheduleRefetch.cancel()
+      supabase.removeChannel(channel)
+    }
+  }, [companyId, fetchPeriod, scheduleRefetch])
 
   if (!userProfile) return null
 
@@ -302,6 +317,7 @@ export default function FinanzasPage() {
             {...shared}
             canManage={canManageFacturacion}
             canManageCobros={canManageCobros}
+            userId={userProfile?.user_id}
           />
         )}
 
