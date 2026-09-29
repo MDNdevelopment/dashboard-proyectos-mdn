@@ -15,11 +15,15 @@ vi.mock('../context/AuthContext', () => ({
 
 const mockAddPayment = vi.fn().mockResolvedValue({ data: {}, error: null })
 const mockResolveRateBcv = vi.fn()
+const mockUpdateInvoice = vi.fn().mockResolvedValue({ data: {}, error: null })
+const mockLoadUltimasRetenciones = vi.fn().mockResolvedValue({ data: null, error: null })
 vi.mock('../components/finanzas/finanzasApi', () => ({
   addPayment: (...a) => mockAddPayment(...a),
   deletePayment: vi.fn(),
   deleteDistributionsForInvoice: vi.fn(),
   resolveRateBcv: (...a) => mockResolveRateBcv(...a),
+  updateInvoice: (...a) => mockUpdateInvoice(...a),
+  loadUltimasRetenciones: (...a) => mockLoadUltimasRetenciones(...a),
 }))
 
 import CobroModal from '../components/finanzas/CobroModal'
@@ -288,5 +292,111 @@ describe('CobroModal — guardar el cobro', () => {
 
     expect(await screen.findByText('Ingresa o confirma la tasa BCV')).toBeInTheDocument()
     expect(mockAddPayment).not.toHaveBeenCalled()
+  })
+})
+
+// ─── Retenciones: se marcan AQUÍ, no en el cliente ni en la factura ──────────
+describe('CobroModal — retenciones de impuestos', () => {
+  const TODAS = { isl: true, islRate: 0.05, iva: true, ivaRate: 0.75, municipal: true }
+  const CON_CLIENTE = { ...invoice, clientId: 'c-1', amount: 1000 }
+
+  function renderCobro(inv = CON_CLIENTE, props = {}) {
+    render(
+      <CobroModal
+        invoice={inv}
+        companyId="co-1"
+        canManage
+        onClose={() => {}}
+        onSaved={() => {}}
+        {...props}
+      />,
+    )
+  }
+
+  it('sugiere el neto, no el monto facturado, cuando la factura ya trae retenciones', () => {
+    renderCobro({ ...CON_CLIENTE, retenciones: TODAS })
+    expect(screen.getAllByRole('spinbutton')[0]).toHaveValue(844.83)
+    expect(screen.getByText('Neto a cobrar')).toBeInTheDocument()
+  })
+
+  it('al marcar un impuesto el monto sugerido baja solo', () => {
+    renderCobro()
+    expect(screen.getAllByRole('spinbutton')[0]).toHaveValue(1000)
+    fireEvent.click(screen.getByLabelText('ISL'))
+    // ISL 5% sobre la base de 1.000 → 43,10 retenido.
+    expect(screen.getAllByRole('spinbutton')[0]).toHaveValue(956.9)
+  })
+
+  it('no pisa el monto si el usuario ya lo escribió a mano', () => {
+    renderCobro()
+    fireEvent.change(screen.getAllByRole('spinbutton')[0], { target: { value: '500' } })
+    fireEvent.click(screen.getByLabelText('ISL'))
+    expect(screen.getAllByRole('spinbutton')[0]).toHaveValue(500)
+  })
+
+  it('precarga lo que ese cliente retuvo la última vez', async () => {
+    mockLoadUltimasRetenciones.mockResolvedValueOnce({ data: TODAS, error: null })
+    renderCobro()
+    await waitFor(() => expect(screen.getByLabelText('ISL')).toBeChecked())
+    expect(screen.getAllByRole('spinbutton')[0]).toHaveValue(844.83)
+  })
+
+  it('un cargo externo (sin cliente) no consulta el historial', () => {
+    renderCobro({ ...invoice, clientId: null })
+    expect(mockLoadUltimasRetenciones).not.toHaveBeenCalled()
+  })
+
+  it('guarda las retenciones en la factura ANTES de registrar el pago', async () => {
+    const orden = []
+    mockUpdateInvoice.mockImplementationOnce(async () => {
+      orden.push('updateInvoice')
+      return { data: {}, error: null }
+    })
+    mockAddPayment.mockImplementationOnce(async () => {
+      orden.push('addPayment')
+      return { data: {}, error: null }
+    })
+    renderCobro()
+    fireEvent.click(screen.getByLabelText('ISL'))
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar cobro' }))
+
+    await waitFor(() => expect(mockAddPayment).toHaveBeenCalled())
+    expect(orden).toEqual(['updateInvoice', 'addPayment'])
+    expect(mockUpdateInvoice).toHaveBeenCalledWith(
+      'inv-1',
+      expect.objectContaining({
+        retenciones: expect.objectContaining({ isl: true, islRate: 0.05 }),
+      }),
+    )
+  })
+
+  // Si se registrara el pago igual, quedaría un cobro contra un neto equivocado
+  // y la factura aparecería "Abonado" con una deuda fantasma.
+  it('si falla el guardado de las retenciones NO registra el pago', async () => {
+    mockUpdateInvoice.mockResolvedValueOnce({ data: null, error: { message: 'sin permiso' } })
+    renderCobro()
+    fireEvent.click(screen.getByLabelText('ISL'))
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar cobro' }))
+
+    await waitFor(() => expect(screen.getByText(/sin permiso/)).toBeInTheDocument())
+    expect(mockAddPayment).not.toHaveBeenCalled()
+  })
+
+  it('sin tocar las retenciones no escribe la factura', async () => {
+    renderCobro()
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar cobro' }))
+    await waitFor(() => expect(mockAddPayment).toHaveBeenCalled())
+    expect(mockUpdateInvoice).not.toHaveBeenCalled()
+  })
+
+  it('con la factura ya saldada los checks se ven pero no se editan', () => {
+    renderCobro(
+      { ...CON_CLIENTE, retenciones: TODAS, payments: [{ amount: 844.83 }] },
+      {
+        canManage: false,
+      },
+    )
+    expect(screen.getByLabelText('ISL')).toBeChecked()
+    expect(screen.getByLabelText('ISL')).toBeDisabled()
   })
 })

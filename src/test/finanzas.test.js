@@ -7,6 +7,9 @@ import {
   totalFacturado,
   totalCobrado,
   totalPorCobrar,
+  netoACobrarDe,
+  totalNetoACobrar,
+  totalRetenidoDelMes,
   distribuidoDe,
   asignadoPorPartida,
   pagadoPorPartida,
@@ -51,6 +54,54 @@ const PCTS_66_20_14 = { gastos: 0.66, socios: 0.2, ganancia: 0.14 }
 function invoice(overrides = {}) {
   return { id: 'i1', amount: 1000, payments: [], ...overrides }
 }
+
+// Config de retenciones de referencia: ISL 5%, IVA 75%, municipal 1%.
+// Sobre $1.000 deja un neto a cobrar de $844,83 (ver retenciones.test.js).
+const RET_TODAS = { isl: true, islRate: 0.05, iva: true, ivaRate: 0.75, municipal: true }
+
+describe('finanzas — neto a cobrar (retenciones)', () => {
+  it('netoACobrarDe descuenta las retenciones del monto facturado', () => {
+    expect(netoACobrarDe(invoice({ amount: 1000, retenciones: RET_TODAS }))).toBe(844.83)
+  })
+
+  it('una factura sin retenciones se comporta exactamente como antes', () => {
+    const inv = invoice({ amount: 1000, payments: [{ amount: 400 }] })
+    expect(netoACobrarDe(inv)).toBe(1000)
+    expect(pendienteDe(inv)).toBe(600)
+    expect(estadoFactura(inv)).toBe('abonado')
+  })
+
+  it('la factura queda cobrada al recibir el NETO, no el monto facturado', () => {
+    const inv = invoice({ amount: 1000, retenciones: RET_TODAS, payments: [{ amount: 844.83 }] })
+    expect(pendienteDe(inv)).toBe(0)
+    expect(estadoFactura(inv)).toBe('cobrado')
+  })
+
+  it('un abono parcial sobre una factura con retenciones sigue siendo "abonado"', () => {
+    const inv = invoice({ amount: 1000, retenciones: RET_TODAS, payments: [{ amount: 400 }] })
+    expect(pendienteDe(inv)).toBeCloseTo(444.83, 6)
+    expect(estadoFactura(inv)).toBe('abonado')
+  })
+
+  it('totalFacturado sigue siendo el bruto y totalNetoACobrar el neto', () => {
+    const invoices = [
+      invoice({ id: 'a', amount: 1000, retenciones: RET_TODAS }),
+      invoice({ id: 'b', amount: 500 }),
+    ]
+    expect(totalFacturado(invoices)).toBe(1500)
+    expect(totalNetoACobrar(invoices)).toBe(1344.83)
+    expect(totalRetenidoDelMes(invoices)).toBe(155.17)
+  })
+
+  it('totalPorCobrar llega a 0 al cobrar los netos, no queda la retención como deuda', () => {
+    const invoices = [
+      invoice({ id: 'a', amount: 1000, retenciones: RET_TODAS, payments: [{ amount: 844.83 }] }),
+      invoice({ id: 'b', amount: 500, payments: [{ amount: 500 }] }),
+    ]
+    expect(totalPorCobrar(invoices)).toBe(0)
+    expect(tasaCobranza(invoices)).toBe(1)
+  })
+})
 
 describe('finanzas — facturas y cobros', () => {
   it('cobradoDe suma los abonos registrados', () => {
@@ -521,6 +572,29 @@ describe('invoiceRowsForNewMonth', () => {
         recurring: true,
       },
     ])
+  })
+
+  it('no factura a las marcas en intercambio (no pagan dinero, hacen canje)', () => {
+    const rows = invoiceRowsForNewMonth({
+      prevInvoices: [],
+      clients: [
+        ...CLIENTES,
+        { id: 'c3', name: 'Canje', es_intercambio: true, mdn_since: '2025-01-01' },
+      ],
+      year: 2026,
+      month: 9,
+    })
+    expect(rows.map((r) => r.clientId)).toEqual(['c1', 'c2'])
+  })
+
+  it('tampoco arrastra del mes anterior a una marca que pasó a intercambio', () => {
+    const rows = invoiceRowsForNewMonth({
+      prevInvoices: [prevInvoice()],
+      clients: [{ ...CLIENTES[0], es_intercambio: true, monthly_fee: null }, CLIENTES[1]],
+      year: 2026,
+      month: 9,
+    })
+    expect(rows.map((r) => r.clientId)).toEqual(['c2'])
   })
 
   it('descarta la marca que ya no factura el mes nuevo (dada de baja)', () => {

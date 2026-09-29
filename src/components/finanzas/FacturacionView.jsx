@@ -5,6 +5,9 @@ import {
   pendienteDe,
   estadoFactura,
   totalFacturado,
+  totalNetoACobrar,
+  totalRetenidoDelMes,
+  netoACobrarDe,
   totalCobrado,
   cobradoPorMoneda,
   facturadoPorMoneda,
@@ -130,7 +133,12 @@ export default function FacturacionView({
   const closed = !!finMonth?.closed
   const facturado = totalFacturado(invoices)
   const cobrado = totalCobrado(invoices)
-  const pct = facturado ? Math.round((cobrado / facturado) * 100) : 0
+  // El avance de cobranza se mide contra el NETO: las retenciones nunca entran a
+  // caja, así que contra lo facturado una cartera con retención jamás llegaría
+  // al 100% aunque se hubiera cobrado todo.
+  const netoACobrar = totalNetoACobrar(invoices)
+  const retenido = totalRetenidoDelMes(invoices)
+  const pct = netoACobrar ? Math.round((cobrado / netoACobrar) * 100) : 0
   // Siempre sobre el total real (invoices), sin filtrar — el filtro de moneda de
   // abajo solo afecta las filas mostradas en la tabla, no estos resúmenes.
   const { usd: facturadoUsd, bs: facturadoBs } = useMemo(
@@ -271,6 +279,15 @@ export default function FacturacionView({
               <p className="text-[11px] uppercase text-[#999]">Facturado en Bs</p>
               <p className="font-bold text-[#111] text-[16px]">{fmtUSD(facturadoBs)}</p>
             </div>
+            {/* Solo aparece cuando de verdad hay retenciones: en una cartera sin
+                impuestos configurados la vista se ve igual que siempre. */}
+            {retenido > 0 && (
+              <div className="bg-white border border-[#e0ddd4] rounded-xl p-3">
+                <p className="text-[11px] uppercase text-[#999]">Neto a cobrar</p>
+                <p className="font-bold text-[#111] text-[16px]">{fmtUSD(netoACobrar)}</p>
+                <p className="text-[11.5px] text-[#999]">{fmtUSD(retenido)} retenido</p>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -279,10 +296,11 @@ export default function FacturacionView({
         <div className="flex-1 min-w-[240px]">
           <div className="flex justify-between text-[13px] text-[#666] mb-1">
             <span>
-              {fmtUSD(cobrado)} cobrado de {fmtUSD(facturado)} facturado
+              {fmtUSD(cobrado)} cobrado de {fmtUSD(netoACobrar)}
+              {retenido > 0 ? ' neto' : ' facturado'}
             </span>
             <span>
-              {pct}% · faltan {fmtUSD(facturado - cobrado)}
+              {pct}% · faltan {fmtUSD(netoACobrar - cobrado)}
             </span>
           </div>
           <div className="h-2 rounded-full bg-[#f0ede3] overflow-hidden">
@@ -359,6 +377,10 @@ export default function FacturacionView({
                 >
                   Facturado
                 </th>
+                {/* La columna Neto solo se agrega si hay retenciones en el mes:
+                    en una cartera sin impuestos configurados la tabla queda
+                    exactamente como estaba. */}
+                {!enCobros && retenido > 0 && <th className="text-right px-4 py-2">Neto</th>}
                 {enCobros ? (
                   <>
                     <th className="text-right px-4 py-2">Cobrado</th>
@@ -405,6 +427,11 @@ export default function FacturacionView({
                         fmtUSD(inv.amount)
                       )}
                     </td>
+                    {!enCobros && retenido > 0 && (
+                      <td className="text-right px-4 py-2.5 font-mono">
+                        {sinMonto(inv) ? '—' : fmtUSD(netoACobrarDe(inv))}
+                      </td>
+                    )}
                     {enCobros ? (
                       <>
                         <td className="text-right px-4 py-2.5 font-mono text-[#1F9D57]">

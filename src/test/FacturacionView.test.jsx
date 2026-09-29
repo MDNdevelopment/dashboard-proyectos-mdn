@@ -367,3 +367,31 @@ describe('FacturacionView — vista Cobros', () => {
     expect(screen.getByText('Ver cobro')).toBeInTheDocument()
   })
 })
+
+describe('FacturacionView — neto a cobrar con retenciones', () => {
+  const RET = { isl: true, islRate: 0.05, iva: true, ivaRate: 0.75, municipal: true }
+
+  it('muestra la columna Neto y la card cuando hay retenciones', () => {
+    renderView([{ ...BASE_INVOICE, amount: 1000, retenciones: RET }])
+    expect(screen.getByText('Neto')).toBeInTheDocument()
+    expect(screen.getByText('Neto a cobrar')).toBeInTheDocument()
+    // 1.000 → neto 844,83 y 155,17 retenido. Sale tres veces: la card del mes,
+    // la celda Neto de la factura y su Pendiente (todavía sin cobros).
+    expect(screen.getAllByText('$844.83')).toHaveLength(3)
+    expect(screen.getByText(/155\.17 retenido/)).toBeInTheDocument()
+  })
+
+  it('la factura queda "Cobrado" al recibir el neto, no el monto facturado', () => {
+    renderView([
+      { ...BASE_INVOICE, amount: 1000, retenciones: RET, payments: [{ amount: 844.83 }] },
+    ])
+    expect(screen.getByText('Cobrado')).toBeInTheDocument()
+  })
+
+  it('sin retenciones la vista queda exactamente como antes (sin columna Neto)', () => {
+    renderView([{ ...BASE_INVOICE, amount: 1000 }])
+    expect(screen.queryByText('Neto')).not.toBeInTheDocument()
+    expect(screen.queryByText('Neto a cobrar')).not.toBeInTheDocument()
+    expect(screen.getByText(/de \$1,000\.00 facturado/)).toBeInTheDocument()
+  })
+})

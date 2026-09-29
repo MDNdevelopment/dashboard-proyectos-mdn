@@ -106,9 +106,11 @@ export default function InvoiceModal({
       ...f,
       clientId: id,
       clientName: client?.name ?? '',
-      amount: client?.monthly_fee ?? f.amount,
+      // Una marca en intercambio no tiene mensualidad que precargar, y el cargo
+      // es puntual por definición: no debe arrastrarse al mes siguiente.
+      amount: client?.es_intercambio ? f.amount : (client?.monthly_fee ?? f.amount),
       concept: CONCEPTO_RECURRENTE,
-      recurring: true,
+      recurring: !client?.es_intercambio,
     }))
   }
 
@@ -344,7 +346,11 @@ export default function InvoiceModal({
               checked={form.recurring}
               onChange={(e) => set('recurring', e.target.checked)}
             />
-            Cargo recurrente (se repite al cerrar el mes)
+            {/* Antes decía "al cerrar el mes", que dejó de ser cierto cuando la
+                facturación pasó a prepararse sola al entrar a un mes nuevo
+                (migración 20260929150000): cerrar el mes ya no es el único
+                momento en que se arrastra. */}
+            Cargo recurrente (se repite el mes siguiente)
           </label>
 
           <div className="flex items-center justify-end gap-2 pt-1">

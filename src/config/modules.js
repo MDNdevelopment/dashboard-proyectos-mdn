@@ -204,6 +204,10 @@ export const MODULES = [
       // Ya existía en la BD (migración 20260918205117) y se usa en FinanzasPage.jsx,
       // pero faltaba en esta lista — no era editable desde Empresa → Accesos.
       { key: 'finanzas.partidas.manage', label: 'Editar el % de reparto del mes' },
+      {
+        key: 'finanzas.clientes.manage',
+        label: 'Editar mensualidad, intercambio e impuestos de los clientes',
+      },
     ],
   },
 ]

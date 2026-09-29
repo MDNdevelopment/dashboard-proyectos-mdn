@@ -1,13 +1,17 @@
 import { useState, useEffect } from 'react'
 import { fmtUSD } from '../../utils/metricsFinance'
 import { fmtDate } from '../../utils/formatDate'
-import { cobradoDe, pendienteDe } from '../../utils/finanzas'
+import { cobradoDe } from '../../utils/finanzas'
+import { hayRetenciones, normalizarRetenciones, retencionesDe } from '../../utils/retenciones'
 import {
   addPayment,
   deletePayment,
   deleteDistributionsForInvoice,
   resolveRateBcv,
+  updateInvoice,
+  loadUltimasRetenciones,
 } from './finanzasApi'
+import RetencionesFields from './RetencionesFields'
 import { METODOS_PAGO_USD, METODOS_PAGO_BS } from './constants'
 
 function todayISO() {
@@ -31,8 +35,22 @@ function fmtBs(n) {
  * (eso contaminaría la BCV oficial del día que usan otros cobros/pagos) — se
  * guarda solo en el pago (`rate` + `rate_source='manual'`).
  */
+/** Neto pendiente de una factura bajo una config de retenciones dada. */
+function pendienteLocalDe(invoice, ret) {
+  return retencionesDe(invoice?.amount, ret).neto - cobradoDe(invoice)
+}
+
 export default function CobroModal({ invoice, companyId, canManage, onClose, onSaved }) {
-  const [amount, setAmount] = useState(() => pendienteDe(invoice))
+  // Las retenciones se marcan AQUÍ, no en el perfil del cliente ni al emitir la
+  // factura: el ISLR de una misma marca varía entre 2% y 5% de un mes a otro y
+  // la retención real se conoce cuando el cliente paga y entrega su
+  // comprobante. Se guardan en la factura (`fin_invoices.ret_*`) porque son de
+  // la factura, no de cada abono.
+  const [ret, setRet] = useState(() => normalizarRetenciones(invoice?.retenciones))
+  // El monto sugerido sigue al neto mientras el usuario no lo haya escrito a
+  // mano: sin esto, marcar un impuesto le pisaría la cifra que acaba de teclear.
+  const [montoTocado, setMontoTocado] = useState(false)
+  const [amount, setAmount] = useState(() => pendienteLocalDe(invoice, invoice?.retenciones))
   const [currency, setCurrency] = useState('USD')
   const [method, setMethod] = useState(METODOS_PAGO_USD[0])
   const [date, setDate] = useState(todayISO())
@@ -44,13 +62,51 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
   const [error, setError] = useState(null)
 
   const cobrado = cobradoDe(invoice)
-  const pendiente = pendienteDe(invoice)
+  // Contra el estado del FORMULARIO, no contra lo guardado en la factura: al
+  // marcar un impuesto la cifra sugerida tiene que moverse ya, que es lo que el
+  // usuario necesita ver para decidir cuánto cobrar.
+  const desglose = retencionesDe(invoice?.amount, ret)
+  const pendiente = desglose.neto - cobrado
+  const guardadas = normalizarRetenciones(invoice?.retenciones)
+  const retCambiaron =
+    ret.isl !== guardadas.isl ||
+    ret.islRate !== guardadas.islRate ||
+    ret.iva !== guardadas.iva ||
+    ret.ivaRate !== guardadas.ivaRate ||
+    ret.municipal !== guardadas.municipal
   const isBs = currency === 'Bs'
   const effectiveRate = customRate ? Number(manualRate) || null : (rateInfo?.rate ?? null)
   const amountBs =
     isBs && effectiveRate && Number(amount) > 0
       ? Math.round(Number(amount) * effectiveRate * 100) / 100
       : null
+
+  // Precarga desde el historial: lo que esa marca retuvo la última vez. Solo si
+  // la factura no trae ya las suyas (segundo abono, o consultar un cobro hecho)
+  // y solo mientras nadie haya tocado los checks.
+  useEffect(() => {
+    if (hayRetenciones(invoice?.retenciones) || !invoice?.clientId) return
+    let cancelled = false
+    loadUltimasRetenciones(invoice.clientId).then(({ data }) => {
+      if (cancelled || !data) return
+      setRet(data)
+      setAmount((prev) => (montoTocado ? prev : retencionesDe(invoice.amount, data).neto - cobrado))
+    })
+    return () => {
+      cancelled = true
+    }
+    // Solo al montar: después manda lo que elija el usuario.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoice?.id])
+
+  /** Cambia una retención y arrastra el monto sugerido, si no lo escribieron. */
+  function cambiarRet(patch) {
+    setRet((prev) => {
+      const next = { ...prev, ...patch }
+      if (!montoTocado) setAmount(retencionesDe(invoice?.amount, next).neto - cobrado)
+      return next
+    })
+  }
 
   // Resuelve la BCV vigente para la fecha elegida en cuanto la moneda es Bs.
   useEffect(() => {
@@ -102,6 +158,18 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
     setSaving(true)
     setError(null)
 
+    // El ORDEN importa: si se registrara el pago primero y fallara la escritura
+    // de las retenciones, quedaría un cobro contra un neto equivocado y la
+    // factura aparecería "Abonado" con una deuda fantasma igual a lo retenido.
+    if (retCambiaron) {
+      const { error: retErr } = await updateInvoice(invoice.id, { retenciones: ret })
+      if (retErr) {
+        setSaving(false)
+        setError(`No se pudieron guardar las retenciones: ${retErr.message}`)
+        return
+      }
+    }
+
     const { error: err } = await addPayment(invoice.id, {
       paidOn: date,
       amount: amt,
@@ -148,6 +216,9 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
           </h2>
           <p className="text-[13px] text-[#888] mt-0.5">
             {invoice.clientName} · {invoice.concept} · facturado {fmtUSD(invoice.amount)}
+            {/* Con retenciones, lo que se espera cobrar es el neto: decirlo aquí
+                evita que parezca que la factura quedó corta de pago. */}
+            {hayRetenciones(ret) && <> · neto {fmtUSD(desglose.neto)}</>}
           </p>
         </div>
 
@@ -204,6 +275,59 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
             </div>
           )}
 
+          {/* Retenciones — se marcan al cobrar, con el comprobante del cliente
+              delante. Visibles también con la factura saldada, para consultar
+              qué se retuvo. */}
+          <div className="rounded-xl border border-[#e0ddd4] p-3 space-y-2.5">
+            <p className="text-[12px] font-mono font-bold uppercase tracking-wide text-[#888]">
+              Retenciones del cliente
+            </p>
+            <RetencionesFields
+              value={ret}
+              onChange={cambiarRet}
+              disabled={!canManage}
+              idPrefix="cobro"
+            />
+            {hayRetenciones(ret) && (
+              <div className="pt-2 border-t border-[#f0ede3] space-y-0.5">
+                <Fila label="Base imponible" valor={fmtUSD(desglose.base)} tenue />
+                <Fila label="IVA 16%" valor={fmtUSD(desglose.iva)} tenue />
+                {ret.iva && (
+                  <Fila
+                    label={`Retención IVA ${Math.round(ret.ivaRate * 100)}%`}
+                    valor={`− ${fmtUSD(desglose.retIva)}`}
+                    tenue
+                  />
+                )}
+                {ret.isl && (
+                  <Fila
+                    label={`Retención ISL ${ret.islRate * 100}%`}
+                    valor={`− ${fmtUSD(desglose.retIsl)}`}
+                    tenue
+                  />
+                )}
+                {ret.municipal && (
+                  <Fila
+                    label="Impuesto municipal 1%"
+                    valor={`− ${fmtUSD(desglose.retMunicipal)}`}
+                    tenue
+                  />
+                )}
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[13px] font-bold text-[#111]">Neto a cobrar</span>
+                  <span className="font-mono text-[14px] font-bold text-[#111]">
+                    {fmtUSD(desglose.neto)}
+                  </span>
+                </div>
+              </div>
+            )}
+            {invoice?.clientId && (
+              <p className="text-[11.5px] text-[#999]">
+                Sugerido por lo que se le retuvo la última vez. Confírmalo contra el comprobante.
+              </p>
+            )}
+          </div>
+
           {canManage && pendiente > 0.5 && (
             <>
               <div className="grid grid-cols-2 gap-3">
@@ -215,7 +339,10 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
                     type="number"
                     className="input-base"
                     value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
+                    onChange={(e) => {
+                      setMontoTocado(true)
+                      setAmount(e.target.value)
+                    }}
                   />
                 </div>
                 <div>
@@ -376,6 +503,15 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+function Fila({ label, valor, tenue }) {
+  return (
+    <div className="flex items-center justify-between text-[12.5px]">
+      <span className={tenue ? 'text-[#888]' : 'text-[#333]'}>{label}</span>
+      <span className={`font-mono ${tenue ? 'text-[#888]' : 'text-[#333]'}`}>{valor}</span>
     </div>
   )
 }

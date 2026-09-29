@@ -15,6 +15,8 @@ import {
   totalFacturado,
   totalCobrado,
   totalPorCobrar,
+  totalNetoACobrar,
+  totalRetenidoDelMes,
   asignadoPorPartida,
   desviacionEnPuntos,
   pctsEnterosPorPartida,
@@ -116,6 +118,10 @@ export default function DashboardView({
   const facturado = isSummary ? (monthTotals?.totalFacturado ?? 0) : totalFacturado(invoices)
   const cobrado = isSummary ? (monthTotals?.totalCobrado ?? 0) : totalCobrado(invoices)
   const porCobrar = isSummary ? 0 : totalPorCobrar(invoices)
+  // En un mes resumen no hay filas de factura: sus totales ya son lo realmente
+  // cobrado, así que el neto cae a lo facturado y todo se comporta como antes.
+  const netoACobrar = isSummary ? facturado : totalNetoACobrar(invoices)
+  const retenido = isSummary ? 0 : totalRetenidoDelMes(invoices)
   const { bs: cobradoBs, divisa: cobradoDivisa } = cobradoPorMoneda(invoices)
   // Los movimientos de "traspaso entre partidas" (PagoPartidaModal, cuando un pago
   // excede el disponible) mueven plata ya cobrada de una partida a otra — no son
@@ -236,13 +242,17 @@ export default function DashboardView({
         <KpiCard
           label="Cobrado"
           value={fmtUSD(cobrado)}
-          sub={`Bs ${fmtUSD(cobradoBs)} · Divisa ${fmtUSD(cobradoDivisa)} · ${facturado ? Math.round((cobrado / facturado) * 100) : 0}%`}
+          // El % va contra el neto a cobrar, no contra lo facturado: las
+          // retenciones no entran a caja, así que medirlas como cobranza
+          // pendiente dejaría el indicador tope por debajo del 100% para
+          // siempre.
+          sub={`Bs ${fmtUSD(cobradoBs)} · Divisa ${fmtUSD(cobradoDivisa)} · ${netoACobrar ? Math.round((cobrado / netoACobrar) * 100) : 0}%`}
           accent="#1F9D57"
         />
         <KpiCard
           label="Por cobrar"
           value={fmtUSD(porCobrar)}
-          sub="pendiente del mes"
+          sub={retenido > 0 ? `neto · ${fmtUSD(retenido)} retenido` : 'pendiente del mes'}
           accent="#D6453F"
         />
         <KpiCard

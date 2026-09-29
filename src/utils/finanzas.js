@@ -22,6 +22,7 @@ import {
   FX_OP_TYPES,
 } from '../components/finanzas/constants'
 import { clientInMonth } from './clientInMonth'
+import { netoDe, totalRetenido } from './retenciones'
 
 /** Tolerancia usada en todo el módulo para tratar redondeos como iguales. */
 const EPS = 0.5
@@ -33,9 +34,24 @@ export function cobradoDe(invoice) {
   return (invoice?.payments ?? []).reduce((a, p) => a + Number(p.amount ?? 0), 0)
 }
 
-/** Monto que aún falta cobrar de una factura. */
+/**
+ * Neto a cobrar de una factura: el monto facturado menos las retenciones que el
+ * cliente le practica (ver utils/retenciones.js). Una factura sin retenciones
+ * configuradas — toda la facturación anterior a esta feature — devuelve su
+ * monto tal cual, así que nada del comportamiento histórico cambia.
+ */
+export function netoACobrarDe(invoice) {
+  return netoDe(invoice)
+}
+
+/**
+ * Monto que aún falta cobrar de una factura. Se mide contra el NETO, no contra
+ * lo facturado: la retención nunca va a entrar a caja (la entera el cliente al
+ * fisco), así que una factura queda saldada al recibir el neto. Si se midiera
+ * contra el bruto, toda marca con retención quedaría "abonada" para siempre.
+ */
 export function pendienteDe(invoice) {
-  return Number(invoice?.amount ?? 0) - cobradoDe(invoice)
+  return netoACobrarDe(invoice) - cobradoDe(invoice)
 }
 
 /**
@@ -97,8 +113,26 @@ export function totalCobrado(invoices) {
   return (invoices ?? []).reduce((a, i) => a + cobradoDe(i), 0)
 }
 
+/**
+ * Suma de los netos a cobrar del mes: lo que de verdad se espera que entre a
+ * caja. Se diferencia de `totalFacturado()` en las retenciones, que el cliente
+ * entera al fisco y nunca llegan a la agencia.
+ */
+export function totalNetoACobrar(invoices) {
+  return (invoices ?? []).reduce((a, i) => a + netoACobrarDe(i), 0)
+}
+
+/** Total retenido del mes por los clientes (KPI informativo, no es un egreso). */
+export function totalRetenidoDelMes(invoices) {
+  return totalRetenido(invoices)
+}
+
+/**
+ * Lo que falta cobrar del mes. Contra el neto, no contra lo facturado: si no,
+ * las retenciones figurarían como deuda eterna de los clientes.
+ */
 export function totalPorCobrar(invoices) {
-  return totalFacturado(invoices) - totalCobrado(invoices)
+  return totalNetoACobrar(invoices) - totalCobrado(invoices)
 }
 
 /**
@@ -276,7 +310,14 @@ export function invoiceRowsForNewMonth({
     if (excluidos.has(clientId)) return false
     if (yaFacturados.has(clientId)) return false
     const client = clientById.get(clientId)
-    return !!client && clientInMonth(client, year, month)
+    if (!client) return false
+    // Marca en intercambio: la agencia le trabaja pero no le cobra dinero, así
+    // que no entra en la facturación del mes. El filtro va aquí y no en
+    // clientInMonth(), que responde "¿existía esta cuenta este mes?" y la usan
+    // Métricas, Tareas, Ads y Chequeo: meterlo allí borraría a estas marcas de
+    // los reportes de trabajo, que sí las atienden.
+    if (client.es_intercambio) return false
+    return clientInMonth(client, year, month)
   }
 
   for (const inv of prevInvoices ?? []) {
@@ -377,10 +418,14 @@ export function esMesPreparable(year, month, ref = new Date()) {
 
 // ─── Análisis ───────────────────────────────────────────────────────────────────
 
-/** Tasa de cobranza del mes: cobrado / facturado (0 si no hay facturación). */
+/**
+ * Tasa de cobranza del mes: cobrado / neto a cobrar (0 si no hay facturación).
+ * Contra el neto y no contra lo facturado, porque si no una cartera con
+ * retenciones nunca podría llegar al 100% aunque hubiera cobrado todo.
+ */
 export function tasaCobranza(invoices) {
-  const fac = totalFacturado(invoices)
-  return fac ? totalCobrado(invoices) / fac : 0
+  const neto = totalNetoACobrar(invoices)
+  return neto ? totalCobrado(invoices) / neto : 0
 }
 
 /** Ticket promedio: facturado / clientes activos facturados (0 si no hay clientes). */

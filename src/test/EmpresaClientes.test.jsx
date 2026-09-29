@@ -588,6 +588,74 @@ describe('ClientsView (sección Clientes en Empresa) — lista plana', () => {
     expect(screen.getByDisplayValue('ALSA')).not.toBeDisabled()
   })
 
+  // Los datos económicos de un cliente (mensualidad, día de pago, intercambio,
+  // impuestos) solo los toca quien entra a Finanzas: ver migración
+  // 20260929170000, que además lo hace cumplir en la base con un trigger.
+  it('sin finanzas.clientes.manage no se pueden editar mensualidad ni día de pago', async () => {
+    const user = userEvent.setup()
+    useAuth.mockReturnValue({
+      userProfile: { user_id: 'u-mgr', company_id: 'co-1', access_level: 2, admin: false },
+      can: (key) => key !== 'finanzas.clientes.manage',
+    })
+    render(
+      <MemoryRouter initialEntries={['/empresa/clientes']}>
+        <EmpresaPage />
+      </MemoryRouter>,
+    )
+    await waitFor(() => {
+      expect(screen.getByText('ALSA')).toBeInTheDocument()
+    })
+    await user.click(screen.getAllByRole('button', { name: 'Editar' })[0])
+    expect(screen.queryByText('Mensualidad (USD)')).not.toBeInTheDocument()
+    expect(screen.queryByText('Día de pago')).not.toBeInTheDocument()
+    expect(screen.getByText(/se editan desde/i)).toBeInTheDocument()
+  })
+
+  it('con finanzas.clientes.manage sí aparecen mensualidad y día de pago', async () => {
+    const user = userEvent.setup()
+    useAuth.mockReturnValue({
+      userProfile: { user_id: 'u-fin', company_id: 'co-1', access_level: 2, admin: false },
+      can: () => true,
+    })
+    render(
+      <MemoryRouter initialEntries={['/empresa/clientes']}>
+        <EmpresaPage />
+      </MemoryRouter>,
+    )
+    await waitFor(() => {
+      expect(screen.getByText('ALSA')).toBeInTheDocument()
+    })
+    await user.click(screen.getAllByRole('button', { name: 'Editar' })[0])
+    expect(screen.getByText('Mensualidad (USD)')).toBeInTheDocument()
+    expect(screen.getByText('Día de pago')).toBeInTheDocument()
+  })
+
+  // El caso que rompería la edición de clientes para todos: el modal manda el
+  // payload completo, así que sin la capacidad tiene que reenviar los valores
+  // que ya tenía la fila, no un default que el trigger rechazaría.
+  it('sin la capacidad, guardar preserva la mensualidad y el día de pago previos', async () => {
+    const user = userEvent.setup()
+    useAuth.mockReturnValue({
+      userProfile: { user_id: 'u-mgr', company_id: 'co-1', access_level: 2, admin: false },
+      can: (key) => key !== 'finanzas.clientes.manage',
+    })
+    render(
+      <MemoryRouter initialEntries={['/empresa/clientes']}>
+        <EmpresaPage />
+      </MemoryRouter>,
+    )
+    await waitFor(() => {
+      expect(screen.getByText('Da Vinci')).toBeInTheDocument()
+    })
+    // Da Vinci (cli-2) tiene payment_day 5 en el fixture.
+    await user.click(screen.getAllByRole('button', { name: 'Editar' })[1])
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+    await waitFor(() => expect(mockUpdateClient).toHaveBeenCalled())
+    const [, payload] = mockUpdateClient.mock.calls[0]
+    expect(payload.payment_day).toBe(5)
+    expect(payload.monthly_fee).toBe(null)
+  })
+
   it('el payload de crear cliente incluye los campos de equipo', async () => {
     const user = userEvent.setup()
     renderAsManager()

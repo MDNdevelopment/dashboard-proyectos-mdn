@@ -21,14 +21,37 @@ vi.mock('../components/finanzas/finanzasApi', () => ({
   loadInvoicesUpTo: vi.fn().mockResolvedValue({ data: [], error: null }),
   loadDistributionsUpTo: vi.fn().mockResolvedValue({ data: [], error: null }),
   loadRates: vi.fn().mockResolvedValue({ data: [], error: null }),
+  // Con la cartera no vacía, FacturacionView prepara el mes al montarse (ver su
+  // efecto: exige `clients?.length`), así que estas dos hacen falta aunque esta
+  // suite solo pruebe el enrutado de pestañas.
+  loadOrCreateMonth: vi.fn().mockResolvedValue({ data: null, error: null }),
+  syncMonthInvoices: vi.fn().mockResolvedValue({ inserted: 0, error: null }),
+  deleteInvoice: vi.fn().mockResolvedValue({ error: null }),
+  addInvoiceExclusion: vi.fn().mockResolvedValue({ error: null }),
   resolveRateBcv: vi
     .fn()
     .mockResolvedValue({ data: { rate: null, rateDate: null, source: 'missing' }, error: null }),
 }))
 
+// Una marca en la cartera, para poder probar el gating de edición de la tab
+// Clientes (con la lista vacía no hay fila que abrir).
 vi.mock('../components/metricas/metricsApi', () => ({
-  loadClients: vi.fn().mockResolvedValue({ data: [], error: null }),
+  loadClients: vi.fn().mockResolvedValue({
+    data: [
+      {
+        id: 'c-1',
+        name: 'Turbopre',
+        monthly_fee: 1000,
+        line_id: null,
+        mdn_since: '2024-01-01',
+        deleted_at: null,
+        contract_end: null,
+      },
+    ],
+    error: null,
+  }),
   loadLines: vi.fn().mockResolvedValue({ data: [], error: null }),
+  updateClient: vi.fn().mockResolvedValue({ data: {}, error: null }),
 }))
 
 vi.mock('../supabase', () => {
@@ -475,5 +498,20 @@ describe('FinanzasPage — el realtime no dispara una recarga por fila', () => {
     const tablas = Object.keys(callbacksDelCanal())
     expect(tablas).not.toContain('fin_rates')
     expect(tablas).toContain('fin_invoices')
+  })
+})
+
+describe('FinanzasPage — permiso de edición económica de clientes', () => {
+  it('con finanzas.clientes.manage el panel del cliente permite guardar', async () => {
+    renderAt('/finanzas/clientes', () => true)
+    await userEvent.click(await screen.findByText('Turbopre'))
+    expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeInTheDocument()
+  })
+
+  it('sin la capacidad, la tab se sigue viendo pero el panel abre en solo lectura', async () => {
+    renderAt('/finanzas/clientes', (key) => key !== 'finanzas.clientes.manage')
+    await userEvent.click(await screen.findByText('Turbopre'))
+    expect(screen.queryByRole('button', { name: 'Guardar cambios' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Mensualidad (USD)')).toBeDisabled()
   })
 })

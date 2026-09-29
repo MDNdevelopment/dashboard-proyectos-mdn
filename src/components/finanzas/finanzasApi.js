@@ -14,6 +14,23 @@ import {
   hoyISO,
   ultimoDiaDelMesISO,
 } from '../../utils/finanzas'
+import { normalizarRetenciones } from '../../utils/retenciones'
+
+/**
+ * Config de retenciones → las 5 columnas de `fin_invoices`. `null` escribe los
+ * defaults, que dan neto = monto. Solo la usa `updateInvoice`: las retenciones
+ * se marcan al registrar el cobro, así que una factura nace sin ellas.
+ */
+function columnasRetencion(retenciones) {
+  const r = normalizarRetenciones(retenciones)
+  return {
+    ret_isl: r.isl,
+    ret_isl_rate: r.islRate,
+    ret_iva: r.iva,
+    ret_iva_rate: r.ivaRate,
+    ret_municipal: r.municipal,
+  }
+}
 
 function normalizeInvoice(row) {
   if (!row) return row
@@ -27,6 +44,16 @@ function normalizeInvoice(row) {
     currency: row.currency,
     amountBs: row.amount_bs == null ? null : Number(row.amount_bs),
     rate: row.rate == null ? null : Number(row.rate),
+    // Snapshot de las retenciones vigentes cuando se emitió la factura. Es lo
+    // que hace que un mes cerrado siga cuadrando aunque después le cambien la
+    // configuración fiscal al cliente. Ver utils/retenciones.js.
+    retenciones: {
+      isl: !!row.ret_isl,
+      islRate: row.ret_isl_rate == null ? null : Number(row.ret_isl_rate),
+      iva: !!row.ret_iva,
+      ivaRate: row.ret_iva_rate == null ? null : Number(row.ret_iva_rate),
+      municipal: !!row.ret_municipal,
+    },
     recurring: row.recurring,
     createdBy: row.created_by,
     createdAt: row.created_at,
@@ -294,6 +321,29 @@ export async function createSummaryMonth({ companyId, year, month, userId, total
 
 // ─── Facturas y cobros ──────────────────────────────────────────────────────────
 
+/**
+ * Últimas retenciones que se le aplicaron a un cliente, para precargar el modal
+ * de cobro. Es una SUGERENCIA leída del historial, no una configuración: el
+ * ISLR de una misma marca varía entre 2% y 5% de un mes a otro, así que quien
+ * registra el cobro tiene que cotejarla contra el comprobante igual.
+ *
+ * @returns {{data: object|null, error}} config normalizada, o null si esa marca
+ *   nunca tuvo retenciones (o es un cargo externo sin cliente).
+ */
+export async function loadUltimasRetenciones(clientId) {
+  if (!clientId) return { data: null, error: null }
+  const { data, error } = await supabase
+    .from('fin_invoices')
+    .select('ret_isl, ret_isl_rate, ret_iva, ret_iva_rate, ret_municipal, created_at')
+    .eq('client_id', clientId)
+    .or('ret_isl.eq.true,ret_iva.eq.true,ret_municipal.eq.true')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error || !data) return { data: null, error: error ?? null }
+  return { data: normalizarRetenciones(data), error: null }
+}
+
 export async function loadInvoices(monthId) {
   const { data, error } = await supabase
     .from('fin_invoices')
@@ -363,6 +413,7 @@ export async function updateInvoice(invoiceId, updates) {
   if ('currency' in updates) patch.currency = updates.currency
   if ('amountBs' in updates) patch.amount_bs = updates.amountBs
   if ('rate' in updates) patch.rate = updates.rate
+  if ('retenciones' in updates) Object.assign(patch, columnasRetencion(updates.retenciones))
   if ('recurring' in updates) patch.recurring = updates.recurring
   const { data, error } = await supabase
     .from('fin_invoices')

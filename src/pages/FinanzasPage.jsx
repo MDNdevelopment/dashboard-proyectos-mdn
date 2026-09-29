@@ -249,6 +249,10 @@ export default function FinanzasPage() {
   const canManageDistribucion = can('finanzas.distribucion.manage')
   const canCerrarMes = can('finanzas.cerrar_mes')
   const canManagePartidas = can('finanzas.partidas.manage')
+  // Editar lo económico de un cliente (mensualidad, día de pago, intercambio,
+  // impuestos). Desde 20260929170000 es el único camino: ni siquiera
+  // empresa.clientes.manage alcanza, y la base lo hace cumplir con un trigger.
+  const canManageClientes = can('finanzas.clientes.manage')
   // Comprar/vender divisas, cargar la tasa BCV y el ajuste de cuadre de Caja Bs
   // reusan finanzas.distribucion.manage — decisión A2, sin capability nueva.
   const canManageDivisas = canManageDistribucion
@@ -322,7 +326,15 @@ export default function FinanzasPage() {
         )}
 
         {activeKey === 'clientes' && can('finanzas.clientes') && (
-          <ClientesView clients={clients} lines={lines} loading={loading} />
+          <ClientesView
+            clients={clients}
+            lines={lines}
+            loading={loading}
+            canManage={canManageClientes}
+            // La cartera se carga en fetchBase, no en fetchPeriod (no es por
+            // mes): tras editar un cliente hay que recargar esa, no el periodo.
+            refetch={fetchBase}
+          />
         )}
 
         {activeKey === 'distribucion' &&

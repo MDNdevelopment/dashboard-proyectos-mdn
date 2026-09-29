@@ -52,8 +52,16 @@ export default function ClientModal({
   onSaved,
 }) {
   const isEdit = client != null
-  const { userProfile } = useAuth()
+  const { userProfile, can = () => true } = useAuth()
+  // `privileged` (nivel >= 3 / admin) sigue gobernando los datos privados de
+  // contacto y el movimiento de línea. Lo ECONÓMICO se separó: desde la
+  // migración 20260929170000 la mensualidad, el día de pago, el intercambio y
+  // las retenciones solo los toca quien entra a Finanzas (o es admin), y la
+  // base de datos lo hace cumplir con un trigger. Enviar esos campos sin la
+  // capacidad haría fallar el guardado entero con un 42501, así que este flag
+  // decide tanto qué se muestra como qué se envía.
   const privileged = isFinancePrivileged(userProfile)
+  const canEditEconomico = can('finanzas.clientes.manage')
 
   const [form, setForm] = useState(() => ({
     name: client?.name ?? '',
@@ -201,9 +209,14 @@ export default function ClientModal({
       return
     }
 
+    // Sin la capacidad económica los valores se reenvían EXACTAMENTE como
+    // estaban: el trigger de la base compara viejo contra nuevo, así que basta
+    // con que no cambien. Mandar un default (null, false) haría fallar el
+    // guardado completo con un 42501 y rompería la edición de clientes para
+    // todo el mundo.
     let payment_day = isEdit ? (client?.payment_day ?? null) : null
     let monthly_fee = isEdit ? (client?.monthly_fee ?? null) : null
-    if (privileged) {
+    if (canEditEconomico) {
       payment_day = form.payment_day !== '' ? parseInt(form.payment_day, 10) : null
       if (payment_day !== null && (payment_day < 1 || payment_day > 31)) {
         setError('El día de pago debe estar entre 1 y 31.')
@@ -520,8 +533,16 @@ export default function ClientModal({
             </div>
           </div>
 
-          {/* Día de pago + Mensualidad — solo nivel 4 / admin */}
-          {privileged && (
+          {/* Día de pago + Mensualidad — solo quien entra a Finanzas (o admin).
+              El resto de lo económico (intercambio e impuestos) se edita
+              únicamente desde Finanzas → Clientes. */}
+          {!canEditEconomico && isEdit && (
+            <p className="text-[12.5px] text-[#999] bg-[#faf9f5] border border-[#ece9df] rounded-xl px-3 py-2">
+              La mensualidad, el día de pago y los impuestos de esta marca se editan desde{' '}
+              <span className="font-semibold">Finanzas → Clientes</span>.
+            </p>
+          )}
+          {canEditEconomico && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">

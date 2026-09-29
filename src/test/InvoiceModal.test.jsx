@@ -231,3 +231,25 @@ describe('InvoiceModal — moneda Bs pide solo la tasa (el monto sigue en USD)',
     )
   })
 })
+
+describe('InvoiceModal — marcas en intercambio', () => {
+  function renderModal(clients) {
+    render(
+      <InvoiceModal
+        invoice={null}
+        monthId="m-1"
+        companyId="co-1"
+        clients={clients}
+        onClose={() => {}}
+        onSaved={() => {}}
+      />,
+    )
+  }
+
+  it('una marca en intercambio no precarga monto y entra como cargo puntual', () => {
+    renderModal([{ id: 'c-1', name: 'Canje', monthly_fee: null, es_intercambio: true }])
+    fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'c-1' } })
+    expect(screen.getAllByRole('spinbutton')[0]).toHaveValue(null)
+    expect(screen.getByLabelText(/Cargo recurrente/)).not.toBeChecked()
+  })
+})
