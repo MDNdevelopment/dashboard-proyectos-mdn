@@ -12,6 +12,7 @@ export const CHANGELOG = [
     version: '1.2.0',
     title: 'Mejoras en Campañas y Empresa',
     changes: [
+      'Corregido: al equipo de Administración le faltaban las pestañas "Divisas" y "Movimientos" de Finanzas, aunque sí veía el resto del módulo. Ahora quien tiene acceso a Finanzas tiene acceso a todas sus pestañas.',
       'Corregido: al entrar a un mes en Finanzas, la página quedaba recargándose sola una y otra vez y todo iba lentísimo. Pasaba porque al preparar la facturación del mes (un cargo por cada cliente) la página se recargaba entera una vez por cada cliente, decenas de veces seguidas. Ahora espera a que termine todo y recarga una sola vez.',
       'Corregido: al pasar meses en Finanzas se creaban solos meses futuros (por ejemplo marzo del año que viene) con toda la facturación cargada. Ahora solo se prepara el mes en curso; si entras a un mes que todavía no llegó, se te avisa y no se crea nada.',
       'En Finanzas ya no hay que "abrir" el mes: se quitó ese botón. Al entrar a Facturación de un mes nuevo, el mes se prepara solo y aparece con su facturación lista. Cerrar el mes sigue igual que siempre, con su botón y su permiso aparte.',
