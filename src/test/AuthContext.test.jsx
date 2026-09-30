@@ -54,6 +54,7 @@ vi.mock('../supabase', () => ({
 }))
 
 import { AuthProvider, useAuth } from '../context/AuthContext'
+import { isViewOnly, readStoredViewAs, setViewOnly, storeViewAs } from '../lib/viewAs'
 
 function wrapper({ children }) {
   return <AuthProvider>{children}</AuthProvider>
@@ -400,5 +401,154 @@ describe('AuthContext — recuperación automática de sesión expirada', () => 
     })
 
     await waitFor(() => expect(result.current.sessionExpired).toBe(false))
+  })
+})
+
+// ════════════════════════════════════════════════════════════════════════════
+// 4. Modo "Ver como": suplantación VISUAL + solo lectura (src/lib/viewAs.js)
+// ════════════════════════════════════════════════════════════════════════════
+describe('AuthContext — modo "Ver como"', () => {
+  const JUAN = '2d50a4e5-35db-4be5-b27a-a24d1282ce82'
+  const JUAN_PROFILE = {
+    user_id: JUAN,
+    company_id: null,
+    admin: true,
+    access_level: 3,
+    first_name: 'Juan',
+    last_name: 'Lauretta',
+  }
+  const TARGET_PROFILE = {
+    user_id: 'u-nairim',
+    company_id: null,
+    admin: false,
+    access_level: 1,
+    first_name: 'Nairim',
+    last_name: 'Pérez',
+  }
+
+  /** from('users') que devuelve el perfil según el user_id pedido en .eq(). */
+  function mockUsersTable(rowsById) {
+    mockFrom.mockImplementation(() => {
+      let requested = null
+      const chain = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn((_col, value) => {
+          requested = value
+          return chain
+        }),
+        single: vi.fn(() =>
+          Promise.resolve(
+            rowsById[requested]
+              ? { data: rowsById[requested], error: null }
+              : { data: null, error: { message: 'no existe' } },
+          ),
+        ),
+      }
+      return chain
+    })
+  }
+
+  async function renderAs(realProfile) {
+    mockGetSession.mockResolvedValue({ data: { session: { user: { id: realProfile.user_id } } } })
+    mockGetUser.mockResolvedValue({ data: { user: { id: realProfile.user_id } }, error: null })
+    const { result } = renderHook(useAuth, { wrapper })
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    return result
+  }
+
+  beforeEach(() => {
+    window.sessionStorage.clear()
+    setViewOnly(false)
+    mockUsersTable({ [JUAN]: JUAN_PROFILE, [TARGET_PROFILE.user_id]: TARGET_PROFILE })
+  })
+
+  it('startViewAs suplanta userProfile y activa el solo lectura', async () => {
+    const result = await renderAs(JUAN_PROFILE)
+    expect(result.current.isViewingAs).toBe(false)
+    expect(isViewOnly()).toBe(false)
+
+    await act(async () => {
+      await result.current.startViewAs(TARGET_PROFILE.user_id)
+    })
+
+    expect(result.current.userProfile.user_id).toBe(TARGET_PROFILE.user_id)
+    expect(result.current.userProfile.admin).toBe(false)
+    expect(result.current.userProfile.access_level).toBe(1)
+    expect(result.current.isViewingAs).toBe(true)
+    expect(isViewOnly()).toBe(true)
+  })
+
+  it('conserva la identidad real y la sesión mientras suplanta', async () => {
+    const result = await renderAs(JUAN_PROFILE)
+    await act(async () => {
+      await result.current.startViewAs(TARGET_PROFILE.user_id)
+    })
+
+    expect(result.current.realUserProfile.user_id).toBe(JUAN)
+    expect(result.current.session.user.id).toBe(JUAN)
+    expect(readStoredViewAs()).toBe(TARGET_PROFILE.user_id)
+  })
+
+  it('stopViewAs restaura el perfil real y libera la escritura', async () => {
+    const result = await renderAs(JUAN_PROFILE)
+    await act(async () => {
+      await result.current.startViewAs(TARGET_PROFILE.user_id)
+    })
+    await act(async () => {
+      await result.current.stopViewAs()
+    })
+
+    expect(result.current.userProfile.user_id).toBe(JUAN)
+    expect(result.current.isViewingAs).toBe(false)
+    expect(isViewOnly()).toBe(false)
+    expect(readStoredViewAs()).toBeNull()
+  })
+
+  it('un usuario que no es el dev no puede suplantar a nadie', async () => {
+    const otroAdmin = { ...JUAN_PROFILE, user_id: 'u-otro-admin', first_name: 'Otro' }
+    mockUsersTable({ 'u-otro-admin': otroAdmin, [TARGET_PROFILE.user_id]: TARGET_PROFILE })
+    const result = await renderAs(otroAdmin)
+
+    await act(async () => {
+      await result.current.startViewAs(TARGET_PROFILE.user_id)
+    })
+
+    expect(result.current.userProfile.user_id).toBe('u-otro-admin')
+    expect(result.current.isViewingAs).toBe(false)
+    expect(isViewOnly()).toBe(false)
+  })
+
+  it('restaura el modo tras recargar la página', async () => {
+    storeViewAs(TARGET_PROFILE.user_id)
+    const result = await renderAs(JUAN_PROFILE)
+
+    await waitFor(() => expect(result.current.isViewingAs).toBe(true))
+    expect(result.current.userProfile.user_id).toBe(TARGET_PROFILE.user_id)
+    expect(result.current.realUserProfile.user_id).toBe(JUAN)
+  })
+
+  it('ignora y limpia un id guardado si el usuario real no es el dev', async () => {
+    storeViewAs(TARGET_PROFILE.user_id)
+    const otroAdmin = { ...JUAN_PROFILE, user_id: 'u-otro-admin' }
+    mockUsersTable({ 'u-otro-admin': otroAdmin, [TARGET_PROFILE.user_id]: TARGET_PROFILE })
+    const result = await renderAs(otroAdmin)
+
+    expect(result.current.isViewingAs).toBe(false)
+    expect(readStoredViewAs()).toBeNull()
+  })
+
+  it('signOut apaga el solo lectura (si no, el próximo login queda bloqueado)', async () => {
+    const result = await renderAs(JUAN_PROFILE)
+    await act(async () => {
+      await result.current.startViewAs(TARGET_PROFILE.user_id)
+    })
+    expect(isViewOnly()).toBe(true)
+
+    await act(async () => {
+      await result.current.signOut()
+    })
+
+    expect(isViewOnly()).toBe(false)
+    expect(readStoredViewAs()).toBeNull()
   })
 })

@@ -21,7 +21,7 @@ let bellInstanceSeq = 0
  *  - Mobile: inside AppLayout's top bar
  */
 export default function NotificationBell() {
-  const { userProfile } = useAuth()
+  const { userProfile, isViewingAs } = useAuth()
   const navigate = useNavigate()
   const [notifs, setNotifs] = useState([])
   const [open, setOpen] = useState(false)
@@ -31,7 +31,10 @@ export default function NotificationBell() {
   const buttonRef = useRef(null)
   const panelRef = useRef(null)
 
-  const userId = userProfile?.user_id ?? null
+  // En modo "Ver como" la campana no se monta (ver el return null de abajo): el
+  // userId se anula también aquí para que los efectos no pidan ni se suscriban a
+  // las notificaciones de la persona suplantada.
+  const userId = isViewingAs ? null : (userProfile?.user_id ?? null)
 
   // Nº de páginas ya traídas del servidor. El offset de "Cargar más" se calcula
   // desde aquí (pagesLoaded * PAGE_SIZE) y NO desde notifs.length: así una inserción
@@ -167,7 +170,10 @@ export default function NotificationBell() {
   // ── Derived state ────────────────────────────────────────────────────────────
   const unreadCount = notifs.filter((n) => !n.read).length
 
-  if (!userId) return null
+  // En modo "Ver como" la campana se oculta: la RLS de `notifications` filtra por
+  // auth.uid() (el real), así que mostraría las notificaciones propias bajo el nombre
+  // de otra persona — o ninguna. Ver src/lib/viewAs.js.
+  if (!userId || isViewingAs) return null
 
   // ── Panel position ────────────────────────────────────────────────────────────
   // Opens upward when button is in the lower half of the screen (Sidebar),

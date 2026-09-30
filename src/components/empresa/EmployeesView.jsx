@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { format } from 'date-fns'
 import { supabase } from '../../supabase'
+import { blockedByViewOnly } from '../../lib/viewOnlyClient'
 import { useAuth } from '../../context/AuthContext'
 import { Avatar } from '../tareas/UserPickerSingle'
 import EmployeeModal from './EmployeeModal'
@@ -533,6 +534,10 @@ export default function EmployeesView({ companyId }) {
   // `incluyeMes` solo aplica al archivar: decide si el mes de la baja todavía cuenta en los
   // reportes mensuales (ver utils/employeeInMonth.js). Al restaurar no se envía.
   async function callManage(user_id, action, { incluyeMes } = {}) {
+    // Esta escritura no pasa por el cliente de Supabase (service role), así que el
+    // candado del modo "Ver como" hay que aplicarlo a mano.
+    const blocked = blockedByViewOnly()
+    if (blocked) throw new Error(blocked)
     const {
       data: { session },
     } = await supabase.auth.getSession()

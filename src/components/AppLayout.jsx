@@ -7,6 +7,7 @@ import ProjectModal from './ProjectModal'
 import ProjectDetailModal from './ProjectDetailModal'
 import MDNLogo from './MDNLogo'
 import InstallBanner from './InstallBanner'
+import ViewAsBanner from './ViewAsBanner'
 import NotificationBell from './notifications/NotificationBell'
 import WhatsNewModal from './WhatsNewModal'
 import ReportCloseReminderModal from './ReportCloseReminderModal'
@@ -159,6 +160,8 @@ export default function AppLayout() {
         </div>
 
         <div className="flex-1 min-w-0 flex flex-col">
+          <ViewAsBanner />
+
           {/* Mobile top bar — visible on all routes */}
           <div className="lg:hidden flex items-center px-5 py-3.5 bg-white border-b border-[#e8e5db] sticky top-0 z-30">
             <button

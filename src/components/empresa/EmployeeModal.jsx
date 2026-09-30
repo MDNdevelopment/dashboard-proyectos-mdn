@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../supabase'
+import { blockedByViewOnly } from '../../lib/viewOnlyClient'
 import AvatarUpload from './AvatarUpload'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import { useAuth } from '../../context/AuthContext'
@@ -100,6 +101,15 @@ export default function EmployeeModal({ employee, departments, positions, onClos
     // vuelve a validar esto — ver update-employee.js)
     if (privileged) {
       updatePayload.monthly_salary = form.monthly_salary !== '' ? Number(form.monthly_salary) : null
+    }
+
+    // Escritura vía Netlify function (service role): no pasa por el cliente de
+    // Supabase, así que el candado del modo "Ver como" se aplica aquí.
+    const blocked = blockedByViewOnly()
+    if (blocked) {
+      setError(blocked)
+      setSaving(false)
+      return
     }
 
     const {

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../supabase'
+import { blockedByViewOnly } from '../../lib/viewOnlyClient'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import { useAuth } from '../../context/AuthContext'
 import { isFinancePrivileged } from '../../lib/permissions'
@@ -92,6 +93,15 @@ export default function NewEmployeeDialog({ departments, positions, onClose, onC
 
     setSubmitting(true)
     setError(null)
+
+    // Escritura vía Netlify function (service role): no pasa por el cliente de
+    // Supabase, así que el candado del modo "Ver como" se aplica aquí.
+    const blocked = blockedByViewOnly()
+    if (blocked) {
+      setError(blocked)
+      setSubmitting(false)
+      return
+    }
 
     const {
       data: { session },

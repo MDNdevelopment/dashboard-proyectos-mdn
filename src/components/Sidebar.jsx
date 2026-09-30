@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../supabase'
+import { canUseViewAs } from '../lib/viewAs'
+import { blockedByViewOnly } from '../lib/viewOnlyClient'
 import MDNLogo from './MDNLogo'
 import AvatarUpload from './empresa/AvatarUpload'
 import NotificationBell from './notifications/NotificationBell'
@@ -187,6 +189,10 @@ function Sidebar() {
   const {
     signOut,
     userProfile,
+    realUserProfile,
+    isViewingAs = false,
+    startViewAs,
+    stopViewAs,
     refreshProfile,
     can = () => false,
     permissionsLoaded = false,
@@ -195,6 +201,7 @@ function Sidebar() {
   const canR = permissionsLoaded ? can : () => false
   const [menuOpen, setMenuOpen] = useState(false)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
+  const [viewAsOptions, setViewAsOptions] = useState([])
   const avatarInputRef = useRef(null)
   const menuRef = useRef(null)
 
@@ -205,14 +212,19 @@ function Sidebar() {
   }
 
   // Acceso rápido solo para Juan: cambiar su propio nivel/admin sin pasar por Empresa → Empleados.
-  // Mismo user_id que CEO_ANALYSIS_USER_IDS (ceoAnalysisAccess.js) — el email de users.email no es confiable.
-  const isGodModeUser = userProfile?.user_id === '2d50a4e5-35db-4be5-b27a-a24d1282ce82'
+  // Se evalúa contra el perfil REAL: en modo "Ver como", userProfile es el del suplantado
+  // y el bloque desaparecería justo cuando hace falta para volver atrás.
+  // Mismo user_id que VIEW_AS_USER_IDS (viewAs.js) — el email de users.email no es confiable.
+  const godProfile = realUserProfile ?? userProfile
+  const isGodModeUser = canUseViewAs(godProfile)
 
   // Vía Netlify function con service-role: un UPDATE directo con el cliente anon
   // choca con el trigger anti-escalada (is_company_admin() evalúa el admin ACTUAL
   // del caller, así que un no-admin nunca puede tocar admin/access_level ni sobre
   // su propia fila). Ver netlify/functions/self-god-mode.js.
   async function callSelfGodMode(payload) {
+    // Netlify function con service role: fuera del candado del cliente Supabase.
+    if (blockedByViewOnly()) return
     const {
       data: { session },
     } = await supabase.auth.getSession()
@@ -236,6 +248,34 @@ function Sidebar() {
   async function handleSelfAdminToggle(admin) {
     if (!userProfile?.user_id) return
     await callSelfGodMode({ admin })
+  }
+
+  // Lista de empleados para el selector "Ver como". Se carga al abrir el popover
+  // (y una sola vez) para no pedirla en cada render del Sidebar.
+  useEffect(() => {
+    if (!menuOpen || !isGodModeUser || viewAsOptions.length > 0) return
+    let cancelled = false
+    supabase
+      .from('users')
+      .select('user_id, first_name, last_name, access_level, admin')
+      .is('deleted_at', null)
+      .eq('company_id', godProfile?.company_id ?? '')
+      .order('first_name')
+      .then(({ data }) => {
+        if (!cancelled && data) setViewAsOptions(data)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [menuOpen, isGodModeUser, viewAsOptions.length, godProfile?.company_id])
+
+  async function handleViewAsChange(targetUserId) {
+    setMenuOpen(false)
+    if (!targetUserId) {
+      await stopViewAs?.()
+      return
+    }
+    await startViewAs?.(targetUserId)
   }
 
   useEffect(() => {
@@ -799,7 +839,10 @@ function Sidebar() {
         {/* Popover */}
         {menuOpen && (
           <div className="absolute bottom-full left-4 right-4 mb-2 bg-white border border-[#e0ddd4] rounded-xl shadow-lg overflow-hidden">
+            {/* En modo "Ver como" el user_id del perfil es el del suplantado: la escritura
+                está bloqueada de todos modos, pero ofrecer el botón solo confunde. */}
             <button
+              hidden={isViewingAs}
               onClick={() => {
                 setMenuOpen(false)
                 avatarInputRef.current?.click()
@@ -823,11 +866,39 @@ function Sidebar() {
             {isGodModeUser && (
               <div className="border-t border-[#ece9df] px-4 py-3">
                 <p className="text-[11px] font-mono font-bold tracking-[0.1em] uppercase text-[#999] mb-2">
+                  Ver como
+                </p>
+                <select
+                  className="input-base"
+                  aria-label="Ver la plataforma como otro usuario"
+                  value={isViewingAs ? (userProfile?.user_id ?? '') : ''}
+                  onChange={(e) => handleViewAsChange(e.target.value)}
+                >
+                  <option value="">— Yo ({godProfile?.first_name ?? 'mi cuenta'}) —</option>
+                  {viewAsOptions
+                    .filter((u) => u.user_id !== godProfile?.user_id)
+                    .map((u) => (
+                      <option key={u.user_id} value={u.user_id}>
+                        {`${u.first_name ?? ''} ${u.last_name ?? ''}`.trim()}
+                        {u.admin ? ' · admin' : ` · nivel ${u.access_level ?? 1}`}
+                      </option>
+                    ))}
+                </select>
+                <p className="text-[12px] text-[#888] leading-snug mt-1.5">
+                  Solo cambia lo que se ve. La app queda en solo lectura.
+                </p>
+              </div>
+            )}
+
+            {isGodModeUser && (
+              <div className="border-t border-[#ece9df] px-4 py-3">
+                <p className="text-[11px] font-mono font-bold tracking-[0.1em] uppercase text-[#999] mb-2">
                   Modo dios
                 </p>
                 <select
                   className="input-base mb-2.5"
-                  value={userProfile.access_level ?? 1}
+                  disabled={isViewingAs}
+                  value={godProfile?.access_level ?? 1}
                   onChange={(e) => handleSelfLevelChange(Number(e.target.value))}
                 >
                   <option value={1}>Nivel 1</option>
@@ -839,15 +910,16 @@ function Sidebar() {
                   <button
                     type="button"
                     role="switch"
-                    aria-checked={userProfile.admin === true}
-                    onClick={() => handleSelfAdminToggle(!userProfile.admin)}
-                    className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${
-                      userProfile.admin ? 'bg-[#FFB800]' : 'bg-[#d8d4c8]'
+                    disabled={isViewingAs}
+                    aria-checked={godProfile?.admin === true}
+                    onClick={() => handleSelfAdminToggle(!godProfile?.admin)}
+                    className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 disabled:opacity-40 ${
+                      godProfile?.admin ? 'bg-[#FFB800]' : 'bg-[#d8d4c8]'
                     }`}
                   >
                     <span
                       className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                        userProfile.admin ? 'translate-x-4' : ''
+                        godProfile?.admin ? 'translate-x-4' : ''
                       }`}
                     />
                   </button>
