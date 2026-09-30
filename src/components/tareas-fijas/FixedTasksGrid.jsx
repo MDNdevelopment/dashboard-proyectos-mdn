@@ -92,6 +92,28 @@ export default function FixedTasksGrid({
       return
     }
 
+    // Si ya existe una marca (aunque sea de una línea anterior a un cambio de
+    // cuenta), se actualiza por id sin volver a mandar line_id: line_id es el
+    // snapshot histórico de quién hizo el trabajo y no debe reescribirse solo
+    // porque la cuenta se movió de línea (ver 20260930000000_fixed_task_marks_owner_rls).
+    if (current) {
+      const { data, error: err } = await supabase
+        .from('fixed_task_marks')
+        .update({
+          status: next,
+          link: next === 'si' ? (current?.link ?? null) : null,
+          marked_by: userId,
+          marked_at: new Date().toISOString(),
+        })
+        .eq('id', current.id)
+        .select()
+        .single()
+      if (err) setError(err.message)
+      else onMarkChanged(data)
+      setSavingKey(null)
+      return
+    }
+
     const payload = {
       company_id: companyId,
       client_id: client.id,
@@ -102,7 +124,7 @@ export default function FixedTasksGrid({
       period_week: weekN,
       network: '',
       status: next,
-      link: next === 'si' ? (current?.link ?? null) : null,
+      link: null,
       marked_by: userId,
       marked_at: new Date().toISOString(),
     }

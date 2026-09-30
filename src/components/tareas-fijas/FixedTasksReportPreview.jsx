@@ -28,7 +28,13 @@ export default function FixedTasksReportPreview({
 }) {
   function rowsForLine(line) {
     const lineClients = clients.filter((c) => c.line_id === line.id)
-    const lineMarks = marks.filter((m) => m.line_id === line.id)
+    // Se cuenta por client_id (dueño actual) y no por el line_id snapshot de la marca:
+    // en el mes en que una cuenta cambia de línea, sus marcas de semanas anteriores
+    // quedan con el line_id de quien las hizo, pero deben sumar en el "Real" de la
+    // línea que hoy es dueña de la cuenta — la misma que aporta el "Meta" vía
+    // lineClients. Si no, esas marcas quedan huérfanas (no suman en ninguna línea).
+    const lineClientIds = new Set(lineClients.map((c) => c.id))
+    const lineMarks = marks.filter((m) => lineClientIds.has(m.client_id))
     const lineChecks = (checks ?? []).filter((c) => c.line_id === line.id)
     return [
       ...computeProductividad(lineMarks, lineClients, weeks),

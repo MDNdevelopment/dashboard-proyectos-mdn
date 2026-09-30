@@ -71,28 +71,33 @@ export default function TareasFijasPage() {
   const scopedLines =
     activeLineId === ALL_LINES ? lines : lines.filter((l) => l.id === activeLineId)
   const scopedLineIds = scopedLines.map((l) => l.id)
+  const scopedClientIds = clients.filter((c) => scopedLineIds.includes(c.line_id)).map((c) => c.id)
 
   const loadMarks = useCallback(async () => {
-    if (scopedLineIds.length === 0) {
+    if (scopedClientIds.length === 0) {
       setMarks([])
       return
     }
-    // Paginado con selectAllPages: mismo criterio que loadChecks — el volumen mensual
-    // de marcas fijas no tiene cota estricta y podría superar el tope de 1000 filas por
-    // respuesta de Supabase a medida que crece la agencia.
+    // Se filtra por client_id (dueño actual de la cuenta) y no por line_id: una marca
+    // guardada antes de un cambio de línea conserva el line_id de quien la hizo (ver
+    // 20260818000000), pero debe seguir viéndose y siendo editable para la línea que
+    // hoy tiene la cuenta (ver 20260930000000_fixed_task_marks_owner_rls). Paginado con
+    // selectAllPages: mismo criterio que loadChecks — el volumen mensual de marcas fijas
+    // no tiene cota estricta y podría superar el tope de 1000 filas por respuesta de
+    // Supabase a medida que crece la agencia.
     const { data } = await selectAllPages((from, to) =>
       supabase
         .from('fixed_task_marks')
         .select('*', { count: 'exact' })
         .eq('period_year', year)
         .eq('period_month', month)
-        .in('line_id', scopedLineIds)
+        .in('client_id', scopedClientIds)
         .order('id', { ascending: true })
         .range(from, to),
     )
     setMarks(data ?? [])
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scopedLineIds.join(','), year, month])
+  }, [scopedClientIds.join(','), year, month])
 
   useEffect(() => {
     loadMarks()
