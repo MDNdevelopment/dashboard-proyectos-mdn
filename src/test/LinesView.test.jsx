@@ -30,6 +30,7 @@ vi.mock('../components/metricas/metricsApi', () => ({
   loadLines: vi.fn().mockResolvedValue({ data: MOCK_LINES, error: null }),
   loadClients: vi.fn().mockResolvedValue({ data: [], error: null }),
   loadYearReports: vi.fn().mockResolvedValue({ data: [], error: null }),
+  loadYearReportsEffective: vi.fn().mockResolvedValue({ data: [], error: null }),
   loadCompanyEmployees: vi.fn().mockResolvedValue({ data: [], error: null }),
   updateLine: vi.fn(),
   deleteLine: vi.fn(),
@@ -43,7 +44,7 @@ function renderAt(path) {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <LinesView companyId="co-1" canManage={false} />
-    </MemoryRouter>
+    </MemoryRouter>,
   )
 }
 

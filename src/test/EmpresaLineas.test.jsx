@@ -90,6 +90,7 @@ vi.mock('../components/metricas/metricsApi', () => ({
   loadCompanyUsers: (...a) => mockLoadCompanyUsers(...a),
   loadClients: (...a) => mockLoadClients(...a),
   loadYearReports: (...a) => mockLoadYearReports(...a),
+  loadYearReportsEffective: async (companyId, year) => mockLoadYearReports(companyId, year),
   seedMetricsIfEmpty: (...a) => mockSeedIfEmpty(...a),
   addLineMember: (...a) => mockAddLineMember(...a),
   removeLineMember: (...a) => mockRemoveLineMember(...a),

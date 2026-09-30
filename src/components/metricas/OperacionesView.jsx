@@ -7,30 +7,19 @@ import {
   upsertReport,
   loadCompanyEmployees,
   loadFixedTaskMarks,
+  maybeAutoPersistEffectiveReport,
 } from './metricsApi'
 import SectionTotal from '../common/SectionTotal'
 import ClientFichaModal from './ClientFichaModal'
 import { initMetricReport } from '../../utils/initMetricReport'
-import { syncReportClients } from '../../utils/syncReportClients'
 import { clientInMonth } from '../../utils/clientInMonth'
 import { employeeActiveInMonth } from '../../utils/employeeInMonth'
-import { isReportFrozen } from '../../utils/reportPeriod'
 import { pruneCarryForward } from '../../utils/pruneCarryForward'
 import { calcTotal, sumScore, crecimientoCliente } from '../../utils/metricsScore'
-import { buildFixedWeeks, computeProductividad } from '../../utils/fixedTasks'
-import { computePlataformasProductividad } from '../../utils/chequeo'
+import { buildEffectiveReport, effectiveReportGates } from '../../utils/buildEffectiveReport'
 import { computeReunionesMeta, countMarcasSinReunion } from '../../utils/reunionesMeta'
 import { loadChecks } from '../chequeo/chequeoApi'
-import {
-  MONTHS,
-  INDICATORS,
-  REUNIONES_MODULE_START,
-  REUNIONES_META_AUTO_START,
-  TAREAS_FIJAS_MODULE_START,
-  AUDIOVISUAL_MODULE_START,
-  CHEQUEO_PRODUCTIVIDAD_START,
-  SOLICITUDES_MODULE_START,
-} from './constants'
+import { MONTHS, INDICATORS, REUNIONES_META_AUTO_START } from './constants'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import { Avatar } from '../tareas/UserPickerSingle'
 import { loadAds, spentByClientInPeriod } from '../ads/campaignSpendApi'
@@ -64,8 +53,10 @@ export default function OperacionesView({ line, companyId, year, month, closed =
   const isReunionesMetaEra =
     year > REUNIONES_META_AUTO_START.year ||
     (year === REUNIONES_META_AUTO_START.year && month >= REUNIONES_META_AUTO_START.month)
-  const metaAutoSync =
-    isReunionesMetaEra && !closed && year === today.getFullYear() && month === today.getMonth() + 1
+  // Gates centralizados en buildEffectiveReport.js — única definición, compartida con el
+  // camino de lectura (loadYearReportsEffective). Ver ARQUITECTURA.md §2.5.
+  const gates = effectiveReportGates(year, month, closed, today)
+  const { metaAutoSync, isFijasEra, isAvEra, isSolicitudesEra } = gates
   const [report, setReport] = useState(null)
   const [prevReport, setPrevReport] = useState(null)
   const [clients, setClients] = useState([])
@@ -153,40 +144,19 @@ export default function OperacionesView({ line, companyId, year, month, closed =
     // Un mes ya pasado (o cerrado) es de solo lectura: se muestra tal cual se guardó,
     // sin reconciliar contra el roster actual (que puede tener altas/bajas posteriores
     // a ese mes). Ver utils/reportPeriod.js.
-    const frozen = isReportFrozen(year, month, closed)
+    const frozen = gates.frozen
 
     // Guardar el reporte del mes anterior para mostrarlo en la sección de crecimiento
     setPrevReport(prevRes.data?.data ?? null)
 
-    // Poda las marcas que ya quedaron cubiertas (tienen reunión realizada) del mapa de
-    // justificativos, para no arrastrar justificativos obsoletos en el jsonb del reporte.
-    function pruneJustificativos(reuniones) {
-      const justificativos = { ...(reuniones.justificativos ?? {}) }
-      heldIds.forEach((id) => {
-        delete justificativos[id]
-      })
-      return justificativos
-    }
-
-    // Antes del lanzamiento del módulo Reuniones no hay filas en `meetings` para derivar
-    // el conteo — esos meses conservan el valor que ya tenían guardado en vez de pisarlo
-    // con 0. De REUNIONES_MODULE_START en adelante (o si el reporte está cerrado, ver
-    // "Cerrar reporte"), se mantiene como siempre reflejando el conteo automático.
-    const isReunionesEra =
-      year > REUNIONES_MODULE_START.year ||
-      (year === REUNIONES_MODULE_START.year && month >= REUNIONES_MODULE_START.month)
-    const shouldAutoSync = isReunionesEra && !closed
-
-    let synced
+    // Reporte base tal cual está guardado, o inicializado con carry-forward si no existe
+    // fila para este mes todavía. La reconciliación contra el roster actual (crecimiento/
+    // pautas/feedback/nómina) y la derivación de los indicadores auto-llenados corren
+    // ambas dentro de buildEffectiveReport — ver utils/buildEffectiveReport.js.
+    let baseData
     if (reportRes.data) {
-      // Mes congelado (pasado o cerrado): se muestra tal cual se guardó, sin reconciliar
-      // contra el roster actual (evita borrar/agregar clientes o empleados retroactivamente).
-      // Mes editable: sincronizar items con los clientes/empleados activos EN ESE MES.
-      synced = frozen
-        ? structuredClone(reportRes.data.data)
-        : syncReportClients(reportRes.data.data, activeLineClients, lineEmployees)
+      baseData = reportRes.data.data
     } else {
-      // Inicializar con carry-forward y metas de la línea
       const lineMetas = line?.metas ?? {}
       const carried = initMetricReport(
         prevRes.data?.data ?? null,
@@ -198,111 +168,50 @@ export default function OperacionesView({ line, companyId, year, month, closed =
         },
       )
       // El carry-forward hereda sueldos/ingresos del mes anterior tal cual. Si este mes ya pasó
-      // (frozen) no corre syncReportClients, así que hay que podar a quien no corresponde a ESTE
-      // mes antes de mostrarlo/guardarlo — esta vista persiste el `data` completo, nómina
-      // incluida, aunque no la pinte. Ver utils/pruneCarryForward.js.
-      const fresh = pruneCarryForward(carried, {
+      // (frozen) buildEffectiveReport no corre syncReportClients, así que hay que podar a quien
+      // no corresponde a ESTE mes antes de mostrarlo/guardarlo — esta vista persiste el `data`
+      // completo, nómina incluida, aunque no la pinte. Ver utils/pruneCarryForward.js.
+      baseData = pruneCarryForward(carried, {
         allEmployees,
         allClients: allLineClients,
         year,
         month,
       })
-      synced = frozen ? fresh : syncReportClients(fresh, activeLineClients, lineEmployees)
-    }
-    // "Realizadas" ya no es editable — siempre refleja el conteo automático (clientes
-    // distintos con reunión realizada en el mes), a diferencia del resto de indicadores
-    // que quedan congelados al guardar. Excepto en meses previos al módulo Reuniones o
-    // en reportes cerrados, donde se conserva el valor histórico guardado.
-    if (shouldAutoSync) synced.reuniones.realizadas = meetingsCount
-    synced.reuniones.justificativos = pruneJustificativos(synced.reuniones)
-    // Meta de reuniones: 1 por marca de la línea, menos las "No aplica" — recalculada
-    // solo en el mes en curso (metaAutoSync, ver arriba). metaAutoSync implica mes no
-    // congelado, así que el roster vigente es siempre activeLineClients.
-    if (metaAutoSync) {
-      synced.reuniones.meta = computeReunionesMeta(
-        activeLineClients,
-        synced.reuniones.justificativos,
-      )
     }
 
-    // "Productividad – Tareas Fijas" ya no se captura a mano — se deriva de lo tildado
-    // en Gestión de Tareas → Tareas Fijas (fixed_task_marks), mismo patrón que
-    // "Realizadas" arriba. Antes del lanzamiento del módulo no hay marcas que derivar,
-    // así que esos meses conservan las filas que ya tenían guardadas.
-    const isFijasEra =
-      year > TAREAS_FIJAS_MODULE_START.year ||
-      (year === TAREAS_FIJAS_MODULE_START.year && month >= TAREAS_FIJAS_MODULE_START.month)
-    const weeks = buildFixedWeeks(year, month)
-    if (isFijasEra && !closed) {
-      synced.productividad.tareas = computeProductividad(
-        fixedTaskMarksRes.data ?? [],
-        activeLineClients,
-        weeks,
-      )
-    }
-
-    // Fila «Actualización de Plataformas» del mismo indicador — se mudó al módulo
-    // Chequeo (ver utils/chequeo.js → computePlataformasProductividad), derivada de la
-    // grilla semanal de publication_checks (ya no de publication_check_events, en
-    // desuso). Antes del lanzamiento no hay celdas que derivar, así que esos meses no la
-    // agregan (evita un meta>0/real=0 falso; conserva la fila si ya estaba guardada de antes).
-    const isChequeoEra =
-      year > CHEQUEO_PRODUCTIVIDAD_START.year ||
-      (year === CHEQUEO_PRODUCTIVIDAD_START.year && month >= CHEQUEO_PRODUCTIVIDAD_START.month)
-    if (isChequeoEra && !closed) {
-      synced.productividad.tareas = [
-        ...synced.productividad.tareas.filter((t) => t.nombre !== 'Actualización de Plataformas'),
-        computePlataformasProductividad(checksRes.data ?? [], activeLineClients, weeks),
-      ]
-    }
-
-    // "Nº Piezas vs Piezas editadas" ya no se captura a mano — se deriva de las pautas
-    // 'realizada' de Tareas Fijas → Audiovisual (av_pautas), mismo patrón que Reuniones y
-    // Productividad arriba. Solo cuenta piezas de VIDEO (Video/Reel): countPiezasForLine
-    // usa sumPiezasVideoForLine, que excluye foto (ver utils/audiovisual.js). `porGrupo`
-    // desglosa ese total en Video 4K vs Reel, solo informativo (no cambia el score). Antes
-    // del lanzamiento no hay pautas que derivar, así que esos meses conservan el valor que
-    // ya tenían guardado.
-    const isAvEra =
-      year > AUDIOVISUAL_MODULE_START.year ||
-      (year === AUDIOVISUAL_MODULE_START.year && month >= AUDIOVISUAL_MODULE_START.month)
-    if (isAvEra && !closed) {
-      synced.piezas.piezas = piezasRes.piezas
-      synced.piezas.editadas = piezasRes.editadas
-      synced.piezas.porGrupo = piezasRes.porGrupo ?? null
-    }
-
-    // "Nº Pautas" (Realizadas) ya no se captura a mano por marca — se deriva del conteo
-    // de pautas 'realizada' de Audiovisual por cliente, mismo corte de fecha que Piezas.
-    // La Meta de cada marca sigue siendo manual (no tiene equivalente en av_pautas).
-    if (isAvEra && !closed) {
-      const byClient = pautasRealizadasRes.byClient
-      synced.pautas.items = synced.pautas.items.map((item) => ({
-        ...item,
-        realizadas: byClient[item.clienteId] ?? 0,
-      }))
-    }
-
-    // "Solicitudes vs Entregados" ya no se captura a mano — se deriva de CNP + Gestión
-    // de Tareas, 5 pts cada uno (ver calcSolicitudes en utils/metricsScore.js). Antes del
-    // lanzamiento esos meses conservan el valor que ya tenían guardado. Los dos campos
-    // planos (solicitudes/editadas) se mantienen como la suma de ambas fuentes para que
-    // reportes/queries antiguas que solo leen esas claves sigan funcionando.
-    const isSolicitudesEra =
-      year > SOLICITUDES_MODULE_START.year ||
-      (year === SOLICITUDES_MODULE_START.year && month >= SOLICITUDES_MODULE_START.month)
-    if (isSolicitudesEra && !closed) {
-      const cnp = { solicitudes: cnpSolRes.solicitudes, entregados: cnpSolRes.entregados }
-      const tareas = { solicitudes: tareasSolRes.solicitudes, entregados: tareasSolRes.entregados }
-      synced.solicitudes = {
-        solicitudes: cnp.solicitudes + tareas.solicitudes,
-        editadas: cnp.entregados + tareas.entregados,
-        cnp,
-        tareas,
-      }
-    }
+    const synced = buildEffectiveReport(
+      baseData,
+      {
+        meetingsCount,
+        heldClientIds: heldIds,
+        fixedTaskMarks: fixedTaskMarksRes.data ?? [],
+        checks: checksRes.data ?? [],
+        piezas: piezasRes,
+        pautasByClient: pautasRealizadasRes.byClient,
+        cnpSolicitudes: cnpSolRes,
+        tareasSolicitudes: tareasSolRes,
+      },
+      { year, month, closed, activeLineClients, lineEmployees, now: today },
+    )
     setReport(synced)
     baselineRef.current = synced
+
+    // Auto-persistencia silenciosa: si lo derivado difiere de lo guardado, se guarda
+    // solo (merge de claves operativas, nunca finanzas) para que SQL/MCP y las demás
+    // vistas converjan aunque nadie pulse "Guardar". Solo si YA existía una fila — abrir
+    // Operaciones de un mes sin reporte todavía no debe crear uno solo por mirarlo (eso
+    // sigue siendo exclusivo de handleSave). No se espera (fire-and-forget): no debe
+    // bloquear el render ni el estado `loading` de la vista.
+    if (reportRes.data) {
+      maybeAutoPersistEffectiveReport(companyId, {
+        lineId: line.id,
+        year,
+        month,
+        closed,
+        stored: reportRes.data.data,
+        effectiveData: synced,
+      })
+    }
 
     // Roster de marcas para Reuniones (picker + meta máxima). Debe respetar el mismo
     // congelamiento que crecimiento/pautas/finanzas: en meses pasados no se recalcula contra
@@ -443,17 +352,8 @@ export default function OperacionesView({ line, companyId, year, month, closed =
     })
   }
 
-  // Antes del lanzamiento del módulo Tareas Fijas, "Productividad" se sigue capturando
-  // a mano (mismo criterio que en load(), ver TAREAS_FIJAS_MODULE_START en constants.js).
-  const isFijasEra =
-    year > TAREAS_FIJAS_MODULE_START.year ||
-    (year === TAREAS_FIJAS_MODULE_START.year && month >= TAREAS_FIJAS_MODULE_START.month)
-
-  // Antes del lanzamiento del módulo Audiovisual, "Piezas" se sigue capturando a mano
-  // (mismo criterio que en load(), ver AUDIOVISUAL_MODULE_START en constants.js).
-  const isAvEra =
-    year > AUDIOVISUAL_MODULE_START.year ||
-    (year === AUDIOVISUAL_MODULE_START.year && month >= AUDIOVISUAL_MODULE_START.month)
+  // isFijasEra/isAvEra/isSolicitudesEra vienen de `gates` (effectiveReportGates),
+  // desestructurado arriba — misma definición que usa load() para derivar los campos.
 
   // Texto informativo de la sección 6: distingue cuántas de las piezas de video totales
   // son Video 4K (formato V) y cuántas son Reels (formato R) — no cambia el score
@@ -475,12 +375,6 @@ export default function OperacionesView({ line, companyId, year, month, closed =
     }
     return parts.join(' · ')
   })()
-
-  // Antes del lanzamiento del auto-llenado, "Solicitudes vs Entregados" se sigue
-  // capturando a mano (mismo criterio que en load(), ver SOLICITUDES_MODULE_START).
-  const isSolicitudesEra =
-    year > SOLICITUDES_MODULE_START.year ||
-    (year === SOLICITUDES_MODULE_START.year && month >= SOLICITUDES_MODULE_START.month)
 
   return (
     <fieldset disabled={closed} className="space-y-5 border-0 p-0 m-0 min-w-0">

@@ -93,6 +93,10 @@ const mockUpsertReport = vi.fn().mockResolvedValue({ data: null, error: null })
 
 vi.mock('../components/metricas/metricsApi', () => ({
   loadYearReports: (...a) => mockLoadYearReports(...a),
+  // LineHubView usa el reporte efectivo; en estos tests no hay eras "calientes"
+  // relevantes que probar (eso vive en buildEffectiveReport.test.js/effectiveReportEquivalence.test.js),
+  // así que basta con reusar los mismos reportes crudos que loadYearReports.
+  loadYearReportsEffective: async (companyId, year) => mockLoadYearReports(companyId, year),
   loadCompanyEmployees: (...a) => mockLoadCompanyEmployees(...a),
   loadClients: (...a) => mockLoadClients(...a),
   loadReport: (...a) => mockLoadReport(...a),
@@ -103,6 +107,7 @@ vi.mock('../components/metricas/metricsApi', () => ({
   seedMetricsIfEmpty: vi.fn().mockResolvedValue(null),
   loadLines: vi.fn().mockResolvedValue({ data: [], error: null }),
   loadFixedTaskMarks: vi.fn().mockResolvedValue({ data: [], error: null }),
+  maybeAutoPersistEffectiveReport: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('../utils/metricsFinance', () => ({

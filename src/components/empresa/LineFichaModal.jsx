@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { isFinancePrivileged, canViewEmployeeFicha } from '../../lib/permissions'
 import { calcFinanzas, fmtUSD } from '../../utils/metricsFinance'
 import { MONTHS } from '../metricas/constants'
-import { loadCompanyEmployees, loadClients, loadYearReports } from '../metricas/metricsApi'
+import { loadCompanyEmployees, loadClients, loadYearReportsEffective } from '../metricas/metricsApi'
 import EmployeeFichaContent from '../metricas/EmployeeFichaContent'
 import ClientFichaContent from '../metricas/ClientFichaContent'
 import EntityGridList, { ViewToggle } from '../common/EntityGridList'
@@ -77,7 +77,11 @@ export default function LineFichaModal({
     Promise.all([
       loadCompanyEmployees(companyId),
       loadClients(companyId, line.id),
-      privileged ? loadYearReports(companyId, CURRENT_YEAR) : Promise.resolve({ data: [] }),
+      // `lines: [line]` — line ya trae member_user_ids. Sin autoSave: ver
+      // ARQUITECTURA.md §2.5 (solo Operaciones y Resumen escriben).
+      privileged
+        ? loadYearReportsEffective(companyId, CURRENT_YEAR, { lines: [line] })
+        : Promise.resolve({ data: [] }),
     ]).then(([empRes, cliRes, repRes]) => {
       if (cancelled) return
       setAllEmployees(empRes.data ?? [])

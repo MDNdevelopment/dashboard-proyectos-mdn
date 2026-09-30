@@ -200,6 +200,7 @@ describe('LineView — click en tab actualiza ?tab= en la URL', () => {
 // consulta directamente con loadReport/closeReport).
 vi.mock('../components/metricas/metricsApi', () => ({
   loadYearReports: vi.fn().mockResolvedValue({ data: [], error: null }),
+  loadYearReportsEffective: vi.fn().mockResolvedValue({ data: [], error: null }),
   loadClients: vi.fn().mockResolvedValue({ data: [], error: null }),
   loadCompanyUsers: vi.fn().mockResolvedValue({ data: [], error: null }),
   seedMetricsIfEmpty: vi.fn().mockResolvedValue(null),

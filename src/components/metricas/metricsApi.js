@@ -8,6 +8,10 @@ import { lastNMonths } from '../../utils/metricsFinance'
 import { moveClientLine } from '../../utils/moveClientLine'
 import { stripClientFromReport, reportHasClient } from '../../utils/stripClientFromReport'
 import { firstOfNextMonthISO } from '../../utils/prorateMonthlyFee'
+import { buildEffectiveReport, needsSourcesFor } from '../../utils/buildEffectiveReport'
+import { loadReportSources } from './reportSourcesApi'
+import { clientInMonth } from '../../utils/clientInMonth'
+import { employeeActiveInMonth } from '../../utils/employeeInMonth'
 
 // ─── Líneas ───────────────────────────────────────────────────────────────────
 
@@ -289,7 +293,9 @@ export async function loadRecentReports(lineId, endYear, endMonth, n = 5) {
 
 /**
  * Carga todos los reportes de todas las líneas para un año dado.
- * Para el Dashboard General.
+ * @deprecated el `data` que trae es el CAPTURADO, no el efectivo (ver
+ * ARQUITECTURA.md §2.5) — usar loadYearReportsEffective. Se conserva porque varios tests
+ * la mockean directamente y como query plana de depuración.
  */
 export async function loadYearReports(companyId, year) {
   return supabase
@@ -297,6 +303,181 @@ export async function loadYearReports(companyId, year) {
     .select('*, line:metric_lines!inner(id, name, color, sort_order)')
     .eq('company_id', companyId)
     .eq('year', year)
+}
+
+// ─── Reporte efectivo (lectura) ────────────────────────────────────────────────
+// Ver utils/buildEffectiveReport.js — mismo cálculo que usa OperacionesView, aplicado
+// aquí a TODAS las filas de un año para que Resumen/Inicio/Hub/Empresa dejen de mostrar
+// un score distinto al de Operaciones. Solo se pide/deriva para reportes "calientes"
+// (needsSourcesFor): un mes cerrado o previo a todas las eras de auto-llenado sale tal
+// cual venía guardado, sin ningún costo extra de queries.
+
+const OPERATIONAL_KEYS = [
+  'reuniones',
+  'productividad',
+  'crecimiento',
+  'solicitudes',
+  'pautas',
+  'piezas',
+  'feedback',
+]
+
+/** Dedupe en memoria del auto-guardado: evita reescribir dos veces el mismo `data`
+ * (doble montaje de StrictMode en dev, o Resumen y Operaciones cargando a la vez). */
+const _autoSaveDone = new Map() // `${lineId}__${year}__${month}` → hash de lo último escrito
+
+function stableStringify(value) {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value)
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`
+  const keys = Object.keys(value).sort()
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(',')}}`
+}
+
+/** Solo las claves que puntúan (nunca `finanzas`, para que el auto-guardado no pueda
+ * pisar nómina/ingresos reconciliados solo para mostrarlos). */
+function pickOperationalKeys(data) {
+  const out = {}
+  OPERATIONAL_KEYS.forEach((k) => {
+    if (data?.[k] !== undefined) out[k] = data[k]
+  })
+  return out
+}
+
+function hasOperationalDiff(stored, effective) {
+  return (
+    stableStringify(pickOperationalKeys(stored ?? {})) !==
+    stableStringify(pickOperationalKeys(effective ?? {}))
+  )
+}
+
+/**
+ * Igual que loadYearReports, pero con `data` ya derivado (reporte efectivo) — el mismo
+ * `data` que se ve al abrir Operaciones para ese mes/línea. Ver
+ * utils/buildEffectiveReport.js y ARQUITECTURA.md §2.5.
+ *
+ * @param {string} companyId
+ * @param {number} year
+ * @param {{
+ *   lines?: Array|null,      - metric_lines ya cargadas (con member_user_ids). Si se
+ *                               omite, se cargan aquí con loadLines(companyId).
+ *   clients?: Array|null,    - metric_clients de la empresa, CON archivados. Si se
+ *                               omite, se cargan aquí con includeArchived:true (necesario:
+ *                               sin archivados el denominador del mes de una baja no
+ *                               coincidiría con el de Operaciones).
+ *   employees?: Array|null,  - loadCompanyEmployees(companyId) si se omite.
+ *   autoSave?: boolean,      - default false. Si true, persiste en Supabase (upsert,
+ *                               merge solo de claves operativas) cuando lo derivado
+ *                               difiere de lo guardado y el reporte no está cerrado.
+ *   now?: Date,              - inyectable para tests.
+ * }} [opts]
+ * @returns {Promise<{data: Array, error: any}>} mismo shape que loadYearReports
+ */
+export async function loadYearReportsEffective(
+  companyId,
+  year,
+  { lines = null, clients = null, employees = null, autoSave = false, now = new Date() } = {},
+) {
+  const [reportsRes, linesRes, clientsRes, employeesRes] = await Promise.all([
+    loadYearReports(companyId, year),
+    lines ? Promise.resolve({ data: lines, error: null }) : loadLines(companyId),
+    clients
+      ? Promise.resolve({ data: clients, error: null })
+      : loadClients(companyId, null, { includeArchived: true }),
+    employees ? Promise.resolve({ data: employees, error: null }) : loadCompanyEmployees(companyId),
+  ])
+  if (reportsRes.error) return reportsRes
+
+  const linesById = new Map((linesRes.data ?? []).map((l) => [l.id, l]))
+  const clientsByLine = {}
+  ;(clientsRes.data ?? []).forEach((c) => {
+    if (!c.line_id) return
+    ;(clientsByLine[c.line_id] ??= []).push(c)
+  })
+  const allEmployees = employeesRes.data ?? []
+
+  const rows = reportsRes.data ?? []
+  const hotRows = rows.filter((r) => needsSourcesFor(r.year, r.month, !!r.closed_at, now))
+  const { data: sourcesByKey } = await loadReportSources(companyId, {
+    year,
+    months: [...new Set(hotRows.map((r) => r.month))],
+    lineIds: [...new Set(hotRows.map((r) => r.line_id))],
+  })
+
+  const toPersist = []
+  const effectiveRows = rows.map((row) => {
+    const closed = !!row.closed_at
+    if (!needsSourcesFor(row.year, row.month, closed, now)) return row
+
+    const line = linesById.get(row.line_id)
+    const memberIds = new Set(line?.member_user_ids ?? [])
+    const activeLineClients = (clientsByLine[row.line_id] ?? []).filter((c) =>
+      clientInMonth(c, row.year, row.month),
+    )
+    const lineEmployees = allEmployees.filter(
+      (e) => memberIds.has(e.user_id) && employeeActiveInMonth(e, row.year, row.month),
+    )
+    const sources = sourcesByKey[`${row.line_id}__${row.month}`] ?? {}
+    const effectiveData = buildEffectiveReport(row.data, sources, {
+      year: row.year,
+      month: row.month,
+      closed,
+      activeLineClients,
+      lineEmployees,
+      now,
+    })
+
+    if (autoSave) {
+      toPersist.push({
+        lineId: row.line_id,
+        year: row.year,
+        month: row.month,
+        closed,
+        stored: row.data,
+        effectiveData,
+      })
+    }
+
+    return { ...row, data: effectiveData }
+  })
+
+  if (toPersist.length > 0) {
+    await Promise.all(toPersist.map((p) => maybeAutoPersistEffectiveReport(companyId, p)))
+  }
+
+  return { data: effectiveRows, error: null }
+}
+
+/**
+ * Persiste en Supabase (upsert, merge solo de claves operativas) el reporte efectivo de
+ * una línea×mes, si y solo si difiere de lo guardado y el reporte no está cerrado.
+ * Compartido por `loadYearReportsEffective` (autoSave) y por `OperacionesView` (al
+ * cargar la vista, aunque el usuario nunca pulse "Guardar") — ver ARQUITECTURA.md §2.5.
+ *
+ * Nunca lanza ni bloquea la UI: un fallo de auto-persistencia no debe romper la
+ * visualización de un score que ya está bien calculado en memoria. En modo "Ver como"
+ * (src/lib/viewOnlyClient.js) el upsert se bloquea siempre por este mismo camino — es el
+ * comportamiento esperado, no un error real.
+ *
+ * @param {string} companyId
+ * @param {{lineId:string, year:number, month:number, closed:boolean, stored:object, effectiveData:object}} p
+ */
+export async function maybeAutoPersistEffectiveReport(
+  companyId,
+  { lineId, year, month, closed, stored, effectiveData },
+) {
+  if (closed || !hasOperationalDiff(stored, effectiveData)) return
+  const dedupeKey = `${lineId}__${year}__${month}`
+  const payloadHash = stableStringify(pickOperationalKeys(effectiveData))
+  if (_autoSaveDone.get(dedupeKey) === payloadHash) return
+  // Merge: solo las claves operativas — `finanzas` y cualquier clave desconocida quedan
+  // exactamente como estaban guardadas.
+  const payload = { ...stored, ...pickOperationalKeys(effectiveData) }
+  const { error } = await upsertReport(companyId, lineId, year, month, payload)
+  if (error) {
+    console.warn('[metricas] auto-persistencia del reporte efectivo falló', error)
+    return
+  }
+  _autoSaveDone.set(dedupeKey, payloadHash)
 }
 
 /**

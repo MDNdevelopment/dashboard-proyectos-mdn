@@ -204,6 +204,7 @@ vi.mock('../components/metricas/metricsApi', () => ({
   updateLine: (...a) => mockUpdateLine(...a),
   deleteLine: (...a) => mockDeleteLine(...a),
   loadYearReports: (...a) => mockLoadYearReports(...a),
+  loadYearReportsEffective: async (companyId, year) => mockLoadYearReports(companyId, year),
   addLineMember: (...a) => mockAddLineMember(...a),
   removeLineMember: (...a) => mockRemoveLineMember(...a),
   setLineLeader: (...a) => mockSetLineLeader(...a),

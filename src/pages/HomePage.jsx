@@ -9,7 +9,7 @@ import { isLate, isClosed } from '../components/tareas/constants'
 import KpiCard from '../components/common/KpiCard'
 import {
   loadLines,
-  loadYearReports,
+  loadYearReportsEffective,
   loadClients,
   loadCompanyEmployees,
   loadCompanyUsers,
@@ -543,16 +543,24 @@ export default function HomePage() {
   useEffect(() => {
     if (!userProfile?.company_id) return
     let cancelled = false
-    Promise.all([
-      loadLines(userProfile.company_id),
-      loadYearReports(userProfile.company_id, HEALTH_YEAR),
-      loadClients(userProfile.company_id),
-    ]).then(([linesRes, reportsRes, clientsRes]) => {
-      if (cancelled) return
-      setLines(linesRes.data ?? [])
-      setMetricReports(reportsRes.data ?? [])
-      setClients(clientsRes.data ?? [])
-    })
+    Promise.all([loadLines(userProfile.company_id), loadClients(userProfile.company_id)]).then(
+      ([linesRes, clientsRes]) => {
+        if (cancelled) return
+        setLines(linesRes.data ?? [])
+        setClients(clientsRes.data ?? [])
+        // `lines` inyectado (evita una query extra). `clients` NO se inyecta: el de
+        // arriba no incluye archivados y el reporte efectivo necesita includeArchived
+        // para que el denominador del mes de una baja coincida con Operaciones — se
+        // deja que loadYearReportsEffective cargue el suyo internamente. Sin autoSave
+        // — ver ARQUITECTURA.md §2.5 (solo Operaciones y Resumen escriben).
+        loadYearReportsEffective(userProfile.company_id, HEALTH_YEAR, {
+          lines: linesRes.data ?? [],
+        }).then((reportsRes) => {
+          if (cancelled) return
+          setMetricReports(reportsRes.data ?? [])
+        })
+      },
+    )
     return () => {
       cancelled = true
     }

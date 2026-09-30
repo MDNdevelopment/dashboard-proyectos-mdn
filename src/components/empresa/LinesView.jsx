@@ -6,7 +6,7 @@ import {
   updateLine,
   deleteLine,
   loadClients,
-  loadYearReports,
+  loadYearReportsEffective,
   addLineMember,
   removeLineMember,
   setLineLeader,
@@ -142,13 +142,17 @@ export default function LinesView({ companyId, canManage = true }) {
   // ── Carga ─────────────────────────────────────────────────────────────────────
   const fetchAll = useCallback(async () => {
     if (!companyId) return
-    const [linesRes, clientsRes, reportsRes] = await Promise.all([
-      loadLines(companyId),
-      loadClients(companyId),
-      loadYearReports(companyId, CURRENT_YEAR),
-    ])
+    const [linesRes, clientsRes] = await Promise.all([loadLines(companyId), loadClients(companyId)])
     setLines(linesRes.data ?? [])
     setClients(clientsRes.data ?? [])
+    // `lines` inyectado (evita una query extra). `clients` NO se inyecta: el de arriba
+    // no incluye archivados y el reporte efectivo necesita includeArchived para que el
+    // denominador del mes de una baja coincida con Operaciones. Sin autoSave: este canal
+    // realtime reacciona a cambios en metric_reports, así que escribir desde aquí
+    // crearía un bucle. Ver ARQUITECTURA.md §2.5.
+    const reportsRes = await loadYearReportsEffective(companyId, CURRENT_YEAR, {
+      lines: linesRes.data ?? [],
+    })
     setReports(reportsRes.data ?? [])
   }, [companyId])
 

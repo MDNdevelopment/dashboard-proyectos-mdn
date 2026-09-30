@@ -15,7 +15,7 @@ import {
   CartesianGrid,
   LabelList,
 } from 'recharts'
-import { loadYearReports, loadClients } from './metricsApi'
+import { loadYearReportsEffective, loadClients } from './metricsApi'
 import { calcTotal, sumScore } from '../../utils/metricsScore'
 import { calcFinanzas, fmtUSD } from '../../utils/metricsFinance'
 import { aggregateMetricsDashboard } from '../../utils/aggregateMetricsDashboard'
@@ -40,7 +40,10 @@ export default function DashboardView({ companyId, lines }) {
     setLoading(true)
     setError(null)
     const [reportsRes, clientsRes] = await Promise.all([
-      loadYearReports(companyId, year),
+      // autoSave:true — al abrir Resumen, si lo derivado difiere de lo guardado (mes
+      // abierto), se persiste solo para que SQL/MCP y las demás vistas converjan.
+      // Ver ARQUITECTURA.md §2.5 "Reporte efectivo".
+      loadYearReportsEffective(companyId, year, { lines, autoSave: true }),
       loadClients(companyId),
     ])
     if (reportsRes.error) {

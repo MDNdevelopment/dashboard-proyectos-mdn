@@ -10,7 +10,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from 'recharts'
-import { loadYearReports, loadCompanyEmployees, loadClients } from './metricsApi'
+import { loadYearReportsEffective, loadCompanyEmployees, loadClients } from './metricsApi'
 import { calcTotal, sumScore } from '../../utils/metricsScore'
 import { MONTHS, INDICATORS } from './constants'
 import ScoreDial from './ScoreDial'
@@ -40,7 +40,10 @@ export default function LineHubView({ line, companyId, year = CURRENT_YEAR }) {
     if (!companyId || !line?.id) return
     setLoading(true)
     const [{ data: reportsData }, { data: usersData }, { data: clientsData }] = await Promise.all([
-      loadYearReports(companyId, year),
+      // `lines: [line]` — line ya trae member_user_ids, evita una query extra a
+      // metric_lines. Sin autoSave: ver ARQUITECTURA.md §2.5 (solo Operaciones y
+      // Resumen escriben, para no multiplicar escrituras en vistas de bajo tráfico).
+      loadYearReportsEffective(companyId, year, { lines: [line] }),
       loadCompanyEmployees(companyId),
       loadClients(companyId, line.id),
     ])

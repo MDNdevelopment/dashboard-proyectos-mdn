@@ -79,10 +79,18 @@ export async function loadHeldClientIdsForLine(companyId, lineId, { month, year 
   return { clientIds, error: null }
 }
 
-/** Expande client_ids/line_ids (arreglos posicionales) a los client_id cuya posición
+/**
+ * Expande client_ids/line_ids (arreglos posicionales) a los client_id cuya posición
  * corresponde a `lineId` — una reunión sin ningún cliente (arreglos vacíos) aporta un
- * único `null`, para conservar el caso borde de "cuenta aparte" del criterio original. */
-function clientIdsForLine(rows, lineId) {
+ * único `null`, para conservar el caso borde de "cuenta aparte" del criterio original.
+ *
+ * Exportada (antes privada) para que reportSourcesApi.js la reutilice al batchear el
+ * conteo de reuniones para varias líneas a la vez: ahí la query usa `.overlaps` en vez
+ * de `.contains` y por eso cada fila debe pre-filtrarse por línea ANTES de llamar a esta
+ * función (ver reportSourcesApi.js) — de lo contrario, una reunión con `line_ids:['A']`
+ * y `client_ids:[]` devolvería `[null]` también para cualquier otra línea consultada.
+ */
+export function clientIdsForLine(rows, lineId) {
   return rows.flatMap((r) => {
     const clientIds = r.client_ids ?? []
     const lineIds = r.line_ids ?? []

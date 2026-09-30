@@ -47,6 +47,7 @@ vi.mock('../components/metricas/metricsApi', () => ({
   loadCompanyEmployees: (...a) => mockLoadCompanyEmployees(...a),
   upsertReport: (...a) => mockUpsertReport(...a),
   loadFixedTaskMarks: (...a) => mockLoadFixedTaskMarks(...a),
+  maybeAutoPersistEffectiveReport: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('../components/chequeo/chequeoApi', () => ({
