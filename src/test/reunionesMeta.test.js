@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeReunionesMeta } from '../utils/reunionesMeta'
+import { computeReunionesMeta, countMarcasSinReunion } from '../utils/reunionesMeta'
 
 const CLIENTS = [{ id: 'c1' }, { id: 'c2' }, { id: 'c3' }]
 
@@ -32,5 +32,29 @@ describe('computeReunionesMeta', () => {
 
   it('defaults: sin argumentos da meta 0', () => {
     expect(computeReunionesMeta()).toBe(0)
+  })
+})
+
+describe('countMarcasSinReunion', () => {
+  it('sin justificativos, cuenta las marcas sin reunión', () => {
+    expect(countMarcasSinReunion(CLIENTS, ['c1'], {})).toBe(2)
+  })
+
+  it('una marca sin reunión pero justificada "no_aplica" no cuenta', () => {
+    expect(countMarcasSinReunion(CLIENTS, ['c1'], { c2: 'no_aplica' })).toBe(1)
+  })
+
+  it('todas con reunión o "no_aplica" da 0', () => {
+    expect(countMarcasSinReunion(CLIENTS, ['c1'], { c2: 'no_aplica', c3: 'no_aplica' })).toBe(0)
+  })
+
+  it('otros justificativos (reprogramado_cliente, no_cumplio) sí cuentan como pendientes', () => {
+    expect(
+      countMarcasSinReunion(CLIENTS, ['c1'], { c2: 'reprogramado_cliente', c3: 'no_cumplio' }),
+    ).toBe(2)
+  })
+
+  it('defaults: sin argumentos da 0', () => {
+    expect(countMarcasSinReunion()).toBe(0)
   })
 })

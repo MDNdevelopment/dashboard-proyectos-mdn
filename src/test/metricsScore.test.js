@@ -242,6 +242,27 @@ describe('crecimientoCliente', () => {
     expect(res.ganados).toBe(50)
     expect(res.cumple).toBe(false)
   })
+
+  // ── Umbral de 95% (se considera meta lograda desde el 95%, no solo al 100%) ──
+  it('cumple al 95% exacto de la meta', () => {
+    const item = { clienteId: 'c1', seguidoresGanados: 95, meta: 100 }
+    const res = crecimientoCliente(item, null)
+    expect(res.pct).toBeCloseTo(95)
+    expect(res.cumple).toBe(true)
+  })
+
+  it('no cumple justo debajo del 95% de la meta', () => {
+    const item = { clienteId: 'c1', seguidoresGanados: 94, meta: 100 }
+    const res = crecimientoCliente(item, null)
+    expect(res.pct).toBeCloseTo(94)
+    expect(res.cumple).toBe(false)
+  })
+
+  it('cumple al 95% con otra meta (19/20)', () => {
+    const item = { clienteId: 'c1', seguidoresGanados: 19, meta: 20 }
+    const res = crecimientoCliente(item, null)
+    expect(res.cumple).toBe(true)
+  })
 })
 
 // ─── calcCrecimiento (peso 20) ────────────────────────────────────────────────
@@ -318,6 +339,15 @@ describe('calcCrecimiento', () => {
     })
     // 1/2 clientes cumplen → (1/2)*20 = 10
     expect(calcCrecimiento(curr, null)).toBe(10)
+  })
+
+  it('cuenta como cumplido a un cliente que llegó al 95% de la meta', () => {
+    const curr = makeReport({
+      crecimiento: {
+        items: [{ clienteId: 'c1', seguidoresGanados: 95, seguidoresActuales: 1095, meta: 100 }],
+      },
+    })
+    expect(calcCrecimiento(curr, null)).toBe(20)
   })
 })
 

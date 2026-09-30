@@ -821,6 +821,18 @@ describe('OperacionesView — modal de cobertura de reuniones por marca', () => 
     expect(screen.getByRole('button', { name: /Ver marcas \(1 sin reunión\)/ })).toBeInTheDocument()
   })
 
+  it('una marca justificada "no_aplica" no cuenta como pendiente en "Ver marcas"', async () => {
+    mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: ['c-1'], error: null })
+    const data = makeReportData()
+    data.reuniones.justificativos = { 'c-2': 'no_aplica' }
+    mockLoadReport.mockResolvedValue({ data: { data }, error: null })
+    renderView()
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
+    expect(screen.getByRole('button', { name: /Ver marcas \(0 sin reunión\)/ })).toBeInTheDocument()
+  })
+
   it('elegir un justificativo lo persiste en report.reuniones.justificativos', async () => {
     mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: ['c-1'], error: null })
     renderView()

@@ -316,6 +316,9 @@ export const CHANGELOG = [
       'Corregido: en Reportes → Finanzas, si el reporte de un mes ya pasado se abría por primera vez tiempo después, nacía copiando la nómina y los ingresos del mes anterior sin filtrar — aparecían empleados y cuentas que ya se habían dado de baja. Ahora se descartan solos.',
       'En Reportes → Finanzas ya se puede eliminar a mano una fila de sueldo de un empleado, para corregir la nómina de un mes pasado. Al quitar a alguien aparece un aviso en el mismo bloque recordando que hay que bajar y pulsar "Guardar finanzas" para que el cambio quede.',
       'Nuevo aviso para las jefas de línea: al entrar a la herramienta salta un mensaje si alguna de tus cuentas todavía tiene asignado como social, diseñador, audiovisual o apoyo a alguien que ya no trabaja en MDN. Se reasigna desde el mismo aviso, cuenta por cuenta, y vuelve a aparecer cada vez que entres hasta que no quede ninguno — así la hoja de "Clientes por social" siempre sale con los nombres correctos.',
+      'En Reportes → Operaciones, en Crecimiento de seguidores, una marca que alcanzó al menos el 95% de su meta ya se marca como cumplida (antes solo contaba llegar al 100%, así que un 95% se veía como si no se hubiera logrado nada).',
+      'En Reportes → Operaciones, el botón "Ver marcas" (sin reunión) ya no cuenta a las marcas justificadas como "No aplica" en ese mes — si todas las que debían tener reunión ya la tuvieron, el contador queda en 0.',
+      'Corregido: en Reportes → Pautas, cuando el campo "Realizadas" venía marcado como "Derivado de Audiovisual", el texto de aviso lo desalineaba y quedaba más arriba que el campo "Meta" de al lado. Ahora quedan a la misma altura.',
     ],
   },
   {

@@ -28,6 +28,10 @@ export function calcProductividad(report) {
   return meta === 0 ? 0 : (real / meta) * 20
 }
 
+// A partir de este % de la meta de seguidores ganados, se considera la meta lograda
+// (un 95% de cumplimiento no debe leerse como un fracaso).
+export const UMBRAL_CUMPLIMIENTO_CRECIMIENTO = 95
+
 /**
  * Evalúa el crecimiento de seguidores de un cliente individual.
  *
@@ -39,7 +43,8 @@ export function calcProductividad(report) {
  * @param {object|null} prevReport - Reporte del mes anterior o null.
  * @returns {{ ganados: number|null, cumple: boolean|null, pct: number|null }}
  *   - ganados: seguidores ganados en el mes, o null si faltan datos.
- *   - cumple: true si ganados >= meta, false si no, null si faltan datos.
+ *   - cumple: true si el % de la meta (redondeado) es >= UMBRAL_CUMPLIMIENTO_CRECIMIENTO
+ *     (o si ganados >= meta cuando la meta es 0), false si no, null si faltan datos.
  *   - pct: ganados / meta × 100 (% de cumplimiento de la meta), o null si meta es 0 o faltan datos.
  */
 export function crecimientoCliente(item, prevReport = null) {
@@ -68,8 +73,8 @@ export function crecimientoCliente(item, prevReport = null) {
   }
 
   const meta = Number(item.meta ?? 0)
-  const cumple = ganados >= meta
   const pct = meta > 0 ? (ganados / meta) * 100 : null
+  const cumple = meta > 0 ? Math.round(pct) >= UMBRAL_CUMPLIMIENTO_CRECIMIENTO : ganados >= meta
   return { ganados, cumple, pct }
 }
 
@@ -85,7 +90,7 @@ export function crecimientoCliente(item, prevReport = null) {
  *   2. Fallback (reportes históricos): actuales − base, donde base es
  *      seguidoresActuales del mes anterior, o seguidoresBase manual.
  *   3. Si no hay datos suficientes, el cliente no cuenta (se omite del total).
- * Un cliente "cumple" si ganados >= meta.
+ * Un cliente "cumple" si alcanzó al menos UMBRAL_CUMPLIMIENTO_CRECIMIENTO (95%) de la meta.
  */
 export function calcCrecimiento(report, prevReport = null) {
   const items = report.crecimiento?.items ?? []

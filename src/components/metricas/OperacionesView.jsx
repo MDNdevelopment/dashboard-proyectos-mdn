@@ -19,7 +19,7 @@ import { pruneCarryForward } from '../../utils/pruneCarryForward'
 import { calcTotal, sumScore, crecimientoCliente } from '../../utils/metricsScore'
 import { buildFixedWeeks, computeProductividad } from '../../utils/fixedTasks'
 import { computePlataformasProductividad } from '../../utils/chequeo'
-import { computeReunionesMeta } from '../../utils/reunionesMeta'
+import { computeReunionesMeta, countMarcasSinReunion } from '../../utils/reunionesMeta'
 import { loadChecks } from '../chequeo/chequeoApi'
 import {
   MONTHS,
@@ -561,8 +561,11 @@ export default function OperacionesView({ line, companyId, year, month, closed =
           </Field>
         </div>
         {(() => {
-          const heldSet = new Set(heldClientIds)
-          const pending = activeClients.filter((c) => !heldSet.has(c.id))
+          const pendingCount = countMarcasSinReunion(
+            activeClients,
+            heldClientIds,
+            report.reuniones?.justificativos ?? {},
+          )
           return (
             <button
               type="button"
@@ -580,7 +583,7 @@ export default function OperacionesView({ line, companyId, year, month, closed =
                 <circle cx="12" cy="12" r="9" strokeLinecap="round" strokeLinejoin="round" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4" />
               </svg>
-              Ver marcas{activeClients.length > 0 ? ` (${pending.length} sin reunión)` : ''}
+              Ver marcas{activeClients.length > 0 ? ` (${pendingCount} sin reunión)` : ''}
             </button>
           )
         })()}
@@ -1078,9 +1081,11 @@ export default function OperacionesView({ line, companyId, year, month, closed =
               report.pautas.items.map((item, idx) => (
                 <div
                   key={item.clienteId}
-                  className="grid grid-cols-[minmax(100px,1fr)_auto_auto] gap-2 items-center"
+                  className="grid grid-cols-[minmax(100px,1fr)_auto_auto] gap-2 items-start"
                 >
-                  <ClientLink clienteId={item.clienteId} />
+                  <div className="self-center">
+                    <ClientLink clienteId={item.clienteId} />
+                  </div>
                   <div className="flex flex-col gap-0.5">
                     <div className="flex items-center gap-1">
                       <span className="text-[11px] text-[#aaa]">Realizadas</span>
