@@ -140,6 +140,17 @@ describe('OperacionesView — columna Inversión Ads (Crecimiento de seguidores)
     })
   })
 
+  it('pide las marcas de Tareas Fijas por empresa, no por línea', async () => {
+    // Filtrar por line_id dejaba huérfanas las marcas de una cuenta que cambió de línea a
+    // mitad de mes (conservan el line_id de quien las hizo): no sumaban en ninguna línea y
+    // el reporte quedaba por debajo de la grilla de Tareas Fijas.
+    renderView()
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
+    expect(mockLoadFixedTaskMarks).toHaveBeenCalledWith('co-1', 2026, 7)
+  })
+
   it('muestra la suma de campañas del cliente cuyo start_date cae en el mes del reporte', async () => {
     mockLoadAds.mockResolvedValue({
       data: [

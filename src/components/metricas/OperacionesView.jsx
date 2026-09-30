@@ -110,7 +110,7 @@ export default function OperacionesView({ line, companyId, year, month, closed =
       loadAds(companyId),
       countMeetingsHeldForLine(companyId, line.id, { month, year }),
       loadHeldClientIdsForLine(companyId, line.id, { month, year }),
-      loadFixedTaskMarks(line.id, year, month),
+      loadFixedTaskMarks(companyId, year, month),
       countPiezasForLine(companyId, line.id, { month, year }),
       countPautasRealizadasByClient(companyId, line.id, { month, year }),
       loadChecks(companyId, year, month),

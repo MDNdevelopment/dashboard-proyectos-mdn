@@ -111,8 +111,11 @@ export default function TareasFijasPage() {
       setChecks([])
       return
     }
+    // Sin pre-filtrar por line_id: el preview acota cada celda por las cuentas de la línea
+    // (client_id), que es lo único que sigue siendo cierto cuando una cuenta cambia de
+    // línea a mitad de mes — ver FixedTasksReportPreview.rowsForLine.
     const { data } = await loadChecks(userProfile.company_id, year, month)
-    setChecks((data ?? []).filter((c) => scopedLineIds.includes(c.line_id)))
+    setChecks(data ?? [])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scopedLineIds.join(','), year, month, userProfile?.company_id])
 

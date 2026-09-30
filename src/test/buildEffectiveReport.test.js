@@ -168,6 +168,67 @@ describe('buildEffectiveReport — gate de Chequeo (Actualización de Plataforma
   })
 })
 
+describe('buildEffectiveReport — mes de 5 semanas (HOT_CTX = sep 2026): la 5.ª semana', () => {
+  // Cubre el cableado real, no solo las funciones puras: buildEffectiveReport arma
+  // `weeks` internamente (buildFixedWeeks) y se lo pasa a computeProductividad y a
+  // computePlataformasProductividad — esto asegura que ese `weeks` de verdad llega.
+  const clienteConRed = [{ ...CLIENTS[0], social_links: [{ red: 'Instagram' }] }]
+
+  it('grilla/artes de la 5.ª semana no suman, calendario sí', () => {
+    const stored = baseStored()
+    const marks = [
+      { client_id: 'c1', task_key: 'grilla', period_week: 5, status: 'si' },
+      { client_id: 'c1', task_key: 'artes', period_week: 5, status: 'si' },
+      { client_id: 'c1', task_key: 'calendario', period_week: 5, status: 'si' },
+    ]
+    const result = buildEffectiveReport(
+      stored,
+      { fixedTaskMarks: marks },
+      { ...HOT_CTX, activeLineClients: [CLIENTS[0]] },
+    )
+    const tareas = result.productividad.tareas
+    // meta 4 (no 5) = solo las semanas 1-4 exigen grilla/artes; realizado 0 = el "si"
+    // de la 5.ª semana no suma. Septiembre 2026 tiene 5 miércoles (2, 9, 16, 23, 30).
+    expect(tareas.find((t) => t.nombre === 'Grillas Redes → Diseño')).toEqual({
+      nombre: 'Grillas Redes → Diseño',
+      realizado: 0,
+      meta: 4,
+    })
+    expect(tareas.find((t) => t.nombre === 'Grillas Diseño → Redes')).toEqual({
+      nombre: 'Grillas Diseño → Redes',
+      realizado: 0,
+      meta: 4,
+    })
+    expect(tareas.find((t) => t.nombre === 'Calendario')).toEqual({
+      nombre: 'Calendario',
+      realizado: 1,
+      meta: 1,
+    })
+  })
+
+  it('Actualización de Plataformas no cuenta un registro solo en la 5.ª semana', () => {
+    const stored = baseStored()
+    const checks = [
+      {
+        client_id: 'c1',
+        network: 'Instagram',
+        content_type: 'publicaciones',
+        period_week: 5,
+        last_published_at: '2026-09-30',
+      },
+    ]
+    const result = buildEffectiveReport(
+      stored,
+      { checks },
+      { ...HOT_CTX, activeLineClients: clienteConRed },
+    )
+    const fila = result.productividad.tareas.find(
+      (t) => t.nombre === 'Actualización de Plataformas',
+    )
+    expect(fila.realizado).toBe(0)
+  })
+})
+
 describe('buildEffectiveReport — gate Audiovisual (piezas y pautas)', () => {
   it('conserva piezas/pautas guardadas antes de AUDIOVISUAL_MODULE_START', () => {
     const stored = baseStored()

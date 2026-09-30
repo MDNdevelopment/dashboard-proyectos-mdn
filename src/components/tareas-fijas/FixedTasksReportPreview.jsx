@@ -35,7 +35,11 @@ export default function FixedTasksReportPreview({
     // lineClients. Si no, esas marcas quedan huérfanas (no suman en ninguna línea).
     const lineClientIds = new Set(lineClients.map((c) => c.id))
     const lineMarks = marks.filter((m) => lineClientIds.has(m.client_id))
-    const lineChecks = (checks ?? []).filter((c) => c.line_id === line.id)
+    // Mismo criterio para las celdas de Chequeo: se acotan por cuenta, no por el line_id
+    // snapshot de la celda, que en el mes del cambio de línea todavía apunta a la línea
+    // anterior. computePlataformasProductividad ya cruza cada celda por client_id contra
+    // lineClients, así que basta con no filtrarlas antes.
+    const lineChecks = (checks ?? []).filter((c) => lineClientIds.has(c.client_id))
     return [
       ...computeProductividad(lineMarks, lineClients, weeks),
       computePlataformasProductividad(lineChecks, lineClients, weeks),

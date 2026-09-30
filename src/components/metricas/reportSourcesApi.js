@@ -113,12 +113,18 @@ export async function loadReportSources(companyId, { year, months, lineIds }) {
       .eq('status', 'realizada')
       .gte('starts_at', rangeStart.toISOString())
       .lt('starts_at', rangeEnd.toISOString()),
-    supabase
-      .from('fixed_task_marks')
-      .select('line_id, period_month, client_id, task_key, period_week, status')
-      .in('line_id', lineIds)
-      .eq('period_year', year)
-      .in('period_month', months),
+    selectAllPages((from, to) =>
+      supabase
+        .from('fixed_task_marks')
+        .select('line_id, period_month, client_id, task_key, period_week, status', {
+          count: 'exact',
+        })
+        .eq('company_id', companyId)
+        .eq('period_year', year)
+        .in('period_month', months)
+        .order('id', { ascending: true })
+        .range(from, to),
+    ),
     selectAllPages((from, to) =>
       supabase
         .from('publication_checks')
@@ -189,10 +195,22 @@ export async function loadReportSources(companyId, { year, months, lineIds }) {
     })
   })
 
-  // ── Tareas fijas ──────────────────────────────────────────────────────────
+  // ── Tareas fijas (company-wide, se reparten igual a todas las líneas del mismo mes) ──
+  // No se agrupan por `line_id`: ese es el snapshot de quién marcó la celda, y una cuenta
+  // que cambia de línea a mitad de mes deja sus marcas previas con el line_id viejo.
+  // `computeProductividad` acota por las cuentas de la línea (client_id), así que repartir
+  // todas las marcas del mes le da a cada línea exactamente las de sus cuentas de hoy.
+  const marksByMonth = {}
+  months.forEach((m) => {
+    marksByMonth[m] = []
+  })
   ;(marksRes.data ?? []).forEach((row) => {
-    const key = `${row.line_id}__${row.period_month}`
-    if (result[key]) result[key].fixedTaskMarks.push(row)
+    if (marksByMonth[row.period_month]) marksByMonth[row.period_month].push(row)
+  })
+  lineIds.forEach((lineId) => {
+    months.forEach((month) => {
+      result[`${lineId}__${month}`].fixedTaskMarks = marksByMonth[month]
+    })
   })
 
   // ── Chequeo (company-wide, se reparte igual a todas las líneas del mismo mes) ───

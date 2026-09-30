@@ -12,6 +12,7 @@ import { buildEffectiveReport, needsSourcesFor } from '../../utils/buildEffectiv
 import { loadReportSources } from './reportSourcesApi'
 import { clientInMonth } from '../../utils/clientInMonth'
 import { employeeActiveInMonth } from '../../utils/employeeInMonth'
+import { selectAllPages } from '../../lib/supabasePaginate'
 
 // ─── Líneas ───────────────────────────────────────────────────────────────────
 
@@ -217,17 +218,25 @@ export async function upsertClientPrivate(clientId, { phone, instagram_email }) 
 // ─── Tareas Fijas ───────────────────────────────────────────────────────────────
 
 /**
- * Carga las marcas de Tareas Fijas de una línea en un mes concreto (todas las
- * semanas). Alimenta el auto-llenado del indicador «2. Productividad» en
- * OperacionesView (ver utils/fixedTasks.js:computeProductividad).
+ * Carga las marcas de Tareas Fijas de la EMPRESA en un mes concreto (todas las líneas y
+ * semanas). Alimenta el auto-llenado del indicador «2. Productividad» en OperacionesView
+ * (ver utils/fixedTasks.js:computeProductividad), que acota por `client_id` contra las
+ * cuentas de la línea — por eso aquí no se filtra por `line_id`: una marca guardada antes
+ * de que la cuenta cambiara de línea conserva el line_id de quien la hizo, y filtrar por
+ * él la dejaba huérfana (no sumaba en ninguna línea). Mismo criterio que `loadChecks` y
+ * que la grilla de Tareas Fijas.
  */
-export async function loadFixedTaskMarks(lineId, year, month) {
-  return supabase
-    .from('fixed_task_marks')
-    .select('*')
-    .eq('line_id', lineId)
-    .eq('period_year', year)
-    .eq('period_month', month)
+export async function loadFixedTaskMarks(companyId, year, month) {
+  return selectAllPages((from, to) =>
+    supabase
+      .from('fixed_task_marks')
+      .select('*', { count: 'exact' })
+      .eq('company_id', companyId)
+      .eq('period_year', year)
+      .eq('period_month', month)
+      .order('id', { ascending: true })
+      .range(from, to),
+  )
 }
 
 // ─── Reportes ─────────────────────────────────────────────────────────────────

@@ -159,12 +159,16 @@ describe('loadReportSources', () => {
     expect(data['B__9'].meetingsCount).toBe(1)
   })
 
-  it('fixed_task_marks: agrupa por line_id + period_month', async () => {
+  it('fixed_task_marks: company-wide, se reparte al mismo mes de todas las líneas', async () => {
     resetMocks()
+    // La marca de 'c1' quedó con line_id 'B' (quien la marcó antes del cambio de línea),
+    // pero la cuenta hoy es de 'A'. Repartir por mes en vez de agrupar por line_id es lo
+    // que deja que computeProductividad la sume en 'A' al acotar por client_id.
     mockFixedTaskMarks.mockReturnValue({
       data: [
         {
-          line_id: 'A',
+          id: 1,
+          line_id: 'B',
           period_month: 8,
           client_id: 'c1',
           task_key: 'metricas',
@@ -172,6 +176,7 @@ describe('loadReportSources', () => {
           status: 'si',
         },
         {
+          id: 2,
           line_id: 'B',
           period_month: 9,
           client_id: 'c2',
@@ -181,15 +186,17 @@ describe('loadReportSources', () => {
         },
       ],
       error: null,
+      count: 2,
     })
     const { data } = await loadReportSources('co1', {
       year: 2026,
       months: [8, 9],
       lineIds: ['A', 'B'],
     })
-    expect(data['A__8'].fixedTaskMarks).toHaveLength(1)
-    expect(data['A__9'].fixedTaskMarks).toHaveLength(0)
-    expect(data['B__9'].fixedTaskMarks).toHaveLength(1)
+    expect(data['A__8'].fixedTaskMarks.map((m) => m.id)).toEqual([1])
+    expect(data['B__8'].fixedTaskMarks.map((m) => m.id)).toEqual([1])
+    expect(data['A__9'].fixedTaskMarks.map((m) => m.id)).toEqual([2])
+    expect(data['B__9'].fixedTaskMarks.map((m) => m.id)).toEqual([2])
   })
 
   it('publication_checks: company-wide, se reparte al mismo mes de todas las líneas', async () => {
