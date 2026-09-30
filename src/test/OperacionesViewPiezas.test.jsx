@@ -144,6 +144,65 @@ describe('OperacionesView — "6. Nº Piezas vs Piezas editadas"', () => {
     expect(within(piezasSection).getAllByText('Derivado de Audiovisual').length).toBe(2)
   })
 
+  it('con porGrupo, muestra la distinción Video 4K vs Reels', async () => {
+    mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
+    mockCountPiezasForLine.mockResolvedValue({
+      piezas: 20,
+      editadas: 15,
+      porGrupo: {
+        video4k: { piezas: 12, editadas: 9 },
+        reel: { piezas: 8, editadas: 6 },
+        sinDesglose: { piezas: 0, editadas: 0 },
+      },
+      error: null,
+    })
+    renderView({ month: 9 })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
+    expect(
+      screen.getByText('Video 4K: 12 piezas / 9 editadas · Reels: 8 piezas / 6 editadas'),
+    ).toBeInTheDocument()
+  })
+
+  it('con piezas sin desglosar (legacy V+R), lo muestra aparte', async () => {
+    mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
+    mockCountPiezasForLine.mockResolvedValue({
+      piezas: 7,
+      editadas: 5,
+      porGrupo: {
+        video4k: { piezas: 0, editadas: 0 },
+        reel: { piezas: 0, editadas: 0 },
+        sinDesglose: { piezas: 7, editadas: 5 },
+      },
+      error: null,
+    })
+    renderView({ month: 9 })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
+    expect(screen.getByText(/Sin desglosar: 7 piezas \/ 5 editadas/)).toBeInTheDocument()
+  })
+
+  it('sin piezas de video en el mes (porGrupo en cero), no muestra el desglose', async () => {
+    mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
+    mockCountPiezasForLine.mockResolvedValue({
+      piezas: 0,
+      editadas: 0,
+      porGrupo: {
+        video4k: { piezas: 0, editadas: 0 },
+        reel: { piezas: 0, editadas: 0 },
+        sinDesglose: { piezas: 0, editadas: 0 },
+      },
+      error: null,
+    })
+    renderView({ month: 9 })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
+    expect(screen.queryByText(/Video 4K:/)).not.toBeInTheDocument()
+  })
+
   it('reporte cerrado en la era del módulo: conserva el valor guardado sin recalcular', async () => {
     mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
     mockCountPiezasForLine.mockResolvedValue({ piezas: 999, editadas: 999, error: null })

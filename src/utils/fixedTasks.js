@@ -141,6 +141,26 @@ export function taskAppliesToClient(fixedTasksConfig, taskKey) {
 }
 
 /**
+ * Tareas que el REPORTE exige en una semana — usado solo por `computeProductividad`.
+ * Difiere de `tasksForWeek` (lo que la grilla de Tareas Fijas muestra y lo que exige
+ * la Evaluación automática, `aggregateEmployeeFixedTasksByRole`) únicamente en los
+ * meses de 5 semanas: esa 5.ª semana cae fuera de la cadencia semanal real de
+ * grilla/artes (son 4 entregas al mes, no 5), así que para la meta del indicador 2
+ * esa semana solo cuenta Calendario. La grilla sigue mostrando y exigiendo las 3
+ * columnas esa semana — este ajuste es solo de cara al score del reporte.
+ * @param {number} weekN
+ * @param {Array} weeks  resultado de buildFixedWeeks
+ */
+function reportTasksForWeek(weekN, weeks) {
+  const tasks = tasksForWeek(weekN, weeks)
+  const week = weeks.find((w) => w.n === weekN)
+  if (weeks.length >= 5 && week?.isLast) {
+    return tasks.filter((t) => t === 'calendario')
+  }
+  return tasks
+}
+
+/**
  * Calcula las filas del indicador «2. Productividad – Tareas Fijas» del reporte
  * mensual de la línea, a partir de las marcas tildadas en la grilla.
  *
@@ -166,7 +186,7 @@ export function computeProductividad(marks, clients, weeks) {
     clients.forEach((client) => {
       if (!taskAppliesToClient(client.fixed_tasks, taskKey)) return
       weeks.forEach((week) => {
-        if (!tasksForWeek(week.n, weeks).includes(taskKey)) return
+        if (!reportTasksForWeek(week.n, weeks).includes(taskKey)) return
 
         const mark = marks.find(
           (m) => m.client_id === client.id && m.task_key === taskKey && m.period_week === week.n,

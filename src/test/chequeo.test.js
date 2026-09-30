@@ -262,6 +262,35 @@ describe('computePlataformasProductividad', () => {
     expect(row.realizado).toBe(4)
   })
 
+  it('con `weeks` de 5 semanas, un registro SOLO en la 5.ª semana no cuenta', () => {
+    // Julio 2026: 5 miércoles.
+    const weeks = buildFixedWeeks(2026, 7)
+    const lastN = weeks.at(-1).n
+    const clients = [clientNets(['Instagram'])]
+    const checks = [check({ period_week: lastN })]
+    const row = computePlataformasProductividad(checks, clients, weeks)
+    expect(row.realizado).toBe(0)
+  })
+
+  it('con `weeks` de 5 semanas, registrar las 4 primeras semanas sigue llegando a 4 (la 5.ª no suma ni resta)', () => {
+    const weeks = buildFixedWeeks(2026, 7)
+    const lastN = weeks.at(-1).n
+    const clients = [clientNets(['Instagram'])]
+    const checks = [
+      ...[1, 2, 3, 4].map((week) => check({ period_week: week })),
+      check({ period_week: lastN }), // no debería aportar nada extra
+    ]
+    const row = computePlataformasProductividad(checks, clients, weeks)
+    expect(row.realizado).toBe(4)
+  })
+
+  it('sin `weeks` (o con menos de 5), la 5.ª semana simulada sigue contando como antes', () => {
+    const clients = [clientNets(['Instagram'])]
+    const checks = [check({ period_week: 5 })]
+    const row = computePlataformasProductividad(checks, clients)
+    expect(row.realizado).toBe(1)
+  })
+
   it('no cuenta registros de otra celda (network/content_type distintos)', () => {
     const clients = [clientNets(['Instagram'])]
     const checks = [check({ content_type: 'reels' }), check({ network: 'Facebook' })]

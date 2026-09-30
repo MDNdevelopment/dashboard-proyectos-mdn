@@ -1,12 +1,13 @@
 import { aggregatePiezasByLine, aggregateResourcePerformance } from '../../utils/audiovisual'
 import Avatar from '../Avatar'
 
-/** Desglose chico "🎬 N video · 📷 N foto · ≈ N sin desglosar" — omite las partes en 0. */
-function formatoDesglose({ av, foto, sinDesglose }) {
+/** Desglose chico "🎬 N video · 📷 N foto · ≈ N sin desglosar · 🗂️ N CNP" — omite las partes en 0. */
+function formatoDesglose({ av, foto, sinDesglose, cnp }) {
   return [
     av ? `🎬 ${av} video` : null,
     foto ? `📷 ${foto} foto` : null,
     sinDesglose ? `≈ ${sinDesglose} sin desglosar` : null,
+    cnp ? `🗂️ ${cnp} CNP` : null,
   ]
     .filter(Boolean)
     .join(' · ')
@@ -18,12 +19,16 @@ export default function AvAnalytics({
   lines,
   usersById,
   piezasByPauta,
+  // CNP de audiovisual (is_audiovisual = true) del período/alcance visible: suman a las
+  // piezas editadas de cada recurso en "Rendimiento por recurso", pero NUNCA entran a
+  // aggregatePiezasByLine/byLine — ese indicador («6» del reporte) es solo de pautas.
+  cnpAv = [],
   generalLineId = null,
 }) {
   const byLine = aggregatePiezasByLine(pautas, lines, generalLineId).filter(
     (l) => l.totales || l.editadas,
   )
-  const byResource = aggregateResourcePerformance(pautas, usersById, piezasByPauta)
+  const byResource = aggregateResourcePerformance(pautas, usersById, piezasByPauta, cnpAv)
   const anyEstimado = byResource.some((r) => r.grabaEstimado)
 
   return (
@@ -80,7 +85,8 @@ export default function AvAnalytics({
         <h2 className="text-[16px] font-semibold text-[#222] mb-1">Rendimiento por recurso</h2>
         <p className="text-[12px] text-[#999] mb-3">
           Piezas <strong>capturadas</strong> (grabó video/reel o tomó fotos) y{' '}
-          <strong>editadas</strong>, por persona, en pautas realizadas.
+          <strong>editadas</strong>, por persona, en pautas realizadas — incluye las piezas de CNP
+          de audiovisual entregadas (desglosadas aparte).
         </p>
         {byResource.length === 0 ? (
           <p className="text-[13px] text-[#a29b8c]">Aún no hay pautas realizadas.</p>
@@ -118,6 +124,7 @@ export default function AvAnalytics({
                       av: r.editaAv,
                       foto: r.editaFoto,
                       sinDesglose: r.editaOtro,
+                      cnp: r.editaCnp,
                     })
                     return (
                       <tr key={r.id} className="border-b border-[#f0ede3] last:border-0">

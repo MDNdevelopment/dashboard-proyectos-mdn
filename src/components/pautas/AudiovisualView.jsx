@@ -4,6 +4,8 @@ import { supabase } from '../../supabase'
 import { loadCompanyEmployees } from '../metricas/metricsApi'
 import { loadPautas, loadPiezas, updatePauta } from './avPautasApi'
 import { loadExternalResources } from './externalResourcesApi'
+import { loadCnp } from '../cnp/cnpApi'
+import { cnpInMonth } from '../cnp/constants'
 import {
   avEditMode,
   nextAgendaDeadline,
@@ -73,6 +75,11 @@ export default function AudiovisualView({
   const [piezas, setPiezas] = useState([])
   const [employees, setEmployees] = useState([])
   const [externalResources, setExternalResources] = useState([])
+  // CNP de audiovisual (is_audiovisual = true): pedidos de cliente para editar un clip que
+  // NO pasan por una pauta. Se cargan aparte y se filtran a is_audiovisual/mes/línea más
+  // abajo (cnpAv) para sumarlos en AvAnalytics → "Rendimiento por recurso", sin tocar el
+  // indicador «6» del reporte por línea (ese sigue siendo solo de pautas).
+  const [cnpRequests, setCnpRequests] = useState([])
   const [loading, setLoading] = useState(true)
   // Solo relevante cuando canViewAll (badges "Todos"/línea): sin ese permiso, el alcance queda
   // SIEMPRE derivado de `lines` (la única línea visible de la jefa) — nunca en estado, para
@@ -102,16 +109,18 @@ export default function AudiovisualView({
   const loadAll = useCallback(async () => {
     if (!companyId) return
     setLoading(true)
-    const [pautasRes, employeesRes, piezasRes, externalRes] = await Promise.all([
+    const [pautasRes, employeesRes, piezasRes, externalRes, cnpRes] = await Promise.all([
       loadPautas(companyId),
       loadCompanyEmployees(companyId),
       loadPiezas(companyId),
       loadExternalResources(companyId),
+      loadCnp(companyId),
     ])
     setPautas(pautasRes.data ?? [])
     setEmployees(employeesRes.data ?? [])
     setPiezas(piezasRes.data ?? [])
     setExternalResources(externalRes.data ?? [])
+    setCnpRequests(cnpRes.data ?? [])
     setPinnedIds(new Set())
     setLoading(false)
   }, [companyId])
@@ -293,6 +302,15 @@ export default function AudiovisualView({
   // pauta anclada de otro mes no debe seguir contando como "Agendada"/"Realizada" de este mes.
   const monthPautas = pautasInMonth(scopedPautas, year, month, pinnedIds)
   const visiblePautas = pautasInMonth(scopedPautas, year, month).filter((p) => !p.deleted_at)
+  // CNP de audiovisual visibles en AvAnalytics: mismo alcance de línea que scopedPautas
+  // (pautasInScope solo mira `line_id`, sirve igual para CNP) y mismo mes que visiblePautas
+  // (cnpInMonth usa created_at, la única fecha de referencia de un CNP).
+  const cnpMonthIdx = year * 12 + (month - 1)
+  const cnpAv = pautasInScope(
+    cnpRequests.filter((c) => c.is_audiovisual && !c.deleted_at),
+    scopeLine,
+    generalLineId,
+  ).filter((c) => cnpInMonth(c, cnpMonthIdx))
 
   const { deadline } = nextAgendaDeadline()
   // "Agendadas" = pautas con status 'programada' (con o sin fecha) — mismo número que la
@@ -459,6 +477,7 @@ export default function AudiovisualView({
         generalLineId={generalLineId}
         usersById={usersById}
         piezasByPauta={piezasByPautaMap}
+        cnpAv={cnpAv}
       />
 
       {detailPauta && (

@@ -319,6 +319,11 @@ export const CHANGELOG = [
       'En Reportes → Operaciones, en Crecimiento de seguidores, una marca que alcanzó al menos el 95% de su meta ya se marca como cumplida (antes solo contaba llegar al 100%, así que un 95% se veía como si no se hubiera logrado nada).',
       'En Reportes → Operaciones, el botón "Ver marcas" (sin reunión) ya no cuenta a las marcas justificadas como "No aplica" en ese mes — si todas las que debían tener reunión ya la tuvieron, el contador queda en 0.',
       'Corregido: en Reportes → Pautas, cuando el campo "Realizadas" venía marcado como "Derivado de Audiovisual", el texto de aviso lo desalineaba y quedaba más arriba que el campo "Meta" de al lado. Ahora quedan a la misma altura.',
+      'En Reportes → Operaciones, en Productividad de tareas fijas, los meses que tienen 5 semanas ya no exigen las grillas de esa 5.ª semana: solo se pide el Calendario, igual que antes se venía pidiendo de más. La grilla de Tareas Fijas donde se marcan las tareas no cambió, solo el cálculo de la meta del reporte.',
+      'En Reportes → Operaciones, el indicador "Nº Piezas vs Piezas editadas" ahora cuenta solo piezas de video (Video de marca y Reel); las fotos dejaron de sumar en ese indicador.',
+      'En Reportes → Operaciones, en Productividad de tareas fijas, la fila "Actualización de Plataformas" tampoco cuenta la 5.ª semana en los meses de 5 semanas: si una red solo se actualizó esa semana, ya no cuenta como si se hubiera actualizado a tiempo.',
+      'En Reportes → Operaciones, el indicador "Nº Piezas vs Piezas editadas" ahora muestra, debajo del total, cuántas de esas piezas son Video 4K y cuántas son Reels.',
+      'En Pautas, el panel "Rendimiento por recurso" ahora también suma las piezas editadas de los CNP de audiovisual (los pedidos de cliente para editar un clip, que no pasan por una pauta) al total del editor asignado, mostrando aparte cuántas de esas piezas son CNP. Esto no afecta el indicador "Nº Piezas vs Piezas editadas" de Reportes, que sigue contando solo lo que sale de las pautas.',
     ],
   },
   {

@@ -347,7 +347,7 @@ function emptyReportShape() {
     crecimiento: { items: [] },
     solicitudes: { solicitudes: null, editadas: null },
     pautas: { items: [] },
-    piezas: { piezas: null, editadas: null },
+    piezas: { piezas: null, editadas: null, porGrupo: null },
     feedback: { items: [] },
     finanzas: { ingresos: [], gastosOperativos: [], sueldos: [], otrosGastos: [] },
   }

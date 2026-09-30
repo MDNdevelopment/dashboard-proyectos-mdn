@@ -80,7 +80,7 @@ export function initMetricReport(
           meta: i.meta,
         })),
       },
-      piezas: { piezas: null, editadas: null },
+      piezas: { piezas: null, editadas: null, porGrupo: null },
       feedback: {
         items: (prevReport.feedback?.items ?? []).map((i) => ({
           clienteId: i.clienteId,
@@ -123,7 +123,7 @@ export function initMetricReport(
       pautas: {
         items: lineClients.map((c) => ({ clienteId: c.id, realizadas: null, meta: null })),
       },
-      piezas: { piezas: null, editadas: null },
+      piezas: { piezas: null, editadas: null, porGrupo: null },
       feedback: {
         items: lineClients.map((c) => ({ clienteId: c.id, score: null })),
       },

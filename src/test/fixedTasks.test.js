@@ -103,12 +103,13 @@ describe('computeProductividad', () => {
       mark({ client_id: 'c1', task_key: 'grilla', period_week: 1, status: 'si' }),
       mark({ client_id: 'c1', task_key: 'grilla', period_week: 2, status: 'na' }),
       mark({ client_id: 'c1', task_key: 'grilla', period_week: 3, status: 'no' }),
-      // semanas 4 y 5 sin marca (pendiente) → cuentan en meta, no en real
+      // semana 4 sin marca (pendiente) → cuenta en meta, no en real
+      // semana 5: última semana de un mes de 5 semanas → grilla no cuenta para el reporte
     ]
     const rows = computeProductividad(marks, clients, weeks)
     const grillaRow = rows.find((r) => r.nombre === 'Grillas Redes → Diseño')
-    // meta = 5 semanas - 1 (na) = 4; real = 1 (si)
-    expect(grillaRow.meta).toBe(4)
+    // meta = 5 semanas - 1 (na) - 1 (semana 5, excluida en meses de 5 semanas) = 3; real = 1 (si)
+    expect(grillaRow.meta).toBe(3)
     expect(grillaRow.realizado).toBe(1)
   })
 
@@ -130,6 +131,52 @@ describe('computeProductividad', () => {
       expect(r).toHaveProperty('realizado')
       expect(r).toHaveProperty('meta')
     })
+  })
+
+  it('en un mes de 5 semanas, la última semana solo cuenta calendario (grilla/artes quedan en 4)', () => {
+    // Julio 2026: 5 miércoles (ver YEAR/MONTH arriba).
+    const weeks = buildFixedWeeks(YEAR, MONTH)
+    expect(weeks).toHaveLength(5)
+    const rows = computeProductividad([], [client()], weeks)
+    const grillaRow = rows.find((r) => r.nombre === 'Grillas Redes → Diseño')
+    const artesRow = rows.find((r) => r.nombre === 'Grillas Diseño → Redes')
+    const calRow = rows.find((r) => r.nombre === 'Calendario')
+    expect(grillaRow.meta).toBe(4)
+    expect(artesRow.meta).toBe(4)
+    expect(calRow.meta).toBe(1)
+  })
+
+  it('una marca "si" en grilla/artes de la 5.ª semana no suma a realizado ni a meta', () => {
+    const weeks = buildFixedWeeks(YEAR, MONTH)
+    const lastN = weeks.at(-1).n
+    const marks = [
+      mark({ client_id: 'c1', task_key: 'grilla', period_week: lastN, status: 'si' }),
+      mark({ client_id: 'c1', task_key: 'artes', period_week: lastN, status: 'si' }),
+    ]
+    const rows = computeProductividad(marks, [client()], weeks)
+    const grillaRow = rows.find((r) => r.nombre === 'Grillas Redes → Diseño')
+    const artesRow = rows.find((r) => r.nombre === 'Grillas Diseño → Redes')
+    expect(grillaRow.meta).toBe(4)
+    expect(grillaRow.realizado).toBe(0)
+    expect(artesRow.meta).toBe(4)
+    expect(artesRow.realizado).toBe(0)
+  })
+
+  it('en un mes de 4 semanas no cambia nada (meta = 4 en todas las semanas)', () => {
+    // Junio 2026: 4 miércoles.
+    const weeks = buildFixedWeeks(2026, 6)
+    expect(weeks).toHaveLength(4)
+    const rows = computeProductividad([], [client()], weeks)
+    const grillaRow = rows.find((r) => r.nombre === 'Grillas Redes → Diseño')
+    const artesRow = rows.find((r) => r.nombre === 'Grillas Diseño → Redes')
+    expect(grillaRow.meta).toBe(4)
+    expect(artesRow.meta).toBe(4)
+  })
+
+  it('tasksForWeek (la grilla) sigue exigiendo las 3 columnas en la 5.ª semana', () => {
+    const weeks = buildFixedWeeks(YEAR, MONTH)
+    const lastN = weeks.at(-1).n
+    expect(tasksForWeek(lastN, weeks).sort()).toEqual(['artes', 'calendario', 'grilla'].sort())
   })
 })
 

@@ -8,6 +8,8 @@
  * (se capturan piezas) | 'declinada' (no se agenda).
  */
 
+import { cnpPiecesDelivered } from '../components/cnp/constants'
+
 export const FORMAT_KEYS = ['V', 'R', 'F']
 
 export const FORMAT_LABELS = {
@@ -639,9 +641,11 @@ function hasFormatoBreakdown(pauta) {
 
 /**
  * Agrega piezas totales/editadas de las pautas 'realizada' por línea. `totales`/`editadas`
- * son la suma cruda de las columnas — NO cambian con el desglose por grupo, porque
- * alimentan el indicador «6. Nº Piezas vs Piezas editadas» de Reportes → Operaciones
- * (avPautasApi.countPiezasForLine) y ese número no debe moverse por este cambio.
+ * son la suma cruda de las columnas (video + foto) — esta analítica sigue mostrando el
+ * total sin filtrar, a diferencia del indicador «6. Nº Piezas vs Piezas editadas» de
+ * Reportes → Operaciones (avPautasApi.countPiezasForLine → sumPiezasVideoForLine), que
+ * desde el ajuste de solo-video cuenta menos que este `totales`/`editadas` cuando hay
+ * piezas de foto en el mes — a propósito, ambos números miden cosas distintas.
  * `porGrupo` es el desglose adicional Video/Reel vs Foto: pautas con desglose por formato
  * reparten ahí; pautas legacy (sin `piezas_por_formato`) caen enteras en `sinDesglose`.
  * @param {Array} pautas
@@ -713,14 +717,24 @@ export function aggregatePiezasByLine(pautas, lines, generalLineId = null) {
  * (`edita_user_id`/`piezas_editadas`), igual que antes.
  *
  * Agrupa por ID de recurso, no por nombre — dos personas homónimas ya no se fusionan.
+ *
+ * `cnpAv` (opcional) suma además las piezas editadas de CNP de audiovisual (`cnp_requests`
+ * con `is_audiovisual = true`) — un pedido espontáneo de cliente para editar un clip, que NO
+ * pasa por una pauta. Se contabilizan en `editaCnp`, incluido en el total `edita`, pero se
+ * mantienen separadas del resto de `edita*` para poder mostrar cuántas de las piezas
+ * editadas de un recurso vienen de CNP vs. de pautas. Deliberadamente NO tocan
+ * `sumPiezasVideoForLine`/`sumPiezasVideoBreakdownForLine` (indicador «6» del reporte por
+ * línea): ese indicador sigue leyendo solo `av_pauta_piezas`, para que el trabajo de CNP
+ * cuente en el rendimiento del recurso sin inflar el score de la línea en Reportes.
  * @param {Array} pautas
  * @param {Map<string,object>} usersById
  * @param {Map<string,Array>} [piezasByPauta] — pauta_id → piezas de esa pauta
+ * @param {Array} [cnpAv] — CNP de audiovisual (`is_audiovisual = true`) a incluir
  * @returns {Array<{id:string, name:string, grabaAv:number, grabaFoto:number,
  *   grabaSinDesglose:number, grabaEstimado:boolean, editaAv:number, editaFoto:number,
- *   editaOtro:number, graba:number, edita:number}>}
+ *   editaOtro:number, editaCnp:number, graba:number, edita:number}>}
  */
-export function aggregateResourcePerformance(pautas, usersById, piezasByPauta) {
+export function aggregateResourcePerformance(pautas, usersById, piezasByPauta, cnpAv = []) {
   const byId = new Map()
   const ensure = (id, name) => {
     if (!byId.has(id)) {
@@ -734,6 +748,7 @@ export function aggregateResourcePerformance(pautas, usersById, piezasByPauta) {
         editaAv: 0,
         editaFoto: 0,
         editaOtro: 0,
+        editaCnp: 0,
       })
     }
     return byId.get(id)
@@ -805,11 +820,17 @@ export function aggregateResourcePerformance(pautas, usersById, piezasByPauta) {
     }
   })
 
+  cnpAv.forEach((cnp) => {
+    if (!cnp?.assignee_id) return
+    const entry = ensure(cnp.assignee_id, nameOf(cnp.assignee_id))
+    entry.editaCnp += cnpPiecesDelivered(cnp)
+  })
+
   return [...byId.values()]
     .map((r) => ({
       ...r,
       graba: r.grabaAv + r.grabaFoto + r.grabaSinDesglose,
-      edita: r.editaAv + r.editaFoto + r.editaOtro,
+      edita: r.editaAv + r.editaFoto + r.editaOtro + r.editaCnp,
     }))
     .sort((a, b) => b.graba + b.edita - (a.graba + a.edita))
 }
@@ -825,6 +846,67 @@ export function sumPiezasForLine(pautas) {
     },
     { piezas: 0, editadas: 0 },
   )
+}
+
+/**
+ * Suma de piezas de VIDEO (grupo `av` = Video de marca + Reel, `FORMAT_GROUPS.av`) de las
+ * pautas 'realizada' de una línea en un período — alimenta el indicador «6. Nº Piezas vs
+ * Piezas editadas» del reporte, que solo mide video (las fotos dejaron de contar). Total
+ * combinado de `sumPiezasVideoBreakdownForLine` (video4k + reel + sinDesglose) — ver esa
+ * función para el criterio exacto de qué pauta cuenta y cómo se reparte entre subtipos.
+ * @param {Array} pautas
+ * @returns {{piezas:number, editadas:number}}
+ */
+export function sumPiezasVideoForLine(pautas) {
+  const { video4k, reel, sinDesglose } = sumPiezasVideoBreakdownForLine(pautas)
+  return {
+    piezas: video4k.piezas + reel.piezas + sinDesglose.piezas,
+    editadas: video4k.editadas + reel.editadas + sinDesglose.editadas,
+  }
+}
+
+/**
+ * Igual que `sumPiezasVideoForLine`, pero desglosada por subtipo de video — Video 4K
+ * (formato `V`, "Video de marca") vs Reel (formato `R`) — para mostrar la distinción en el
+ * indicador «6. Nº Piezas vs Piezas editadas» del reporte, además del total combinado.
+ * - Pauta con desglose por formato: V va a `video4k`, R va a `reel` (Foto sigue sin contar).
+ * - Pauta legacy (sin desglose) de un solo subtipo (`formats` = solo V, o solo R, sin F):
+ *   se atribuye entera a ese subtipo.
+ * - Pauta legacy con AMBOS V y R (sin desglose ni forma de saber cuánto es de cada uno):
+ *   cae en `sinDesglose` — sigue siendo video (cuenta en el total de `sumPiezasVideoForLine`
+ *   y en `calcPiezas`), pero no se puede repartir entre las dos columnas visibles.
+ * @param {Array} pautas
+ * @returns {{video4k:{piezas:number,editadas:number}, reel:{piezas:number,editadas:number},
+ *   sinDesglose:{piezas:number,editadas:number}}}
+ */
+export function sumPiezasVideoBreakdownForLine(pautas) {
+  const emptyGrupo = () => ({ piezas: 0, editadas: 0 })
+  const out = { video4k: emptyGrupo(), reel: emptyGrupo(), sinDesglose: emptyGrupo() }
+  pautas.forEach((p) => {
+    if (p.status !== 'realizada') return
+    if (hasFormatoBreakdown(p)) {
+      const breakdown = piezasPorFormato(p)
+      if (breakdown.V) {
+        out.video4k.piezas += breakdown.V.salieron
+        out.video4k.editadas += breakdown.V.editadas
+      }
+      if (breakdown.R) {
+        out.reel.piezas += breakdown.R.salieron
+        out.reel.editadas += breakdown.R.editadas
+      }
+      return
+    }
+    const formats = p.formats ?? []
+    const hasV = formats.includes('V')
+    const hasR = formats.includes('R')
+    if (formats.includes('F') || (!hasV && !hasR)) return
+    const piezas = Number(p.piezas_totales) || 0
+    const editadas = Number(p.piezas_editadas) || 0
+    const target = hasV && hasR ? out.sinDesglose : hasV ? out.video4k : out.reel
+    target.piezas += piezas
+    target.editadas += editadas
+  })
+  return out
 }
 
 // ─── Checklist de piezas por editor (av_pauta_piezas) ──────────────────────

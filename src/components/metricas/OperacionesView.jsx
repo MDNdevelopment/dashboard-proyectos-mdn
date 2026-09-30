@@ -252,20 +252,24 @@ export default function OperacionesView({ line, companyId, year, month, closed =
     if (isChequeoEra && !closed) {
       synced.productividad.tareas = [
         ...synced.productividad.tareas.filter((t) => t.nombre !== 'Actualización de Plataformas'),
-        computePlataformasProductividad(checksRes.data ?? [], activeLineClients),
+        computePlataformasProductividad(checksRes.data ?? [], activeLineClients, weeks),
       ]
     }
 
     // "Nº Piezas vs Piezas editadas" ya no se captura a mano — se deriva de las pautas
     // 'realizada' de Tareas Fijas → Audiovisual (av_pautas), mismo patrón que Reuniones y
-    // Productividad arriba. Antes del lanzamiento no hay pautas que derivar, así que esos
-    // meses conservan el valor que ya tenían guardado.
+    // Productividad arriba. Solo cuenta piezas de VIDEO (Video/Reel): countPiezasForLine
+    // usa sumPiezasVideoForLine, que excluye foto (ver utils/audiovisual.js). `porGrupo`
+    // desglosa ese total en Video 4K vs Reel, solo informativo (no cambia el score). Antes
+    // del lanzamiento no hay pautas que derivar, así que esos meses conservan el valor que
+    // ya tenían guardado.
     const isAvEra =
       year > AUDIOVISUAL_MODULE_START.year ||
       (year === AUDIOVISUAL_MODULE_START.year && month >= AUDIOVISUAL_MODULE_START.month)
     if (isAvEra && !closed) {
       synced.piezas.piezas = piezasRes.piezas
       synced.piezas.editadas = piezasRes.editadas
+      synced.piezas.porGrupo = piezasRes.porGrupo ?? null
     }
 
     // "Nº Pautas" (Realizadas) ya no se captura a mano por marca — se deriva del conteo
@@ -450,6 +454,27 @@ export default function OperacionesView({ line, companyId, year, month, closed =
   const isAvEra =
     year > AUDIOVISUAL_MODULE_START.year ||
     (year === AUDIOVISUAL_MODULE_START.year && month >= AUDIOVISUAL_MODULE_START.month)
+
+  // Texto informativo de la sección 6: distingue cuántas de las piezas de video totales
+  // son Video 4K (formato V) y cuántas son Reels (formato R) — no cambia el score
+  // (`calcPiezas` sigue usando report.piezas.piezas/editadas, el total combinado), solo
+  // aclara la composición. Se omite si no hay desglose que mostrar (mes sin pautas, o
+  // reportes de antes de que `porGrupo` existiera).
+  const piezasPorGrupo = report?.piezas?.porGrupo
+  const piezasPorGrupoResumen = (() => {
+    if (!piezasPorGrupo) return null
+    const { video4k, reel, sinDesglose } = piezasPorGrupo
+    const total = (video4k?.piezas ?? 0) + (reel?.piezas ?? 0) + (sinDesglose?.piezas ?? 0)
+    if (total === 0) return null
+    const parts = [
+      `Video 4K: ${video4k?.piezas ?? 0} piezas / ${video4k?.editadas ?? 0} editadas`,
+      `Reels: ${reel?.piezas ?? 0} piezas / ${reel?.editadas ?? 0} editadas`,
+    ]
+    if (sinDesglose?.piezas) {
+      parts.push(`Sin desglosar: ${sinDesglose.piezas} piezas / ${sinDesglose.editadas} editadas`)
+    }
+    return parts.join(' · ')
+  })()
 
   // Antes del lanzamiento del auto-llenado, "Solicitudes vs Entregados" se sigue
   // capturando a mano (mismo criterio que en load(), ver SOLICITUDES_MODULE_START).
@@ -1165,7 +1190,7 @@ export default function OperacionesView({ line, companyId, year, month, closed =
               }
               title={
                 isAvEra
-                  ? 'Derivado automáticamente de Audiovisual: piezas de las pautas realizadas en el mes'
+                  ? 'Derivado automáticamente de Audiovisual: piezas de video (Video/Reel) de las pautas realizadas en el mes; no incluye foto'
                   : undefined
               }
             />
@@ -1194,7 +1219,7 @@ export default function OperacionesView({ line, companyId, year, month, closed =
               }
               title={
                 isAvEra
-                  ? 'Derivado automáticamente de Audiovisual: piezas editadas de las pautas realizadas en el mes'
+                  ? 'Derivado automáticamente de Audiovisual: piezas de video (Video/Reel) editadas de las pautas realizadas en el mes; no incluye foto'
                   : undefined
               }
             />
@@ -1203,6 +1228,11 @@ export default function OperacionesView({ line, companyId, year, month, closed =
             )}
           </Field>
         </div>
+        {isAvEra && piezasPorGrupoResumen && (
+          <p className="text-[12px] text-[#888] bg-[#faf9f3] border border-[#e8e4d8] rounded-lg px-3 py-2 mt-3">
+            {piezasPorGrupoResumen}
+          </p>
+        )}
       </Section>
 
       {/* Botón guardar */}

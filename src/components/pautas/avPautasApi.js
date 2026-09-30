@@ -5,7 +5,12 @@
  * components/reuniones/meetingsApi.js.
  */
 import { supabase } from '../../supabase'
-import { sumPiezasForLine, defaultLoteName, FOTO_FORMAT } from '../../utils/audiovisual'
+import {
+  sumPiezasVideoForLine,
+  sumPiezasVideoBreakdownForLine,
+  defaultLoteName,
+  FOTO_FORMAT,
+} from '../../utils/audiovisual'
 import { selectAllPages } from '../../lib/supabasePaginate'
 
 // ─── Lectura ──────────────────────────────────────────────────────────────────
@@ -31,9 +36,13 @@ export async function loadPautas(companyId) {
 }
 
 /**
- * Suma piezas totales/editadas de las pautas 'realizada' de una línea en un mes/año
- * dado — usado por Reportes → Operaciones para sembrar el indicador «6. Nº Piezas vs
- * Piezas editadas» desde AUDIOVISUAL_MODULE_START.
+ * Suma piezas de VIDEO (Video/Reel, excluye Foto) de las pautas 'realizada' de una línea
+ * en un mes/año dado — usado por Reportes → Operaciones para sembrar el indicador «6. Nº
+ * Piezas vs Piezas editadas» desde AUDIOVISUAL_MODULE_START. `piezas`/`editadas` es el
+ * total combinado (lo que alimenta `calcPiezas`); `porGrupo` desglosa ese mismo total en
+ * Video 4K (`video4k`, formato V) vs Reel (`reel`, formato R) para mostrar la distinción en
+ * el reporte — ver sumPiezasVideoForLine/sumPiezasVideoBreakdownForLine
+ * (utils/audiovisual.js) para el criterio exacto de qué pauta cuenta y cómo se reparte.
  */
 export async function countPiezasForLine(companyId, lineId, { month, year }) {
   const monthStart = new Date(year, month - 1, 1)
@@ -42,15 +51,20 @@ export async function countPiezasForLine(companyId, lineId, { month, year }) {
 
   const { data, error } = await supabase
     .from('av_pautas')
-    .select('piezas_totales, piezas_editadas, status')
+    .select('piezas_totales, piezas_editadas, status, formats, piezas_por_formato')
     .eq('company_id', companyId)
     .eq('line_id', lineId)
     .eq('status', 'realizada')
     .gte('pauta_date', toISODate(monthStart))
     .lt('pauta_date', toISODate(monthEnd))
 
-  if (error) return { piezas: 0, editadas: 0, error }
-  return { ...sumPiezasForLine(data ?? []), error: null }
+  if (error) return { piezas: 0, editadas: 0, porGrupo: sumPiezasVideoBreakdownForLine([]), error }
+  const rows = data ?? []
+  return {
+    ...sumPiezasVideoForLine(rows),
+    porGrupo: sumPiezasVideoBreakdownForLine(rows),
+    error: null,
+  }
 }
 
 /**

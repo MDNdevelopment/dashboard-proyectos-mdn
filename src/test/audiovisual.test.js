@@ -23,6 +23,8 @@ import {
   aggregatePiezasByLine,
   aggregateResourcePerformance,
   sumPiezasForLine,
+  sumPiezasVideoForLine,
+  sumPiezasVideoBreakdownForLine,
   generateAgendaText,
   generateDayAgendaText,
   piezasProgress,
@@ -917,6 +919,51 @@ describe('aggregateResourcePerformance', () => {
     const result = aggregateResourcePerformance(pautas, usersById, piezasByPauta)
     expect(result).toEqual([])
   })
+
+  it('suma las piezas entregadas de un CNP de audiovisual al recurso asignado, separadas en editaCnp', () => {
+    const cnpAv = [
+      { id: 'c1', is_audiovisual: true, assignee_id: 'u1', status: 'Terminado', pieces: [] },
+    ]
+    const result = aggregateResourcePerformance([], usersById, new Map(), cnpAv)
+    expect(result).toContainEqual(expect.objectContaining({ id: 'u1', editaCnp: 1, edita: 1 }))
+  })
+
+  it('un CNP de audiovisual no cerrado solo suma las piezas marcadas done', () => {
+    const cnpAv = [
+      {
+        id: 'c1',
+        is_audiovisual: true,
+        assignee_id: 'u1',
+        status: 'En proceso',
+        pieces: [
+          { id: 'p1', label: 'Pieza 1', done: true },
+          { id: 'p2', label: 'Pieza 2', done: false },
+        ],
+      },
+    ]
+    const result = aggregateResourcePerformance([], usersById, new Map(), cnpAv)
+    expect(result).toContainEqual(expect.objectContaining({ id: 'u1', editaCnp: 1, edita: 1 }))
+  })
+
+  it('las piezas de CNP se suman al total del recurso junto con las de sus pautas, sin mezclar los buckets', () => {
+    const pautas = [pauta({ id: 'p1', status: 'realizada', formats: ['V'], piezas_totales: 1 })]
+    const piezasByPauta = new Map([
+      ['p1', [{ editor_user_id: 'u1', status: 'listo', formato: 'V' }]],
+    ])
+    const cnpAv = [
+      { id: 'c1', is_audiovisual: true, assignee_id: 'u1', status: 'Terminado', pieces: [] },
+    ]
+    const result = aggregateResourcePerformance(pautas, usersById, piezasByPauta, cnpAv)
+    expect(result).toContainEqual(
+      expect.objectContaining({ id: 'u1', editaAv: 1, editaCnp: 1, edita: 2 }),
+    )
+  })
+
+  it('un CNP sin assignee_id no aporta a ningún recurso', () => {
+    const cnpAv = [{ id: 'c1', is_audiovisual: true, assignee_id: null, status: 'Terminado' }]
+    const result = aggregateResourcePerformance([], usersById, new Map(), cnpAv)
+    expect(result).toEqual([])
+  })
 })
 
 describe('piezaUnidades / piezaListas', () => {
@@ -1245,6 +1292,173 @@ describe('sumPiezasForLine', () => {
 
   it('sin pautas realizadas → ceros', () => {
     expect(sumPiezasForLine([pauta({ status: 'solicitada' })])).toEqual({ piezas: 0, editadas: 0 })
+  })
+})
+
+describe('sumPiezasVideoForLine', () => {
+  it('con desglose por formato, suma solo Video/Reel (V/R) e ignora Foto (F)', () => {
+    const p = pauta({
+      status: 'realizada',
+      formats: ['V', 'R', 'F'],
+      piezas_por_formato: {
+        V: { salieron: 2, editadas: 1 },
+        R: { salieron: 3, editadas: 2 },
+        F: { salieron: 5, editadas: 5 },
+      },
+    })
+    expect(sumPiezasVideoForLine([p])).toEqual({ piezas: 5, editadas: 3 })
+  })
+
+  it('pauta legacy (sin desglose) de solo video → cuenta entera', () => {
+    const p = pauta({
+      status: 'realizada',
+      formats: ['V'],
+      piezas_totales: 4,
+      piezas_editadas: 3,
+    })
+    expect(sumPiezasVideoForLine([p])).toEqual({ piezas: 4, editadas: 3 })
+  })
+
+  it('pauta legacy mixta (video + foto, sin desglose) → no aporta', () => {
+    const p = pauta({
+      status: 'realizada',
+      formats: ['V', 'F'],
+      piezas_totales: 10,
+      piezas_editadas: 8,
+    })
+    expect(sumPiezasVideoForLine([p])).toEqual({ piezas: 0, editadas: 0 })
+  })
+
+  it('pauta legacy solo foto (sin desglose) → no aporta', () => {
+    const p = pauta({
+      status: 'realizada',
+      formats: ['F'],
+      piezas_totales: 6,
+      piezas_editadas: 6,
+    })
+    expect(sumPiezasVideoForLine([p])).toEqual({ piezas: 0, editadas: 0 })
+  })
+
+  it('pauta sin formats → no aporta', () => {
+    const p = pauta({ status: 'realizada', formats: [], piezas_totales: 6, piezas_editadas: 6 })
+    expect(sumPiezasVideoForLine([p])).toEqual({ piezas: 0, editadas: 0 })
+  })
+
+  it('ignora pautas no realizadas', () => {
+    const p = pauta({
+      status: 'programada',
+      formats: ['V'],
+      piezas_totales: 100,
+      piezas_editadas: 100,
+    })
+    expect(sumPiezasVideoForLine([p])).toEqual({ piezas: 0, editadas: 0 })
+  })
+
+  it('pauta legacy con AMBOS V y R (sin desglose) sigue contando entera en el total', () => {
+    const p = pauta({
+      status: 'realizada',
+      formats: ['V', 'R'],
+      piezas_totales: 7,
+      piezas_editadas: 5,
+    })
+    expect(sumPiezasVideoForLine([p])).toEqual({ piezas: 7, editadas: 5 })
+  })
+})
+
+describe('sumPiezasVideoBreakdownForLine', () => {
+  it('con desglose por formato, reparte V en video4k y R en reel', () => {
+    const p = pauta({
+      status: 'realizada',
+      formats: ['V', 'R', 'F'],
+      piezas_por_formato: {
+        V: { salieron: 2, editadas: 1 },
+        R: { salieron: 3, editadas: 2 },
+        F: { salieron: 5, editadas: 5 },
+      },
+    })
+    expect(sumPiezasVideoBreakdownForLine([p])).toEqual({
+      video4k: { piezas: 2, editadas: 1 },
+      reel: { piezas: 3, editadas: 2 },
+      sinDesglose: { piezas: 0, editadas: 0 },
+    })
+  })
+
+  it('pauta legacy de solo Video (V) → va entera a video4k', () => {
+    const p = pauta({ status: 'realizada', formats: ['V'], piezas_totales: 4, piezas_editadas: 3 })
+    expect(sumPiezasVideoBreakdownForLine([p])).toEqual({
+      video4k: { piezas: 4, editadas: 3 },
+      reel: { piezas: 0, editadas: 0 },
+      sinDesglose: { piezas: 0, editadas: 0 },
+    })
+  })
+
+  it('pauta legacy de solo Reel (R) → va entera a reel', () => {
+    const p = pauta({ status: 'realizada', formats: ['R'], piezas_totales: 6, piezas_editadas: 4 })
+    expect(sumPiezasVideoBreakdownForLine([p])).toEqual({
+      video4k: { piezas: 0, editadas: 0 },
+      reel: { piezas: 6, editadas: 4 },
+      sinDesglose: { piezas: 0, editadas: 0 },
+    })
+  })
+
+  it('pauta legacy con AMBOS V y R (sin desglose) → no se puede repartir, va a sinDesglose', () => {
+    const p = pauta({
+      status: 'realizada',
+      formats: ['V', 'R'],
+      piezas_totales: 7,
+      piezas_editadas: 5,
+    })
+    expect(sumPiezasVideoBreakdownForLine([p])).toEqual({
+      video4k: { piezas: 0, editadas: 0 },
+      reel: { piezas: 0, editadas: 0 },
+      sinDesglose: { piezas: 7, editadas: 5 },
+    })
+  })
+
+  it('pauta legacy mixta (video + foto, sin desglose) → no aporta a ningún grupo', () => {
+    const p = pauta({
+      status: 'realizada',
+      formats: ['V', 'F'],
+      piezas_totales: 10,
+      piezas_editadas: 8,
+    })
+    expect(sumPiezasVideoBreakdownForLine([p])).toEqual({
+      video4k: { piezas: 0, editadas: 0 },
+      reel: { piezas: 0, editadas: 0 },
+      sinDesglose: { piezas: 0, editadas: 0 },
+    })
+  })
+
+  it('el total de sumPiezasVideoForLine siempre es la suma de los 3 grupos del desglose', () => {
+    const pautas = [
+      pauta({
+        id: 'p1',
+        status: 'realizada',
+        formats: ['V', 'R'],
+        piezas_por_formato: { V: { salieron: 2, editadas: 1 }, R: { salieron: 1, editadas: 1 } },
+      }),
+      pauta({
+        id: 'p2',
+        status: 'realizada',
+        formats: ['V'],
+        piezas_totales: 3,
+        piezas_editadas: 2,
+      }),
+      pauta({
+        id: 'p3',
+        status: 'realizada',
+        formats: ['V', 'R'],
+        piezas_totales: 5,
+        piezas_editadas: 4,
+      }),
+    ]
+    const breakdown = sumPiezasVideoBreakdownForLine(pautas)
+    const total = sumPiezasVideoForLine(pautas)
+    expect(total).toEqual({
+      piezas: breakdown.video4k.piezas + breakdown.reel.piezas + breakdown.sinDesglose.piezas,
+      editadas:
+        breakdown.video4k.editadas + breakdown.reel.editadas + breakdown.sinDesglose.editadas,
+    })
   })
 })
 

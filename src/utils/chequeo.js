@@ -225,11 +225,20 @@ export const MONTHLY_TARGET_PER_NETWORK = 4
  * Respeta el opt-out por cliente (`client.fixed_tasks.plataformas === false`), mismo
  * criterio que usaba la columna vieja.
  *
+ * Si `weeks` trae 5 semanas (5 miércoles), la 5.ª (última) se descarta ANTES de armar
+ * `weeksWithDate`: igual que Grillas Redes→Diseño y Grillas Diseño→Redes en
+ * `computeProductividad` (utils/fixedTasks.js), esa semana no es parte de la cadencia real
+ * de 4/mes, así que una celda registrada solo en la semana 5 no debe poder "tapar" un mes
+ * incompleto (sin `weeks`, o con 4, no cambia nada).
+ *
  * @param {Array} checks   publication_checks del mes (line_id ya filtrado)
  * @param {Array} clients  cuentas de la línea (con social_links, fixed_tasks)
+ * @param {Array} [weeks]  buildFixedWeeks(year, month) — opcional, solo para excluir la
+ *                         5.ª semana en meses de 5 semanas
  * @returns {{nombre:string, realizado:number, meta:number}}
  */
-export function computePlataformasProductividad(checks, clients) {
+export function computePlataformasProductividad(checks, clients, weeks = []) {
+  const excludedWeekN = weeks.length >= 5 ? weeks.at(-1)?.n : null
   let meta = 0
   let realizado = 0
   clients.forEach((client) => {
@@ -251,7 +260,9 @@ export function computePlataformasProductividad(checks, clients) {
         }
         meta += MONTHLY_TARGET_PER_NETWORK
         const weeksWithDate = new Set(
-          cellChecks.filter((c) => c.last_published_at).map((c) => c.period_week),
+          cellChecks
+            .filter((c) => c.last_published_at && c.period_week !== excludedWeekN)
+            .map((c) => c.period_week),
         )
         realizado += Math.min(MONTHLY_TARGET_PER_NETWORK, weeksWithDate.size)
       })
