@@ -13,6 +13,7 @@ import {
   externalAsUser,
   externalUsersForRole,
   canEditPiezasForPauta,
+  leadLineIdsFor,
 } from '../../utils/audiovisual'
 import { effectiveLineId } from '../../utils/lineFilters'
 import AvCalendar from './AvCalendar'
@@ -49,6 +50,10 @@ export default function AudiovisualView({
   const canManage = can('audiovisual.manage')
   const canCoordinate = can('audiovisual.coordina')
   const canGestionPautas = can('audiovisual.pautas.gestion')
+  // Líneas que esta usuaria lidera: habilitan gestionar recursos y piezas (quién capturó /
+  // quién editó) de las pautas de SU línea sin darle poder sobre las de las demás — ver
+  // canEditPiezasForPauta.
+  const leadLineIds = leadLineIdsFor(lines, userProfile?.user_id)
   const editMode = avEditMode({ canCoordinate, canManage })
   // "Ver todo" (todas las líneas) es una capability aparte de "coordina" (agendar/
   // declinar/marcar realizada): antes cualquier coordinador del depto Audiovisual veía
@@ -430,6 +435,7 @@ export default function AudiovisualView({
           defaultLineId={defaultLineId}
           editMode={editMode}
           canGestionPautas={canGestionPautas}
+          leadLineIds={leadLineIds}
           phase={phase}
           onPhaseChange={(p) => {
             setPhase(p)
@@ -467,6 +473,7 @@ export default function AudiovisualView({
             canGestionPautas,
             userId: userProfile?.user_id,
             pauta: detailPauta,
+            leadLineIds,
           })}
           userId={userProfile?.user_id}
           companyId={companyId}

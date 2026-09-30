@@ -217,20 +217,52 @@ export function resourceNames(pauta, usersById) {
 /**
  * Determina si `userId` puede gestionar los recursos y la lista de piezas de una pauta:
  * quien coordina (admin o Lizdania, vía `audiovisual.coordina`), quien tenga la capability
- * configurable `audiovisual.pautas.gestion` (Empresa > Accesos), o el recurso que grabó
- * esa pauta (`recurso_ids`). Reemplaza el booleano global que antes abría la edición a
- * todo el depto Audiovisual — ver commit 19e5bbc.
+ * configurable `audiovisual.pautas.gestion` (Empresa > Accesos), el recurso que grabó esa
+ * pauta (`recurso_ids`), o la jefa de la línea a la que pertenece la pauta
+ * (`metric_line_members.is_lead`). Reemplaza el booleano global que antes abría la edición
+ * a todo el depto Audiovisual — ver commit 19e5bbc.
+ *
+ * El caso de la jefa es por ALCANCE, no por persona: cualquier jefa sobre las pautas de su
+ * línea y solo de su línea, algo que una capability no puede expresar (el evaluador de
+ * `module_permissions` solo mira el perfil del usuario, nunca la pauta). Las pautas sin
+ * `line_id` (cuentas sin línea, agrupadas como "Independientes") no tienen jefa y quedan
+ * fuera a propósito. Espejo en BD: policies de `av_pauta_piezas` +
+ * `prevent_av_pautas_recurso_escalation`, vía `user_leads_line`
+ * (20260930000000_av_pautas_jefa_de_linea.sql).
  * @param {object} params
  * @param {boolean} params.canCoordinate  — resultado de `can('audiovisual.coordina')`
  * @param {boolean} [params.canGestionPautas]  — resultado de `can('audiovisual.pautas.gestion')`
  * @param {string|null|undefined} params.userId  — user_id del usuario actual
  * @param {object|null|undefined} params.pauta
+ * @param {string[]} [params.leadLineIds]  — ids de las líneas que `userId` lidera
  * @returns {boolean}
  */
-export function canEditPiezasForPauta({ canCoordinate, canGestionPautas, userId, pauta }) {
+export function canEditPiezasForPauta({
+  canCoordinate,
+  canGestionPautas,
+  userId,
+  pauta,
+  leadLineIds,
+}) {
   if (canCoordinate || canGestionPautas) return true
   if (!userId || !pauta) return false
-  return (pauta.recurso_ids ?? []).includes(userId)
+  if ((pauta.recurso_ids ?? []).includes(userId)) return true
+  return Boolean(pauta.line_id) && (leadLineIds ?? []).includes(pauta.line_id)
+}
+
+/**
+ * Ids de las líneas que `userId` lidera (`lead_user_id`, derivado de
+ * `metric_line_members.is_lead` por `loadLines`) — la entrada de `leadLineIds` en
+ * `canEditPiezasForPauta`. Se calcula sobre las líneas que ya tiene cargadas la vista, sin
+ * una query extra: quien no ve todas las líneas recibe únicamente la suya, y quien las ve
+ * todas recibe solo aquellas donde efectivamente figura como jefa.
+ * @param {Array} lines  — líneas con `{ id, lead_user_id }`
+ * @param {string|null|undefined} userId
+ * @returns {string[]}
+ */
+export function leadLineIdsFor(lines, userId) {
+  if (!userId) return []
+  return (lines ?? []).filter((l) => l?.lead_user_id === userId).map((l) => l.id)
 }
 
 /**

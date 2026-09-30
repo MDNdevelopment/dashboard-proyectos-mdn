@@ -420,6 +420,55 @@ describe('AvPhaseTable — Agenda: "Recursos" (selección múltiple, reemplaza a
     await waitFor(() => expect(mockUpdatePauta).toHaveBeenCalledWith('p1', { recurso_ids: ['r1'] }))
   })
 
+  it('la jefa de la línea de la pauta puede editar Recursos sin coordinar ni ser el recurso', async () => {
+    mockUpdatePauta.mockResolvedValue({ data: { id: 'p1' }, error: null })
+    const pauta = {
+      id: 'p1',
+      client_name: 'Cliente A',
+      status: 'programada',
+      formats: [],
+      recurso_ids: [],
+      line_id: 'line-1',
+    }
+    renderTable({
+      initialPhase: 'agenda',
+      editMode: 'solicita',
+      leadLineIds: ['line-1'],
+      userId: 'jefa',
+      audiovisualUsers: AV_USERS,
+      pautas: [pauta],
+    })
+
+    fireEvent.click(screen.getAllByText('Seleccionar…')[0])
+    const search = screen.getByPlaceholderText('Buscar empleado por nombre…')
+    fireEvent.change(search, { target: { value: 'Nadia' } })
+    fireEvent.click(screen.getByRole('button', { name: /Nadia Torres/ }))
+
+    await waitFor(() => expect(mockUpdatePauta).toHaveBeenCalledWith('p1', { recurso_ids: ['r1'] }))
+  })
+
+  it('la jefa de otra línea sigue viendo Recursos en solo lectura', () => {
+    const pauta = {
+      id: 'p1',
+      client_name: 'Cliente A',
+      status: 'programada',
+      formats: [],
+      recurso_ids: ['otro'],
+      line_id: 'line-9',
+    }
+    renderTable({
+      initialPhase: 'agenda',
+      editMode: 'solicita',
+      leadLineIds: ['line-1'],
+      userId: 'jefa',
+      audiovisualUsers: AV_USERS,
+      pautas: [pauta],
+    })
+
+    expect(screen.getByText('1 recurso(s)')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '1 recurso(s)' })).not.toBeInTheDocument()
+  })
+
   it('el recurso ya asignado a la pauta puede editar Recursos aunque no coordine ni tenga la capability', () => {
     const pauta = {
       id: 'p1',

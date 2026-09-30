@@ -7,6 +7,7 @@ import {
   resourceName,
   resourceNames,
   canEditPiezasForPauta,
+  leadLineIdsFor,
   canActOnEditorGroup,
   requesterName,
   pautasInScope,
@@ -262,6 +263,73 @@ describe('canEditPiezasForPauta', () => {
         pauta: p,
       }),
     ).toBe(false)
+  })
+
+  it('la jefa de la línea de la pauta puede editar sin ser el recurso asignado', () => {
+    const p = pauta({ recurso_ids: ['otro'], line_id: 'linea-1' })
+    expect(
+      canEditPiezasForPauta({
+        canCoordinate: false,
+        userId: 'jefa',
+        pauta: p,
+        leadLineIds: ['linea-1'],
+      }),
+    ).toBe(true)
+  })
+
+  it('la jefa de OTRA línea no puede editar la pauta', () => {
+    const p = pauta({ recurso_ids: ['otro'], line_id: 'linea-1' })
+    expect(
+      canEditPiezasForPauta({
+        canCoordinate: false,
+        userId: 'jefa',
+        pauta: p,
+        leadLineIds: ['linea-2'],
+      }),
+    ).toBe(false)
+  })
+
+  it('pauta sin línea (Independientes) no tiene jefa: queda reservada a coordinación', () => {
+    const p = pauta({ recurso_ids: ['otro'], line_id: null })
+    expect(
+      canEditPiezasForPauta({
+        canCoordinate: false,
+        userId: 'jefa',
+        pauta: p,
+        leadLineIds: ['linea-1'],
+      }),
+    ).toBe(false)
+  })
+
+  it('leadLineIds ausente no rompe el gate existente', () => {
+    const p = pauta({ recurso_ids: ['yo'], line_id: 'linea-1' })
+    expect(canEditPiezasForPauta({ canCoordinate: false, userId: 'yo', pauta: p })).toBe(true)
+    expect(canEditPiezasForPauta({ canCoordinate: false, userId: 'otro', pauta: p })).toBe(false)
+  })
+})
+
+describe('leadLineIdsFor', () => {
+  const lines = [
+    { id: 'l1', lead_user_id: 'jefa-1' },
+    { id: 'l2', lead_user_id: 'jefa-2' },
+    { id: 'l3', lead_user_id: null },
+  ]
+
+  it('devuelve solo las líneas donde el usuario es jefa', () => {
+    expect(leadLineIdsFor(lines, 'jefa-1')).toEqual(['l1'])
+  })
+
+  it('devuelve [] para quien no lidera ninguna línea', () => {
+    expect(leadLineIdsFor(lines, 'alguien')).toEqual([])
+  })
+
+  it('sin userId o sin líneas → []', () => {
+    expect(leadLineIdsFor(lines, null)).toEqual([])
+    expect(leadLineIdsFor(undefined, 'jefa-1')).toEqual([])
+  })
+
+  it('una línea sin jefa nunca se atribuye a un usuario sin id', () => {
+    expect(leadLineIdsFor(lines, undefined)).toEqual([])
   })
 })
 

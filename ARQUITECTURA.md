@@ -107,6 +107,12 @@ La granularidad es `módulo`, `módulo.tab` y `módulo.acción`:
 - JS: `can(capabilityKey)` en `AuthContext` — carga todas las filas de `module_permissions` al login.
 - SQL: `public.user_can(p_capability_key text) returns boolean` (`security definer`) — usada en RLS.
 
+Permisos por **alcance** (dependen de la fila que se toca, no del perfil) no se modelan como
+capability: `public.user_leads_line(uuid)` y `public.user_leads_av_pauta(uuid)`
+(`security definer`, leen `metric_line_members.is_lead`) son el equivalente SQL de
+"soy la jefa de esta línea" y se usan en las policies de Pautas — ver la nota de la jefa de línea
+en el módulo Pautas.
+
 **Defaults sembrados** (migración `20260706000002`):
 
 - `empresa.clientes`, `empresa.lineas` → `min_level 2`
@@ -136,7 +142,13 @@ La granularidad es `módulo`, `módulo.tab` y `módulo.acción`:
   `20260914202422_create_finanzas.sql`, mismo patrón que `empresa.departamentos`)
 - `audiovisual.pautas.gestion` → copia las `rules` de `audiovisual.coordina` al sembrarse (seed
   `20260929000001_audiovisual_pautas_gestion_capability.sql`), así que al desplegar nadie gana ni
-  pierde acceso; se reconfigura después desde Empresa → Accesos
+  pierde acceso; se reconfigura después desde Empresa → Accesos.
+  **Drift en prod (2026-09-30):** la regla se editó a mano y quedó como **un solo grupo `all`**
+  con el `user_id` de Lizdania **Y** `min_level ≥ 3` **Y** `department 2` — el mismo error de
+  `empresa.clientes.manage` de arriba (dentro de un grupo las condiciones son AND). Resultado:
+  la capability es imposible de cumplir (Lizdania es nivel 2) y **nadie** la tiene; Lizdania
+  conserva el acceso solo porque `audiovisual.coordina` se evalúa antes con OR. Para habilitar
+  a alguien hay que dejar cada condición en **su propio grupo** (OR)
 - Todo lo no sembrado queda **abierto** y es configurable en la UI.
 
 **Estado real en prod (2026-08-28, auditoría de `plan.md` Bloque 2):** `ads.manage` estaba en
@@ -153,8 +165,10 @@ pauta); agendar/aprobar/marcar como realizada ya estaba correctamente acotado a 
   acotó de nuevo (2026-09-10): `audiovisual.piezas` ya NO otorga edición de piezas por sí sola,
   solo sigue contando para "ver todas las líneas" (`canViewAll`, junto a
   `audiovisual.ver_todo`). La edición de piezas ahora depende de `canEditPiezasForPauta` en
-  `src/utils/audiovisual.js`: quien coordina (`audiovisual.coordina` — Lizdania o admin) o el
-  recurso asignado a esa pauta específica (`av_pautas.recurso_ids`). Reforzado también en RLS
+  `src/utils/audiovisual.js`: quien coordina (`audiovisual.coordina` — Lizdania o admin), el
+  recurso asignado a esa pauta específica (`av_pautas.recurso_ids`), quien tenga
+  `audiovisual.pautas.gestion`, o la jefa de la línea de la pauta (ver las dos notas de más
+  abajo). Reforzado también en RLS
   (`20260910000000_av_piezas_restrict_recurso.sql`): las policies insert/update/delete de
   `av_pauta_piezas` exigen `user_can('audiovisual.coordina')` o que `auth.uid()::text` esté en
   `recurso_ids` de la pauta — antes de esto cualquiera con `audiovisual.manage` podía escribir
@@ -192,6 +206,24 @@ pauta); agendar/aprobar/marcar como realizada ya estaba correctamente acotado a 
   `prevent_users_privilege_escalation`) protege esa columna específica: solo coordinación,
   quien tenga `audiovisual.pautas.gestion`, o el recurso ya asignado (comparado contra
   `OLD.recurso_ids`) puede cambiarla.
+
+  **La jefa de línea gestiona los recursos y piezas de SU línea** (2026-09-30,
+  `20260930000000_av_pautas_jefa_de_linea.sql`): quien es `is_lead` de una línea en
+  `metric_line_members` puede gestionar `recurso_ids`, `grabacion_por_formato` y las piezas
+  (incluido reasignar `editor_user_id`) de las pautas cuyo `av_pautas.line_id` es esa línea —
+  típicamente para completar quién capturó y quién editó en una pauta ya realizada. Antes una
+  jefa quedaba en solo lectura sobre sus propias pautas y la única forma de habilitarla era
+  `audiovisual.pautas.gestion`, que es GLOBAL (cualquier pauta de cualquier línea). Se eligió el
+  liderazgo de línea porque el permiso es por **alcance**, no por persona, y el evaluador de
+  `module_permissions` solo mira el perfil del usuario, nunca la fila que se toca: una capability
+  no puede expresar "de su línea". Espejo BD ↔ frontend: `user_leads_line(uuid)` /
+  `user_leads_av_pauta(uuid)` (`security definer`, leen `metric_line_members`) se suman a las
+  policies de `av_pauta_piezas` y a `prevent_av_pautas_recurso_escalation` (contra `OLD.line_id`,
+  para que nadie mueva la pauta a su línea en el mismo `UPDATE`); en el cliente,
+  `canEditPiezasForPauta` recibe `leadLineIds`, derivado con `leadLineIdsFor(lines, userId)` de
+  `lines[].lead_user_id` (ya lo calcula `loadLines`), sin query extra. Las pautas con `line_id`
+  nulo (cuentas sin línea, agrupadas bajo "Independientes") no tienen jefa y quedan fuera a
+  propósito: siguen reservadas a coordinación.
 
   El contador "Capturadas" del panel "Rendimiento por recurso" (`AvAnalytics.jsx`,
   `aggregateResourcePerformance` en `utils/audiovisual.js`) es 100% dinámico y lee `recurso_ids`

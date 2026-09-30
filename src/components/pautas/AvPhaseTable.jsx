@@ -67,6 +67,7 @@ export default function AvPhaseTable({
   defaultLineId,
   editMode,
   canGestionPautas,
+  leadLineIds,
   phase,
   onPhaseChange,
   viewYear,
@@ -447,6 +448,7 @@ export default function AvPhaseTable({
             employeesById={employeesById}
             canCoordinate={canCoordinate}
             canGestionPautas={canGestionPautas}
+            leadLineIds={leadLineIds}
             userId={userId}
             confirmingId={confirmingId}
             expandedAttendeesId={expandedAttendeesId}
@@ -1130,6 +1132,7 @@ function AgendaTable({
   employeesById,
   canCoordinate,
   canGestionPautas,
+  leadLineIds,
   userId,
   confirmingId,
   expandedAttendeesId,
@@ -1178,6 +1181,7 @@ function AgendaTable({
             employeesById={employeesById}
             canCoordinate={canCoordinate}
             canGestionPautas={canGestionPautas}
+            leadLineIds={leadLineIds}
             userId={userId}
             confirming={confirmingId === p.id}
             expandedAttendees={expandedAttendeesId === p.id}
@@ -1205,6 +1209,7 @@ function AgendaRow({
   employeesById,
   canCoordinate,
   canGestionPautas,
+  leadLineIds,
   userId,
   confirming,
   expandedAttendees,
@@ -1225,6 +1230,7 @@ function AgendaRow({
     canGestionPautas,
     userId,
     pauta: p,
+    leadLineIds,
   })
   const expanded = expandedAttendees || expandedRecursos
   const rowRef = useRef(null)

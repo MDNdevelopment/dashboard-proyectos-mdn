@@ -139,9 +139,11 @@ const MOCK_CLIENTS = [
   { id: 'c2', name: 'Cliente Sabrina', line_id: 'line-2' },
 ]
 
+// `lead_user_id` lo deriva `loadLines` de `metric_line_members.is_lead` — habilita a la jefa
+// a gestionar recursos/piezas de las pautas de SU línea (ver canEditPiezasForPauta).
 const LINES = [
-  { id: 'line-1', name: 'Georgina' },
-  { id: 'line-2', name: 'Sabrina' },
+  { id: 'line-1', name: 'Georgina', lead_user_id: 'jefa-1' },
+  { id: 'line-2', name: 'Sabrina', lead_user_id: 'jefa-2' },
 ]
 
 vi.mock('../supabase', () => ({
@@ -351,6 +353,49 @@ describe('AudiovisualView', () => {
     expect(screen.getByText('+ Agregar editor')).toBeInTheDocument()
     expect(screen.queryByText('Agendar')).not.toBeInTheDocument()
     expect(screen.queryByText('Declinar')).not.toBeInTheDocument()
+  })
+
+  it('la jefa de la línea puede editar las piezas de una pauta realizada de SU línea', async () => {
+    renderView({
+      userProfile: {
+        user_id: 'jefa-1',
+        company_id: 'co-1',
+        access_level: 3,
+        admin: false,
+        department_id: 1,
+      },
+      can: (key) => key === 'audiovisual.manage',
+      lines: [LINES[0]],
+      initialEntries: ['/tareas/pautas?pautaId=p4'],
+    })
+    await waitFor(() => {
+      expect(screen.getByText('Edición de piezas')).toBeInTheDocument()
+    })
+    // p4 es de 'line-1' y 'jefa-1' es su lead: editable aunque no esté en recurso_ids ni
+    // tenga audiovisual.coordina / audiovisual.pautas.gestion.
+    expect(screen.getByText('+ Agregar editor')).toBeInTheDocument()
+    expect(screen.queryByText('Agendar')).not.toBeInTheDocument()
+    expect(screen.queryByText('Declinar')).not.toBeInTheDocument()
+  })
+
+  it('la jefa de OTRA línea no puede editar las piezas de esa pauta', async () => {
+    renderView({
+      userProfile: {
+        user_id: 'jefa-2',
+        company_id: 'co-1',
+        access_level: 3,
+        admin: false,
+        department_id: 1,
+      },
+      can: (key) => key === 'audiovisual.manage',
+      lines: [LINES[1]],
+      initialEntries: ['/tareas/pautas?pautaId=p4'],
+    })
+    await waitFor(() => {
+      expect(screen.getByText('Edición de piezas')).toBeInTheDocument()
+    })
+    // p4 es de 'line-1'; 'jefa-2' lidera 'line-2' → solo lectura.
+    expect(screen.queryByText('+ Agregar editor')).not.toBeInTheDocument()
   })
 })
 
