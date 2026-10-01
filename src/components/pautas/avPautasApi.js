@@ -5,12 +5,7 @@
  * components/reuniones/meetingsApi.js.
  */
 import { supabase } from '../../supabase'
-import {
-  sumPiezasVideoForLine,
-  sumPiezasVideoBreakdownForLine,
-  defaultLoteName,
-  FOTO_FORMAT,
-} from '../../utils/audiovisual'
+import { sumPiezasVideoForLine, sumPiezasVideoBreakdownForLine } from '../../utils/audiovisual'
 import { selectAllPages } from '../../lib/supabasePaginate'
 
 // ─── Lectura ──────────────────────────────────────────────────────────────────
@@ -93,25 +88,6 @@ export async function countPautasRealizadasByClient(companyId, lineId, { month, 
     byClient[row.client_id] = (byClient[row.client_id] ?? 0) + 1
   }
   return { byClient, error: null }
-}
-
-/**
- * Pautas activas ('programada'|'realizada') de un día exacto, en CUALQUIER línea —
- * usado para validar disponibilidad de recursos (ver `resourceConflicts` en
- * utils/audiovisual.js). A diferencia de `loadPautas`, filtra por fecha en el
- * servidor (usa `av_pautas_company_date_idx`) y excluye la pauta que se está editando.
- * Select acotado a los campos que la validación necesita.
- */
-export async function fetchPautasByDate(companyId, dateStr, excludeId) {
-  let query = supabase
-    .from('av_pautas')
-    .select('id, client_name, tema, salida, llegada, recurso_ids, status')
-    .eq('company_id', companyId)
-    .eq('pauta_date', dateStr)
-    .is('deleted_at', null)
-    .in('status', ['programada', 'realizada'])
-  if (excludeId) query = query.neq('id', excludeId)
-  return query
 }
 
 // ─── Escritura ────────────────────────────────────────────────────────────────
@@ -203,55 +179,6 @@ export async function loadPiezas(companyId) {
 }
 
 /**
- * Inserta `count` piezas nuevas para un editor, continuando `position` desde
- * `startPosition`. `nombre` se inserta vacío: el número visible (#1, #2…) se deriva en
- * cliente del orden (`piezaOrdinals`/`piezaDisplayName` en utils/audiovisual.js), nunca se
- * persiste — así un borrado no puede volver a producir nombres repetidos. `formato` (V/R/F)
- * es opcional: se pasa cuando la pauta tiene un único formato marcado, para no obligar a
- * elegirlo pieza por pieza en el caso común.
- */
-export async function createPiezas(
-  companyId,
-  pautaId,
-  editorUserId,
-  count,
-  startPosition = 0,
-  formato = null,
-) {
-  const rows = Array.from({ length: count }, (_, i) => ({
-    company_id: companyId,
-    pauta_id: pautaId,
-    editor_user_id: editorUserId,
-    nombre: '',
-    position: startPosition + i,
-    formato,
-  }))
-  return supabase.from('av_pauta_piezas').insert(rows).select()
-}
-
-/**
- * Inserta el lote de fotos de un editor — una sola fila que representa `cantidad` unidades
- * (`es_lote: true`, formato fijo 'F'), en vez de una fila por foto. El trigger de BD
- * (av_pauta_piezas_sync_lote) deriva `status` a partir de `listas`/`cantidad`.
- */
-export async function createLotePieza(companyId, pautaId, editorUserId, cantidad, position = 0) {
-  return supabase
-    .from('av_pauta_piezas')
-    .insert({
-      company_id: companyId,
-      pauta_id: pautaId,
-      editor_user_id: editorUserId,
-      nombre: defaultLoteName(),
-      position,
-      formato: FOTO_FORMAT,
-      es_lote: true,
-      cantidad,
-    })
-    .select()
-    .single()
-}
-
-/**
  * Crea o actualiza el lote de un editor en un formato (modelo rediseñado: un lote por
  * (pauta, editor, formato), ver índice `av_pauta_piezas_lote_unico_por_editor_formato`).
  * `existingLote` lo resuelve el llamador con `loteFor` sobre las piezas en memoria; si es
@@ -283,32 +210,6 @@ export async function deleteLote(loteId) {
 export async function updatePieza(piezaId, fields) {
   const updates = { ...sanitizePiezaFields(fields), updated_at: new Date().toISOString() }
   return supabase.from('av_pauta_piezas').update(updates).eq('id', piezaId).select().single()
-}
-
-/**
- * Reasigna varias piezas a un editor (o a `null` para dejarlas sin asignar) en un solo
- * UPDATE — reemplaza el `Promise.all` de N updates individuales que usaba
- * `handleEditorsChange` para huerfanizar, con menos round-trips y menos eventos de
- * realtime. `prevEditorId` queda guardado en `prev_editor_user_id` para poder ofrecer la
- * devolución si `editorUserId` es `null` (ver `RemoveEditorDialog`); al reasignar a alguien
- * concreto se limpia (`null`), porque la pieza ya no está huérfana.
- */
-export async function reassignPiezas(ids, editorUserId, prevEditorId = null) {
-  if (!ids?.length) return { data: null, error: null }
-  return supabase
-    .from('av_pauta_piezas')
-    .update({
-      editor_user_id: editorUserId,
-      prev_editor_user_id: editorUserId ? null : prevEditorId,
-      updated_at: new Date().toISOString(),
-    })
-    .in('id', ids)
-    .select()
-}
-
-export async function deletePiezas(ids) {
-  if (!ids?.length) return { data: null, error: null }
-  return supabase.from('av_pauta_piezas').delete().in('id', ids)
 }
 
 function sanitizePiezaFields(fields) {

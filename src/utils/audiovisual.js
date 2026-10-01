@@ -53,52 +53,6 @@ export const GRILLA_STATUS_LABELS = {
   incumple: 'Incumple',
 }
 
-/**
- * Estados de una pieza individual dentro del checklist de edición (av_pauta_piezas).
- * `PIEZA_STATUS_META` sigue el contrato de StatusPill (common/StatusPill.jsx): clases
- * Tailwind LITERALES, nunca armadas en runtime (el JIT no las generaría). Misma paleta
- * base que STATUS_BADGE de PautaDetailModal para que el módulo se vea
- * consistente.
- */
-export const PIEZA_STATUS_LABELS = {
-  pendiente: 'Pendiente',
-  en_edicion: 'En edición',
-  espera_aprobacion: 'Espera de aprobación',
-  listo: 'Listo',
-  cancelado: 'Cancelado',
-}
-
-export const PIEZA_STATUS_META = {
-  pendiente: {
-    label: 'Pendiente',
-    bg: 'bg-[#fdf4de]',
-    text: 'text-[#9a7400]',
-    dot: 'bg-[#e0b23d]',
-  },
-  en_edicion: {
-    label: 'En edición',
-    bg: 'bg-[#e6f0ff]',
-    text: 'text-[#2563eb]',
-    dot: 'bg-[#2563eb]',
-  },
-  espera_aprobacion: {
-    label: 'Espera de aprobación',
-    bg: 'bg-[#f3e8ff]',
-    text: 'text-[#7c3aed]',
-    dot: 'bg-[#7c3aed]',
-  },
-  listo: { label: 'Listo', bg: 'bg-[#e9f7ec]', text: 'text-[#1f8a43]', dot: 'bg-[#1f8a43]' },
-  cancelado: { label: 'Cancelado', bg: 'bg-[#f2f0ea]', text: 'text-[#888]', dot: 'bg-[#999]' },
-}
-
-export const PIEZA_STATUS_ORDER = [
-  'pendiente',
-  'en_edicion',
-  'espera_aprobacion',
-  'listo',
-  'cancelado',
-]
-
 const DAYNAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 const MON3 = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 
@@ -318,11 +272,6 @@ export function editorLabel(editorId, usersById) {
   return `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() || 'Editor no disponible'
 }
 
-/** Pseudo-usuario mínimo para pintar un Avatar cuando `editorId` no resuelve en `usersById`. */
-export function unresolvedEditorUser(editorId) {
-  return { user_id: editorId, first_name: '?', last_name: '', avatar_url: null }
-}
-
 /**
  * Nombre a mostrar de quien solicitó/creó la pauta (`created_by`), resuelto vía
  * `usersById`. A diferencia de `resourceName`, no tiene fallback de texto libre:
@@ -536,20 +485,12 @@ export function pautasInScope(pautas, lineId, generalLineId = null) {
  * importar el mes — de lo contrario desaparecerían de la tabla hasta que alguien les
  * ponga fecha, escondiendo justo lo que falta agendar.
  */
-export function pautasInMonth(pautas, year, month, pinnedIds = null) {
+export function pautasInMonth(pautas, year, month) {
   return pautas.filter((p) => {
     if (!p.pauta_date) return true
-    if (pinnedIds?.has(p.id)) return true
     const [y, m] = p.pauta_date.split('-').map(Number)
     return y === year && m === month
   })
-}
-
-/** true si la pauta tiene fecha y esa fecha cae fuera del año/mes que se está viendo. */
-export function isOutOfMonth(pauta, year, month) {
-  if (!pauta.pauta_date) return false
-  const [y, m] = pauta.pauta_date.split('-').map(Number)
-  return y !== year || m !== month
 }
 
 /** Nombre del mes+año de una fecha 'YYYY-MM-DD', para el aviso "↗ mes" de una fila anclada. */
@@ -579,18 +520,6 @@ export function sortAgenda(pautas) {
 }
 
 // ─── Flujo de aprobación ────────────────────────────────────────────────────
-
-/**
- * Modo de edición de la sub-sección según capabilities del usuario:
- *  - 'coordina'  → agenda/aprueba solicitudes, edita Agenda y Realizadas (cualquier línea)
- *  - 'solicita'  → arma y envía el brief de Solicitudes (solo su línea)
- *  - 'lectura'   → solo ve
- */
-export function avEditMode({ canCoordinate, canManage }) {
-  if (canCoordinate) return 'coordina'
-  if (canManage) return 'solicita'
-  return 'lectura'
-}
 
 /**
  * Brief mínimo completo para poder solicitar una pauta: cliente + algo que diga de qué va
@@ -627,16 +556,6 @@ export function pautaErrorMessage(err) {
     return 'Ese editor ya tiene ese formato asignado en esta pauta. Recarga la página.'
   }
   return 'No se pudo guardar el cambio. Vuelve a intentarlo; si sigue pasando, avisa a soporte.'
-}
-
-/**
- * Solicitudes visibles en la pestaña «Solicitudes»: la coordinadora solo ve las
- * ya enviadas (`submitted`); quien solicita ve las suyas en cualquier estado de
- * borrador/enviado (el alcance por línea ya viene acotado en `pautas`).
- */
-export function visibleSolicitudes(pautas, { canCoordinate }) {
-  const base = pautas.filter((p) => p.status === 'solicitada')
-  return canCoordinate ? base.filter((p) => p.submitted) : base
 }
 
 // ─── Analítica (piezas por línea / rendimiento por recurso) ────────────────
@@ -996,53 +915,8 @@ export function piezasByEditor(piezas) {
   return grouped
 }
 
-/**
- * Ordinal 1..N de cada pieza NO-lote dentro de una pauta, ordenado por `position` (empate
- * desempatado por `id` para que el resultado sea estable). Los lotes ('Fotos') no numeran
- * ni consumen número — no tiene sentido "Foto #1" cuando la fila representa 40 unidades.
- * Reemplaza a `piezas.length` como base de la numeración: ese conteo de filas crecía con
- * cada pieza creada pero nunca bajaba al borrar, así que el siguiente nombre/`position`
- * repetía uno ya existente (ver `createForEditor` en PautaDetailModal.jsx).
- * @param {Array} piezas — piezas de UNA pauta
- * @returns {Map<string, number>} piezaId -> ordinal (1-indexado)
- */
-export function piezaOrdinals(piezas) {
-  const sorted = (piezas ?? [])
-    .filter((pz) => !pz.es_lote)
-    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0) || String(a.id).localeCompare(b.id))
-  const ordinals = new Map()
-  sorted.forEach((pz, i) => ordinals.set(pz.id, i + 1))
-  return ordinals
-}
-
-/**
- * Etiqueta a mostrar de una pieza: el `nombre` que el coordinador escribió a mano manda
- * siempre; si está vacío se DERIVA del formato + ordinal ('Video #1', 'Reel #2', 'Foto #3'
- * si es una foto suelta sin lote, 'Pieza #4' sin formato). Nunca se persiste — así un
- * borrado no puede volver a producir nombres repetidos, a diferencia del viejo
- * `defaultPiezaName` que sí se guardaba en `nombre`.
- * @param {{nombre?:string, formato?:string}} pieza
- * @param {number} ordinal — de `piezaOrdinals`
- */
-export function piezaDisplayName(pieza, ordinal) {
-  if (pieza?.nombre) return pieza.nombre
-  const label = pieza?.formato ? FORMAT_LABELS[pieza.formato] : 'Pieza'
-  return `${label} #${ordinal}`
-}
-
-/** Siguiente `position` libre de una pauta: `max(position) + 1`, o 0 si no hay piezas. */
-export function nextPosition(piezas) {
-  const positions = (piezas ?? []).map((pz) => Number(pz.position) || 0)
-  return positions.length ? Math.max(...positions) + 1 : 0
-}
-
 /** Código de formato que siempre se reparte como lote (ver createLotePieza en avPautasApi.js). */
 export const FOTO_FORMAT = 'F'
-
-/** Nombre fijo del lote de fotos de un editor — no es editable, a diferencia de una pieza. */
-export function defaultLoteName() {
-  return 'Fotos'
-}
 
 // ─── Piezas por formato (Video/Reel/Foto) de una pauta 'realizada' ─────────
 
@@ -1083,120 +957,6 @@ export function setPiezaFormatoCount(pauta, code, key, value) {
   const current = next[code] ?? { salieron: 0, editadas: 0 }
   next[code] = { ...current, [key]: Math.max(0, Math.round(Number(value)) || 0) }
   return next
-}
-
-/**
- * Clasifica las piezas de una pauta en un bucket por formato activo + `sinClasificar`, para
- * que el checklist de cada editor pueda separar Video/Reel/Foto en secciones propias en vez
- * de una lista mezclada. Opera sobre TODA la pauta (no por editor) — el llamador filtra por
- * `editor_user_id` dentro de cada bucket si lo necesita.
- * Reglas:
- *  - `es_lote` (siempre Foto hoy) → bucket de su `formato`.
- *  - no-lote con `formato` en un formato activo → ese bucket.
- *  - no-lote con `formato: null`: si la pauta tiene un SOLO formato de video activo, se
- *    adopta ahí (no hay nada que adivinar); si tiene DOS (V+R) no hay forma honesta de saber
- *    cuál era → `sinClasificar`, para que el coordinador la reclasifique una vez a mano.
- *  - no-lote con un `formato` que ya no está entre los activos (basura de un formato
- *    desmarcado) → `sinClasificar`.
- * Solo tiene sentido en el camino con formatos marcados (`pauta.formats` no vacío); el
- * camino legacy (pautas sin formato) no lo usa.
- * @param {{formats?: string[]}} pauta
- * @param {Array} piezas
- * @returns {{V?:Array,R?:Array,F?:Array,sinClasificar:Array}}
- */
-export function piezasPorBucket(pauta, piezas) {
-  const activeFormats = FORMAT_KEYS.filter((code) => (pauta.formats ?? []).includes(code))
-  const nonFoto = activeFormats.filter((code) => code !== FOTO_FORMAT)
-  const out = { sinClasificar: [] }
-  activeFormats.forEach((code) => {
-    out[code] = []
-  })
-  ;(piezas ?? []).forEach((pz) => {
-    const formato = pz.es_lote ? (pz.formato ?? FOTO_FORMAT) : pz.formato
-    if (formato && activeFormats.includes(formato)) {
-      out[formato].push(pz)
-    } else if (!formato && !pz.es_lote && nonFoto.length === 1) {
-      out[nonFoto[0]].push(pz)
-    } else {
-      out.sinClasificar.push(pz)
-    }
-  })
-  return out
-}
-
-/**
- * `{salieron, repartido, faltan}` por formato activo — gemelo de `grabacionBalance` pero
- * sobre el checklist de EDICIÓN (`av_pauta_piezas`) en vez de `grabacion_por_formato`. Cada
- * formato tiene su propio cupo real, independiente de los demás: antes todos competían por
- * un único pool (`piezas_totales - asignadas`), así que repartir fotos le quitaba cupo a los
- * videos y viceversa aunque cada uno tuviera su propio "Salieron".
- * Fallback: si el desglose `piezas_por_formato` está vacío (camino legacy del trigger de BD,
- * donde `piezas_totales` es un número manual sin desglose cargado) pero `piezas_totales > 0`,
- * `salieron` de cada formato se completa con `piezas_totales` como TECHO (no como verdad por
- * formato) — el llamador debe seguir clampeando contra el remanente global para no repartir
- * de más mientras no haya desglose real cargado.
- * @param {object} pauta
- * @param {Array} piezas
- * @returns {Record<'V'|'R'|'F', {salieron:number, repartido:number, faltan:number}>}
- */
-export function piezasBalancePorFormato(pauta, piezas) {
-  const breakdown = piezasPorFormato(pauta)
-  const buckets = piezasPorBucket(pauta, piezas)
-  const totales = Number(pauta.piezas_totales) || 0
-  const sinDesglose = Object.values(breakdown).every((entry) => entry.salieron === 0)
-  const out = {}
-  Object.keys(breakdown).forEach((code) => {
-    const salieron = sinDesglose && totales > 0 ? totales : breakdown[code].salieron
-    const repartido = piezasUnidadesActivas(buckets[code])
-    out[code] = { salieron, repartido, faltan: salieron - repartido }
-  })
-  return out
-}
-
-/**
- * Decide qué piezas borrar al bajar la cantidad de un editor con el stepper `−`. Solo se
- * tocan piezas 'pendiente' (nunca trabajo con avance), empezando por el final del grupo
- * para no reordenar las que sí se conservan. Si no alcanzan las 'pendiente' para cubrir
- * `cantidad`, `toDelete` trae las que sí se pueden borrar y `blocked` las que impiden
- * llegar al número pedido — el llamador decide cómo avisarlo (nunca se borra en silencio
- * una pieza con avance).
- * @param {Array} piezasDelEditor — piezas de un solo editor, en el orden mostrado
- * @param {number} cantidad — piezas a quitar (entero positivo)
- * @returns {{ toDelete: string[], blocked: Array }}
- */
-export function planPiezaRemoval(piezasDelEditor, cantidad) {
-  const lista = piezasDelEditor ?? []
-  const removable = lista.filter((pz) => pz.status === 'pendiente')
-  const toDelete = removable.slice(Math.max(0, removable.length - cantidad))
-  const blocked = lista
-    .filter((pz) => pz.status !== 'pendiente')
-    .slice(0, cantidad - toDelete.length)
-  return { toDelete: toDelete.map((pz) => pz.id), blocked }
-}
-
-/**
- * Reparte `faltantes` piezas nuevas entre `editorIds`, una por turno empezando por quien
- * menos piezas tiene ya asignadas — así "Repartir automáticamente" empareja las cargas en
- * vez de amontonar todo en el primer editor de la lista. Sin editores, no reparte nada
- * (el llamador debe pedir agregar uno primero).
- * @param {number} faltantes — piezas por crear (`totales - asignadas`, ya positivo)
- * @param {string[]} editorIds
- * @param {Map<string, Array>} grouped — piezasByEditor(piezas), para partir de la carga real
- * @returns {{ editorId: string, count: number }[]}
- */
-export function distributePiezas(faltantes, editorIds, grouped) {
-  if (!editorIds?.length || faltantes <= 0) return []
-  // piezasUnidadesActivas (no piezaUnidades a secas): una pieza 'cancelado' no es carga real
-  // de ese editor, así que no debe pesar al decidir a quién le toca la siguiente.
-  const unitsOf = (id) => piezasUnidadesActivas(grouped?.get(id))
-  const counts = new Map(editorIds.map((id) => [id, unitsOf(id)]))
-  for (let i = 0; i < faltantes; i++) {
-    const minId = editorIds.reduce((a, b) => (counts.get(b) < counts.get(a) ? b : a))
-    counts.set(minId, counts.get(minId) + 1)
-  }
-  return editorIds
-    .map((id) => ({ editorId: id, count: counts.get(id) - unitsOf(id) }))
-    .filter((e) => e.count > 0)
 }
 
 /** Suma `salieron`/`editadas` de un objeto `piezas_por_formato` (ya acotado o crudo). */

@@ -12,14 +12,11 @@ import {
   requesterName,
   pautasInScope,
   pautasInMonth,
-  isOutOfMonth,
   monthLabel,
   agendaSortKey,
   sortAgenda,
-  avEditMode,
   briefComplete,
   pautaErrorMessage,
-  visibleSolicitudes,
   aggregatePiezasByLine,
   aggregateResourcePerformance,
   sumPiezasForLine,
@@ -33,16 +30,8 @@ import {
   piezaUnidades,
   piezaListas,
   editorNames,
-  piezaOrdinals,
-  piezaDisplayName,
-  nextPosition,
-  defaultLoteName,
   piezasPorFormato,
   setPiezaFormatoCount,
-  piezasPorBucket,
-  piezasBalancePorFormato,
-  planPiezaRemoval,
-  distributePiezas,
   sumPiezasPorFormato,
   formatoBreakdownLabel,
   isExternalId,
@@ -423,33 +412,9 @@ describe('pautasInMonth', () => {
     expect(pautasInMonth(pautas, 2026, 12).map((p) => p.id)).toEqual(['p1'])
   })
 
-  it('sin pinnedIds se comporta igual que antes (una pauta de otro mes no aparece)', () => {
+  it('una pauta de otro mes no aparece', () => {
     const pautas = [pauta({ id: 'p1', pauta_date: '2026-08-02' })]
     expect(pautasInMonth(pautas, 2026, 7).map((p) => p.id)).toEqual([])
-  })
-
-  it('con pinnedIds, una pauta anclada aparece aunque su fecha sea de otro mes', () => {
-    const pautas = [
-      pauta({ id: 'p1', pauta_date: '2026-08-02' }),
-      pauta({ id: 'p2', pauta_date: '2026-07-10' }),
-    ]
-    const pinned = new Set(['p1'])
-    expect(pautasInMonth(pautas, 2026, 7, pinned).map((p) => p.id)).toEqual(['p1', 'p2'])
-  })
-})
-
-describe('isOutOfMonth', () => {
-  it('false si la pauta no tiene fecha', () => {
-    expect(isOutOfMonth(pauta({ pauta_date: null }), 2026, 7)).toBe(false)
-  })
-
-  it('false si la fecha cae en el año/mes dado', () => {
-    expect(isOutOfMonth(pauta({ pauta_date: '2026-07-15' }), 2026, 7)).toBe(false)
-  })
-
-  it('true si la fecha cae en otro mes o año', () => {
-    expect(isOutOfMonth(pauta({ pauta_date: '2026-08-15' }), 2026, 7)).toBe(true)
-    expect(isOutOfMonth(pauta({ pauta_date: '2027-07-15' }), 2026, 7)).toBe(true)
   })
 })
 
@@ -502,21 +467,6 @@ describe('sortAgenda', () => {
   })
 })
 
-describe('avEditMode', () => {
-  it('coordina si tiene audiovisual.coordina, sin importar audiovisual.manage', () => {
-    expect(avEditMode({ canCoordinate: true, canManage: true })).toBe('coordina')
-    expect(avEditMode({ canCoordinate: true, canManage: false })).toBe('coordina')
-  })
-
-  it('solicita si solo tiene audiovisual.manage', () => {
-    expect(avEditMode({ canCoordinate: false, canManage: true })).toBe('solicita')
-  })
-
-  it('lectura sin ninguna capability', () => {
-    expect(avEditMode({ canCoordinate: false, canManage: false })).toBe('lectura')
-  })
-})
-
 describe('briefComplete', () => {
   it('requiere cliente + enlace o descripción de piezas', () => {
     expect(briefComplete(pauta({ client_id: null, link: 'x' }))).toBe(false)
@@ -549,25 +499,6 @@ describe('pautaErrorMessage', () => {
     expect(msg).toBe(
       'No se pudo guardar el cambio. Vuelve a intentarlo; si sigue pasando, avisa a soporte.',
     )
-  })
-})
-
-describe('visibleSolicitudes', () => {
-  const pautas = [
-    pauta({ id: 'p1', status: 'solicitada', submitted: true }),
-    pauta({ id: 'p2', status: 'solicitada', submitted: false }),
-    pauta({ id: 'p3', status: 'programada', submitted: true }),
-  ]
-
-  it('la coordinadora solo ve las solicitudes ya enviadas', () => {
-    expect(visibleSolicitudes(pautas, { canCoordinate: true }).map((p) => p.id)).toEqual(['p1'])
-  })
-
-  it('quien solicita ve las suyas en borrador o enviadas', () => {
-    expect(visibleSolicitudes(pautas, { canCoordinate: false }).map((p) => p.id)).toEqual([
-      'p1',
-      'p2',
-    ])
   })
 })
 
@@ -1046,98 +977,6 @@ describe('piezasByEditor', () => {
   })
 })
 
-describe('planPiezaRemoval', () => {
-  it('borra solo piezas "pendiente", empezando por el final del grupo', () => {
-    const piezas = [
-      { id: 'a', status: 'pendiente' },
-      { id: 'b', status: 'pendiente' },
-      { id: 'c', status: 'pendiente' },
-    ]
-    const { toDelete, blocked } = planPiezaRemoval(piezas, 2)
-    expect(toDelete).toEqual(['b', 'c'])
-    expect(blocked).toEqual([])
-  })
-
-  it('cuando faltan piezas "pendiente" para cubrir la cantidad, reporta las bloqueadas sin borrarlas', () => {
-    const piezas = [
-      { id: 'a', status: 'listo' },
-      { id: 'b', status: 'pendiente' },
-    ]
-    const { toDelete, blocked } = planPiezaRemoval(piezas, 2)
-    expect(toDelete).toEqual(['b'])
-    expect(blocked.map((p) => p.id)).toEqual(['a'])
-  })
-
-  it('sin piezas "pendiente", no borra nada y bloquea todas las pedidas', () => {
-    const piezas = [
-      { id: 'a', status: 'en_edicion' },
-      { id: 'b', status: 'listo' },
-    ]
-    const { toDelete, blocked } = planPiezaRemoval(piezas, 1)
-    expect(toDelete).toEqual([])
-    expect(blocked.map((p) => p.id)).toEqual(['a'])
-  })
-
-  it('cantidad 0 o lista vacía no borra ni bloquea nada', () => {
-    expect(planPiezaRemoval([], 3)).toEqual({ toDelete: [], blocked: [] })
-    expect(planPiezaRemoval([{ id: 'a', status: 'pendiente' }], 0)).toEqual({
-      toDelete: [],
-      blocked: [],
-    })
-  })
-})
-
-describe('distributePiezas', () => {
-  it('reparte por turnos empezando por quien menos piezas tiene', () => {
-    const grouped = piezasByEditor([
-      { id: 'a', editor_user_id: 'u1', position: 0 },
-      { id: 'b', editor_user_id: 'u1', position: 1 },
-    ])
-    const plan = distributePiezas(3, ['u1', 'u2'], grouped)
-    // u1 ya tiene 2, u2 tiene 0 → primero se empareja u2 antes de volver a sumarle a u1.
-    expect(plan).toEqual([
-      { editorId: 'u1', count: 1 },
-      { editorId: 'u2', count: 2 },
-    ])
-  })
-
-  it('sin editores, no reparte nada', () => {
-    expect(distributePiezas(3, [], new Map())).toEqual([])
-  })
-
-  it('sin faltantes, no reparte nada', () => {
-    expect(distributePiezas(0, ['u1'], new Map())).toEqual([])
-  })
-
-  it('una pieza cancelada no cuenta como carga del editor que la tenía', () => {
-    const grouped = piezasByEditor([
-      { id: 'a', editor_user_id: 'u1', status: 'cancelado', position: 0 },
-    ])
-    const plan = distributePiezas(2, ['u1', 'u2'], grouped)
-    // u1 "tiene" 1 pieza, pero cancelada → no pesa: el reparto queda parejo (1 y 1), no
-    // 0 para u1 y 2 para u2 como si la cancelada siguiera ocupando su cupo.
-    expect(plan).toEqual([
-      { editorId: 'u1', count: 1 },
-      { editorId: 'u2', count: 1 },
-    ])
-  })
-
-  it('un solo editor recibe todo el faltante', () => {
-    const plan = distributePiezas(4, ['u1'], new Map())
-    expect(plan).toEqual([{ editorId: 'u1', count: 4 }])
-  })
-
-  it('parte de unidades ya asignadas, no de filas — un lote de 50 cuenta como 50', () => {
-    const grouped = new Map([
-      ['u1', [{ es_lote: true, cantidad: 50, listas: 0 }]],
-      ['u2', []],
-    ])
-    const plan = distributePiezas(10, ['u1', 'u2'], grouped)
-    // u1 ya tiene 50 unidades (aunque sea 1 sola fila) → todo el faltante va a u2.
-    expect(plan).toEqual([{ editorId: 'u2', count: 10 }])
-  })
-})
-
 describe('editorNames', () => {
   const usersById = new Map([
     ['u1', { first_name: 'Lizdania', last_name: 'Pérez' }],
@@ -1164,74 +1003,6 @@ describe('editorNames', () => {
 
   it('sin piezas → array vacío', () => {
     expect(editorNames([], usersById)).toEqual([])
-  })
-})
-
-describe('piezaOrdinals', () => {
-  it('numera 1..N por position, sin importar huecos', () => {
-    const piezas = [
-      { id: 'a', position: 0 },
-      { id: 'b', position: 5 },
-      { id: 'c', position: 9 },
-    ]
-    const ordinals = piezaOrdinals(piezas)
-    expect(ordinals.get('a')).toBe(1)
-    expect(ordinals.get('b')).toBe(2)
-    expect(ordinals.get('c')).toBe(3)
-  })
-
-  it('empate de position desempata por id (estable)', () => {
-    const piezas = [
-      { id: 'z', position: 0 },
-      { id: 'a', position: 0 },
-    ]
-    const ordinals = piezaOrdinals(piezas)
-    expect(ordinals.get('a')).toBe(1)
-    expect(ordinals.get('z')).toBe(2)
-  })
-
-  it('los lotes no numeran ni consumen número', () => {
-    const piezas = [
-      { id: 'a', position: 0 },
-      { id: 'lote', position: 1, es_lote: true },
-      { id: 'b', position: 2 },
-    ]
-    const ordinals = piezaOrdinals(piezas)
-    expect(ordinals.has('lote')).toBe(false)
-    expect(ordinals.get('a')).toBe(1)
-    expect(ordinals.get('b')).toBe(2)
-  })
-})
-
-describe('piezaDisplayName', () => {
-  it('el nombre manual siempre manda', () => {
-    expect(piezaDisplayName({ nombre: 'Toma dron' }, 3)).toBe('Toma dron')
-  })
-
-  it('sin nombre, deriva "Video #n" / "Reel #n" / "Foto #n" del formato', () => {
-    expect(piezaDisplayName({ nombre: '', formato: 'V' }, 1)).toBe('Video de marca #1')
-    expect(piezaDisplayName({ nombre: '', formato: 'R' }, 2)).toBe('Reel #2')
-    expect(piezaDisplayName({ nombre: '', formato: 'F' }, 3)).toBe('Foto #3')
-  })
-
-  it('sin nombre ni formato, deriva "Pieza #n"', () => {
-    expect(piezaDisplayName({ nombre: '' }, 4)).toBe('Pieza #4')
-  })
-})
-
-describe('nextPosition', () => {
-  it('max(position) + 1', () => {
-    expect(nextPosition([{ position: 0 }, { position: 5 }, { position: 2 }])).toBe(6)
-  })
-
-  it('sin piezas, empieza en 0', () => {
-    expect(nextPosition([])).toBe(0)
-  })
-})
-
-describe('defaultLoteName', () => {
-  it('siempre es "Fotos" — el lote no tiene nombre editable', () => {
-    expect(defaultLoteName()).toBe('Fotos')
   })
 })
 
@@ -1287,111 +1058,6 @@ describe('setPiezaFormatoCount', () => {
       piezas_por_formato: { R: { salieron: 1, editadas: 0 }, F: { salieron: 5, editadas: 5 } },
     })
     expect(setPiezaFormatoCount(p, 'R', 'salieron', 2)).toEqual({ R: { salieron: 2, editadas: 0 } })
-  })
-})
-
-describe('piezasPorBucket', () => {
-  it('una pieza no-lote con formato V/R va a su propio bucket', () => {
-    const p = pauta({ formats: ['V', 'R'] })
-    const piezas = [
-      { id: 'pz1', formato: 'V', es_lote: false },
-      { id: 'pz2', formato: 'R', es_lote: false },
-    ]
-    const buckets = piezasPorBucket(p, piezas)
-    expect(buckets.V.map((pz) => pz.id)).toEqual(['pz1'])
-    expect(buckets.R.map((pz) => pz.id)).toEqual(['pz2'])
-    expect(buckets.sinClasificar).toEqual([])
-  })
-
-  it('una pieza en lote siempre cae en el bucket F', () => {
-    const p = pauta({ formats: ['V', 'F'] })
-    const piezas = [{ id: 'pz1', es_lote: true, cantidad: 10 }]
-    const buckets = piezasPorBucket(p, piezas)
-    expect(buckets.F.map((pz) => pz.id)).toEqual(['pz1'])
-  })
-
-  it('formato null con un solo formato de video activo se adopta ahí (nada que adivinar)', () => {
-    const p = pauta({ formats: ['V', 'F'] })
-    const piezas = [{ id: 'pz1', formato: null, es_lote: false }]
-    const buckets = piezasPorBucket(p, piezas)
-    expect(buckets.V.map((pz) => pz.id)).toEqual(['pz1'])
-    expect(buckets.sinClasificar).toEqual([])
-  })
-
-  it('formato null con V+R (dos formatos de video activos) cae en sinClasificar', () => {
-    const p = pauta({ formats: ['V', 'R'] })
-    const piezas = [{ id: 'pz1', formato: null, es_lote: false }]
-    const buckets = piezasPorBucket(p, piezas)
-    expect(buckets.sinClasificar.map((pz) => pz.id)).toEqual(['pz1'])
-  })
-
-  it('un formato ya desmarcado (basura de un cambio anterior) cae en sinClasificar', () => {
-    const p = pauta({ formats: ['V'] })
-    const piezas = [{ id: 'pz1', formato: 'R', es_lote: false }]
-    const buckets = piezasPorBucket(p, piezas)
-    expect(buckets.sinClasificar.map((pz) => pz.id)).toEqual(['pz1'])
-  })
-})
-
-describe('piezasBalancePorFormato', () => {
-  it('con desglose cargado, cada formato tiene su propio "faltan" independiente', () => {
-    const p = pauta({
-      formats: ['V', 'R'],
-      piezas_por_formato: { V: { salieron: 2, editadas: 0 }, R: { salieron: 1, editadas: 0 } },
-    })
-    const piezas = [{ formato: 'V', es_lote: false, status: 'pendiente' }]
-    const balance = piezasBalancePorFormato(p, piezas)
-    expect(balance.V).toEqual({ salieron: 2, repartido: 1, faltan: 1 })
-    expect(balance.R).toEqual({ salieron: 1, repartido: 0, faltan: 1 })
-  })
-
-  it('un lote de fotos no afecta el balance de Video (cupos independientes)', () => {
-    const p = pauta({
-      formats: ['V', 'F'],
-      piezas_por_formato: {
-        V: { salieron: 1, editadas: 0 },
-        F: { salieron: 10, editadas: 0 },
-      },
-    })
-    const piezas = [{ es_lote: true, cantidad: 10, formato: 'F' }]
-    const balance = piezasBalancePorFormato(p, piezas)
-    expect(balance.V).toEqual({ salieron: 1, repartido: 0, faltan: 1 })
-    expect(balance.F.repartido).toBe(10)
-  })
-
-  it('una pieza cancelada no cuenta como repartida', () => {
-    const p = pauta({
-      formats: ['V'],
-      piezas_por_formato: { V: { salieron: 2, editadas: 0 } },
-    })
-    const piezas = [
-      { formato: 'V', es_lote: false, status: 'pendiente' },
-      { formato: 'V', es_lote: false, status: 'cancelado' },
-    ]
-    const balance = piezasBalancePorFormato(p, piezas)
-    expect(balance.V).toEqual({ salieron: 2, repartido: 1, faltan: 1 })
-  })
-
-  it('"faltan" puede ser negativo si bajaron "Salieron" después de repartir de más', () => {
-    const p = pauta({
-      formats: ['V'],
-      piezas_por_formato: { V: { salieron: 1, editadas: 0 } },
-    })
-    const piezas = [
-      { formato: 'V', es_lote: false, status: 'pendiente' },
-      { formato: 'V', es_lote: false, status: 'pendiente' },
-    ]
-    const balance = piezasBalancePorFormato(p, piezas)
-    expect(balance.V).toEqual({ salieron: 1, repartido: 2, faltan: -1 })
-  })
-
-  it('con el desglose vacío (piezas_totales manual, camino legacy del trigger), usa el total como techo por formato', () => {
-    const p = pauta({ formats: ['V', 'R'], piezas_totales: 5, piezas_por_formato: {} })
-    const piezas = [{ formato: 'V', es_lote: false, status: 'pendiente' }]
-    const balance = piezasBalancePorFormato(p, piezas)
-    // Techo, no verdad por formato: ambos ven 5 como tope, no 5 cada uno sumando 10.
-    expect(balance.V).toEqual({ salieron: 5, repartido: 1, faltan: 4 })
-    expect(balance.R).toEqual({ salieron: 5, repartido: 0, faltan: 5 })
   })
 })
 
