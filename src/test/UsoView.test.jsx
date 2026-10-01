@@ -56,6 +56,16 @@ function emptyRaw(overrides = {}) {
   return { meetings: [], tasks: [], fixedMarks: [], cnp: [], pautas: [], ...overrides }
 }
 
+// UsoView filtra por el mes/año "actual" real (ver CURRENT_YEAR/CURRENT_MONTH en
+// UsoView.jsx), y los tests no mockean `Date` ni pasan `month`/`year` explícitos — así que
+// las fechas de los fixtures deben caer siempre en el mes en curso, no en una fecha fija
+// que quede vieja apenas cambie el mes. Los días usados (≤11) son válidos en cualquier mes.
+const CURRENT_YEAR = new Date().getFullYear()
+const CURRENT_MONTH = new Date().getMonth() + 1
+function dateInCurrentMonth(day) {
+  return `${CURRENT_YEAR}-${String(CURRENT_MONTH).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
 beforeEach(() => {
   loadUsageActivity.mockReset()
   loadCompanyUsers.mockReset()
@@ -66,7 +76,14 @@ describe('UsoView', () => {
   it('renderiza una fila por línea con el nombre de la jefa y resalta los ceros', async () => {
     loadUsageActivity.mockResolvedValue({
       data: emptyRaw({
-        tasks: [{ team_id: 'l-1', created_by: 'jefa-1', created_at: '2026-09-05', due_date: null }],
+        tasks: [
+          {
+            team_id: 'l-1',
+            created_by: 'jefa-1',
+            created_at: dateInCurrentMonth(5),
+            due_date: null,
+          },
+        ],
       }),
       error: null,
     })
@@ -106,7 +123,14 @@ describe('UsoView', () => {
   it('click en una fila expande el detalle con la narrativa', async () => {
     loadUsageActivity.mockResolvedValue({
       data: emptyRaw({
-        tasks: [{ team_id: 'l-1', created_by: 'jefa-1', created_at: '2026-09-05', due_date: null }],
+        tasks: [
+          {
+            team_id: 'l-1',
+            created_by: 'jefa-1',
+            created_at: dateInCurrentMonth(5),
+            due_date: null,
+          },
+        ],
       }),
       error: null,
     })
@@ -128,8 +152,18 @@ describe('UsoView', () => {
     loadUsageActivity.mockResolvedValue({
       data: emptyRaw({
         tasks: [
-          { team_id: 'l-1', created_by: 'jefa-1', created_at: '2026-09-05', due_date: null },
-          { team_id: 'l-1', created_by: 'miembro-1', created_at: '2026-09-06', due_date: null },
+          {
+            team_id: 'l-1',
+            created_by: 'jefa-1',
+            created_at: dateInCurrentMonth(5),
+            due_date: null,
+          },
+          {
+            team_id: 'l-1',
+            created_by: 'miembro-1',
+            created_at: dateInCurrentMonth(6),
+            due_date: null,
+          },
         ],
       }),
       error: null,
@@ -158,14 +192,14 @@ describe('UsoView', () => {
           {
             team_id: 'l-1',
             created_by: 'jefa-1',
-            created_at: '2026-09-11',
-            due_date: '2026-09-10',
+            created_at: dateInCurrentMonth(11),
+            due_date: dateInCurrentMonth(10),
           },
           {
             team_id: 'l-1',
             created_by: 'jefa-1',
-            created_at: '2026-09-05',
-            due_date: '2026-09-10',
+            created_at: dateInCurrentMonth(5),
+            due_date: dateInCurrentMonth(10),
           },
         ],
       }),
@@ -230,9 +264,24 @@ describe('UsoView', () => {
       loadUsageActivity.mockResolvedValue({
         data: emptyRaw({
           tasks: [
-            { team_id: 'l-1', created_by: 'jefa-1', created_at: '2026-09-05', due_date: null },
-            { team_id: 'l-2', created_by: 'jefa-2', created_at: '2026-09-06', due_date: null },
-            { team_id: 'l-2', created_by: 'jefa-2', created_at: '2026-09-07', due_date: null },
+            {
+              team_id: 'l-1',
+              created_by: 'jefa-1',
+              created_at: dateInCurrentMonth(5),
+              due_date: null,
+            },
+            {
+              team_id: 'l-2',
+              created_by: 'jefa-2',
+              created_at: dateInCurrentMonth(6),
+              due_date: null,
+            },
+            {
+              team_id: 'l-2',
+              created_by: 'jefa-2',
+              created_at: dateInCurrentMonth(7),
+              due_date: null,
+            },
           ],
         }),
         error: null,
@@ -255,9 +304,24 @@ describe('UsoView', () => {
       loadUsageActivity.mockResolvedValue({
         data: emptyRaw({
           tasks: [
-            { team_id: 'l-1', created_by: 'jefa-1', created_at: '2026-09-05', due_date: null },
-            { team_id: 'l-2', created_by: 'jefa-2', created_at: '2026-09-06', due_date: null },
-            { team_id: 'l-2', created_by: 'jefa-2', created_at: '2026-09-07', due_date: null },
+            {
+              team_id: 'l-1',
+              created_by: 'jefa-1',
+              created_at: dateInCurrentMonth(5),
+              due_date: null,
+            },
+            {
+              team_id: 'l-2',
+              created_by: 'jefa-2',
+              created_at: dateInCurrentMonth(6),
+              due_date: null,
+            },
+            {
+              team_id: 'l-2',
+              created_by: 'jefa-2',
+              created_at: dateInCurrentMonth(7),
+              due_date: null,
+            },
           ],
         }),
         error: null,

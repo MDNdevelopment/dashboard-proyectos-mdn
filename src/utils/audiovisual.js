@@ -928,6 +928,20 @@ export function piezaListas(pz) {
 }
 
 /**
+ * Unidades de trabajo VIVO de un conjunto de piezas: suma `piezaUnidades` excluyendo las
+ * 'cancelado' (no son trabajo pendiente ni hecho). Única fuente de esta regla — la usan
+ * `piezasProgress`, el cupo `faltantes` del modal de detalle y `distributePiezas`, para que
+ * una pieza cancelada no quede ocupando su lugar para siempre.
+ * @param {Array} piezas
+ * @returns {number}
+ */
+export function piezasUnidadesActivas(piezas) {
+  return (piezas ?? [])
+    .filter((pz) => pz.status !== 'cancelado')
+    .reduce((sum, pz) => sum + piezaUnidades(pz), 0)
+}
+
+/**
  * Progreso del checklist de una pauta: unidades terminadas sobre el total de unidades
  * activas (las canceladas no cuentan ni para el numerador ni para el denominador — no son
  * trabajo pendiente ni trabajo hecho). Un lote de 50 fotos con 32 listas cuenta como 50/32,
@@ -937,7 +951,7 @@ export function piezaListas(pz) {
  */
 export function piezasProgress(piezas) {
   const activas = (piezas ?? []).filter((pz) => pz.status !== 'cancelado')
-  const total = activas.reduce((sum, pz) => sum + piezaUnidades(pz), 0)
+  const total = piezasUnidadesActivas(piezas)
   const listas = activas.reduce((sum, pz) => sum + piezaListas(pz), 0)
   const canceladas = (piezas ?? []).length - activas.length
   return {
@@ -1056,6 +1070,74 @@ export function setPiezaFormatoCount(pauta, code, key, value) {
 }
 
 /**
+ * Clasifica las piezas de una pauta en un bucket por formato activo + `sinClasificar`, para
+ * que el checklist de cada editor pueda separar Video/Reel/Foto en secciones propias en vez
+ * de una lista mezclada. Opera sobre TODA la pauta (no por editor) — el llamador filtra por
+ * `editor_user_id` dentro de cada bucket si lo necesita.
+ * Reglas:
+ *  - `es_lote` (siempre Foto hoy) → bucket de su `formato`.
+ *  - no-lote con `formato` en un formato activo → ese bucket.
+ *  - no-lote con `formato: null`: si la pauta tiene un SOLO formato de video activo, se
+ *    adopta ahí (no hay nada que adivinar); si tiene DOS (V+R) no hay forma honesta de saber
+ *    cuál era → `sinClasificar`, para que el coordinador la reclasifique una vez a mano.
+ *  - no-lote con un `formato` que ya no está entre los activos (basura de un formato
+ *    desmarcado) → `sinClasificar`.
+ * Solo tiene sentido en el camino con formatos marcados (`pauta.formats` no vacío); el
+ * camino legacy (pautas sin formato) no lo usa.
+ * @param {{formats?: string[]}} pauta
+ * @param {Array} piezas
+ * @returns {{V?:Array,R?:Array,F?:Array,sinClasificar:Array}}
+ */
+export function piezasPorBucket(pauta, piezas) {
+  const activeFormats = FORMAT_KEYS.filter((code) => (pauta.formats ?? []).includes(code))
+  const nonFoto = activeFormats.filter((code) => code !== FOTO_FORMAT)
+  const out = { sinClasificar: [] }
+  activeFormats.forEach((code) => {
+    out[code] = []
+  })
+  ;(piezas ?? []).forEach((pz) => {
+    const formato = pz.es_lote ? (pz.formato ?? FOTO_FORMAT) : pz.formato
+    if (formato && activeFormats.includes(formato)) {
+      out[formato].push(pz)
+    } else if (!formato && !pz.es_lote && nonFoto.length === 1) {
+      out[nonFoto[0]].push(pz)
+    } else {
+      out.sinClasificar.push(pz)
+    }
+  })
+  return out
+}
+
+/**
+ * `{salieron, repartido, faltan}` por formato activo — gemelo de `grabacionBalance` pero
+ * sobre el checklist de EDICIÓN (`av_pauta_piezas`) en vez de `grabacion_por_formato`. Cada
+ * formato tiene su propio cupo real, independiente de los demás: antes todos competían por
+ * un único pool (`piezas_totales - asignadas`), así que repartir fotos le quitaba cupo a los
+ * videos y viceversa aunque cada uno tuviera su propio "Salieron".
+ * Fallback: si el desglose `piezas_por_formato` está vacío (camino legacy del trigger de BD,
+ * donde `piezas_totales` es un número manual sin desglose cargado) pero `piezas_totales > 0`,
+ * `salieron` de cada formato se completa con `piezas_totales` como TECHO (no como verdad por
+ * formato) — el llamador debe seguir clampeando contra el remanente global para no repartir
+ * de más mientras no haya desglose real cargado.
+ * @param {object} pauta
+ * @param {Array} piezas
+ * @returns {Record<'V'|'R'|'F', {salieron:number, repartido:number, faltan:number}>}
+ */
+export function piezasBalancePorFormato(pauta, piezas) {
+  const breakdown = piezasPorFormato(pauta)
+  const buckets = piezasPorBucket(pauta, piezas)
+  const totales = Number(pauta.piezas_totales) || 0
+  const sinDesglose = Object.values(breakdown).every((entry) => entry.salieron === 0)
+  const out = {}
+  Object.keys(breakdown).forEach((code) => {
+    const salieron = sinDesglose && totales > 0 ? totales : breakdown[code].salieron
+    const repartido = piezasUnidadesActivas(buckets[code])
+    out[code] = { salieron, repartido, faltan: salieron - repartido }
+  })
+  return out
+}
+
+/**
  * Decide qué piezas borrar al bajar la cantidad de un editor con el stepper `−`. Solo se
  * tocan piezas 'pendiente' (nunca trabajo con avance), empezando por el final del grupo
  * para no reordenar las que sí se conservan. Si no alcanzan las 'pendiente' para cubrir
@@ -1088,7 +1170,9 @@ export function planPiezaRemoval(piezasDelEditor, cantidad) {
  */
 export function distributePiezas(faltantes, editorIds, grouped) {
   if (!editorIds?.length || faltantes <= 0) return []
-  const unitsOf = (id) => (grouped?.get(id) ?? []).reduce((sum, pz) => sum + piezaUnidades(pz), 0)
+  // piezasUnidadesActivas (no piezaUnidades a secas): una pieza 'cancelado' no es carga real
+  // de ese editor, así que no debe pesar al decidir a quién le toca la siguiente.
+  const unitsOf = (id) => piezasUnidadesActivas(grouped?.get(id))
   const counts = new Map(editorIds.map((id) => [id, unitsOf(id)]))
   for (let i = 0; i < faltantes; i++) {
     const minId = editorIds.reduce((a, b) => (counts.get(b) < counts.get(a) ? b : a))

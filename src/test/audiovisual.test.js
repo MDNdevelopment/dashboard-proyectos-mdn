@@ -28,6 +28,7 @@ import {
   generateAgendaText,
   generateDayAgendaText,
   piezasProgress,
+  piezasUnidadesActivas,
   piezasByEditor,
   piezaUnidades,
   piezaListas,
@@ -38,6 +39,8 @@ import {
   defaultLoteName,
   piezasPorFormato,
   setPiezaFormatoCount,
+  piezasPorBucket,
+  piezasBalancePorFormato,
   planPiezaRemoval,
   distributePiezas,
   sumPiezasPorFormato,
@@ -1004,6 +1007,26 @@ describe('piezasProgress', () => {
   })
 })
 
+describe('piezasUnidadesActivas', () => {
+  it('suma unidades ignorando las canceladas', () => {
+    const piezas = [{ status: 'pendiente' }, { status: 'listo' }, { status: 'cancelado' }]
+    expect(piezasUnidadesActivas(piezas)).toBe(2)
+  })
+
+  it('un lote cuenta por su cantidad', () => {
+    const piezas = [
+      { status: 'pendiente' },
+      { es_lote: true, cantidad: 50, listas: 32, status: 'en_edicion' },
+    ]
+    expect(piezasUnidadesActivas(piezas)).toBe(51)
+  })
+
+  it('lista vacía o undefined devuelve 0', () => {
+    expect(piezasUnidadesActivas([])).toBe(0)
+    expect(piezasUnidadesActivas(undefined)).toBe(0)
+  })
+})
+
 describe('piezasByEditor', () => {
   it('agrupa por editor_user_id ordenando por position dentro de cada grupo', () => {
     const piezas = [
@@ -1084,6 +1107,19 @@ describe('distributePiezas', () => {
 
   it('sin faltantes, no reparte nada', () => {
     expect(distributePiezas(0, ['u1'], new Map())).toEqual([])
+  })
+
+  it('una pieza cancelada no cuenta como carga del editor que la tenía', () => {
+    const grouped = piezasByEditor([
+      { id: 'a', editor_user_id: 'u1', status: 'cancelado', position: 0 },
+    ])
+    const plan = distributePiezas(2, ['u1', 'u2'], grouped)
+    // u1 "tiene" 1 pieza, pero cancelada → no pesa: el reparto queda parejo (1 y 1), no
+    // 0 para u1 y 2 para u2 como si la cancelada siguiera ocupando su cupo.
+    expect(plan).toEqual([
+      { editorId: 'u1', count: 1 },
+      { editorId: 'u2', count: 1 },
+    ])
   })
 
   it('un solo editor recibe todo el faltante', () => {
@@ -1251,6 +1287,111 @@ describe('setPiezaFormatoCount', () => {
       piezas_por_formato: { R: { salieron: 1, editadas: 0 }, F: { salieron: 5, editadas: 5 } },
     })
     expect(setPiezaFormatoCount(p, 'R', 'salieron', 2)).toEqual({ R: { salieron: 2, editadas: 0 } })
+  })
+})
+
+describe('piezasPorBucket', () => {
+  it('una pieza no-lote con formato V/R va a su propio bucket', () => {
+    const p = pauta({ formats: ['V', 'R'] })
+    const piezas = [
+      { id: 'pz1', formato: 'V', es_lote: false },
+      { id: 'pz2', formato: 'R', es_lote: false },
+    ]
+    const buckets = piezasPorBucket(p, piezas)
+    expect(buckets.V.map((pz) => pz.id)).toEqual(['pz1'])
+    expect(buckets.R.map((pz) => pz.id)).toEqual(['pz2'])
+    expect(buckets.sinClasificar).toEqual([])
+  })
+
+  it('una pieza en lote siempre cae en el bucket F', () => {
+    const p = pauta({ formats: ['V', 'F'] })
+    const piezas = [{ id: 'pz1', es_lote: true, cantidad: 10 }]
+    const buckets = piezasPorBucket(p, piezas)
+    expect(buckets.F.map((pz) => pz.id)).toEqual(['pz1'])
+  })
+
+  it('formato null con un solo formato de video activo se adopta ahí (nada que adivinar)', () => {
+    const p = pauta({ formats: ['V', 'F'] })
+    const piezas = [{ id: 'pz1', formato: null, es_lote: false }]
+    const buckets = piezasPorBucket(p, piezas)
+    expect(buckets.V.map((pz) => pz.id)).toEqual(['pz1'])
+    expect(buckets.sinClasificar).toEqual([])
+  })
+
+  it('formato null con V+R (dos formatos de video activos) cae en sinClasificar', () => {
+    const p = pauta({ formats: ['V', 'R'] })
+    const piezas = [{ id: 'pz1', formato: null, es_lote: false }]
+    const buckets = piezasPorBucket(p, piezas)
+    expect(buckets.sinClasificar.map((pz) => pz.id)).toEqual(['pz1'])
+  })
+
+  it('un formato ya desmarcado (basura de un cambio anterior) cae en sinClasificar', () => {
+    const p = pauta({ formats: ['V'] })
+    const piezas = [{ id: 'pz1', formato: 'R', es_lote: false }]
+    const buckets = piezasPorBucket(p, piezas)
+    expect(buckets.sinClasificar.map((pz) => pz.id)).toEqual(['pz1'])
+  })
+})
+
+describe('piezasBalancePorFormato', () => {
+  it('con desglose cargado, cada formato tiene su propio "faltan" independiente', () => {
+    const p = pauta({
+      formats: ['V', 'R'],
+      piezas_por_formato: { V: { salieron: 2, editadas: 0 }, R: { salieron: 1, editadas: 0 } },
+    })
+    const piezas = [{ formato: 'V', es_lote: false, status: 'pendiente' }]
+    const balance = piezasBalancePorFormato(p, piezas)
+    expect(balance.V).toEqual({ salieron: 2, repartido: 1, faltan: 1 })
+    expect(balance.R).toEqual({ salieron: 1, repartido: 0, faltan: 1 })
+  })
+
+  it('un lote de fotos no afecta el balance de Video (cupos independientes)', () => {
+    const p = pauta({
+      formats: ['V', 'F'],
+      piezas_por_formato: {
+        V: { salieron: 1, editadas: 0 },
+        F: { salieron: 10, editadas: 0 },
+      },
+    })
+    const piezas = [{ es_lote: true, cantidad: 10, formato: 'F' }]
+    const balance = piezasBalancePorFormato(p, piezas)
+    expect(balance.V).toEqual({ salieron: 1, repartido: 0, faltan: 1 })
+    expect(balance.F.repartido).toBe(10)
+  })
+
+  it('una pieza cancelada no cuenta como repartida', () => {
+    const p = pauta({
+      formats: ['V'],
+      piezas_por_formato: { V: { salieron: 2, editadas: 0 } },
+    })
+    const piezas = [
+      { formato: 'V', es_lote: false, status: 'pendiente' },
+      { formato: 'V', es_lote: false, status: 'cancelado' },
+    ]
+    const balance = piezasBalancePorFormato(p, piezas)
+    expect(balance.V).toEqual({ salieron: 2, repartido: 1, faltan: 1 })
+  })
+
+  it('"faltan" puede ser negativo si bajaron "Salieron" después de repartir de más', () => {
+    const p = pauta({
+      formats: ['V'],
+      piezas_por_formato: { V: { salieron: 1, editadas: 0 } },
+    })
+    const piezas = [
+      { formato: 'V', es_lote: false, status: 'pendiente' },
+      { formato: 'V', es_lote: false, status: 'pendiente' },
+    ]
+    const balance = piezasBalancePorFormato(p, piezas)
+    expect(balance.V).toEqual({ salieron: 1, repartido: 2, faltan: -1 })
+  })
+
+  it('con el desglose vacío (piezas_totales manual, camino legacy del trigger), usa el total como techo por formato', () => {
+    const p = pauta({ formats: ['V', 'R'], piezas_totales: 5, piezas_por_formato: {} })
+    const piezas = [{ formato: 'V', es_lote: false, status: 'pendiente' }]
+    const balance = piezasBalancePorFormato(p, piezas)
+    // Techo, no verdad por formato: ambos ven 5 como tope, no 5 cada uno sumando 10.
+    expect(balance.V).toEqual({ salieron: 5, repartido: 1, faltan: 4 })
+    expect(balance.R).toEqual({ salieron: 5, repartido: 0, faltan: 5 })
   })
 })
 

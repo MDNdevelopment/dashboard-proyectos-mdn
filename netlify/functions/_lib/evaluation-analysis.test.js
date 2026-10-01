@@ -89,15 +89,28 @@ function baseInputs(overrides = {}) {
   }
 }
 
+// El handler usa `new Date()` real para el mes/año a evaluar (`period.monthIdx` en
+// evaluation-analysis.js), y las tareas se filtran por ese mes (`taskInMonth`). Las fechas
+// de este fixture deben caer siempre en el mes en curso — un literal fijo (ej. "2026-09")
+// queda viejo apenas cambia el mes y el score sale `null` (0 unidades) en vez de calcularse.
+const CURRENT_YEAR = new Date().getFullYear()
+const CURRENT_MONTH = new Date().getMonth() + 1
+function dateInCurrentMonth(day) {
+  return `${CURRENT_YEAR}-${String(CURRENT_MONTH).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+function lastDayOfCurrentMonth() {
+  return new Date(CURRENT_YEAR, CURRENT_MONTH, 0).getDate()
+}
+
 function tasksForScore() {
   const rows = []
   for (let i = 0; i < 10; i++) {
     rows.push({
       assignee_ids: ['emp-1'],
       created_by: 'jefe',
-      request_date: '2026-09-01',
-      due_date: `2026-09-${10 + i}`,
-      closed_date: `2026-09-${9 + i}`,
+      request_date: dateInCurrentMonth(1),
+      due_date: dateInCurrentMonth(10 + i),
+      closed_date: dateInCurrentMonth(9 + i),
       status: 'Terminado',
     })
   }
@@ -107,8 +120,8 @@ function tasksForScore() {
     rows.push({
       assignee_ids: ['emp-1'],
       created_by: 'jefe',
-      request_date: '2026-09-01',
-      due_date: '2026-09-30',
+      request_date: dateInCurrentMonth(1),
+      due_date: dateInCurrentMonth(lastDayOfCurrentMonth()),
       closed_date: null,
       status: 'En proceso',
     })
