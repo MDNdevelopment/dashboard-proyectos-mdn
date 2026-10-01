@@ -14,14 +14,14 @@ import {
   isOutOfMonth,
   externalAsUser,
   externalUsersForRole,
-  canEditPiezasForPauta,
+  pautaPermissions,
   leadLineIdsFor,
 } from '../../utils/audiovisual'
 import { effectiveLineId } from '../../utils/lineFilters'
 import AvCalendar from './AvCalendar'
 import AvPhaseTable from './AvPhaseTable'
 import AvAnalytics from './AvAnalytics'
-import PautaDetailModal from './PautaDetailModal'
+import PautaDetail from './PautaDetail'
 import PautaFormModal from './PautaFormModal'
 import DayPautasModal from './DayPautasModal'
 import WhatsAppAgendaModal from './WhatsAppAgendaModal'
@@ -496,15 +496,19 @@ export default function AudiovisualView({
       />
 
       {detailPauta && (
-        <PautaDetailModal
+        <PautaDetail
           pauta={detailPauta}
-          usersById={usersById}
-          audiovisualUsers={editorOptions}
-          recursoUsers={recursoOptions}
           piezas={piezas.filter((pz) => pz.pauta_id === detailPauta.id)}
-          canEditPiezas={canEditPiezasForPauta({
+          pautas={pautas}
+          lines={linesWithGeneral}
+          usersById={usersById}
+          recursoUsers={recursoOptions}
+          editorUsers={editorOptions}
+          allEmployees={employees.filter((u) => !u.deleted_at)}
+          perms={pautaPermissions({
             canCoordinate,
             canGestionPautas,
+            canManage,
             userId: userProfile?.user_id,
             pauta: detailPauta,
             leadLineIds,
@@ -512,8 +516,14 @@ export default function AudiovisualView({
           userId={userProfile?.user_id}
           companyId={companyId}
           onFields={handlePautaFields}
+          onChanged={handleChanged}
+          onDeleted={(id) => {
+            handleDeleted(id)
+            setDetailPauta(null)
+          }}
           onPiezaChanged={handlePiezaChanged}
           onPiezaDeleted={handlePiezaDeleted}
+          onEdit={(p) => setForm({ mode: 'edit', pauta: p })}
           onClose={() => setDetailPauta(null)}
         />
       )}

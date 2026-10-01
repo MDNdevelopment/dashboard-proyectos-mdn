@@ -1558,6 +1558,7 @@ export function pautaPermissions({
       canEditPiezas: false,
       canDelete: false,
       canRestore: false,
+      canReopen: false,
     }
   }
   const isLead = Boolean(pauta.line_id) && (leadLineIds ?? []).includes(pauta.line_id)
@@ -1579,6 +1580,7 @@ export function pautaPermissions({
     canEditPiezas: !deleted && canEditPiezas && ['programada', 'realizada'].includes(pauta.status),
     canDelete: !deleted && (canCoordinate || (solicitada && isCreator)),
     canRestore: deleted && canCoordinate,
+    canReopen: !deleted && canCoordinate && pauta.status === 'declinada',
   }
 }
 

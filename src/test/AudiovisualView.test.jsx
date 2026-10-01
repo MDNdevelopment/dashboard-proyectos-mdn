@@ -97,7 +97,7 @@ const MOCK_PAUTAS = [
     pauta_date: DAY_10,
     salida: null,
     llegada: null,
-    formats: [],
+    formats: ['V'],
     recurso_ids: ['editor-1'],
     graba_user_id: null,
     graba_other: null,
@@ -304,10 +304,10 @@ describe('AudiovisualView', () => {
       initialEntries: ['/tareas/pautas?pautaId=p4'],
     })
     await waitFor(() => {
-      expect(screen.getByText('Edición de piezas')).toBeInTheDocument()
+      expect(screen.getByText('quién edita cuántas piezas')).toBeInTheDocument()
     })
     // Editable: 'editor-1' está en recurso_ids de p4 (ver MOCK_PAUTAS).
-    expect(screen.getByText('+ Agregar editor')).toBeInTheDocument()
+    expect(screen.getByText('+ agregar editor')).toBeInTheDocument()
     // Pero no tiene audiovisual.coordina: no ve los botones de agendar/declinar.
     expect(screen.queryByText('Agendar')).not.toBeInTheDocument()
     expect(screen.queryByText('Declinar')).not.toBeInTheDocument()
@@ -327,10 +327,10 @@ describe('AudiovisualView', () => {
       initialEntries: ['/tareas/pautas?pautaId=p4'],
     })
     await waitFor(() => {
-      expect(screen.getByText('Edición de piezas')).toBeInTheDocument()
+      expect(screen.getByText('quién edita cuántas piezas')).toBeInTheDocument()
     })
     // No editable: 'otro-editor' no está en recurso_ids de p4.
-    expect(screen.queryByPlaceholderText('Buscar empleado por nombre…')).not.toBeInTheDocument()
+    expect(screen.queryByText('+ agregar editor')).not.toBeInTheDocument()
   })
 
   it('con audiovisual.pautas.gestion puede editar piezas de cualquier pauta sin ser recurso ni coordinar', async () => {
@@ -347,10 +347,10 @@ describe('AudiovisualView', () => {
       initialEntries: ['/tareas/pautas?pautaId=p4'],
     })
     await waitFor(() => {
-      expect(screen.getByText('Edición de piezas')).toBeInTheDocument()
+      expect(screen.getByText('quién edita cuántas piezas')).toBeInTheDocument()
     })
     // Editable aunque 'gestor-1' no está en recurso_ids de p4 y no tiene audiovisual.coordina.
-    expect(screen.getByText('+ Agregar editor')).toBeInTheDocument()
+    expect(screen.getByText('+ agregar editor')).toBeInTheDocument()
     expect(screen.queryByText('Agendar')).not.toBeInTheDocument()
     expect(screen.queryByText('Declinar')).not.toBeInTheDocument()
   })
@@ -369,11 +369,11 @@ describe('AudiovisualView', () => {
       initialEntries: ['/tareas/pautas?pautaId=p4'],
     })
     await waitFor(() => {
-      expect(screen.getByText('Edición de piezas')).toBeInTheDocument()
+      expect(screen.getByText('quién edita cuántas piezas')).toBeInTheDocument()
     })
     // p4 es de 'line-1' y 'jefa-1' es su lead: editable aunque no esté en recurso_ids ni
     // tenga audiovisual.coordina / audiovisual.pautas.gestion.
-    expect(screen.getByText('+ Agregar editor')).toBeInTheDocument()
+    expect(screen.getByText('+ agregar editor')).toBeInTheDocument()
     expect(screen.queryByText('Agendar')).not.toBeInTheDocument()
     expect(screen.queryByText('Declinar')).not.toBeInTheDocument()
   })
@@ -392,10 +392,10 @@ describe('AudiovisualView', () => {
       initialEntries: ['/tareas/pautas?pautaId=p4'],
     })
     await waitFor(() => {
-      expect(screen.getByText('Edición de piezas')).toBeInTheDocument()
+      expect(screen.getByText('quién edita cuántas piezas')).toBeInTheDocument()
     })
     // p4 es de 'line-1'; 'jefa-2' lidera 'line-2' → solo lectura.
-    expect(screen.queryByText('+ Agregar editor')).not.toBeInTheDocument()
+    expect(screen.queryByText('+ agregar editor')).not.toBeInTheDocument()
   })
 })
 

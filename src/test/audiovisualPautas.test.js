@@ -311,6 +311,12 @@ describe('pautaPermissions', () => {
       canDelete: false,
     })
     expect(pautaPermissions({ userId: 'u1', pauta: del }).canRestore).toBe(false)
+    const dec = pauta({ status: 'declinada' })
+    expect(pautaPermissions({ canCoordinate: true, pauta: dec })).toMatchObject({
+      canReopen: true,
+      canApprove: false,
+    })
+    expect(pautaPermissions({ userId: 'u1', canManage: true, pauta: dec }).canReopen).toBe(false)
     expect(Object.values(pautaPermissions({ pauta: null })).every((v) => v === false)).toBe(true)
   })
 
