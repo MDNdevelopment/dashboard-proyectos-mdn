@@ -334,6 +334,7 @@ export const CHANGELOG = [
       'Corregido: en algunas pautas de fotos, al escribir la cantidad real que salió (por ejemplo 80), el campo "Asignadas" de un editor se quedaba uno o más números por debajo sin razón aparente. Pasaba porque clics rápidos en el botón "+" podían crear dos registros de fotos para el mismo editor en vez de uno, y la pantalla solo mostraba el primero. Se corrigieron las pautas ya afectadas y se bloqueó para que no vuelva a pasar.',
       'En Pautas, cuando una pauta tiene Video y Reel a la vez, cada uno ahora se muestra en su propio bloque con su propio contador, igual que ya pasaba con Fotos — en vez de una sola lista mezclada. Al repartirle piezas a un editor ya no hay que elegir con un selector si es Video o Reel: se asigna solo según el bloque donde se le dio "+".',
       'Corregido: en una pauta con Video y Reel a la vez, repartir fotos le quitaba cupo disponible a los videos (y viceversa) aunque cada formato tuviera su propio número de "Salieron". Ahora cada formato tiene su propio cupo, independiente de los demás.',
+      'Corregido: en la evaluación automática de desempeño, el indicador "Piezas audiovisuales" contaba un lote de fotos (por ejemplo 50 fotos con 32 listas) como si fuera una sola pieza. Ahora suma las unidades reales del lote y deja fuera las piezas canceladas.',
     ],
   },
   {

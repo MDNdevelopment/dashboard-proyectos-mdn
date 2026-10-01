@@ -593,13 +593,14 @@ export function avEditMode({ canCoordinate, canManage }) {
 }
 
 /**
- * Brief mínimo completo para poder solicitar una pauta: cliente + (enlace de
- * grilla O descripción de piezas).
+ * Brief mínimo completo para poder solicitar una pauta: cliente + algo que diga de qué va
+ * (tema, enlace de grilla o descripción de piezas). Antes exigía grilla o descripción; el
+ * formulario nuevo pide el tema como campo principal.
  */
 export function briefComplete(pauta) {
+  const filled = (v) => Boolean(v && String(v).trim())
   return Boolean(
-    pauta.client_id &&
-    ((pauta.link && pauta.link.trim()) || (pauta.piezas_desc && pauta.piezas_desc.trim())),
+    pauta.client_id && (filled(pauta.tema) || filled(pauta.link) || filled(pauta.piezas_desc)),
   )
 }
 
@@ -618,6 +619,12 @@ export function pautaErrorMessage(err) {
     /no autorizado para modificar los recursos/i.test(raw)
   ) {
     return 'No tienes permiso para editar esta pauta.'
+  }
+  if (err.code === '23P01' || /av_pautas_estudio_sin_solape/.test(raw)) {
+    return 'El estudio ya está ocupado en ese horario. Elige otra hora o cambia el lugar.'
+  }
+  if (err.code === '23505' && /lote_unico/.test(raw)) {
+    return 'Ese editor ya tiene ese formato asignado en esta pauta. Recarga la página.'
   }
   return 'No se pudo guardar el cambio. Vuelve a intentarlo; si sigue pasando, avisa a soporte.'
 }
@@ -741,10 +748,14 @@ export function aggregateResourcePerformance(pautas, usersById, piezasByPauta, c
       byId.set(id, {
         id,
         name,
+        grabaV: 0,
+        grabaR: 0,
         grabaAv: 0,
         grabaFoto: 0,
         grabaSinDesglose: 0,
         grabaEstimado: false,
+        editaV: 0,
+        editaR: 0,
         editaAv: 0,
         editaFoto: 0,
         editaOtro: 0,
@@ -758,6 +769,14 @@ export function aggregateResourcePerformance(pautas, usersById, piezasByPauta, c
     const u = usersById?.get(id)
     return u ? `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() || id : id
   }
+  // Suma a grabaAv/grabaFoto y, además, al subtipo exacto (grabaV/grabaR) cuando se conoce.
+  const addGraba = (entry, code, n) => {
+    const group = formatGroupOf(code)
+    if (!group) return
+    entry[group === 'av' ? 'grabaAv' : 'grabaFoto'] += n
+    if (code === 'V') entry.grabaV += n
+    if (code === 'R') entry.grabaR += n
+  }
 
   pautas.forEach((p) => {
     if (p.status !== 'realizada') return
@@ -766,11 +785,8 @@ export function aggregateResourcePerformance(pautas, usersById, piezasByPauta, c
     if (hasGrabacionReparto(p)) {
       const reparto = grabacionPorFormato(p)
       FORMAT_KEYS.forEach((code) => {
-        const group = formatGroupOf(code)
-        if (!group) return
         Object.entries(reparto[code] ?? {}).forEach(([id, n]) => {
-          const entry = ensure(id, nameOf(id))
-          entry[group === 'av' ? 'grabaAv' : 'grabaFoto'] += n
+          addGraba(ensure(id, nameOf(id)), code, n)
         })
       })
     } else if (hasFormatoBreakdown(p)) {
@@ -782,11 +798,7 @@ export function aggregateResourcePerformance(pautas, usersById, piezasByPauta, c
       const breakdown = piezasPorFormato(p)
       ;(p.recurso_ids ?? []).forEach((id) => {
         const entry = ensure(id, nameOf(id))
-        Object.entries(breakdown).forEach(([code, { salieron }]) => {
-          const group = formatGroupOf(code)
-          if (!group) return
-          entry[group === 'av' ? 'grabaAv' : 'grabaFoto'] += salieron
-        })
+        Object.entries(breakdown).forEach(([code, { salieron }]) => addGraba(entry, code, salieron))
         entry.grabaEstimado = true
       })
     } else {
@@ -807,10 +819,14 @@ export function aggregateResourcePerformance(pautas, usersById, piezasByPauta, c
         .forEach((pz) => {
           if (!pz.editor_user_id) return
           const entry = ensure(pz.editor_user_id, nameOf(pz.editor_user_id))
-          const group = formatGroupOf(pz.formato ?? soloFormato)
+          const code = pz.formato ?? soloFormato
+          const group = formatGroupOf(code)
           const n = piezaListas(pz)
-          if (group === 'av') entry.editaAv += n
-          else if (group === 'foto') entry.editaFoto += n
+          if (group === 'av') {
+            entry.editaAv += n
+            if (code === 'V') entry.editaV += n
+            if (code === 'R') entry.editaR += n
+          } else if (group === 'foto') entry.editaFoto += n
           else entry.editaOtro += n
         })
     } else if (p.edita_user_id || p.edita_other) {
@@ -1306,6 +1322,463 @@ export function syncRecursoIds(pauta, nextGrabacion) {
     })
   })
   return ids.length ? [...current, ...ids] : null
+}
+
+/**
+ * Siguiente `piezas_por_formato` con `salieron` DERIVADO de la captura: para cada formato
+ * activo, salieron = Σ de lo que registró cada recurso en `grabacion` (ya calculado con
+ * `setGrabacionCount`). Conserva `editadas` tal cual (lo recalcula el trigger de BD desde
+ * los lotes). Es el único origen de "Salieron" en el módulo rediseñado: no existe un campo
+ * aparte que alguien escriba a mano.
+ * @param {object} pauta
+ * @param {object} grabacion  valor ya calculado de `grabacion_por_formato`
+ * @returns {Record<'V'|'R'|'F', {salieron:number, editadas:number}>}
+ */
+export function syncSalieronFromGrabacion(pauta, grabacion) {
+  const next = piezasPorFormato(pauta)
+  Object.keys(next).forEach((code) => {
+    const salieron = Object.values(grabacion?.[code] ?? {}).reduce(
+      (sum, n) => sum + (Math.max(0, Math.round(Number(n))) || 0),
+      0,
+    )
+    next[code] = { ...next[code], salieron }
+  })
+  return next
+}
+
+// ─── Lugar y estudio ────────────────────────────────────────────────────────
+
+export const LUGAR_TIPOS = ['estudio', 'locacion']
+export const LUGAR_LABELS = { estudio: 'Estudio MDN', locacion: 'Locación' }
+export const ESTUDIO_NOMBRE = 'Estudio MDN'
+/** Cuántas horas ocupa una pauta en el estudio desde su hora de salida. */
+export const STUDIO_WINDOW_HOURS = 2
+
+/** 'Estudio MDN' | texto de la locación | 'Por definir'. */
+export function lugarLabel(pauta) {
+  if (pauta?.lugar_tipo === 'estudio') return ESTUDIO_NOMBRE
+  return (pauta?.place && pauta.place.trim()) || 'Por definir'
+}
+
+/**
+ * Ventana que ocupa una pauta en el estudio: [salida, salida + STUDIO_WINDOW_HOURS),
+ * topada a '24:00' (una pauta no se derrama al día siguiente).
+ * @param {string|null} salida 'HH:MM' o 'HH:MM:SS'
+ * @returns {{start:string, end:string}|null}
+ */
+export function studioWindow(salida) {
+  if (!salida) return null
+  const start = hhmm(salida)
+  const [h, m] = start.split(':').map(Number)
+  const endH = h + STUDIO_WINDOW_HOURS
+  return { start, end: endH >= 24 ? '24:00' : `${pad(endH)}:${pad(m)}` }
+}
+
+/**
+ * Pautas de estudio del mismo día que chocan con una pauta candidata. Dos niveles:
+ *  - `blocking`: pautas 'programada'|'realizada' con hora cuya ventana de 2h se cruza con
+ *    la de la candidata. Son hechos confirmados → no se deja guardar.
+ *  - `warnings`: 'solicitada' con fecha deseada en ese horario (`kind: 'solicitada'` — una
+ *    solicitud no puede vetar a otra; decide quien agenda) y pautas confirmadas de estudio
+ *    sin hora (`kind: 'sin_hora'` — no se puede saber si chocan).
+ * El mismo cliente (`clientId`) puede solaparse consigo mismo: una sesión partida en dos
+ * pautas. Ignora borradas, declinadas, locaciones y la propia pauta (`excludeId`).
+ * Espejo en BD: constraint `av_pautas_estudio_sin_solape` (20261002000001).
+ * @param {Array} pautas  todas las pautas en memoria (cualquier línea)
+ * @param {{date:string, salida:string|null, clientId?:string|null, excludeId?:string|null}} c
+ * @returns {{blocking: Array<{pauta:object}>, warnings: Array<{kind:string, pauta:object}>}}
+ */
+export function estudioConflicts(pautas, { date, salida, clientId = null, excludeId = null }) {
+  const out = { blocking: [], warnings: [] }
+  if (!date) return out
+  const mine = studioWindow(salida)
+  ;(pautas ?? []).forEach((p) => {
+    if (p.id === excludeId || p.deleted_at) return
+    if (p.lugar_tipo !== 'estudio' || p.pauta_date !== date) return
+    if (!['programada', 'realizada', 'solicitada'].includes(p.status)) return
+    if (clientId && p.client_id && p.client_id === clientId) return
+    const theirs = studioWindow(p.salida)
+    const confirmed = p.status !== 'solicitada'
+    if (!theirs || !mine) {
+      if (confirmed) out.warnings.push({ kind: 'sin_hora', pauta: p })
+      return
+    }
+    if (!timeRangesOverlap(mine.start, mine.end, theirs.start, theirs.end)) return
+    if (confirmed) out.blocking.push({ pauta: p })
+    else out.warnings.push({ kind: 'solicitada', pauta: p })
+  })
+  return out
+}
+
+/**
+ * Ocupación del estudio en un día, ordenada por hora, para pintar la línea de tiempo de
+ * disponibilidad. Incluye solicitadas (con `status`) para que se distingan visualmente.
+ * @returns {Array<{pauta:object, start:string|null, end:string|null, status:string}>}
+ */
+export function estudioSlotsForDay(pautas, date, excludeId = null) {
+  return (pautas ?? [])
+    .filter(
+      (p) =>
+        p.id !== excludeId &&
+        !p.deleted_at &&
+        p.lugar_tipo === 'estudio' &&
+        p.pauta_date === date &&
+        ['programada', 'realizada', 'solicitada'].includes(p.status),
+    )
+    .map((p) => {
+      const w = studioWindow(p.salida)
+      return { pauta: p, start: w?.start ?? null, end: w?.end ?? null, status: p.status }
+    })
+    .sort((a, b) => (a.start ?? '99:99').localeCompare(b.start ?? '99:99'))
+}
+
+// ─── Lotes por editor × formato (Edición rediseñada) ───────────────────────
+
+/**
+ * Matriz editor × formato de los LOTES de una pauta. Solo mira `es_lote` (las filas
+ * sueltas del modelo viejo se tratan en `isLegacyPiezas`/`legacyEditorSummary`). La clave
+ * `null` agrupa los lotes huérfanos (sin editor).
+ * @param {Array} piezas — piezas de UNA pauta
+ * @returns {{editorIds: Array<string|null>, byEditor: Map<string|null, Record<string, object>>}}
+ */
+export function lotesMatrix(piezas) {
+  const byEditor = new Map()
+  ;(piezas ?? [])
+    .filter((pz) => pz.es_lote)
+    .forEach((pz) => {
+      const key = pz.editor_user_id ?? null
+      if (!byEditor.has(key)) byEditor.set(key, {})
+      byEditor.get(key)[pz.formato ?? 'null'] = pz
+    })
+  return { editorIds: [...byEditor.keys()], byEditor }
+}
+
+/** Lote de un editor en un formato, o null. */
+export function loteFor(piezas, editorId, formato) {
+  return (
+    (piezas ?? []).find(
+      (pz) =>
+        pz.es_lote && (pz.editor_user_id ?? null) === (editorId ?? null) && pz.formato === formato,
+    ) ?? null
+  )
+}
+
+/**
+ * Qué hacer con un lote al mover `cantidad` (asignadas) o `listas` en `delta`, respetando
+ * los checks de BD (`cantidad >= 1`, `0 <= listas <= cantidad`) y el cupo `max` del formato
+ * (salieron − asignadas a otros). `cantidad` que llega a 0 → se borra el lote. Devuelve el
+ * delta efectivamente aplicado para que el Stepper pueda avisar si se recortó.
+ * @param {{lote:object|null, key:'cantidad'|'listas', delta:number, max?:number}} p
+ * @returns {{action:'insert'|'update'|'delete'|'noop', fields:object, applied:number}}
+ */
+export function planLoteChange({ lote, key, delta, max = Infinity }) {
+  const d = Math.round(Number(delta)) || 0
+  const cantidad = Number(lote?.cantidad) || 0
+  const listas = Number(lote?.listas) || 0
+  if (key === 'listas') {
+    if (!lote) return { action: 'noop', fields: {}, applied: 0 }
+    const next = Math.max(0, Math.min(cantidad, listas + d))
+    if (next === listas) return { action: 'noop', fields: {}, applied: 0 }
+    return { action: 'update', fields: { listas: next }, applied: next - listas }
+  }
+  // El cupo solo limita subidas; nunca se baja por debajo de lo ya entregado.
+  const next = Math.max(listas, Math.min(cantidad + d, cantidad + Math.max(0, max)))
+  if (next === cantidad) return { action: 'noop', fields: {}, applied: 0 }
+  if (next <= 0) {
+    if (!lote) return { action: 'noop', fields: {}, applied: 0 }
+    return { action: 'delete', fields: {}, applied: -cantidad }
+  }
+  if (!lote) return { action: 'insert', fields: { cantidad: next, listas: 0 }, applied: next }
+  return { action: 'update', fields: { cantidad: next }, applied: next - cantidad }
+}
+
+/** true si la pauta tiene filas del modelo viejo (una pieza por fila) → Edición en solo lectura. */
+export function isLegacyPiezas(piezas) {
+  return (piezas ?? []).some((pz) => !pz.es_lote)
+}
+
+/**
+ * Resumen por (editor, formato) de las piezas de una pauta vieja, leyendo filas sueltas y
+ * lotes por igual (`piezaUnidades`/`piezaListas`). Las canceladas no cuentan.
+ * @returns {Array<{editorId:string|null, name:string, formato:string|null, unidades:number, listas:number}>}
+ */
+export function legacyEditorSummary(piezas, usersById) {
+  const acc = new Map()
+  ;(piezas ?? [])
+    .filter((pz) => pz.status !== 'cancelado')
+    .forEach((pz) => {
+      const editorId = pz.editor_user_id ?? null
+      const formato = pz.formato ?? null
+      const key = `${editorId ?? ''}|${formato ?? ''}`
+      if (!acc.has(key)) {
+        acc.set(key, {
+          editorId,
+          name: editorLabel(editorId, usersById),
+          formato,
+          unidades: 0,
+          listas: 0,
+        })
+      }
+      const e = acc.get(key)
+      e.unidades += piezaUnidades(pz)
+      e.listas += piezaListas(pz)
+    })
+  return [...acc.values()]
+}
+
+/** Un editor se puede quitar de una pauta solo si ninguno de sus lotes tiene entregas. */
+export function editorRemovable(lotes) {
+  return (lotes ?? []).every((l) => (Number(l?.listas) || 0) === 0)
+}
+
+// ─── Permisos por pauta (UI) ───────────────────────────────────────────────
+
+/**
+ * Qué puede hacer el usuario con UNA pauta. Centraliza lo que antes estaba repartido entre
+ * `avEditMode` y condiciones sueltas en la tabla/modal. Espejo de las RLS (ver
+ * ARQUITECTURA.md §Permisos): coordina manda en agenda; el brief lo corrige quien lo
+ * solicitó (mientras siga solicitada), la jefa de esa línea o coordina; captura/edición
+ * siguen `canEditPiezasForPauta`. Reagendar queda en coordina/gestión porque mueve el
+ * estudio y los recursos de otras líneas.
+ */
+export function pautaPermissions({
+  canCoordinate = false,
+  canGestionPautas = false,
+  canManage = false,
+  userId = null,
+  pauta,
+  leadLineIds = [],
+}) {
+  if (!pauta) {
+    return {
+      canEditBrief: false,
+      canApprove: false,
+      canReagendar: false,
+      canMarkRealizada: false,
+      canEditPiezas: false,
+      canDelete: false,
+      canRestore: false,
+    }
+  }
+  const isLead = Boolean(pauta.line_id) && (leadLineIds ?? []).includes(pauta.line_id)
+  const isCreator = Boolean(userId) && pauta.created_by === userId
+  const solicitada = pauta.status === 'solicitada'
+  const deleted = Boolean(pauta.deleted_at)
+  const canEditPiezas = canEditPiezasForPauta({
+    canCoordinate,
+    canGestionPautas,
+    userId,
+    pauta,
+    leadLineIds,
+  })
+  return {
+    canEditBrief: !deleted && (canCoordinate || isLead || (solicitada && isCreator && canManage)),
+    canApprove: !deleted && canCoordinate && solicitada,
+    canReagendar: !deleted && (canCoordinate || canGestionPautas) && pauta.status === 'programada',
+    canMarkRealizada: !deleted && canCoordinate && pauta.status === 'programada',
+    canEditPiezas: !deleted && canEditPiezas && ['programada', 'realizada'].includes(pauta.status),
+    canDelete: !deleted && (canCoordinate || (solicitada && isCreator)),
+    canRestore: deleted && canCoordinate,
+  }
+}
+
+/** Solicitudes enviadas que esperan aprobación (badge de la pestaña). */
+export function pendingApprovalCount(pautas) {
+  return (pautas ?? []).filter((p) => p.status === 'solicitada' && p.submitted && !p.deleted_at)
+    .length
+}
+
+// ─── Vista Lista: filtros y orden ──────────────────────────────────────────
+
+export const LIST_FILTERS = ['solicitadas', 'agendadas', 'realizadas', 'declinadas', 'papelera']
+export const LIST_FILTER_LABELS = {
+  solicitadas: 'Solicitadas',
+  agendadas: 'Agendadas',
+  realizadas: 'Realizadas',
+  declinadas: 'Declinadas',
+  papelera: 'Papelera',
+}
+
+const LIST_FILTER_STATUS = {
+  solicitadas: 'solicitada',
+  agendadas: 'programada',
+  realizadas: 'realizada',
+  declinadas: 'declinada',
+}
+
+/** true si la pauta pertenece al filtro de estado de la lista. 'papelera' = borradas. */
+export function pautaMatchesList(pauta, filter) {
+  if (filter === 'papelera') return Boolean(pauta.deleted_at)
+  if (pauta.deleted_at) return false
+  const status = LIST_FILTER_STATUS[filter]
+  return status ? pauta.status === status : true
+}
+
+/**
+ * Filtro secundario de la lista: recurso asignado y texto libre (cliente, tema, lugar,
+ * nombre del solicitante o de un recurso).
+ */
+export function pautaMatchesQuery(pauta, { recursoId = null, query = '', usersById } = {}) {
+  if (recursoId && !(pauta.recurso_ids ?? []).includes(recursoId)) return false
+  const q = (query ?? '').trim().toLowerCase()
+  if (!q) return true
+  const hay = [
+    pauta.client_name,
+    pauta.tema,
+    pauta.place,
+    lugarLabel(pauta),
+    requesterName(pauta, usersById),
+    ...resourceNames(pauta, usersById),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+  return hay.includes(q)
+}
+
+/** Orden de la lista: agenda ascendente por fecha/hora; realizadas y papelera, descendente. */
+export function sortForList(pautas, filter) {
+  const sorted = sortAgenda(pautas)
+  return filter === 'realizadas' || filter === 'papelera' || filter === 'declinadas'
+    ? sorted.reverse()
+    : sorted
+}
+
+// ─── Reagendamientos ───────────────────────────────────────────────────────
+
+/** Historial de reagendados de una pauta, el más reciente primero. */
+export function reagendamientosOf(pauta) {
+  const raw = Array.isArray(pauta?.reagendamientos) ? pauta.reagendamientos : []
+  return raw
+    .filter((e) => e && typeof e === 'object')
+    .map((e) => ({
+      from_date: e.from_date ?? null,
+      from_salida: e.from_salida ?? null,
+      to_date: e.to_date ?? null,
+      to_salida: e.to_salida ?? null,
+      at: e.at ?? null,
+      by: e.by ?? null,
+    }))
+    .sort((a, b) => String(b.at ?? '').localeCompare(String(a.at ?? '')))
+}
+
+/** 'Reagendada desde 12 oct 10:00 AM · por Ana · 05 oct' */
+export function formatReagendamiento(entry, usersById) {
+  const from = `${formatDayShort(entry.from_date)}${entry.from_salida ? ` ${formatTime12(entry.from_salida)}` : ''}`
+  const u = entry.by ? usersById?.get(entry.by) : null
+  const by = u ? `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() : null
+  const at = entry.at ? formatDayShort(String(entry.at).slice(0, 10)) : null
+  return [`Reagendada desde ${from}`, by && `por ${by}`, at].filter(Boolean).join(' · ')
+}
+
+// ─── Rankings y pendientes (vista Rendimiento) ─────────────────────────────
+
+/**
+ * Ranking de Fotos por persona a partir de `aggregateResourcePerformance`. Sin filas en 0.
+ * @returns {Array<{id:string, name:string, capturadas:number, editadas:number, estimado:boolean}>}
+ */
+export function rankingFotos(perf) {
+  return (perf ?? [])
+    .map((r) => ({
+      id: r.id,
+      name: r.name,
+      capturadas: r.grabaFoto,
+      editadas: r.editaFoto,
+      estimado: Boolean(r.grabaEstimado && r.grabaFoto > 0),
+    }))
+    .filter((r) => r.capturadas + r.editadas > 0)
+    .sort((a, b) => b.capturadas + b.editadas - (a.capturadas + a.editadas))
+}
+
+/**
+ * Ranking de Videos (4K + Reel) por persona. `editadas` incluye las piezas de CNP de
+ * audiovisual (`editaCnp`); `capturadas` incluye lo sin desglosar (pautas legacy), marcado
+ * como estimado. `desglose` deja ver de dónde sale cada número.
+ */
+export function rankingVideos(perf) {
+  return (perf ?? [])
+    .map((r) => ({
+      id: r.id,
+      name: r.name,
+      capturadas: r.grabaAv + r.grabaSinDesglose,
+      editadas: r.editaAv + r.editaCnp + r.editaOtro,
+      estimado: Boolean(r.grabaEstimado && r.grabaAv + r.grabaSinDesglose > 0),
+      desglose: {
+        video4k: { capturadas: r.grabaV, editadas: r.editaV },
+        reel: { capturadas: r.grabaR, editadas: r.editaR },
+        cnp: r.editaCnp,
+        sinDesglose: { capturadas: r.grabaSinDesglose, editadas: r.editaOtro },
+      },
+    }))
+    .filter((r) => r.capturadas + r.editadas > 0)
+    .sort((a, b) => b.capturadas + b.editadas - (a.capturadas + a.editadas))
+}
+
+/**
+ * Piezas PENDIENTES por editar, por línea y por formato, de las pautas confirmadas
+ * ('programada'|'realizada', no borradas). Pendiente de un formato = salieron − listas (de
+ * lotes y, en pautas viejas, de filas sueltas), nunca negativo. Las pautas sin desglose por
+ * formato aportan `piezas_totales − piezas_editadas` a `sinDesglose`.
+ * `porPauta` permite filtrar la lista a las pautas que aportan a una celda.
+ * @returns {{porLinea: Array<{lineId:string, name:string, V:number, R:number, F:number,
+ *   sinDesglose:number, total:number}>, porPauta: Map<string, {V:number,R:number,F:number,sinDesglose:number}>}}
+ */
+export function pendientesPorEditar(pautas, piezasByPauta, lines, generalLineId = null) {
+  const porLinea = new Map()
+  const porPauta = new Map()
+  const empty = () => ({ V: 0, R: 0, F: 0, sinDesglose: 0 })
+  ;(pautas ?? []).forEach((p) => {
+    if (p.deleted_at || !['programada', 'realizada'].includes(p.status)) return
+    const piezas = (piezasByPauta?.get(p.id) ?? []).filter((pz) => pz.status !== 'cancelado')
+    const pend = empty()
+    if (hasFormatoBreakdown(p)) {
+      const breakdown = piezasPorFormato(p)
+      Object.entries(breakdown).forEach(([code, { salieron }]) => {
+        const listas = piezas
+          .filter((pz) => pz.formato === code)
+          .reduce((sum, pz) => sum + piezaListas(pz), 0)
+        pend[code] = Math.max(0, salieron - listas)
+      })
+    } else {
+      pend.sinDesglose = Math.max(
+        0,
+        (Number(p.piezas_totales) || 0) - (Number(p.piezas_editadas) || 0),
+      )
+    }
+    const total = pend.V + pend.R + pend.F + pend.sinDesglose
+    if (total === 0) return
+    porPauta.set(p.id, pend)
+    const lineId = p.line_id ?? generalLineId
+    if (!lineId) return
+    if (!porLinea.has(lineId)) {
+      const line = (lines ?? []).find((l) => l.id === lineId)
+      porLinea.set(lineId, { lineId, name: line?.name ?? 'Sin línea', ...empty(), total: 0 })
+    }
+    const entry = porLinea.get(lineId)
+    entry.V += pend.V
+    entry.R += pend.R
+    entry.F += pend.F
+    entry.sinDesglose += pend.sinDesglose
+    entry.total += total
+  })
+  return { porLinea: [...porLinea.values()].sort((a, b) => b.total - a.total), porPauta }
+}
+
+/**
+ * true si la pauta aporta pendiente al filtro `{lineId, formato}` ('V'|'R'|'F'|'sinDesglose'|
+ * null = cualquier formato). `lineId` null = cualquier línea.
+ */
+export function pautaMatchesPendiente(
+  pauta,
+  porPauta,
+  { lineId = null, formato = null } = {},
+  generalLineId = null,
+) {
+  const pend = porPauta?.get(pauta.id)
+  if (!pend) return false
+  if (lineId && (pauta.line_id ?? generalLineId) !== lineId) return false
+  if (!formato) return true
+  return (pend[formato] ?? 0) > 0
 }
 
 // ─── Generador de agenda para WhatsApp ─────────────────────────────────────

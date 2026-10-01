@@ -251,6 +251,35 @@ export async function createLotePieza(companyId, pautaId, editorUserId, cantidad
     .single()
 }
 
+/**
+ * Crea o actualiza el lote de un editor en un formato (modelo rediseñado: un lote por
+ * (pauta, editor, formato), ver índice `av_pauta_piezas_lote_unico_por_editor_formato`).
+ * `existingLote` lo resuelve el llamador con `loteFor` sobre las piezas en memoria; si es
+ * null se inserta. El trigger `av_pauta_piezas_sync_lote` deriva `status`.
+ */
+export async function upsertLote(companyId, pautaId, editorUserId, formato, fields, existingLote) {
+  if (existingLote?.id) return updatePieza(existingLote.id, fields)
+  return supabase
+    .from('av_pauta_piezas')
+    .insert({
+      company_id: companyId,
+      pauta_id: pautaId,
+      editor_user_id: editorUserId,
+      nombre: '',
+      position: 0,
+      formato,
+      es_lote: true,
+      cantidad: Number(fields.cantidad) || 1,
+      listas: Number(fields.listas) || 0,
+    })
+    .select()
+    .single()
+}
+
+export async function deleteLote(loteId) {
+  return supabase.from('av_pauta_piezas').delete().eq('id', loteId)
+}
+
 export async function updatePieza(piezaId, fields) {
   const updates = { ...sanitizePiezaFields(fields), updated_at: new Date().toISOString() }
   return supabase.from('av_pauta_piezas').update(updates).eq('id', piezaId).select().single()
@@ -311,6 +340,7 @@ function sanitizeFields(fields) {
     'client_id',
     'tema',
     'place',
+    'lugar_tipo',
     'requirements',
     'has_model',
     'extra',
