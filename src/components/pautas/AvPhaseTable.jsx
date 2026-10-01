@@ -76,6 +76,7 @@ export default function AvPhaseTable({
   onChanged,
   onDeleted,
   onPautaClick,
+  allowCreate = true,
 }) {
   // `{ message, detail }` — `message` es el texto en español para el banner; `detail` es el
   // mensaje crudo del motor (Supabase/Postgres), mostrado más chico para poder diagnosticar
@@ -385,7 +386,7 @@ export default function AvPhaseTable({
             Seguimiento de pautas{' '}
             <span className="font-normal text-[#888] text-[13px]">— por fase del flujo</span>
           </h2>
-          {canEdit && (
+          {canEdit && allowCreate && (
             <button
               onClick={handleCreate}
               className="flex items-center gap-1.5 text-[13px] font-semibold text-[#111] bg-[#FFB800] px-3 py-1.5 rounded-lg hover:brightness-95"

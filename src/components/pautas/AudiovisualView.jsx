@@ -22,6 +22,7 @@ import AvCalendar from './AvCalendar'
 import AvPhaseTable from './AvPhaseTable'
 import AvAnalytics from './AvAnalytics'
 import PautaDetailModal from './PautaDetailModal'
+import PautaFormModal from './PautaFormModal'
 import DayPautasModal from './DayPautasModal'
 import WhatsAppAgendaModal from './WhatsAppAgendaModal'
 
@@ -87,6 +88,9 @@ export default function AudiovisualView({
   // (p. ej. mientras la página aún está cargando) y termine mostrando pautas de otras líneas.
   const [scopeLineId, setScopeLineId] = useState(ALL_LINES)
   const [detailPauta, setDetailPauta] = useState(null)
+  // Formulario de solicitud/edición del brief: null = cerrado, {mode:'create'} o
+  // {mode:'edit', pauta}.
+  const [form, setForm] = useState(null)
   const [dayDetail, setDayDetail] = useState(null)
   const [waOpen, setWaOpen] = useState(false)
   // Pestaña activa de AvPhaseTable, levantada aquí (en vez de vivir dentro de
@@ -394,12 +398,22 @@ export default function AudiovisualView({
             )}
           </>
         )}
-        <button
-          onClick={() => setWaOpen(true)}
-          className="flex items-center gap-1.5 text-[12.5px] font-semibold text-[#111] bg-[#25D366]/15 border border-[#25D366]/40 px-3 py-1.5 rounded-lg hover:bg-[#25D366]/25 transition-colors ml-auto"
-        >
-          Generar agenda WhatsApp
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={() => setWaOpen(true)}
+            className="flex items-center gap-1.5 text-[12.5px] font-semibold text-[#111] bg-[#25D366]/15 border border-[#25D366]/40 px-3 py-1.5 rounded-lg hover:bg-[#25D366]/25 transition-colors"
+          >
+            Generar agenda WhatsApp
+          </button>
+          {(canManage || canCoordinate) && (
+            <button
+              onClick={() => setForm({ mode: 'create' })}
+              className="flex items-center gap-1.5 text-[13px] font-semibold text-[#111] bg-[#FFB800] px-3 py-1.5 rounded-lg hover:brightness-95"
+            >
+              + {canCoordinate ? 'Agregar pauta' : 'Solicitar pauta'}
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3 mb-4">
@@ -468,6 +482,7 @@ export default function AudiovisualView({
           onChanged={handleChanged}
           onDeleted={handleDeleted}
           onPautaClick={setDetailPauta}
+          allowCreate={false}
         />
       </div>
 
@@ -500,6 +515,24 @@ export default function AudiovisualView({
           onPiezaChanged={handlePiezaChanged}
           onPiezaDeleted={handlePiezaDeleted}
           onClose={() => setDetailPauta(null)}
+        />
+      )}
+
+      {form && (
+        <PautaFormModal
+          pauta={form.mode === 'edit' ? form.pauta : null}
+          clients={scopedClients}
+          employees={employees.filter((u) => !u.deleted_at)}
+          pautas={pautas}
+          companyId={companyId}
+          userId={userProfile?.user_id}
+          defaultLineId={defaultLineId}
+          onClose={() => setForm(null)}
+          onSaved={(p) => {
+            handleChanged(p)
+            setForm(null)
+            setPhase('solicitudes')
+          }}
         />
       )}
 
