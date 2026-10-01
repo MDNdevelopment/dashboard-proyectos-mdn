@@ -151,8 +151,11 @@ describe('PautasPage — team "Independientes" para cuentas sin línea', () => {
     await waitFor(() => {
       expect(screen.getByText('Independientes')).toBeInTheDocument()
     })
-    // En "Todos" se ven ambas (la cuenta aparece además como opción del selector de cliente).
-    expect(screen.getAllByText('ConLinea').length).toBeGreaterThan(0)
+    screen.getByRole('tab', { name: /^Lista/ }).click()
+    // En "Todos" se ven ambas.
+    await waitFor(() => {
+      expect(screen.getAllByText('ConLinea').length).toBeGreaterThan(0)
+    })
     expect(screen.getAllByText('SinLinea').length).toBeGreaterThan(0)
 
     screen.getByText('Independientes').click()
@@ -167,6 +170,7 @@ describe('PautasPage — team "Independientes" para cuentas sin línea', () => {
     await waitFor(() => {
       expect(screen.getByText('Georgina')).toBeInTheDocument()
     })
+    screen.getByRole('tab', { name: /^Lista/ }).click()
     screen.getByText('Georgina').click()
     await waitFor(() => {
       expect(screen.queryAllByText('SinLinea')).toHaveLength(0)

@@ -76,6 +76,14 @@ describe('AvCalendar', () => {
     expect(screen.getByText('Cliente Realizada')).toBeInTheDocument()
   })
 
+  it('con showSolicitadas, una solicitud con fecha se pinta punteada', () => {
+    renderCalendar({
+      pautas: [pauta({ status: 'solicitada', client_name: 'Pedida' })],
+      showSolicitadas: true,
+    })
+    expect(screen.getByTitle(/Pedida/)).toHaveClass('border-dashed')
+  })
+
   it('las solicitudes (sin fecha confirmada) nunca se pintan, con o sin statusFilter', () => {
     renderCalendar({
       pautas: [pauta({ id: 'p1', client_name: 'Cliente Solicitud', status: 'solicitada' })],
