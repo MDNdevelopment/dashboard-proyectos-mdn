@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { vi } from 'vitest'
 import { createSupabaseMock, makeQuery } from './helpers/supabaseMock'
@@ -175,7 +175,9 @@ function renderView({ userProfile, can, lines = LINES, initialEntries = ['/tarea
 }
 
 const tab = (name) => screen.getByRole('tab', { name: new RegExp(`^${name}`) })
-const goLista = () => fireEvent.click(tab('Lista'))
+// Pestañas v3: Semana (default) · Datos · Mes · Todas (la antigua "Lista").
+const goLista = () => fireEvent.click(tab('Todas'))
+const goMes = () => fireEvent.click(tab('Mes'))
 
 const COORD = {
   user_id: 'coord-1',
@@ -262,10 +264,64 @@ describe('AudiovisualView — alcance por línea y permisos', () => {
     expect(screen.queryByLabelText('Acciones')).not.toBeInTheDocument()
   })
 
-  it('la pestaña Lista muestra cuántas solicitudes esperan aprobación', async () => {
+  it('la pestaña Todas muestra cuántas solicitudes esperan aprobación', async () => {
     renderView({ userProfile: COORD, can: () => true, lines: [] })
     await waitFor(() => expect(screen.getByText('Todos')).toBeInTheDocument())
     expect(screen.getByLabelText('2 solicitudes por aprobar')).toBeInTheDocument()
+  })
+})
+
+describe('AudiovisualView — shell por rol (Semana como inicio)', () => {
+  it('coordinación entra a Semana con las pestañas Semana · Datos · Mes · Todas', async () => {
+    renderView({ userProfile: COORD, can: () => true, lines: [] })
+    await waitFor(() => expect(screen.getByText('Todos')).toBeInTheDocument())
+    expect(tab('Semana')).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getAllByRole('tab').map((t) => t.textContent.replace(/\d.*$/, ''))).toEqual([
+      'Semana',
+      'Datos',
+      'Mes',
+      'Todas',
+    ])
+    expect(screen.getByTestId('semana-grid')).toBeInTheDocument()
+  })
+
+  it('la jefa de línea también entra a Semana y ve solo sus solicitudes en las alertas', async () => {
+    renderView({ userProfile: JEFA, can: (key) => key === 'audiovisual.manage', lines: [LINES[0]] })
+    await waitFor(() => expect(screen.getByText('+ Solicitar pauta')).toBeInTheDocument())
+    expect(tab('Semana')).toHaveAttribute('aria-selected', 'true')
+    // Solo p1 (Georgina) está en su alcance; p2 es de Sabrina.
+    expect(screen.getByRole('button', { name: /1 solicitud por aprobar/ })).toBeInTheDocument()
+  })
+
+  it('la pestaña Semana lleva el total de cosas por atender', async () => {
+    renderView({ userProfile: COORD, can: () => true, lines: [] })
+    await waitFor(() => expect(screen.getByText('Todos')).toBeInTheDocument())
+    // 2 solicitudes por aprobar (p1, p2). p3/p4 son del día 10 de este mes: según la fecha
+    // de hoy pueden contar o no como "pasadas sin captura", así que solo se exige el mínimo.
+    const badge = within(tab('Semana')).getByLabelText(/cosas por atender/)
+    expect(Number(badge.textContent)).toBeGreaterThanOrEqual(2)
+  })
+
+  it('desde Semana, abrir "solicitudes por aprobar" permite declinar sin salir de la vista', async () => {
+    renderView({ userProfile: COORD, can: () => true, lines: [] })
+    await waitFor(() => expect(screen.getByText('Todos')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /2 solicitudes por aprobar/ }))
+    const panel = screen.getByRole('dialog')
+    expect(
+      within(panel).getByRole('article', { name: /Solicitud Cliente Georgina/ }),
+    ).toBeInTheDocument()
+    expect(within(panel).getAllByRole('button', { name: 'Agendar' })).toHaveLength(2)
+    fireEvent.click(within(panel).getByLabelText('Cerrar panel'))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(tab('Semana')).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('el KPI del mes en Semana lleva a Datos', async () => {
+    renderView({ userProfile: COORD, can: () => true, lines: [] })
+    await waitFor(() => expect(screen.getByText('Todos')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Ver datos del mes' }))
+    expect(tab('Datos')).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByText('Pendiente por editar')).toBeInTheDocument()
   })
 })
 
@@ -330,6 +386,8 @@ describe('AudiovisualView — vista Calendario', () => {
 
   async function renderCoordinadora() {
     renderView({ userProfile: COORD, can: (key) => key === 'audiovisual.coordina', lines: [] })
+    await waitFor(() => expect(screen.getByText('+ Agregar pauta')).toBeInTheDocument())
+    goMes()
     await waitFor(() => expect(calendarPill('Cliente Agendada')).toBeInTheDocument())
   }
 
@@ -357,6 +415,8 @@ describe('AudiovisualView — vista Calendario', () => {
 describe('AudiovisualView — la Lista sigue al mes del calendario', () => {
   it('al navegar a otro mes, la agendada desaparece de la lista; las solicitudes sin fecha siguen', async () => {
     renderView({ userProfile: COORD, can: (key) => key === 'audiovisual.coordina', lines: [] })
+    await waitFor(() => expect(screen.getByText('+ Agregar pauta')).toBeInTheDocument())
+    goMes()
     await waitFor(() => expect(screen.getByTitle(/Cliente Agendada/)).toBeInTheDocument())
     fireEvent.click(screen.getByLabelText('Mes siguiente'))
     goLista()
@@ -368,11 +428,11 @@ describe('AudiovisualView — la Lista sigue al mes del calendario', () => {
   })
 })
 
-describe('AudiovisualView — vista Rendimiento', () => {
+describe('AudiovisualView — vista Datos', () => {
   it('muestra pendientes por editar y los dos rankings', async () => {
     renderView({ userProfile: COORD, can: () => true, lines: [] })
     await waitFor(() => expect(screen.getByText('Todos')).toBeInTheDocument())
-    fireEvent.click(tab('Rendimiento'))
+    fireEvent.click(tab('Datos'))
     expect(screen.getByText('Pendiente por editar')).toBeInTheDocument()
     expect(screen.getByText('Videos 4K + Reels')).toBeInTheDocument()
     expect(screen.getByText('Fotos')).toBeInTheDocument()

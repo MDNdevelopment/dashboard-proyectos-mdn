@@ -1,12 +1,6 @@
-export const VIEWS = [
-  { key: 'calendario', label: 'Calendario' },
-  { key: 'lista', label: 'Lista' },
-  { key: 'rendimiento', label: 'Rendimiento' },
-]
-
 /**
- * Barra superior del módulo: alcance por línea (pills), pestañas de vista (Calendario /
- * Lista / Rendimiento, con el nº de solicitudes pendientes de aprobar) y acciones globales.
+ * Barra superior del módulo: alcance por línea (pills), pestañas de vista (según el rol,
+ * con badges) y acciones globales. `views` = [{ key, label, badge?, badgeLabel? }].
  */
 export default function AvToolbar({
   canViewAll,
@@ -15,9 +9,9 @@ export default function AvToolbar({
   scopeLineId,
   allLinesKey,
   onScopeChange,
+  views,
   view,
   onViewChange,
-  pendingCount,
   canCreate,
   createLabel,
   onCreate,
@@ -80,7 +74,7 @@ export default function AvToolbar({
       </div>
 
       <div className="flex items-center gap-1 border-b border-[#e8e4d8]" role="tablist">
-        {VIEWS.map((v) => {
+        {views.map((v) => {
           const active = view === v.key
           return (
             <button
@@ -93,13 +87,15 @@ export default function AvToolbar({
               }`}
             >
               {v.label}
-              {v.key === 'lista' && pendingCount > 0 && (
+              {v.badge > 0 && (
                 <span
-                  className="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-[#e0b23d] text-[#111] text-[10.5px] font-mono font-bold"
-                  title={`${pendingCount} solicitudes por aprobar`}
-                  aria-label={`${pendingCount} solicitudes por aprobar`}
+                  className={`ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10.5px] font-mono font-bold ${
+                    v.badgeTone === 'red' ? 'bg-[#e45b5b] text-white' : 'bg-[#e0b23d] text-[#111]'
+                  }`}
+                  title={v.badgeLabel}
+                  aria-label={v.badgeLabel}
                 >
-                  {pendingCount}
+                  {v.badge}
                 </span>
               )}
               {active && (

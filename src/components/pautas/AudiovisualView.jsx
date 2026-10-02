@@ -16,9 +16,11 @@ import {
   leadLineIdsFor,
   pendingApprovalCount,
   pendientesPorEditar,
+  alertas as calcAlertas,
 } from '../../utils/audiovisual'
 import { effectiveLineId } from '../../utils/lineFilters'
 import AvToolbar from './AvToolbar'
+import AvSemanaView from './AvSemanaView'
 import AvCalendarView from './AvCalendarView'
 import AvListView from './AvListView'
 import AvRendimientoView from './AvRendimientoView'
@@ -69,7 +71,10 @@ export default function AudiovisualView({
   const [cnpRequests, setCnpRequests] = useState([])
   const [loading, setLoading] = useState(true)
   const [scopeLineId, setScopeLineId] = useState(ALL_LINES)
-  const [view, setView] = useState('calendario')
+  // Cada rol entra a la pantalla que le sirve: coordinación/jefas a Semana. El equipo
+  // audiovisual (recursos) entrará a "Mi trabajo" cuando exista (F9); hasta entonces todos
+  // arrancan en Semana para que nadie vea un área vacía.
+  const [view, setView] = useState('semana')
   const [calendarFilter, setCalendarFilter] = useState('todas')
   const [listFilter, setListFilter] = useState(DEFAULT_LIST_FILTER)
   // El detalle se guarda por id y se resuelve contra `pautas`: así siempre pinta la fila
@@ -114,7 +119,7 @@ export default function AudiovisualView({
     const pauta = pautas.find((p) => p.id === pautaId)
     if (pauta) {
       setDetailId(pauta.id)
-      setView('calendario')
+      setView('semana')
       if (pauta.pauta_date) {
         const [y, m] = pauta.pauta_date.split('-').map(Number)
         setPeriod({ year: y, month: m })
@@ -248,6 +253,24 @@ export default function AudiovisualView({
     generalLineId,
   )
   const pendingCount = pendingApprovalCount(scopedPautas)
+  const alertas = calcAlertas(visibleScopedPautas, piezasByPautaMap)
+  const views = [
+    {
+      key: 'semana',
+      label: 'Semana',
+      badge: alertas.total,
+      badgeLabel: `${alertas.total} cosas por atender`,
+      badgeTone: 'red',
+    },
+    { key: 'datos', label: 'Datos' },
+    { key: 'mes', label: 'Mes' },
+    {
+      key: 'todas',
+      label: 'Todas',
+      badge: pendingCount,
+      badgeLabel: `${pendingCount} solicitudes por aprobar`,
+    },
+  ]
   const detailPauta = detailId ? (pautas.find((p) => p.id === detailId) ?? null) : null
   const { deadline } = nextAgendaDeadline()
 
@@ -286,16 +309,30 @@ export default function AudiovisualView({
         scopeLineId={scopeLineId}
         allLinesKey={ALL_LINES}
         onScopeChange={setScopeLineId}
+        views={views}
         view={view}
         onViewChange={setView}
-        pendingCount={pendingCount}
         canCreate={canManage || canCoordinate}
         createLabel={canCoordinate ? 'Agregar pauta' : 'Solicitar pauta'}
         onCreate={() => setForm({ mode: 'create' })}
         onWhatsApp={() => setWaOpen(true)}
       />
 
-      {view === 'calendario' && (
+      {view === 'semana' && (
+        <AvSemanaView
+          pautas={visibleScopedPautas}
+          piezasByPauta={piezasByPautaMap}
+          usersById={usersById}
+          recursoUsers={recursoOptions}
+          allEmployees={activeEmployees}
+          canApprove={canCoordinate}
+          onFields={handlePautaFields}
+          onPautaClick={(p) => setDetailId(p.id)}
+          onGoDatos={() => setView('datos')}
+        />
+      )}
+
+      {view === 'mes' && (
         <AvCalendarView
           year={year}
           month={month}
@@ -309,7 +346,7 @@ export default function AudiovisualView({
         />
       )}
 
-      {view === 'lista' && (
+      {view === 'todas' && (
         <AvListView
           pautas={monthPautas}
           piezasByPauta={piezasByPautaMap}
@@ -324,7 +361,7 @@ export default function AudiovisualView({
         />
       )}
 
-      {view === 'rendimiento' && (
+      {view === 'datos' && (
         <AvRendimientoView
           pautas={visiblePautas}
           lines={linesWithGeneral}
@@ -335,7 +372,7 @@ export default function AudiovisualView({
           pendientes={pendientes}
           onSelectPendiente={(sel) => {
             setListFilter({ ...DEFAULT_LIST_FILTER, pendiente: sel })
-            setView('lista')
+            setView('todas')
           }}
         />
       )}
@@ -386,10 +423,7 @@ export default function AudiovisualView({
           onSaved={(p) => {
             handleChanged(p)
             setForm(null)
-            if (form.mode === 'create') {
-              setView('lista')
-              setListFilter({ ...DEFAULT_LIST_FILTER, status: 'solicitadas' })
-            }
+            if (form.mode === 'create') setView('semana')
           }}
         />
       )}
