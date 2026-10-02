@@ -26,6 +26,8 @@ import AvListView from './AvListView'
 import AvRendimientoView from './AvRendimientoView'
 import PautaDetail from './PautaDetail'
 import PautaFormModal from './PautaFormModal'
+import SolicitarWizard from './SolicitarWizard'
+import MisSolicitudes from './MisSolicitudes'
 import DayPautasModal from './DayPautasModal'
 import WhatsAppAgendaModal from './WhatsAppAgendaModal'
 
@@ -329,7 +331,15 @@ export default function AudiovisualView({
           onFields={handlePautaFields}
           onPautaClick={(p) => setDetailId(p.id)}
           onGoDatos={() => setView('datos')}
-        />
+        >
+          {!canCoordinate && (
+            <MisSolicitudes
+              pautas={visibleScopedPautas}
+              userId={userProfile?.user_id}
+              onPautaClick={(p) => setDetailId(p.id)}
+            />
+          )}
+        </AvSemanaView>
       )}
 
       {view === 'mes' && (
@@ -410,11 +420,11 @@ export default function AudiovisualView({
         />
       )}
 
-      {form && (
-        <PautaFormModal
-          pauta={form.mode === 'edit' ? form.pauta : null}
+      {form?.mode === 'create' && (
+        <SolicitarWizard
           clients={scopedClients}
           employees={activeEmployees}
+          recursoUsers={audiovisualUsers}
           pautas={pautas}
           companyId={companyId}
           userId={userProfile?.user_id}
@@ -423,7 +433,21 @@ export default function AudiovisualView({
           onSaved={(p) => {
             handleChanged(p)
             setForm(null)
-            if (form.mode === 'create') setView('semana')
+            setView('semana')
+          }}
+        />
+      )}
+
+      {form?.mode === 'edit' && (
+        <PautaFormModal
+          pauta={form.pauta}
+          clients={scopedClients}
+          employees={activeEmployees}
+          pautas={pautas}
+          onClose={() => setForm(null)}
+          onSaved={(p) => {
+            handleChanged(p)
+            setForm(null)
           }}
         />
       )}

@@ -316,6 +316,21 @@ describe('AudiovisualView — shell por rol (Semana como inicio)', () => {
     expect(tab('Semana')).toHaveAttribute('aria-selected', 'true')
   })
 
+  it('"Solicitar pauta" abre el asistente de 3 pasos con los clientes de la línea', async () => {
+    renderView({ userProfile: JEFA, can: (key) => key === 'audiovisual.manage', lines: [LINES[0]] })
+    await waitFor(() => expect(screen.getByText('+ Solicitar pauta')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('+ Solicitar pauta'))
+    const wizard = screen.getByRole('form', { name: 'Solicitar pauta' })
+    expect(within(wizard).getByRole('list', { name: 'Pasos' })).toHaveTextContent(
+      /Qué.*Cuándo.*Detalles/,
+    )
+    // Un solo cliente en su línea → ya viene elegido.
+    expect(within(wizard).getByText('Cliente Georgina')).toBeInTheDocument()
+    expect(within(wizard).queryByText('Cliente Sabrina')).not.toBeInTheDocument()
+    fireEvent.click(within(wizard).getByRole('button', { name: 'Cerrar' }))
+    expect(screen.queryByRole('form', { name: 'Solicitar pauta' })).not.toBeInTheDocument()
+  })
+
   it('el KPI del mes en Semana lleva a Datos', async () => {
     renderView({ userProfile: COORD, can: () => true, lines: [] })
     await waitFor(() => expect(screen.getByText('Todos')).toBeInTheDocument())

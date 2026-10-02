@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import AttendeePicker from '../reuniones/AttendeePicker'
 import PautaCuandoDondeFields from './PautaCuandoDondeFields'
-import { createPauta, updatePauta } from './avPautasApi'
+import { updatePauta } from './avPautasApi'
 import {
   FORMAT_KEYS,
   FORMAT_LABELS,
@@ -50,27 +50,15 @@ function sameValue(a, b) {
 }
 
 /**
- * Formulario de solicitud de pauta (crear) y de edición del brief (editar). Convención:
- * `pauta === null` crea; un objeto edita. Al crear se inserta ya enviada a coordinación
- * (`status: 'solicitada', submitted: true`). En una pauta ya programada/realizada la fecha,
- * hora y lugar no se tocan desde aquí — para eso está "Reagendar" en el detalle.
+ * Edición del brief de una pauta existente. Crear una pauta nueva es cosa de
+ * `SolicitarWizard` (tres pasos con huecos sugeridos). En una pauta ya programada/realizada
+ * la fecha, hora y lugar no se tocan desde aquí — para eso está "Reagendar" en el detalle.
  */
-export default function PautaFormModal({
-  pauta = null,
-  clients,
-  employees,
-  pautas,
-  companyId,
-  userId,
-  defaultLineId = null,
-  onClose,
-  onSaved,
-}) {
-  const isEdit = pauta != null
+export default function PautaFormModal({ pauta, clients, employees, pautas, onClose, onSaved }) {
   const [values, setValues] = useState(() => initialValues(pauta))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
-  const lockSchedule = isEdit && pauta.status !== 'solicitada'
+  const lockSchedule = pauta.status !== 'solicitada'
 
   const set = (field, v) => setValues((prev) => ({ ...prev, [field]: v }))
 
@@ -80,7 +68,7 @@ export default function PautaFormModal({
         date: values.pauta_date,
         salida: values.salida,
         clientId: values.client_id,
-        excludeId: pauta?.id ?? null,
+        excludeId: pauta.id,
       })
     : { blocking: [], warnings: [] }
   const missingStudioTime = esEstudio && !lockSchedule && (!values.pauta_date || !values.salida)
@@ -98,28 +86,18 @@ export default function PautaFormModal({
     if (!canSave) return
     setSaving(true)
     setError(null)
-    let result
-    if (isEdit) {
-      const changed = {}
-      FIELDS.forEach((f) => {
-        if (lockSchedule && ['pauta_date', 'salida', 'llegada', 'lugar_tipo', 'place'].includes(f))
-          return
-        if (!sameValue(values[f], initialValues(pauta)[f])) changed[f] = values[f]
-      })
-      if (Object.keys(changed).length === 0) {
-        setSaving(false)
-        onClose()
+    const changed = {}
+    FIELDS.forEach((f) => {
+      if (lockSchedule && ['pauta_date', 'salida', 'llegada', 'lugar_tipo', 'place'].includes(f))
         return
-      }
-      result = await updatePauta(pauta.id, changed)
-    } else {
-      result = await createPauta(
-        companyId,
-        { ...values, status: 'solicitada', submitted: true },
-        userId,
-        defaultLineId,
-      )
+      if (!sameValue(values[f], initialValues(pauta)[f])) changed[f] = values[f]
+    })
+    if (Object.keys(changed).length === 0) {
+      setSaving(false)
+      onClose()
+      return
     }
+    const result = await updatePauta(pauta.id, changed)
     setSaving(false)
     if (result.error) {
       setError(pautaErrorMessage(result.error))
@@ -137,17 +115,14 @@ export default function PautaFormModal({
       <form
         onSubmit={handleSubmit}
         className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col"
-        aria-label={isEdit ? 'Editar pauta' : 'Solicitar pauta'}
+        aria-label="Editar pauta"
       >
         <div className="flex-shrink-0 px-6 pt-5 pb-4 border-b border-[#ece9df] flex items-center justify-between">
           <div>
-            <h2 className="text-[17px] font-bold text-[#111]">
-              {isEdit ? 'Editar pauta' : 'Solicitar pauta'}
-            </h2>
+            <h2 className="text-[17px] font-bold text-[#111]">Editar pauta</h2>
             <p className="text-[12.5px] text-[#888] mt-0.5">
-              {isEdit
-                ? 'Corrige el brief. Fecha y hora de una pauta ya agendada se cambian con "Reagendar".'
-                : 'Coordinación recibirá la solicitud y la agendará con los recursos disponibles.'}
+              Corrige el brief. Fecha y hora de una pauta ya agendada se cambian con
+              &quot;Reagendar&quot;.
             </p>
           </div>
           <button
@@ -261,8 +236,8 @@ export default function PautaFormModal({
                 onChange={set}
                 pautas={pautas ?? []}
                 clientId={values.client_id}
-                excludeId={pauta?.id ?? null}
-                dateLabel={isEdit ? 'Fecha' : 'Fecha deseada'}
+                excludeId={pauta.id}
+                dateLabel="Fecha"
               />
             )}
           </Section>
@@ -294,7 +269,7 @@ export default function PautaFormModal({
               disabled={!canSave}
               className="bg-[#111] text-white text-[14px] font-bold px-5 py-2 rounded-xl hover:bg-[#222] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {saving ? 'Guardando…' : isEdit ? 'Guardar cambios' : 'Enviar solicitud'}
+              {saving ? 'Guardando…' : 'Guardar cambios'}
             </button>
           </div>
         </div>
