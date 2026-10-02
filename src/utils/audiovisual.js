@@ -1543,10 +1543,393 @@ export function pautaMatchesPendiente(
   return (pend[formato] ?? 0) > 0
 }
 
+// ─── Semana, alertas y ocupación (vista Semana) ────────────────────────────
+
+const CONFIRMADAS = ['programada', 'realizada']
+const ACTIVAS = ['solicitada', 'programada', 'realizada']
+/** Jornada del estudio para la barra de ocupación: bloques de 2h entre 08:00 y 18:00. */
+export const STUDIO_DAY_START = 8
+export const STUDIO_DAY_END = 18
+/** Días que una pauta realizada puede tener piezas sin editar antes de marcarse atrasada. */
+export const PIEZAS_ATRASO_DIAS = 7
+
+function addDays(iso, n) {
+  const d = parseISODate(iso)
+  d.setDate(d.getDate() + n)
+  return isoDateKey(d)
+}
+
+function diffDays(fromIso, toIso) {
+  return Math.round((parseISODate(toIso) - parseISODate(fromIso)) / 86400000)
+}
+
+/** Semana laboral (lunes a sábado) que contiene `date` (Date o 'YYYY-MM-DD'). */
+export function weekRange(date) {
+  const d = typeof date === 'string' ? parseISODate(date) : startOfDay(date)
+  const dow = (d.getDay() + 6) % 7 // lunes = 0
+  d.setDate(d.getDate() - dow)
+  const start = isoDateKey(d)
+  const days = Array.from({ length: 6 }, (_, i) => addDays(start, i))
+  return { start, end: days[5], days }
+}
+
+/** Pautas activas (no borradas) con fecha dentro del rango de la semana. */
+export function pautasInWeek(pautas, range) {
+  return (pautas ?? []).filter(
+    (p) =>
+      !p.deleted_at &&
+      ACTIVAS.includes(p.status) &&
+      p.pauta_date &&
+      p.pauta_date >= range.start &&
+      p.pauta_date <= range.end,
+  )
+}
+
+/** Map 'YYYY-MM-DD' → pautas de ese día ordenadas por salida. */
+export function groupByDay(pautas) {
+  const out = new Map()
+  sortAgenda(pautas ?? []).forEach((p) => {
+    if (!p.pauta_date) return
+    if (!out.has(p.pauta_date)) out.set(p.pauta_date, [])
+    out.get(p.pauta_date).push(p)
+  })
+  return out
+}
+
+/** Σ salieron / Σ listas de una pauta a partir de `piezas_por_formato` y sus lotes. */
+function capturaYEdicion(pauta, piezas) {
+  const breakdown = piezasPorFormato(pauta)
+  const salieron = Object.values(breakdown).reduce((s, e) => s + e.salieron, 0)
+  const listas = (piezas ?? [])
+    .filter((pz) => pz.status !== 'cancelado')
+    .reduce((s, pz) => s + piezaListas(pz), 0)
+  return { salieron, listas }
+}
+
+/**
+ * Estado "humano" de una pauta para la tarjeta de la semana:
+ *  aprobar (solicitada) · sin_captura (confirmada sin nada registrado) · capturada (hay
+ *  captura, nada editado) · editando (parcial) · lista (todo editado).
+ * @returns {{kind:string, label:string, pct:number|null, salieron:number, listas:number}}
+ */
+export function pautaEstadoResumen(pauta, piezas) {
+  if (pauta.status === 'solicitada') {
+    return { kind: 'aprobar', label: 'Por aprobar', pct: null, salieron: 0, listas: 0 }
+  }
+  if (pauta.status === 'declinada') {
+    return { kind: 'declinada', label: 'Declinada', pct: null, salieron: 0, listas: 0 }
+  }
+  const { salieron, listas } = capturaYEdicion(pauta, piezas)
+  if (salieron === 0) {
+    return { kind: 'sin_captura', label: 'Sin captura', pct: null, salieron, listas }
+  }
+  const pct = Math.min(100, Math.round((listas / salieron) * 100))
+  if (listas === 0)
+    return { kind: 'capturada', label: `${salieron} capturadas`, pct: 0, salieron, listas }
+  if (listas >= salieron)
+    return { kind: 'lista', label: 'Todo editado', pct: 100, salieron, listas }
+  return { kind: 'editando', label: `${listas}/${salieron} editadas`, pct, salieron, listas }
+}
+
+/**
+ * Cosas que necesitan acción hoy. Todas derivadas de datos existentes, nada que marcar:
+ *  - porAprobar: solicitadas enviadas.
+ *  - sinCaptura: confirmadas con fecha pasada (hasta ayer) y sin captura registrada.
+ *  - grillaIncumple: programadas futuras cuya grilla ya venció sin entregarse.
+ *  - piezasAtrasadas: realizadas hace > PIEZAS_ATRASO_DIAS con piezas pendientes.
+ */
+export function alertas(pautas, piezasByPauta, today = new Date()) {
+  const hoy = typeof today === 'string' ? today : isoDateKey(today)
+  const activas = (pautas ?? []).filter((p) => !p.deleted_at)
+  const porAprobar = activas.filter((p) => p.status === 'solicitada' && p.submitted)
+  const sinCaptura = activas.filter((p) => {
+    if (!CONFIRMADAS.includes(p.status) || !p.pauta_date || p.pauta_date >= hoy) return false
+    return capturaYEdicion(p, piezasByPauta?.get(p.id)).salieron === 0
+  })
+  // La grilla debe estar 2 días antes de la pauta (misma regla que grillaStatus); aquí
+  // interesa avisar ANTES de la pauta, cuando el plazo ya venció y aún se puede corregir.
+  const grillaIncumple = activas.filter(
+    (p) =>
+      p.status === 'programada' &&
+      p.pauta_date &&
+      p.pauta_date >= hoy &&
+      !p.grilla_delivered_at &&
+      !(p.link && String(p.link).trim()) &&
+      addDays(p.pauta_date, -2) < hoy,
+  )
+  const piezasAtrasadas = activas.filter((p) => {
+    if (p.status !== 'realizada' || !p.pauta_date) return false
+    if (diffDays(p.pauta_date, hoy) <= PIEZAS_ATRASO_DIAS) return false
+    const { salieron, listas } = capturaYEdicion(p, piezasByPauta?.get(p.id))
+    return salieron > listas
+  })
+  return {
+    porAprobar,
+    sinCaptura,
+    grillaIncumple,
+    piezasAtrasadas,
+    total: porAprobar.length + sinCaptura.length + grillaIncumple.length + piezasAtrasadas.length,
+  }
+}
+
+/**
+ * Ocupación del estudio en un día: bloques de STUDIO_WINDOW_HOURS entre STUDIO_DAY_START y
+ * STUDIO_DAY_END, cada uno con la pauta confirmada que lo ocupa (o null).
+ */
+export function ocupacionEstudio(pautas, date) {
+  const slots = estudioSlotsForDay(pautas, date).filter((s) => CONFIRMADAS.includes(s.status))
+  const bloques = []
+  for (let h = STUDIO_DAY_START; h < STUDIO_DAY_END; h += STUDIO_WINDOW_HOURS) {
+    const start = `${pad(h)}:00`
+    const end = `${pad(Math.min(24, h + STUDIO_WINDOW_HOURS))}:00`
+    const hit = slots.find((s) => s.start && timeRangesOverlap(start, end, s.start, s.end))
+    bloques.push({ start, end, pauta: hit?.pauta ?? null })
+  }
+  const ocupados = bloques.filter((b) => b.pauta).length
+  return { bloques, ocupados, pct: Math.round((ocupados / bloques.length) * 100) }
+}
+
+/** % de bloques del estudio usados en los días hábiles (lun–sáb) de un mes. */
+export function ocupacionEstudioMes(pautas, year, month) {
+  const dias = new Date(year, month, 0).getDate()
+  let total = 0
+  let ocupados = 0
+  for (let d = 1; d <= dias; d++) {
+    const date = new Date(year, month - 1, d)
+    if (date.getDay() === 0) continue
+    const { bloques, ocupados: o } = ocupacionEstudio(pautas, isoDateKey(date))
+    total += bloques.length
+    ocupados += o
+  }
+  return total ? Math.round((ocupados / total) * 100) : 0
+}
+
+/** Pautas confirmadas por recurso en la semana, marcando si algún día llega al límite. */
+export function cargaRecursos(pautas, range, usersById) {
+  const semana = pautasInWeek(pautas, range).filter((p) => CONFIRMADAS.includes(p.status))
+  const acc = new Map()
+  semana.forEach((p) => {
+    ;(p.recurso_ids ?? []).forEach((id) => {
+      if (!acc.has(id)) acc.set(id, { id, name: editorLabel(id, usersById), count: 0, porDia: {} })
+      const e = acc.get(id)
+      e.count++
+      e.porDia[p.pauta_date] = (e.porDia[p.pauta_date] ?? 0) + 1
+    })
+  })
+  return [...acc.values()]
+    .map((e) => ({
+      ...e,
+      sobrecargado: Object.values(e.porDia).some((n) => n >= RESOURCE_DAILY_LIMIT),
+    }))
+    .sort((a, b) => b.count - a.count)
+}
+
+// ─── Solicitar en 3 pasos: huecos sugeridos y mis solicitudes ──────────────
+
+/** Próximos `n` días hábiles (lun–sáb) desde mañana. */
+export function diasHabiles(from = new Date(), n = 10) {
+  const out = []
+  let iso = addDays(isoDateKey(typeof from === 'string' ? parseISODate(from) : from), 1)
+  while (out.length < n) {
+    if (parseISODate(iso).getDay() !== 0) out.push(iso)
+    iso = addDays(iso, 1)
+  }
+  return out
+}
+
+/**
+ * Horas candidatas (08:00–17:00) para una pauta en `date`, con su estado:
+ *  - estudio: 'ocupado' si choca con una confirmada de otro cliente; 'aviso' si choca con
+ *    una solicitud pendiente o con una confirmada sin hora; 'libre' si no.
+ *  - locación: 'aviso' si todos los recursos de audiovisual ya tienen RESOURCE_DAILY_LIMIT
+ *    pautas ese día; 'libre' si no (no se reserva nada).
+ */
+export function sugerirHuecos(
+  pautas,
+  date,
+  { clientId = null, lugarTipo = 'locacion', recursoIds = [] } = {},
+) {
+  const horas = []
+  for (let h = STUDIO_DAY_START; h <= 17; h++) horas.push(`${pad(h)}:00`)
+  if (!date) return horas.map((hora) => ({ hora, estado: 'libre', motivo: null }))
+  const delDia = (pautas ?? []).filter(
+    (p) => !p.deleted_at && p.pauta_date === date && CONFIRMADAS.includes(p.status),
+  )
+  const saturado =
+    recursoIds.length > 0 &&
+    recursoIds.every(
+      (id) =>
+        delDia.filter((p) => (p.recurso_ids ?? []).includes(id)).length >= RESOURCE_DAILY_LIMIT,
+    )
+  return horas.map((hora) => {
+    if (lugarTipo === 'estudio') {
+      const { blocking, warnings } = estudioConflicts(pautas, { date, salida: hora, clientId })
+      if (blocking.length)
+        return { hora, estado: 'ocupado', motivo: blocking[0].pauta.client_name || 'otra pauta' }
+      if (warnings.length)
+        return {
+          hora,
+          estado: 'aviso',
+          motivo:
+            warnings[0].kind === 'solicitada'
+              ? `solicitud de ${warnings[0].pauta.client_name || 'otra línea'}`
+              : 'pauta sin hora en el estudio',
+        }
+      return { hora, estado: 'libre', motivo: null }
+    }
+    return saturado
+      ? { hora, estado: 'aviso', motivo: 'todos los recursos ya tienen pautas ese día' }
+      : { hora, estado: 'libre', motivo: null }
+  })
+}
+
+/** Pautas que pidió `userId`, no borradas, más recientes primero. */
+export function misSolicitudes(pautas, userId) {
+  if (!userId) return []
+  return (pautas ?? [])
+    .filter((p) => p.created_by === userId && !p.deleted_at)
+    .sort((a, b) => String(b.created_at ?? '').localeCompare(String(a.created_at ?? '')))
+}
+
+/** Mini-timeline Solicitada → Agendada → Realizada (o Declinada) con la fecha de cada hito. */
+export function hitosPauta(pauta) {
+  const creada = pauta.created_at ? String(pauta.created_at).slice(0, 10) : null
+  if (pauta.status === 'declinada') {
+    return [
+      { key: 'solicitada', label: 'Solicitada', date: creada, done: true },
+      { key: 'declinada', label: 'Declinada', date: null, done: true },
+    ]
+  }
+  const agendada = ['programada', 'realizada'].includes(pauta.status)
+  const realizada = pauta.status === 'realizada'
+  return [
+    { key: 'solicitada', label: 'Solicitada', date: creada, done: true },
+    {
+      key: 'agendada',
+      label: 'Agendada',
+      date: agendada ? pauta.pauta_date : null,
+      done: agendada,
+    },
+    {
+      key: 'realizada',
+      label: 'Realizada',
+      date: realizada ? pauta.pauta_date : null,
+      done: realizada,
+    },
+  ]
+}
+
+// ─── Mi trabajo (recursos) ─────────────────────────────────────────────────
+
+/**
+ * Lo que un recurso tiene que hacer: pautas de hoy y próximas donde es recurso, lotes
+ * propios con piezas por entregar, y un resumen para la cabecera.
+ */
+export function miTrabajo(pautas, piezas, userId, today = new Date()) {
+  const hoy = typeof today === 'string' ? today : isoDateKey(today)
+  const { start, end } = weekRange(hoy)
+  const mias = sortAgenda(
+    (pautas ?? []).filter(
+      (p) =>
+        !p.deleted_at && CONFIRMADAS.includes(p.status) && (p.recurso_ids ?? []).includes(userId),
+    ),
+  )
+  const hoyList = mias.filter((p) => p.pauta_date === hoy)
+  const proximas = mias.filter((p) => p.pauta_date && p.pauta_date > hoy)
+  const pasadasSinCaptura = mias.filter(
+    (p) =>
+      p.pauta_date &&
+      p.pauta_date < hoy &&
+      Object.values(grabacionPorFormato(p)).every((r) => Object.keys(r).length === 0),
+  )
+  const byPauta = new Map((pautas ?? []).map((p) => [p.id, p]))
+  const porEditar = (piezas ?? [])
+    .filter(
+      (pz) =>
+        pz.es_lote &&
+        pz.editor_user_id === userId &&
+        (Number(pz.listas) || 0) < (Number(pz.cantidad) || 0) &&
+        byPauta.get(pz.pauta_id) &&
+        !byPauta.get(pz.pauta_id).deleted_at,
+    )
+    .map((lote) => ({ lote, pauta: byPauta.get(lote.pauta_id) }))
+    .sort((a, b) => agendaSortKey(a.pauta).localeCompare(agendaSortKey(b.pauta)))
+  const pendientes = porEditar.reduce(
+    (s, { lote }) => s + ((Number(lote.cantidad) || 0) - (Number(lote.listas) || 0)),
+    0,
+  )
+  return {
+    hoy: hoyList,
+    proximas,
+    pasadasSinCaptura,
+    porEditar,
+    resumen: {
+      pautasSemana: mias.filter((p) => p.pauta_date >= start && p.pauta_date <= end).length,
+      pendientes,
+    },
+  }
+}
+
+/**
+ * Formatos con cupo por asignar (salieron − asignadas > 0) en pautas donde `canTake(pauta)`
+ * autoriza a insertar un lote. Devuelve una fila por (pauta, formato).
+ */
+export function disponiblesParaTomar(pautas, piezasByPauta, canTake) {
+  const out = []
+  ;(pautas ?? []).forEach((p) => {
+    if (p.deleted_at || !CONFIRMADAS.includes(p.status) || !canTake(p)) return
+    const breakdown = piezasPorFormato(p)
+    const lotes = (piezasByPauta?.get(p.id) ?? []).filter((pz) => pz.es_lote)
+    Object.entries(breakdown).forEach(([formato, { salieron }]) => {
+      const asignadas = lotes
+        .filter((l) => l.formato === formato)
+        .reduce((s, l) => s + (Number(l.cantidad) || 0), 0)
+      const faltan = salieron - asignadas
+      if (faltan > 0) out.push({ pauta: p, formato, faltan })
+    })
+  })
+  return out
+}
+
+// ─── Datos: resumen del mes ────────────────────────────────────────────────
+
+/**
+ * Conclusiones del mes: % editado, capturadas, editadas, pautas realizadas/solicitadas y
+ * ocupación del estudio. `pautas` ya acotadas al alcance (línea) pero NO al mes.
+ */
+export function resumenMes(pautas, piezasByPauta, { year, month }) {
+  const delMes = (pautas ?? []).filter(
+    (p) => !p.deleted_at && p.pauta_date && isoMonth(p.pauta_date) === `${year}-${pad(month)}`,
+  )
+  let capturadas = 0
+  let editadas = 0
+  delMes
+    .filter((p) => CONFIRMADAS.includes(p.status))
+    .forEach((p) => {
+      const { salieron, listas } = capturaYEdicion(p, piezasByPauta?.get(p.id))
+      capturadas += salieron
+      editadas += Math.min(salieron, listas)
+    })
+  return {
+    pctEditado: capturadas ? Math.round((editadas / capturadas) * 100) : null,
+    capturadas,
+    editadas,
+    pendientes: capturadas - editadas,
+    realizadas: delMes.filter((p) => p.status === 'realizada').length,
+    programadas: delMes.filter((p) => p.status === 'programada').length,
+    solicitadas: (pautas ?? []).filter((p) => !p.deleted_at && p.status === 'solicitada').length,
+    ocupacionEstudio: ocupacionEstudioMes(pautas, year, month),
+  }
+}
+
+function isoMonth(iso) {
+  return String(iso).slice(0, 7)
+}
+
 // ─── Generador de agenda para WhatsApp ─────────────────────────────────────
 
 /** 'YYYY-MM-DD' local, mismo formato que `pauta_date` — comparable lexicográficamente. */
-function isoDateKey(date) {
+export function isoDateKey(date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 
