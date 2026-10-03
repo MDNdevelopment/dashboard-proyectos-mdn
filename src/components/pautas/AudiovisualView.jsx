@@ -24,7 +24,7 @@ import AvToolbar from './AvToolbar'
 import AvSemanaView from './AvSemanaView'
 import AvCalendarView from './AvCalendarView'
 import AvListView from './AvListView'
-import AvRendimientoView from './AvRendimientoView'
+import AvDatosView from './AvDatosView'
 import PautaDetail from './PautaDetail'
 import PautaFormModal from './PautaFormModal'
 import SolicitarWizard from './SolicitarWizard'
@@ -40,7 +40,13 @@ function currentYearMonth() {
   return { year: d.getFullYear(), month: d.getMonth() + 1 }
 }
 
-const DEFAULT_LIST_FILTER = { status: 'solicitadas', recursoId: null, query: '', pendiente: null }
+const DEFAULT_LIST_FILTER = {
+  status: 'solicitadas',
+  recursoId: null,
+  query: '',
+  pendiente: null,
+  lineId: null,
+}
 
 /**
  * Módulo Pautas (Tareas Fijas → Audiovisual): dueño del estado (pautas, piezas, empleados,
@@ -415,16 +421,27 @@ export default function AudiovisualView({
       )}
 
       {view === 'datos' && (
-        <AvRendimientoView
+        <AvDatosView
           pautas={visiblePautas}
+          allPautas={visibleScopedPautas}
+          year={year}
+          month={month}
           lines={linesWithGeneral}
           generalLineId={generalLineId}
           usersById={usersById}
           piezasByPauta={piezasByPautaMap}
           cnpAv={cnpAv}
           pendientes={pendientes}
+          onMonthChange={(ym) => {
+            const [y, m] = ym.split('-').map(Number)
+            goToMonth(y, m)
+          }}
           onSelectPendiente={(sel) => {
             setListFilter({ ...DEFAULT_LIST_FILTER, pendiente: sel })
+            setView('todas')
+          }}
+          onSelectLine={(lineId) => {
+            setListFilter({ ...DEFAULT_LIST_FILTER, status: 'agendadas', lineId })
             setView('todas')
           }}
         />

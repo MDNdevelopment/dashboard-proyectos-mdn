@@ -106,6 +106,32 @@ describe('AvListView', () => {
     expect(onFilterChange).toHaveBeenCalledWith(expect.objectContaining({ pendiente: null }))
   })
 
+  it('el filtro de línea (desde Datos) acota las pautas y se puede quitar', () => {
+    const { onFilterChange } = setup(
+      {
+        status: 'agendadas',
+        lineId: 'l1',
+      },
+      {
+        pautas: [
+          ...pautas,
+          p({
+            id: 'e',
+            client_name: 'Otra línea E',
+            status: 'programada',
+            line_id: 'l2',
+            pauta_date: '2026-10-11',
+          }),
+        ],
+      },
+    )
+    expect(screen.getByText('Línea: Georgina')).toBeInTheDocument()
+    expect(screen.getByText('Agendada B')).toBeInTheDocument()
+    expect(screen.queryByText('Otra línea E')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByLabelText('Quitar filtro de línea'))
+    expect(onFilterChange).toHaveBeenCalledWith(expect.objectContaining({ lineId: null }))
+  })
+
   it('papelera lista solo las borradas', () => {
     setup({ status: 'papelera' })
     expect(screen.getByText('Borrada D')).toBeInTheDocument()

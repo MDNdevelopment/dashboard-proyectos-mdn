@@ -27,16 +27,19 @@ export default function AvListView({
   pendientes,
   onPautaClick,
 }) {
-  const { status, recursoId, query, pendiente } = filter
+  const { status, recursoId, query, pendiente, lineId = null } = filter
+  const enLinea = (p) => !lineId || (p.line_id ?? generalLineId) === lineId
   const counts = Object.fromEntries(
-    LIST_FILTERS.map((f) => [f, pautas.filter((p) => pautaMatchesList(p, f)).length]),
+    LIST_FILTERS.map((f) => [f, pautas.filter((p) => enLinea(p) && pautaMatchesList(p, f)).length]),
   )
   const visible = sortForList(
     pautas.filter(
       (p) =>
+        enLinea(p) &&
         (pendiente
           ? pautaMatchesPendiente(p, pendientes.porPauta, pendiente, generalLineId)
-          : pautaMatchesList(p, status)) && pautaMatchesQuery(p, { recursoId, query, usersById }),
+          : pautaMatchesList(p, status)) &&
+        pautaMatchesQuery(p, { recursoId, query, usersById }),
     ),
     pendiente ? 'agendadas' : status,
   )
@@ -49,6 +52,19 @@ export default function AvListView({
   return (
     <div className="bg-white border border-[#e0ddd4] rounded-2xl overflow-hidden">
       <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-[#ece9df]">
+        {lineId && (
+          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#111] text-[#FFB800] text-[13px] font-semibold">
+            Línea: {lineName({ line_id: lineId })}
+            <button
+              type="button"
+              onClick={() => set({ lineId: null })}
+              aria-label="Quitar filtro de línea"
+              className="w-4 h-4 rounded-full hover:bg-white/20 flex items-center justify-center"
+            >
+              ✕
+            </button>
+          </span>
+        )}
         {pendiente ? (
           <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#fdf4de] text-[#9a7400] text-[13px] font-semibold">
             Pendiente por editar: {pendiente.formato ? PENDIENTE_LABELS[pendiente.formato] : 'todo'}
