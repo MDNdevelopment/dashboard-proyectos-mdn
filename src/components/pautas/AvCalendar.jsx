@@ -34,6 +34,7 @@ export default function AvCalendar({
   month,
   pautas,
   statusFilter = null,
+  showSolicitadas = false,
   onMonthChange,
   onDayClick,
   onPautaClick,
@@ -43,9 +44,12 @@ export default function AvCalendar({
   const gridEnd = endOfWeek(endOfMonth(anchor), { weekStartsOn: 1 })
   const days = eachDayOfInterval({ start: gridStart, end: gridEnd })
 
+  // Las solicitadas con fecha deseada se pintan punteadas (ámbar) solo si se pide: no
+  // son agenda confirmada, pero ayudan a ver qué está pidiendo cada línea.
+  const visibleStatuses = ['programada', 'realizada', ...(showSolicitadas ? ['solicitada'] : [])]
   const byDay = new Map()
   pautas
-    .filter((p) => p.pauta_date && (p.status === 'programada' || p.status === 'realizada'))
+    .filter((p) => p.pauta_date && visibleStatuses.includes(p.status))
     .filter((p) => !statusFilter || p.status === statusFilter)
     .forEach((p) => {
       if (!byDay.has(p.pauta_date)) byDay.set(p.pauta_date, [])
@@ -169,7 +173,12 @@ export default function AvCalendar({
 
 function PautaPill({ pauta, onClick }) {
   const status = grillaStatus(pauta)
-  const border = status === 'incumple' ? 'border-red-300' : 'border-transparent'
+  const border =
+    pauta.status === 'solicitada'
+      ? 'border-dashed border-[#e0b23d] bg-[#fffbea]'
+      : status === 'incumple'
+        ? 'border-red-300'
+        : 'border-transparent'
   return (
     <div
       role="button"
