@@ -17,6 +17,7 @@ import {
   pendingApprovalCount,
   pendientesPorEditar,
   alertas as calcAlertas,
+  miTrabajo as calcMiTrabajo,
 } from '../../utils/audiovisual'
 import { effectiveLineId } from '../../utils/lineFilters'
 import AvToolbar from './AvToolbar'
@@ -28,6 +29,7 @@ import PautaDetail from './PautaDetail'
 import PautaFormModal from './PautaFormModal'
 import SolicitarWizard from './SolicitarWizard'
 import MisSolicitudes from './MisSolicitudes'
+import MiTrabajoView from './MiTrabajoView'
 import DayPautasModal from './DayPautasModal'
 import WhatsAppAgendaModal from './WhatsAppAgendaModal'
 
@@ -73,10 +75,10 @@ export default function AudiovisualView({
   const [cnpRequests, setCnpRequests] = useState([])
   const [loading, setLoading] = useState(true)
   const [scopeLineId, setScopeLineId] = useState(ALL_LINES)
-  // Cada rol entra a la pantalla que le sirve: coordinación/jefas a Semana. El equipo
-  // audiovisual (recursos) entrará a "Mi trabajo" cuando exista (F9); hasta entonces todos
-  // arrancan en Semana para que nadie vea un área vacía.
-  const [view, setView] = useState('semana')
+  // Cada rol entra a la pantalla que le sirve: coordinación/jefas a Semana; el equipo
+  // audiovisual (recursos, sin coordinar) a Mi trabajo.
+  const esRecurso = userProfile?.department_id === 2 && !canCoordinate
+  const [view, setView] = useState(esRecurso ? 'mitrabajo' : 'semana')
   const [calendarFilter, setCalendarFilter] = useState('todas')
   const [listFilter, setListFilter] = useState(DEFAULT_LIST_FILTER)
   // El detalle se guarda por id y se resuelve contra `pautas`: así siempre pinta la fila
@@ -256,6 +258,21 @@ export default function AudiovisualView({
   )
   const pendingCount = pendingApprovalCount(scopedPautas)
   const alertas = calcAlertas(visibleScopedPautas, piezasByPautaMap)
+  const permsFor = (p) =>
+    pautaPermissions({
+      canCoordinate,
+      canGestionPautas,
+      canManage,
+      userId: userProfile?.user_id,
+      pauta: p,
+      leadLineIds,
+    })
+  // "Mi trabajo" existe para los recursos y para cualquiera que tenga algo propio que
+  // marcar (pautas asignadas o lotes por entregar).
+  const mio = calcMiTrabajo(visibleScopedPautas, piezas, userProfile?.user_id)
+  const tieneTrabajo =
+    esRecurso ||
+    mio.hoy.length + mio.proximas.length + mio.pasadasSinCaptura.length + mio.porEditar.length > 0
   const views = [
     {
       key: 'semana',
@@ -264,6 +281,16 @@ export default function AudiovisualView({
       badgeLabel: `${alertas.total} cosas por atender`,
       badgeTone: 'red',
     },
+    ...(tieneTrabajo
+      ? [
+          {
+            key: 'mitrabajo',
+            label: 'Mi trabajo',
+            badge: mio.resumen.pendientes,
+            badgeLabel: `${mio.resumen.pendientes} piezas por editar`,
+          },
+        ]
+      : []),
     { key: 'datos', label: 'Datos' },
     { key: 'mes', label: 'Mes' },
     {
@@ -340,6 +367,22 @@ export default function AudiovisualView({
             />
           )}
         </AvSemanaView>
+      )}
+
+      {view === 'mitrabajo' && (
+        <MiTrabajoView
+          pautas={visibleScopedPautas}
+          piezas={piezas}
+          piezasByPauta={piezasByPautaMap}
+          usersById={usersById}
+          userId={userProfile?.user_id}
+          userName={usersById.get(userProfile?.user_id)?.first_name ?? ''}
+          permsFor={permsFor}
+          companyId={companyId}
+          onFields={handlePautaFields}
+          onPiezaChanged={handlePiezaChanged}
+          onPautaClick={(p) => setDetailId(p.id)}
+        />
       )}
 
       {view === 'mes' && (

@@ -331,6 +331,27 @@ describe('AudiovisualView — shell por rol (Semana como inicio)', () => {
     expect(screen.queryByRole('form', { name: 'Solicitar pauta' })).not.toBeInTheDocument()
   })
 
+  it('un recurso del equipo audiovisual entra a "Mi trabajo" y ve sus pautas asignadas', async () => {
+    renderView({
+      userProfile: {
+        user_id: 'editor-1',
+        company_id: 'co-1',
+        access_level: 1,
+        admin: false,
+        department_id: 2,
+      },
+      can: (key) => key === 'audiovisual.piezas',
+      lines: [],
+    })
+    await waitFor(() => expect(tab('Mi trabajo')).toBeInTheDocument())
+    expect(tab('Mi trabajo')).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('heading', { name: /^Mi trabajo/ })).toBeInTheDocument()
+    // p4 (Cliente Realizada, día 10 de este mes) lo tiene como recurso: según la fecha de hoy
+    // cae en Hoy, Próximas o Pendiente de registrar, pero siempre está en su pantalla.
+    expect(screen.getByText('Cliente Realizada')).toBeInTheDocument()
+    expect(screen.queryByText('Cliente Georgina')).not.toBeInTheDocument()
+  })
+
   it('el KPI del mes en Semana lleva a Datos', async () => {
     renderView({ userProfile: COORD, can: () => true, lines: [] })
     await waitFor(() => expect(screen.getByText('Todos')).toBeInTheDocument())
