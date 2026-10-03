@@ -1,0 +1,8 @@
+node_modules/
+dist/
+coverage/
+reports/
+package-lock.json
+# Docs de arquitectura: prettier re-alinea tablas markdown con relleno de espacios y las infla
+ARQUITECTURA.md
+docs/arquitectura/

@@ -1,0 +1,40 @@
+# Interconexiones entre módulos (§4)
+
+## Conexiones activas
+Formato: Origen → Destino: qué dato, dónde se calcula (archivo).
+
+### Datos relacionales
+- Tareas → Empresa/Métricas: `tasks.client_id → metric_clients.id`, `tasks.team_id → metric_lines.id` (§2.4).
+- Ads → Empresa/Métricas: `campaigns.client_id → metric_clients.id` (Tácticas) y `paid_campaigns.client_id → metric_clients.id` (Ads); tab Ads compara contra `metric_clients.campaign_budget` (tracking mensual + aviso de sobrepaso).
+- Reuniones → Empresa/Métricas: `meetings.client_id → metric_clients.id`, `meetings.line_id → metric_lines.id` (snapshot del `line_id` del cliente al crear/editar, §2.11); `AttendeePicker` arma `meetings.attendee_ids` según `users.access_level`.
+- Clientes → Empleados (equipo asignado): `metric_clients.social_manager_id`/`designer_id` → `users.user_id` (dept Redes=1, Diseño=3); `audiovisual_ids`/`apoyo_ids` arrays de `user_id`. `ClientModal.jsx` filtra candidatos con `assignableUsers(employees, selectedLine, allLines)` (`src/utils/lineFilters.js`: miembros de la línea + pool "Independientes", §2.4) y luego por `department_id`. `ClientsView` pasa `employees` (`loadCompanyEmployees`) y `lines` = todas las líneas reales (`loadLines` sin filtrar visibilidad; = `allLines`).
+
+### Datos derivados (sembrado / cálculo)
+- Tareas/CNP/Tareas Fijas/Audiovisual/Reuniones/Ads/Chequeo/Tickets → Evaluaciones: 9 indicadores del score automático (§2.7) desde `tasks`, `cnp_requests`, `fixed_task_marks`, `av_pauta_piezas`, `meetings`, `campaigns`/`paid_campaigns`, `publication_checks`, `support_tickets`; sin captura manual (`src/utils/employeeScore.js`).
+- Empresa → Métricas (mensualidad): `metric_clients.monthly_fee` siembra `metric_reports.data.finanzas.ingresos` (editable mes a mes); `FinanzasView` carga clientes de la línea, `syncReportClients`/`initMetricReport` sincronizan.
+- Empresa → Métricas (sueldos): `users.monthly_salary` de los miembros (`metric_lines.member_user_ids`) siembra `metric_reports.data.finanzas.sueldos` (sembrar-y-editar) vía `FinanzasView` + `syncReportClients`/`initMetricReport`. Visible solo nivel 4/admin (`isFinancePrivileged`); `monthly_salary` editable solo por nivel 4/admin en `EmployeeModal`/`NewEmployeeDialog`.
+- Ads → Métricas (Crecimiento de seguidores): columna "Inversión Ads" en sección 3 de `OperacionesView` = `spentByClientInPeriod(ads, clienteId, { month, year })` (Σ `amount` con `start_date` en el mes) `/ metric_clients.campaign_budget` si existe; `paid_campaigns` vía `loadAds(companyId)`. Solo lectura, no se persiste en `metric_reports`.
+- Reuniones → Métricas ("1. Reuniones realizadas"): `OperacionesView` llama `countMeetingsHeldForLine(companyId, line.id, {month, year})` (`meetingsApi.js`) y siembra `metric_reports.data.reuniones.realizadas` en cada carga (solo lectura). No siembra en meses anteriores a `REUNIONES_MODULE_START` ni en reportes cerrados (§2.5): conserva el valor guardado.
+- CNP + Tareas → Métricas ("4. Solicitudes vs Entregados"): `OperacionesView` cuenta por línea/mes creadas y `Terminado` con `countCnpSolicitudesForLine` (cuenta **piezas**: `cnpPieceCount`/`cnpPiecesDelivered`; un CNP con `pieces` aporta una por elemento) y `countTareasSolicitudesForLine`; siembra `metric_reports.data.solicitudes.{cnp,tareas}` en cada carga (solo lectura); `calcSolicitudes` reparte 5+5 pts. No siembra antes de `SOLICITUDES_MODULE_START` ni en reportes cerrados (conserva valor manual).
+- Métricas/Tareas/Empresa/Ads/Leads → Inicio (Análisis IA): `ceo-analysis.js` (§2.2) lee `metric_lines`/`metric_reports`, `tasks`, `metric_clients`, `paid_campaigns`, `leads`; mismas fórmulas que Reportes (`metricsScore.js`/`metricsFinance.js`/`aggregateMetricsDashboard.js`); sin tablas nuevas, caché 24h en `ceo_analysis`.
+- Fuentes → lectura de reportes (Resumen, Inicio, Hub de línea, Empresa): aplican el "Reporte efectivo" (§2.5) vía `loadYearReportsEffective`/`buildEffectiveReport` en vez de leer el jsonb tal cual (Productividad–Tareas Fijas y Solicitudes vs. Entregados derivados de `fixed_task_marks`, `publication_checks`, `cnp_requests`, `tasks`).
+
+### Notificaciones
+- Tareas/Proyectos → Notificaciones: triggers sobre `tasks.assignee_ids` y `projects.members` insertan en `notifications`; Edge fn `notify-dispatch` envía correo (Resend) (§2.9).
+- Reuniones → Notificaciones: `notify_meeting_attendees()` (trigger sobre `meetings.attendee_ids`) + `enqueue_meeting_reminders()` (pg_cron cada 15 min) → `meeting_invite`, `meeting_reminder_day`, `meeting_reminder_hour`.
+- Empresa → Notificaciones (fechas): pg_cron diario lee `metric_clients.anniversary_date`, `metric_clients.mdn_since`, `metric_clients.contacts[].birth_day/birth_month`, `users.birth_date`, `users.hire_date`; destinatarios por `metric_lines.member_user_ids` y `users.access_level` (solo in-app).
+
+### Navegación (deep-links y modales)
+- Reportes → Tareas: "Ver tareas de este cliente" en `ClientFichaModal` → `/tareas?view=base&team={lineId}&client={clienteId}`; `TareasPage` lee `?team=`, `BaseView` lee `?client=` (filtra `client_id`, pill removible).
+- Reportes → Evaluaciones: `EmployeeInfoModal` (desde `LineHubView`) botón "Ver perfil completo" → `/evaluaciones/empleado/{userId}` (historial legacy, solo lectura) si `can('evaluaciones')`; `EvaluacionesPage` redirige a `/evaluaciones/mi-desempeno` si no es el propio empleado y no tiene `evaluaciones.ver_todo`.
+- Reportes → ficha empleado: `LineHubView` (Resumen) carga miembros con `loadCompanyEmployees(companyId)` (select completo con joins) + `line.member_user_ids`; clic → `EmployeeInfoModal`.
+- Reportes → ficha cliente: clic en marca en `LineHubView` (columna Marcas), `OperacionesView` (ClientLink) o `FinanzasView` (filas de ingresos/tarjetas) → `ClientFichaModal` (objetos de `metric_clients` ya en estado local).
+- Empresa → fichas (drill-down): card de línea en `LinesView` → `LineFichaModal` (read-only); miembros/clientes drillean dentro del modal a `EmployeeFichaContent`/`ClientFichaContent` (cuerpos de Reportes), heredando gating financiero y deep-links a Evaluaciones/Tareas.
+- Empresa → Reportes (financiero): KPIs "Ingresos brutos"/"Total egresos" de `LineFichaModal` (visibles con `isFinancePrivileged`, navegables si además `can('reportes')`) → `/reportes/linea/{lineId}?tab=finanzas&section=ingresos | gastos`. `FinanzasView` lee `?section=` (`useSearchParams`), scroll one-shot (`ingresosRef`/`gastosRef`) tras la primera carga y limpia el param con `replace`.
+- Reportes → Reportes: KPI "Línea líder" (`DashboardView`) → `/reportes/linea/{lineId}`; tarjetas financieras → `?tab=finanzas`; sub-links "N cuentas"/"N empleados" → `?tab=operaciones` / Resumen. `LineView` lee `?tab=hub | operaciones | finanzas`.
+
+## Deuda residual (aceptada a propósito)
+- **Zona horaria de cortes de mes:** `countMeetingsHeldForLine` y equivalentes de `av_pautas`/`cnp_requests`/`tasks` usan `new Date(year, month-1, 1)` (medianoche local del navegador) → ~4h mal clasificadas en el borde de mes (Venezuela UTC-4). `reportSourcesApi.js` lo preserva a propósito para no mover histórico. Arreglo pendiente: debe tocar las 4 fuentes y el cron de autocierre a la vez.
+- **Convergencia por visita:** el auto-guardado (§2.5) solo persiste al abrir Resumen u Operaciones; no hay job que reconcilie reportes abiertos en segundo plano.
+- **Empleado archivado sigue asignado a clientes:** `netlify/functions/archive-employee.js` limpia `metric_line_members` pero **no** `social_manager_id`/`designer_id`/`audiovisual_ids`/`apoyo_ids` de `metric_clients`; ni `loadCompanyEmployees` ni `buildClientColumns` (`utils/exportClientsToPdf.js`) filtran `deleted_at` → un despedido sigue encabezando su columna en la hoja "Clientes por social".
+  - Gotcha: **intencional, no "arreglar" en `archive-employee.js`.** RRHH archiva pero la reasignación la decide la jefa de línea después; no se limpia en silencio ni se le pide el reemplazo a RRHH. La ventana se cubre con el modal bloqueante de §2.2, que reaparece en cada entrada hasta reasignar.
