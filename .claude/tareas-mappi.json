@@ -1,0 +1,7 @@
+{
+  "responsable_email": "jlauretta@mdnpublicidad.com",
+  "filtro_descripcion": ["%MAPPI%"],
+  "estados": ["Pendiente"],
+  "max_paralelo": 4,
+  "escribir_en_mappi": true
+}
