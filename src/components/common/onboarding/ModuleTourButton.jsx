@@ -51,7 +51,8 @@ export default function ModuleTourButton({
   }, [open, closeMenu])
 
   if (tours.length === 0) return null
-  const hayPendientes = tours.some((t) => !progress.done.includes(t.id))
+  // Hasta que la persona haya visto algún recorrido el botón se anuncia solo.
+  const llamar = progress.done.length === 0
 
   return (
     <div ref={rootRef} className="relative inline-block">
@@ -63,26 +64,37 @@ export default function ModuleTourButton({
         disabled={!ready}
         title={ready ? 'Guía del módulo' : 'La guía estará lista cuando termine de cargar'}
         onClick={() => (open ? closeMenu() : setOpen(true))}
-        className={`relative w-7 h-7 rounded-full border font-mono text-[13px] font-bold leading-none transition-colors ${
+        className={`relative inline-flex items-center gap-1.5 h-8 pl-1.5 pr-3 rounded-full border text-[13px] font-semibold leading-none transition-colors ${
           open
             ? 'bg-[#FFB800] border-[#FFB800] text-[#111]'
-            : 'bg-white border-[#d8d4c6] text-[#777] hover:border-[#FFB800] hover:text-[#111]'
-        } disabled:opacity-50 disabled:cursor-wait disabled:hover:border-[#d8d4c6] disabled:hover:text-[#777]`}
+            : llamar
+              ? 'bg-[#FFB80026] border-[#FFB800] text-[#7a5b00] hover:bg-[#FFB80040]'
+              : 'bg-white border-[#d8d4c6] text-[#777] hover:border-[#FFB800] hover:text-[#111]'
+        } disabled:opacity-50 disabled:cursor-wait disabled:hover:border-[#d8d4c6]`}
       >
-        i
-        {hayPendientes && !open && (
+        {/* Mientras no haya visto ningún recorrido, un aro suave llama la atención. */}
+        {llamar && !open && ready && (
           <span
             aria-hidden="true"
-            className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[#FFB800] border-2 border-[#f2f0e8]"
+            className="pointer-events-none absolute inset-0 rounded-full border-2 border-[#FFB800] motion-safe:animate-ping opacity-60"
           />
         )}
+        <span
+          aria-hidden="true"
+          className={`flex items-center justify-center w-5 h-5 rounded-full font-mono text-[12px] font-bold ${
+            open || llamar ? 'bg-[#FFB800] text-[#111]' : 'bg-[#ece9de] text-[#777]'
+          }`}
+        >
+          i
+        </span>
+        <span>{llamar ? '¿Necesitas ayuda?' : 'Guía'}</span>
       </button>
 
       {open && ready && (
         <div
           role="menu"
           aria-label="Recorridos guiados"
-          className="absolute left-0 top-9 z-30 w-[300px] max-w-[calc(100vw-32px)] rounded-xl border border-[#e8e4d8] bg-white shadow-lg p-2"
+          className="absolute left-0 top-10 z-30 w-[300px] max-w-[calc(100vw-32px)] rounded-xl border border-[#e8e4d8] bg-white shadow-lg p-2"
         >
           <p className="px-2 pt-1 pb-2 text-[11.5px] font-mono uppercase tracking-wide text-[#999]">
             ¿Qué quieres aprender?
