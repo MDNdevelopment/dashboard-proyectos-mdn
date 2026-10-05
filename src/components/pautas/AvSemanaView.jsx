@@ -46,6 +46,9 @@ export default function AvSemanaView({
   onFields,
   onPautaClick,
   onGoDatos,
+  modo = 'semana',
+  onModoChange,
+  calendario = null,
   children,
 }) {
   const hoy = isoDateKey(today)
@@ -73,39 +76,65 @@ export default function AvSemanaView({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => shift(-1)}
-            aria-label="Semana anterior"
-            className="w-8 h-8 rounded-lg text-[#666] hover:bg-[#f5f3eb]"
-          >
-            ‹
-          </button>
-          <h2 className="text-[17px] font-bold text-[#111]">
-            {titulo}{' '}
-            <span className="font-normal text-[#888] text-[14px]">
-              · {formatDayShort(range.start)} – {formatDayShort(range.end)}
-            </span>
-          </h2>
-          <button
-            type="button"
-            onClick={() => shift(1)}
-            aria-label="Semana siguiente"
-            className="w-8 h-8 rounded-lg text-[#666] hover:bg-[#f5f3eb]"
-          >
-            ›
-          </button>
-          {anchor !== hoy && (
+        <div
+          role="group"
+          aria-label="Rango del calendario"
+          className="flex rounded-lg bg-[#ece9de] p-0.5"
+        >
+          {[
+            { key: 'semana', label: 'Semana' },
+            { key: 'mes', label: 'Mes' },
+          ].map((o) => (
+            <button
+              key={o.key}
+              type="button"
+              aria-pressed={modo === o.key}
+              onClick={() => modo !== o.key && onModoChange?.(o.key, anchor)}
+              className={`px-3 py-1 rounded-md text-[12px] font-mono uppercase tracking-wide transition-colors ${
+                modo === o.key
+                  ? 'bg-[#FFB800] text-[#111] font-bold'
+                  : 'text-[#666] hover:text-[#111]'
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+        {modo === 'semana' && (
+          <div className="flex items-center gap-1">
             <button
               type="button"
-              onClick={() => setAnchor(hoy)}
-              className="ml-1 px-2.5 py-1 rounded-lg text-[12.5px] font-semibold text-[#444] hover:bg-[#f5f3eb]"
+              onClick={() => shift(-1)}
+              aria-label="Semana anterior"
+              className="w-8 h-8 rounded-lg text-[#666] hover:bg-[#f5f3eb]"
             >
-              Hoy
+              ‹
             </button>
-          )}
-        </div>
+            <h2 className="text-[17px] font-bold text-[#111]">
+              {titulo}{' '}
+              <span className="font-normal text-[#888] text-[14px]">
+                · {formatDayShort(range.start)} – {formatDayShort(range.end)}
+              </span>
+            </h2>
+            <button
+              type="button"
+              onClick={() => shift(1)}
+              aria-label="Semana siguiente"
+              className="w-8 h-8 rounded-lg text-[#666] hover:bg-[#f5f3eb]"
+            >
+              ›
+            </button>
+            {anchor !== hoy && (
+              <button
+                type="button"
+                onClick={() => setAnchor(hoy)}
+                className="ml-1 px-2.5 py-1 rounded-lg text-[12.5px] font-semibold text-[#444] hover:bg-[#f5f3eb]"
+              >
+                Hoy
+              </button>
+            )}
+          </div>
+        )}
         <button
           type="button"
           onClick={onGoDatos}
@@ -129,16 +158,22 @@ export default function AvSemanaView({
 
       {children}
 
-      <SemanaGrid
-        days={range.days}
-        byDay={byDay}
-        piezasByPauta={piezasByPauta}
-        usersById={usersById}
-        today={hoy}
-        onPautaClick={onPautaClick}
-      />
+      {modo === 'mes' ? (
+        calendario
+      ) : (
+        <>
+          <SemanaGrid
+            days={range.days}
+            byDay={byDay}
+            piezasByPauta={piezasByPauta}
+            usersById={usersById}
+            today={hoy}
+            onPautaClick={onPautaClick}
+          />
 
-      <OcupacionBar pautas={pautas} range={range} usersById={usersById} />
+          <OcupacionBar pautas={pautas} range={range} usersById={usersById} />
+        </>
+      )}
 
       {drawer && (
         <AvDrawer

@@ -220,3 +220,23 @@ describe('AvSemanaView — ocupación', () => {
     expect(within(carga).queryByText('Sol Luz')).not.toBeInTheDocument()
   })
 })
+
+describe('AvSemanaView — toggle Semana / Mes', () => {
+  it('en modo semana marca Semana y pulsar Mes avisa con la fecha ancla', () => {
+    const onModoChange = vi.fn()
+    setup({ onModoChange })
+    expect(screen.getByRole('button', { name: 'Semana' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(screen.getByRole('button', { name: 'Mes' }))
+    expect(onModoChange).toHaveBeenCalledWith('mes', '2026-10-07')
+  })
+
+  it('en modo mes muestra el calendario en lugar de la grilla y oculta la navegación semanal', () => {
+    setup({ modo: 'mes', calendario: <div data-testid="cal-mes" /> })
+    expect(screen.getByTestId('cal-mes')).toBeInTheDocument()
+    expect(screen.queryByTestId('semana-grid')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Semana anterior' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Mes' })).toHaveAttribute('aria-pressed', 'true')
+    // Las alertas y el KPI del mes siguen visibles.
+    expect(screen.getByRole('button', { name: 'Ver datos del mes' })).toBeInTheDocument()
+  })
+})

@@ -85,6 +85,7 @@ export default function AudiovisualView({
   // audiovisual (recursos, sin coordinar) a Mi trabajo.
   const esRecurso = userProfile?.department_id === 2 && !canCoordinate
   const [view, setView] = useState(esRecurso ? 'mitrabajo' : 'semana')
+  const [semanaModo, setSemanaModo] = useState('semana')
   const [calendarFilter, setCalendarFilter] = useState('todas')
   const [listFilter, setListFilter] = useState(DEFAULT_LIST_FILTER)
   // El detalle se guarda por id y se resuelve contra `pautas`: así siempre pinta la fila
@@ -298,7 +299,6 @@ export default function AudiovisualView({
         ]
       : []),
     { key: 'datos', label: 'Datos' },
-    { key: 'mes', label: 'Mes' },
     {
       key: 'todas',
       label: 'Todas',
@@ -364,6 +364,27 @@ export default function AudiovisualView({
           onFields={handlePautaFields}
           onPautaClick={(p) => setDetailId(p.id)}
           onGoDatos={() => setView('datos')}
+          modo={semanaModo}
+          onModoChange={(modo, ancla) => {
+            setSemanaModo(modo)
+            if (modo === 'mes') {
+              const [y, m] = ancla.split('-').map(Number)
+              goToMonth(y, m)
+            }
+          }}
+          calendario={
+            <AvCalendarView
+              year={year}
+              month={month}
+              pautas={visibleScopedPautas}
+              monthPautas={visiblePautas}
+              filter={calendarFilter}
+              onFilterChange={setCalendarFilter}
+              onMonthChange={goToMonth}
+              onDayClick={setDayDetail}
+              onPautaClick={(p) => setDetailId(p.id)}
+            />
+          }
         >
           {!canCoordinate && (
             <MisSolicitudes
@@ -387,20 +408,6 @@ export default function AudiovisualView({
           companyId={companyId}
           onFields={handlePautaFields}
           onPiezaChanged={handlePiezaChanged}
-          onPautaClick={(p) => setDetailId(p.id)}
-        />
-      )}
-
-      {view === 'mes' && (
-        <AvCalendarView
-          year={year}
-          month={month}
-          pautas={visibleScopedPautas}
-          monthPautas={visiblePautas}
-          filter={calendarFilter}
-          onFilterChange={setCalendarFilter}
-          onMonthChange={goToMonth}
-          onDayClick={setDayDetail}
           onPautaClick={(p) => setDetailId(p.id)}
         />
       )}

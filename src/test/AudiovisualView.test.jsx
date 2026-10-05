@@ -175,9 +175,9 @@ function renderView({ userProfile, can, lines = LINES, initialEntries = ['/tarea
 }
 
 const tab = (name) => screen.getByRole('tab', { name: new RegExp(`^${name}`) })
-// Pestañas v3: Semana (default) · Datos · Mes · Todas (la antigua "Lista").
+// Pestañas v3: Semana (default) · Datos · Todas (la antigua "Lista"). El mes es un modo de Semana.
 const goLista = () => fireEvent.click(tab('Todas'))
-const goMes = () => fireEvent.click(tab('Mes'))
+const goMes = () => fireEvent.click(screen.getByRole('button', { name: 'Mes' }))
 
 const COORD = {
   user_id: 'coord-1',
@@ -272,14 +272,13 @@ describe('AudiovisualView — alcance por línea y permisos', () => {
 })
 
 describe('AudiovisualView — shell por rol (Semana como inicio)', () => {
-  it('coordinación entra a Semana con las pestañas Semana · Datos · Mes · Todas', async () => {
+  it('coordinación entra a Semana con las pestañas Semana · Datos · Todas', async () => {
     renderView({ userProfile: COORD, can: () => true, lines: [] })
     await waitFor(() => expect(screen.getByText('Todos')).toBeInTheDocument())
     expect(tab('Semana')).toHaveAttribute('aria-selected', 'true')
     expect(screen.getAllByRole('tab').map((t) => t.textContent.replace(/\d.*$/, ''))).toEqual([
       'Semana',
       'Datos',
-      'Mes',
       'Todas',
     ])
     expect(screen.getByTestId('semana-grid')).toBeInTheDocument()
@@ -445,6 +444,20 @@ describe('AudiovisualView — vista Calendario', () => {
     fireEvent.click(chip('Solicitadas'))
     await waitFor(() => expect(queryCalendarPill('Cliente Agendada')).not.toBeInTheDocument())
     expect(queryCalendarPill('Cliente Georgina')).not.toBeInTheDocument()
+  })
+})
+
+describe('AudiovisualView — toggle Semana / Mes', () => {
+  it('Mes abre el calendario en el mes de la semana que se estaba viendo y Semana vuelve a la grilla', async () => {
+    renderView({ userProfile: COORD, can: (key) => key === 'audiovisual.coordina', lines: [] })
+    await waitFor(() => expect(screen.getByText('+ Agregar pauta')).toBeInTheDocument())
+    // Hoy es lun 5 oct 2026: cuatro semanas adelante cae en noviembre.
+    for (let i = 0; i < 4; i++) fireEvent.click(screen.getByLabelText('Semana siguiente'))
+    goMes()
+    expect(screen.getByRole('heading', { name: /noviembre 2026/i })).toBeInTheDocument()
+    expect(screen.queryByTestId('semana-grid')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Semana' }))
+    expect(screen.getByTestId('semana-grid')).toBeInTheDocument()
   })
 })
 
