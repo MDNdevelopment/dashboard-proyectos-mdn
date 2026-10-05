@@ -74,6 +74,15 @@ describe('ClienteFinanzasModal', () => {
     expect(monto).toBeDisabled()
   })
 
+  it('al marcar Intercambio avisa qué pasa con la facturación ya emitida', async () => {
+    const user = userEvent.setup()
+    renderModal()
+    expect(screen.queryByText(/se quitan las facturas de esta marca/)).not.toBeInTheDocument()
+    await user.click(screen.getByLabelText(/Intercambio/))
+    expect(screen.getByText(/se quitan las facturas de esta marca/)).toBeInTheDocument()
+    expect(screen.getByText(/no tengan\s+cobros/)).toBeInTheDocument()
+  })
+
   it('guarda el intercambio con la mensualidad en null', async () => {
     const user = userEvent.setup()
     renderModal()
