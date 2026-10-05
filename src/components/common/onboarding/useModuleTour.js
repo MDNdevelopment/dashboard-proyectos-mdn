@@ -6,7 +6,7 @@ import './tour.css'
 export const tourSelector = (target) => `[data-tour="${target}"]`
 
 // Tras cambiar de pestaña o de modo el elemento tarda un render en aparecer.
-function waitForTarget(target, timeout = 1500) {
+function waitForTarget(target, timeout = 1000) {
   return new Promise((resolve) => {
     const started = Date.now()
     const tick = () => {

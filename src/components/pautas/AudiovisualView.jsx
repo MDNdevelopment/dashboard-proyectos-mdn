@@ -284,9 +284,12 @@ export default function AudiovisualView({
   const tieneTrabajo =
     esRecurso ||
     mio.hoy.length + mio.proximas.length + mio.pasadasSinCaptura.length + mio.porEditar.length > 0
+  // `ready`: el módulo ya pintó su contenido; la guía no puede empezar antes porque no
+  // encontraría los elementos que señala.
   useEffect(() => {
-    onTourCtx?.({ tieneTrabajo })
-  }, [tieneTrabajo, onTourCtx])
+    onTourCtx?.({ tieneTrabajo, ready: !loading })
+    return () => onTourCtx?.({ tieneTrabajo: false, ready: false })
+  }, [tieneTrabajo, loading, onTourCtx])
   useEffect(() => {
     if (!tourApiRef) return undefined
     tourApiRef.current = {

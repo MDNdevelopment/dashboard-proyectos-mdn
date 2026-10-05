@@ -13,6 +13,9 @@ export default function ModuleTourButton({
   userId,
   tours,
   onBeforeStep,
+  // `ready`: la pantalla ya cargó. Hasta entonces el botón está en espera, porque un
+  // recorrido iniciado antes no encuentra los elementos que debe señalar.
+  ready = true,
   autoOpen = false,
 }) {
   const progress = useTourProgress(moduleKey, userId)
@@ -30,8 +33,8 @@ export default function ModuleTourButton({
   }, [markMenuSeen])
 
   useEffect(() => {
-    if (autoOpen && !progress.menuSeen && tours.length > 0) setOpen(true)
-  }, [autoOpen, progress.menuSeen, tours.length])
+    if (ready && autoOpen && !progress.menuSeen && tours.length > 0) setOpen(true)
+  }, [ready, autoOpen, progress.menuSeen, tours.length])
 
   useEffect(() => {
     if (!open) return undefined
@@ -57,13 +60,14 @@ export default function ModuleTourButton({
         aria-label="Guía del módulo"
         aria-haspopup="menu"
         aria-expanded={open}
-        title="Guía del módulo"
+        disabled={!ready}
+        title={ready ? 'Guía del módulo' : 'La guía estará lista cuando termine de cargar'}
         onClick={() => (open ? closeMenu() : setOpen(true))}
         className={`relative w-7 h-7 rounded-full border font-mono text-[13px] font-bold leading-none transition-colors ${
           open
             ? 'bg-[#FFB800] border-[#FFB800] text-[#111]'
             : 'bg-white border-[#d8d4c6] text-[#777] hover:border-[#FFB800] hover:text-[#111]'
-        }`}
+        } disabled:opacity-50 disabled:cursor-wait disabled:hover:border-[#d8d4c6] disabled:hover:text-[#777]`}
       >
         i
         {hayPendientes && !open && (
@@ -74,7 +78,7 @@ export default function ModuleTourButton({
         )}
       </button>
 
-      {open && (
+      {open && ready && (
         <div
           role="menu"
           aria-label="Recorridos guiados"

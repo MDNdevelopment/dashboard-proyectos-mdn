@@ -74,6 +74,17 @@ describe('ModuleTourButton', () => {
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   })
 
+  it('mientras la pantalla carga el botón espera y el menú no se abre solo; al estar lista, sí', async () => {
+    const { rerender } = renderButton({ autoOpen: true, ready: false })
+    const boton = screen.getByRole('button', { name: 'Guía del módulo' })
+    expect(boton).toBeDisabled()
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+
+    rerender(<ModuleTourButton moduleKey="test" userId="u1" tours={TOURS} autoOpen ready />)
+    expect(await screen.findByRole('menu')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Guía del módulo' })).toBeEnabled()
+  })
+
   it('elegir un recorrido cierra el menú y lo arranca', async () => {
     renderButton()
     fireEvent.click(screen.getByRole('button', { name: 'Guía del módulo' }))

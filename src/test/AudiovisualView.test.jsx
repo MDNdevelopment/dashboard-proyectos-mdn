@@ -486,11 +486,11 @@ describe('AudiovisualView — puente con el onboarding', () => {
     expect(screen.queryByTestId('semana-grid')).not.toBeInTheDocument()
   })
 
-  it('informa a la página si la persona tiene "Mi trabajo"', async () => {
+  it('informa a la página si la persona tiene "Mi trabajo" y cuándo terminó de cargar', async () => {
     const onTourCtx = vi.fn()
     renderView({ userProfile: COORD, can: () => true, lines: [], onTourCtx })
     await waitFor(() => expect(screen.getByText('Todos')).toBeInTheDocument())
-    expect(onTourCtx).toHaveBeenCalledWith({ tieneTrabajo: expect.any(Boolean) })
+    expect(onTourCtx).toHaveBeenCalledWith({ tieneTrabajo: expect.any(Boolean), ready: true })
   })
 })
 

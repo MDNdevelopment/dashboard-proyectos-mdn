@@ -16,7 +16,7 @@ export default function PautasPage() {
   // Onboarding: AudiovisualView registra aquí cómo poner la pantalla en cada paso y avisa
   // si la persona tiene "Mi trabajo" (depende de las pautas cargadas).
   const tourApiRef = useRef(null)
-  const [tourExtra, setTourExtra] = useState({ tieneTrabajo: false })
+  const [tourExtra, setTourExtra] = useState({ tieneTrabajo: false, ready: false })
 
   const loadAll = useCallback(async () => {
     if (!userProfile?.company_id) return
@@ -64,7 +64,7 @@ export default function PautasPage() {
     can('audiovisual.ver_todo') ||
     can('audiovisual.piezas')
   const esRecurso = userProfile?.department_id === 2 && !coordina
-  const { tieneTrabajo } = tourExtra
+  const { tieneTrabajo, ready: moduloListo } = tourExtra
   const tours = useMemo(
     () => toursFor({ coordina, manage, canViewAll, esRecurso, tieneTrabajo }),
     [coordina, manage, canViewAll, esRecurso, tieneTrabajo],
@@ -86,7 +86,8 @@ export default function PautasPage() {
                 userId={userProfile?.user_id}
                 tours={tours}
                 onBeforeStep={onBeforeStep}
-                autoOpen={!loading}
+                ready={!loading && moduloListo}
+                autoOpen
               />
             </div>
             <p className="text-[15px] text-[#888] mt-0.5">Calendario de pautas audiovisuales</p>
