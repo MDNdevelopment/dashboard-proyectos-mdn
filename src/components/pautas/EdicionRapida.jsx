@@ -54,7 +54,7 @@ export default function EdicionRapida({ lote, pauta, onPiezaChanged, onPautaClic
             listas
           </p>
         </button>
-        <BigStepper value={listas} max={cantidad} disabled={busy} label={label} onChange={mover} />
+        <BigStepper value={listas} max={cantidad} label={label} onChange={mover} />
       </div>
       <div className="mt-2 flex items-center gap-2">
         <span className="flex-1 h-[6px] rounded-full bg-[#ece9df] overflow-hidden">

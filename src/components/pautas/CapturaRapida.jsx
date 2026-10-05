@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import Stepper from '../common/Stepper'
 import {
   FORMAT_KEYS,
   FORMAT_LABELS,
@@ -127,12 +128,7 @@ export default function CapturaRapida({
                   </p>
                 </div>
                 {canEdit ? (
-                  <BigStepper
-                    value={mias}
-                    disabled={busy}
-                    label={label}
-                    onChange={(d) => cambiar(code, d)}
-                  />
+                  <BigStepper value={mias} label={label} onChange={(d) => cambiar(code, d)} />
                 ) : (
                   <span className="font-mono text-[18px] font-bold text-[#111]">{mias}</span>
                 )}
@@ -156,36 +152,14 @@ export default function CapturaRapida({
   )
 }
 
-/** −/valor/+ con botones de 44px para el celular. `onChange(delta)` se serializa con `disabled`. */
-export function BigStepper({ value, onChange, disabled, label, max }) {
-  const canUp = !disabled && (max === undefined || value < max)
-  const canDown = !disabled && value > 0
+/**
+ * −/valor/+ con botones de 44px para el celular. El valor se puede escribir (80 fotos sin
+ * 80 toques); `onChange(delta)` es relativo y `Stepper` ya serializa las escrituras.
+ */
+export function BigStepper({ value, onChange, label, max }) {
   return (
-    <div className="inline-flex items-center gap-1.5 flex-shrink-0">
-      <button
-        type="button"
-        aria-label={`Quitar ${label}`}
-        disabled={!canDown}
-        onClick={() => onChange(-1)}
-        className="w-11 h-11 rounded-xl border border-[#e0ddd4] bg-white text-[20px] text-[#444] hover:bg-[#f5f3eb] disabled:opacity-30"
-      >
-        −
-      </button>
-      <span
-        className="font-mono text-[20px] font-bold text-[#111] w-9 text-center tabular-nums"
-        aria-label={`Cantidad de ${label}`}
-      >
-        {value}
-      </span>
-      <button
-        type="button"
-        aria-label={`Agregar ${label}`}
-        disabled={!canUp}
-        onClick={() => onChange(1)}
-        className="w-11 h-11 rounded-xl bg-[#FFB800] text-[20px] font-bold text-[#111] hover:brightness-95 disabled:opacity-30"
-      >
-        +
-      </button>
-    </div>
+    <span className="flex-shrink-0">
+      <Stepper size="lg" value={value} max={max} label={label} onChange={onChange} />
+    </span>
   )
 }

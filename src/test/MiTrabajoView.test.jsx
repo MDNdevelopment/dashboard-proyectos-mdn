@@ -157,7 +157,7 @@ describe('MiTrabajoView — cabecera y secciones', () => {
     )
     const editar = seccion('Por editar (2)')
     expect(editar.getByText('Push')).toBeInTheDocument()
-    expect(editar.getByLabelText('Cantidad de listas de Reel de Push')).toHaveTextContent('4')
+    expect(editar.getByLabelText('Cantidad de listas de Reel de Push')).toHaveValue('4')
     expect(editar.getByRole('button', { name: 'Ver pauta Push' })).toBeInTheDocument()
   })
 
@@ -184,6 +184,20 @@ describe('MiTrabajoView — captura rápida', () => {
       F: { salieron: 0, editadas: 0 },
     })
     expect(fields.recurso_ids).toBeUndefined() // ya estaba
+  })
+
+  it('escribir 80 + Enter registra las 80 fotos en una sola escritura', async () => {
+    const { onFields } = setup()
+    const card = seccion('Hoy, miércoles 7').getByRole('article', { name: 'Pauta Smashack' })
+    const input = within(card).getByLabelText('Cantidad de capturadas de Foto')
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: '80' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    await waitFor(() => expect(onFields).toHaveBeenCalledTimes(1))
+    const [p, fields] = onFields.mock.calls[0]
+    expect(p.id).toBe('hoy')
+    expect(fields.grabacion_por_formato.F).toEqual({ r1: 80 })
+    expect(fields.piezas_por_formato.F).toEqual({ salieron: 80, editadas: 0 })
   })
 
   it('las fotos se llaman "capturadas" y el −1 no baja de cero', () => {
@@ -235,6 +249,15 @@ describe('MiTrabajoView — edición rápida', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Agregar listas de Reel de Push' }))
     await waitFor(() => expect(updatePieza).toHaveBeenCalledWith('l1', { listas: 5 }))
     expect(onPiezaChanged).toHaveBeenCalledWith({ id: 'l1', listas: 5 })
+  })
+
+  it('escribir más que las asignadas se recorta al tope', async () => {
+    setup()
+    const input = screen.getByLabelText('Cantidad de listas de Reel de Push')
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: '99' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    await waitFor(() => expect(updatePieza).toHaveBeenCalledWith('l1', { listas: 6 }))
   })
 
   it('"todo listo" pone listas = asignadas', async () => {
