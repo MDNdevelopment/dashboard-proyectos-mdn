@@ -79,6 +79,7 @@ export default function AvSemanaView({
         <div
           role="group"
           aria-label="Rango del calendario"
+          data-tour="semana-toggle"
           className="flex rounded-lg bg-[#ece9de] p-0.5"
         >
           {[
@@ -140,6 +141,7 @@ export default function AvSemanaView({
           onClick={onGoDatos}
           className="ml-auto flex items-center gap-3 rounded-xl border border-[#e8e4d8] bg-white px-4 py-2 text-left hover:border-[#111] transition-colors"
           aria-label="Ver datos del mes"
+          data-tour="semana-kpi"
         >
           <span className="text-[11px] font-mono uppercase tracking-wide text-[#999] capitalize">
             {MESES[d0.getMonth()]}

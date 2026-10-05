@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { loadLines, loadClients } from '../components/metricas/metricsApi'
 import { visibleLinesForUser } from '../utils/lineMembers'
 import AudiovisualView from '../components/pautas/AudiovisualView'
+import ModuleTourButton from '../components/common/onboarding/ModuleTourButton'
+import { toursFor } from '../components/pautas/pautasTours'
 
 export default function PautasPage() {
   const { userProfile, can = () => true } = useAuth()
@@ -11,6 +13,10 @@ export default function PautasPage() {
   const [generalLine, setGeneralLine] = useState(null)
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
+  // Onboarding: AudiovisualView registra aquí cómo poner la pantalla en cada paso y avisa
+  // si la persona tiene "Mi trabajo" (depende de las pautas cargadas).
+  const tourApiRef = useRef(null)
+  const [tourExtra, setTourExtra] = useState({ tieneTrabajo: false })
 
   const loadAll = useCallback(async () => {
     if (!userProfile?.company_id) return
@@ -50,6 +56,21 @@ export default function PautasPage() {
     loadAll()
   }, [loadAll])
 
+  const coordina = can('audiovisual.coordina')
+  const manage = can('audiovisual.manage')
+  const canViewAll =
+    userProfile?.access_level >= 4 ||
+    userProfile?.admin === true ||
+    can('audiovisual.ver_todo') ||
+    can('audiovisual.piezas')
+  const esRecurso = userProfile?.department_id === 2 && !coordina
+  const { tieneTrabajo } = tourExtra
+  const tours = useMemo(
+    () => toursFor({ coordina, manage, canViewAll, esRecurso, tieneTrabajo }),
+    [coordina, manage, canViewAll, esRecurso, tieneTrabajo],
+  )
+  const onBeforeStep = useCallback((step) => tourApiRef.current?.goTo(step), [])
+
   return (
     <main className="flex-1 overflow-y-auto main-bg">
       <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
@@ -58,7 +79,16 @@ export default function PautasPage() {
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between mb-6">
           <div>
-            <h1 className="text-[26px] font-bold text-[#111] leading-tight">Pautas</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-[26px] font-bold text-[#111] leading-tight">Pautas</h1>
+              <ModuleTourButton
+                moduleKey="pautas"
+                userId={userProfile?.user_id}
+                tours={tours}
+                onBeforeStep={onBeforeStep}
+                autoOpen={!loading}
+              />
+            </div>
             <p className="text-[15px] text-[#888] mt-0.5">Calendario de pautas audiovisuales</p>
           </div>
         </div>
@@ -75,6 +105,8 @@ export default function PautasPage() {
             lines={lines}
             generalLine={generalLine}
             clients={clients}
+            tourApiRef={tourApiRef}
+            onTourCtx={setTourExtra}
           />
         )}
       </div>

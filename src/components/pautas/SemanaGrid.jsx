@@ -6,7 +6,11 @@ const DOW = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 /** Seis columnas (lun–sáb) con las tarjetas de cada día. */
 export default function SemanaGrid({ days, byDay, piezasByPauta, usersById, today, onPautaClick }) {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2" data-testid="semana-grid">
+    <div
+      className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2"
+      data-testid="semana-grid"
+      data-tour="semana-grid"
+    >
       {days.map((iso, i) => {
         const d = parseISODate(iso)
         const esHoy = iso === today

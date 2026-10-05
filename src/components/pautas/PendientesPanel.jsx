@@ -29,7 +29,7 @@ export default function PendientesPanel({ porLinea, onSelect }) {
     )
 
   return (
-    <div className="bg-white border border-[#e0ddd4] rounded-xl p-5">
+    <div className="bg-white border border-[#e0ddd4] rounded-xl p-5" data-tour="datos-pendientes">
       <h2 className="text-[16px] font-semibold text-[#222] mb-0.5">Pendiente por editar</h2>
       <p className="text-[12px] text-[#999] mb-3">
         Piezas capturadas que todavía no están listas, por línea. Haz clic en un número para ver a

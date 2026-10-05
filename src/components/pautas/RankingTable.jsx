@@ -7,7 +7,7 @@ import Avatar from '../Avatar'
 export default function RankingTable({ title, subtitle, rows, usersById, empty, renderDesglose }) {
   const anyEstimado = rows.some((r) => r.estimado)
   return (
-    <div className="bg-white border border-[#e0ddd4] rounded-xl p-5">
+    <div className="bg-white border border-[#e0ddd4] rounded-xl p-5" data-tour="datos-ranking">
       <h2 className="text-[16px] font-semibold text-[#222] mb-0.5">{title}</h2>
       {subtitle && <p className="text-[12px] text-[#999] mb-3">{subtitle}</p>}
       {rows.length === 0 ? (

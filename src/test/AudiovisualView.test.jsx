@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent, within } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, within, act } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { vi } from 'vitest'
 import { createSupabaseMock, makeQuery } from './helpers/supabaseMock'
@@ -157,7 +157,13 @@ vi.mock('../supabase', () => ({
 
 import AudiovisualView from '../components/pautas/AudiovisualView'
 
-function renderView({ userProfile, can, lines = LINES, initialEntries = ['/tareas/pautas'] }) {
+function renderView({
+  userProfile,
+  can,
+  lines = LINES,
+  initialEntries = ['/tareas/pautas'],
+  ...extraProps
+}) {
   return render(
     <AudiovisualView
       companyId="co-1"
@@ -165,6 +171,7 @@ function renderView({ userProfile, can, lines = LINES, initialEntries = ['/tarea
       can={can}
       lines={lines}
       clients={MOCK_CLIENTS}
+      {...extraProps}
     />,
     {
       wrapper: ({ children }) => (
@@ -458,6 +465,32 @@ describe('AudiovisualView — toggle Semana / Mes', () => {
     expect(screen.queryByTestId('semana-grid')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Semana' }))
     expect(screen.getByTestId('semana-grid')).toBeInTheDocument()
+  })
+})
+
+describe('AudiovisualView — puente con el onboarding', () => {
+  it('goTo pone la pantalla donde pide el paso (pestaña y modo de Semana)', async () => {
+    const tourApiRef = { current: null }
+    renderView({
+      userProfile: COORD,
+      can: (key) => key === 'audiovisual.coordina',
+      lines: [],
+      tourApiRef,
+    })
+    await waitFor(() => expect(screen.getByText('+ Agregar pauta')).toBeInTheDocument())
+    act(() => tourApiRef.current.goTo({ view: 'datos' }))
+    expect(tab('Datos')).toHaveAttribute('aria-selected', 'true')
+    act(() => tourApiRef.current.goTo({ view: 'semana', semanaModo: 'mes' }))
+    expect(tab('Semana')).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('button', { name: 'Mes' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.queryByTestId('semana-grid')).not.toBeInTheDocument()
+  })
+
+  it('informa a la página si la persona tiene "Mi trabajo"', async () => {
+    const onTourCtx = vi.fn()
+    renderView({ userProfile: COORD, can: () => true, lines: [], onTourCtx })
+    await waitFor(() => expect(screen.getByText('Todos')).toBeInTheDocument())
+    expect(onTourCtx).toHaveBeenCalledWith({ tieneTrabajo: expect.any(Boolean) })
   })
 })
 

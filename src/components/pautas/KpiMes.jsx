@@ -57,6 +57,7 @@ export default function KpiMes({ year, month, actual, anterior, onMonthChange, o
     <section
       className="bg-white border border-[#e0ddd4] rounded-xl p-5"
       aria-label="Resumen del mes"
+      data-tour="datos-kpi"
     >
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div>

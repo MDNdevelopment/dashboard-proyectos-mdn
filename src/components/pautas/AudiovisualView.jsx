@@ -62,6 +62,10 @@ export default function AudiovisualView({
   clients,
   // Línea general "Independientes" (metric_lines.is_general): agrupa cuentas sin línea.
   generalLine = null,
+  // Puente con el onboarding de la página: `tourApiRef.current.goTo` pone la pantalla donde
+  // pide cada paso, y `onTourCtx` informa lo que solo este componente sabe.
+  tourApiRef = null,
+  onTourCtx = null,
 }) {
   const canManage = can('audiovisual.manage')
   const canCoordinate = can('audiovisual.coordina')
@@ -280,6 +284,21 @@ export default function AudiovisualView({
   const tieneTrabajo =
     esRecurso ||
     mio.hoy.length + mio.proximas.length + mio.pasadasSinCaptura.length + mio.porEditar.length > 0
+  useEffect(() => {
+    onTourCtx?.({ tieneTrabajo })
+  }, [tieneTrabajo, onTourCtx])
+  useEffect(() => {
+    if (!tourApiRef) return undefined
+    tourApiRef.current = {
+      goTo: ({ view: v, semanaModo: modo }) => {
+        if (v) setView(v)
+        if (modo) setSemanaModo(modo)
+      },
+    }
+    return () => {
+      tourApiRef.current = null
+    }
+  }, [tourApiRef])
   const views = [
     {
       key: 'semana',

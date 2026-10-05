@@ -27,12 +27,15 @@ export default function AvToolbar({
     <div className="space-y-3 mb-4">
       <div className="flex flex-wrap items-center gap-1.5">
         {!canViewAll ? (
-          <span className={pill(true)}>{lines[0]?.name ?? 'Sin línea'}</span>
+          <span className={pill(true)} data-tour="scope">
+            {lines[0]?.name ?? 'Sin línea'}
+          </span>
         ) : (
           <>
             <button
               onClick={() => onScopeChange(allLinesKey)}
               className={pill(scopeLineId === allLinesKey)}
+              data-tour="scope"
             >
               Todos
             </button>
@@ -58,6 +61,7 @@ export default function AvToolbar({
         <div className="ml-auto flex items-center gap-2">
           <button
             onClick={onWhatsApp}
+            data-tour="whatsapp"
             className="flex items-center gap-1.5 text-[12.5px] font-semibold text-[#111] bg-[#25D366]/15 border border-[#25D366]/40 px-3 py-1.5 rounded-lg hover:bg-[#25D366]/25 transition-colors"
           >
             Generar agenda WhatsApp
@@ -65,6 +69,7 @@ export default function AvToolbar({
           {canCreate && (
             <button
               onClick={onCreate}
+              data-tour="crear"
               className="flex items-center gap-1.5 text-[13px] font-semibold text-[#111] bg-[#FFB800] px-3 py-1.5 rounded-lg hover:brightness-95"
             >
               + {createLabel}
@@ -73,7 +78,11 @@ export default function AvToolbar({
         </div>
       </div>
 
-      <div className="flex items-center gap-1 border-b border-[#e8e4d8]" role="tablist">
+      <div
+        className="flex items-center gap-1 border-b border-[#e8e4d8]"
+        role="tablist"
+        data-tour="tabs"
+      >
         {views.map((v) => {
           const active = view === v.key
           return (

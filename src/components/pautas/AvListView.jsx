@@ -51,7 +51,10 @@ export default function AvListView({
 
   return (
     <div className="bg-white border border-[#e0ddd4] rounded-2xl overflow-hidden">
-      <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-[#ece9df]">
+      <div
+        className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-[#ece9df]"
+        data-tour="lista-filtros"
+      >
         {lineId && (
           <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#111] text-[#FFB800] text-[13px] font-semibold">
             Línea: {lineName({ line_id: lineId })}

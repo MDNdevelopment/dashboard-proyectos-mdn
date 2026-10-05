@@ -23,6 +23,7 @@ export default function MisSolicitudes({ pautas, userId, today = new Date(), onP
     <section
       className="rounded-xl border border-[#ece9df] bg-white px-4 py-3"
       aria-label="Mis solicitudes"
+      data-tour="mis-solicitudes"
     >
       <div className="flex items-center justify-between gap-2 mb-2">
         <h3 className="text-[11.5px] font-mono font-bold uppercase tracking-[0.1em] text-[#aaa]">

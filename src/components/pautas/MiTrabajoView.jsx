@@ -52,7 +52,10 @@ export default function MiTrabajoView({
 
   return (
     <div className="max-w-[720px] mx-auto space-y-5">
-      <header className="sticky top-0 z-10 -mx-1 px-1 py-2 bg-[#f2f0e8]/95 backdrop-blur">
+      <header
+        className="sticky top-0 z-10 -mx-1 px-1 py-2 bg-[#f2f0e8]/95 backdrop-blur"
+        data-tour="mt-resumen"
+      >
         <h2 className="text-[17px] font-bold text-[#111]">
           Mi trabajo{userName ? ` · ${userName}` : ''}
         </h2>
@@ -63,7 +66,7 @@ export default function MiTrabajoView({
         </p>
       </header>
 
-      <Seccion titulo={`Hoy, ${DOW[d.getDay()]} ${d.getDate()}`}>
+      <Seccion titulo={`Hoy, ${DOW[d.getDay()]} ${d.getDate()}`} tour="mt-hoy">
         {mio.hoy.length === 0 ? (
           <Vacio>Nada para hoy.</Vacio>
         ) : (
@@ -143,7 +146,7 @@ export default function MiTrabajoView({
         )}
       </Seccion>
 
-      <Seccion titulo={`Por editar (${mio.resumen.pendientes})`}>
+      <Seccion titulo={`Por editar (${mio.resumen.pendientes})`} tour="mt-editar">
         {mio.porEditar.length === 0 ? (
           <Vacio>No tienes piezas pendientes de edición. 🎉</Vacio>
         ) : (
@@ -162,7 +165,7 @@ export default function MiTrabajoView({
       </Seccion>
 
       {disponibles.length > 0 && (
-        <Seccion titulo="Disponible para tomar">
+        <Seccion titulo="Disponible para tomar" tour="mt-disponible">
           <ul className="space-y-2">
             {disponibles.map(({ pauta, formato, faltan }) => (
               <TomarRow
@@ -250,9 +253,9 @@ function TomarRow({ pauta, formato, faltan, lote, userId, companyId, onPiezaChan
   )
 }
 
-function Seccion({ titulo, tono, children }) {
+function Seccion({ titulo, tono, tour, children }) {
   return (
-    <section aria-label={titulo}>
+    <section aria-label={titulo} data-tour={tour}>
       <h3
         className={`text-[11.5px] font-mono font-bold uppercase tracking-[0.12em] mb-2 ${
           tono === 'alerta' ? 'text-[#c0392b]' : 'text-[#999]'

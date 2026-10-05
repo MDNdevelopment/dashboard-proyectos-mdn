@@ -29,13 +29,17 @@ export default function AlertasStrip({ alertas, onOpen }) {
     .filter((i) => i.count > 0)
   if (items.length === 0) {
     return (
-      <p className="text-[12.5px] text-[#1f8a43] font-semibold" data-testid="alertas-ok">
+      <p
+        className="text-[12.5px] text-[#1f8a43] font-semibold"
+        data-testid="alertas-ok"
+        data-tour="alertas"
+      >
         ✓ Nada pendiente por tu parte.
       </p>
     )
   }
   return (
-    <div className="flex flex-wrap items-center gap-2" aria-label="Alertas">
+    <div className="flex flex-wrap items-center gap-2" aria-label="Alertas" data-tour="alertas">
       {items.map(({ kind, count }) => (
         <button
           key={kind}

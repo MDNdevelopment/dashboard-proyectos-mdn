@@ -6,7 +6,10 @@ const DOW = ['L', 'M', 'X', 'J', 'V', 'S']
 export default function OcupacionBar({ pautas, range, usersById }) {
   const carga = cargaRecursos(pautas, range, usersById)
   return (
-    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-[#ece9df] bg-white px-4 py-2.5 text-[12px]">
+    <div
+      className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-[#ece9df] bg-white px-4 py-2.5 text-[12px]"
+      data-tour="ocupacion"
+    >
       <div className="flex items-center gap-2" aria-label="Ocupación del estudio">
         <span className="font-mono uppercase tracking-wide text-[#999] text-[10.5px]">Estudio</span>
         {range.days.map((iso, i) => {
