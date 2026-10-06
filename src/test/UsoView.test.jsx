@@ -109,8 +109,13 @@ describe('UsoView', () => {
     await waitFor(() => expect(loadUsageActivity).toHaveBeenCalledTimes(1))
 
     const user = userEvent.setup()
-    const selects = document.querySelectorAll('select')
-    const monthSelect = selects[0]
+    // Mientras `loading` es true la vista solo muestra el spinner: los selects aparecen cuando
+    // termina de cargar, no cuando se llama a la API, así que hay que esperarlos.
+    const monthSelect = await waitFor(() => {
+      const select = document.querySelector('select')
+      expect(select).not.toBeNull()
+      return select
+    })
     await user.selectOptions(monthSelect, '3')
 
     await waitFor(() => expect(loadUsageActivity).toHaveBeenCalledTimes(2))

@@ -24,6 +24,7 @@ import { buildFixedWeeks, aggregateEmployeeFixedTasksByRole } from './fixedTasks
 import { computeAvailability, isInExcludedRange } from './employeeAvailability'
 import { INDICATOR_KEYS, resolveProfile, effectiveWeights } from './employeeScoreProfiles'
 import { getSlaThresholdHours } from '../components/tickets/slaUtils'
+import { piezaUnidades, piezaListas } from './audiovisual'
 
 export { INDICATOR_KEYS }
 
@@ -201,11 +202,14 @@ export function calcPiezasAv(ctx) {
     const d = parseD((p.created_at ?? '').slice(0, 10))
     return d ? d.getFullYear() * 12 + d.getMonth() === monthIdx : false
   })
-  const unidades = misPiezas.length
+  // Una fila puede ser un lote de N unidades (es_lote/cantidad/listas): se suman unidades,
+  // no filas. Las canceladas no son trabajo pendiente ni hecho.
+  const activas = misPiezas.filter((p) => p.status !== 'cancelado')
+  const unidades = activas.reduce((sum, p) => sum + piezaUnidades(p), 0)
   if (unidades === 0)
     return result('piezas_av', { aplica: false, pct: null, unidades: 0, detalle: {} })
 
-  const listas = misPiezas.filter((p) => p.status === 'listo').length
+  const listas = activas.reduce((sum, p) => sum + piezaListas(p), 0)
   return result('piezas_av', {
     aplica: unidades >= 3,
     pct: listas / unidades,

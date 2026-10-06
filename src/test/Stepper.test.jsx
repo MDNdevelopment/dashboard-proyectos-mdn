@@ -263,6 +263,17 @@ describe('Stepper — campo editable (escribir el número)', () => {
     expect(onChange).toHaveBeenCalledWith(89)
   })
 
+  it('size="lg" se escribe igual que el tamaño normal', () => {
+    const onChange = vi.fn()
+    renderStepper({ value: 1, onChange, size: 'lg' })
+    const input = screen.getByLabelText('Cantidad de piezas')
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: '80' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onChange).toHaveBeenCalledTimes(1)
+    expect(onChange).toHaveBeenCalledWith(79)
+  })
+
   it('Escape revierte y no llama a onChange', () => {
     const onChange = vi.fn()
     renderStepper({ value: 1, onChange })

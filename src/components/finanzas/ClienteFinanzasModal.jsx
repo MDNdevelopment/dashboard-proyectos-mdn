@@ -151,8 +151,9 @@ export default function ClienteFinanzasModal({ client, lines = [], canManage, on
             </label>
             {form.es_intercambio && (
               <p className="mt-2 text-[12px] text-[#7a5b00] bg-[#FFB80014] border border-[#FFB80055] rounded-lg px-3 py-2">
-                La facturación que ya se haya emitido este mes no se elimina sola: si corresponde,
-                quítala desde Facturación.
+                Al guardar se quitan las facturas de esta marca en los meses abiertos que no tengan
+                cobros. Las que ya tienen cobros, o están en un mes cerrado, se quedan: si
+                corresponde, resuélvelas desde Facturación.
               </p>
             )}
           </div>

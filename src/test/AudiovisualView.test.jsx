@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, within, act } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { vi } from 'vitest'
 import { createSupabaseMock, makeQuery } from './helpers/supabaseMock'
@@ -97,7 +97,7 @@ const MOCK_PAUTAS = [
     pauta_date: DAY_10,
     salida: null,
     llegada: null,
-    formats: [],
+    formats: ['V'],
     recurso_ids: ['editor-1'],
     graba_user_id: null,
     graba_other: null,
@@ -157,7 +157,13 @@ vi.mock('../supabase', () => ({
 
 import AudiovisualView from '../components/pautas/AudiovisualView'
 
-function renderView({ userProfile, can, lines = LINES, initialEntries = ['/tareas/pautas'] }) {
+function renderView({
+  userProfile,
+  can,
+  lines = LINES,
+  initialEntries = ['/tareas/pautas'],
+  ...extraProps
+}) {
   return render(
     <AudiovisualView
       companyId="co-1"
@@ -165,6 +171,7 @@ function renderView({ userProfile, can, lines = LINES, initialEntries = ['/tarea
       can={can}
       lines={lines}
       clients={MOCK_CLIENTS}
+      {...extraProps}
     />,
     {
       wrapper: ({ children }) => (
@@ -174,120 +181,163 @@ function renderView({ userProfile, can, lines = LINES, initialEntries = ['/tarea
   )
 }
 
-describe('AudiovisualView', () => {
-  it('jefa de línea (audiovisual.manage): ve solo su línea fija, sin selector "Ver"', async () => {
+const tab = (name) => screen.getByRole('tab', { name: new RegExp(`^${name}`) })
+// Pestañas v3: Semana (default) · Datos · Todas (la antigua "Lista"). El mes es un modo de Semana.
+const goLista = () => fireEvent.click(tab('Todas'))
+const goMes = () => fireEvent.click(screen.getByRole('button', { name: 'Mes' }))
+
+const COORD = {
+  user_id: 'coord-1',
+  company_id: 'co-1',
+  access_level: 2,
+  admin: false,
+  department_id: 2,
+}
+const JEFA = {
+  user_id: 'jefa-1',
+  company_id: 'co-1',
+  access_level: 3,
+  admin: false,
+  department_id: 1,
+}
+
+describe('AudiovisualView — alcance por línea y permisos', () => {
+  it('jefa de línea (audiovisual.manage): ve solo su línea fija, sin selector, y puede solicitar', async () => {
+    renderView({ userProfile: JEFA, can: (key) => key === 'audiovisual.manage', lines: [LINES[0]] })
+    await waitFor(() => expect(screen.getByText('Georgina')).toBeInTheDocument())
+    expect(screen.queryByText('Todos')).not.toBeInTheDocument()
+    expect(screen.getByText('+ Solicitar pauta')).toBeInTheDocument()
+    goLista()
+    expect(screen.getByText('Cliente Georgina')).toBeInTheDocument()
+    expect(screen.queryByText('Cliente Sabrina')).not.toBeInTheDocument()
+  })
+
+  it('coordinadora SIN ver_todo: sin selector de líneas, pero agrega pautas y aprueba', async () => {
+    renderView({ userProfile: COORD, can: (key) => key === 'audiovisual.coordina', lines: [] })
+    await waitFor(() => expect(screen.getByText('+ Agregar pauta')).toBeInTheDocument())
+    expect(screen.queryByText('Todos')).not.toBeInTheDocument()
+    goLista()
+    expect(screen.getByText('Cliente Georgina')).toBeInTheDocument()
+    expect(screen.getByText('Cliente Sabrina')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('Cliente Georgina'))
+    expect(screen.getByRole('button', { name: 'Aprobar y agendar' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Declinar' })).toBeInTheDocument()
+  })
+
+  it('coordinador CON línea propia y SIN ver_todo solo ve pautas de su línea', async () => {
     renderView({
-      userProfile: { user_id: 'jefa-1', company_id: 'co-1', access_level: 3, admin: false },
-      can: (key) => key === 'audiovisual.manage',
+      userProfile: COORD,
+      can: (key) => key === 'audiovisual.coordina',
       lines: [LINES[0]],
     })
-    await waitFor(() => {
-      expect(screen.getByText('Cliente Georgina')).toBeInTheDocument()
-    })
+    await waitFor(() => expect(screen.getByText('Georgina')).toBeInTheDocument())
+    goLista()
+    expect(screen.getByText('Cliente Georgina')).toBeInTheDocument()
     expect(screen.queryByText('Cliente Sabrina')).not.toBeInTheDocument()
-    expect(screen.queryByText('Ver')).not.toBeInTheDocument()
-    expect(screen.getByText('+ Solicitar pauta')).toBeInTheDocument()
   })
 
-  it('coordinadora audiovisual SIN audiovisual.ver_todo: ya no ve el selector "Ver" (coordinar no implica ver todas las líneas), pero puede agendar/declinar', async () => {
+  it('con audiovisual.ver_todo ve "Todos" + cada línea y todas las pautas', async () => {
     renderView({
-      userProfile: {
-        user_id: 'coord-1',
-        company_id: 'co-1',
-        access_level: 2,
-        admin: false,
-        department_id: 2,
-      },
-      can: (key) => key === 'audiovisual.coordina',
-      lines: [],
-    })
-    // El coordinador ahora edita el brief inline (fix: pauta creada por él ya no queda en
-    // blanco), así que el cliente se rinde como <select> (valor seleccionado vía
-    // getByDisplayValue) en vez de texto plano — cada fila lista todos los clientes como
-    // <option>, por lo que getByText('Cliente Georgina') matchearía más de un elemento.
-    // Sin línea propia asignada (lines: []) sigue viendo todo (pautasInScope con scope
-    // null no filtra) — lo que cambió es que ya no ve el selector "Ver" de todas modos,
-    // porque "audiovisual.coordina" dejó de implicar canViewAll.
-    await waitFor(() => {
-      expect(screen.getByDisplayValue('Cliente Georgina')).toBeInTheDocument()
-    })
-    expect(screen.getByDisplayValue('Cliente Sabrina')).toBeInTheDocument()
-    expect(screen.queryByText('Ver')).not.toBeInTheDocument()
-    expect(screen.getByText('Sin línea')).toBeInTheDocument()
-    expect(screen.getAllByText('Agendar').length).toBe(2)
-    expect(screen.getAllByText('Declinar').length).toBe(2)
-    expect(screen.getByText('+ Agregar pauta')).toBeInTheDocument()
-  })
-
-  it('coordinador CON línea propia asignada y SIN ver_todo solo ve pautas de su línea', async () => {
-    renderView({
-      userProfile: {
-        user_id: 'coord-1',
-        company_id: 'co-1',
-        access_level: 2,
-        admin: false,
-        department_id: 2,
-      },
-      can: (key) => key === 'audiovisual.coordina',
-      lines: [LINES[0]], // tiene línea propia asignada (Georgina) — antes veía igual todas
-    })
-    await waitFor(() => {
-      expect(screen.getByText('Cliente Georgina')).toBeInTheDocument()
-    })
-    expect(screen.queryByText('Cliente Sabrina')).not.toBeInTheDocument()
-    expect(screen.queryByText('Ver')).not.toBeInTheDocument()
-  })
-
-  it('con audiovisual.ver_todo (aunque no coordine) ve los badges "Todos" + cada línea, y todas las pautas', async () => {
-    renderView({
-      userProfile: { user_id: 'lizdania-1', company_id: 'co-1', access_level: 1, admin: false },
+      userProfile: { ...COORD, access_level: 1 },
       can: (key) => key === 'audiovisual.ver_todo',
       lines: [],
     })
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Todos' })).toBeInTheDocument()
-    })
-    // `lines: []` en este test (sin membresía en ninguna línea) — no hay badges de línea
-    // que mostrar, pero como tiene audiovisual.ver_todo sigue viendo todas las pautas.
+    await waitFor(() => expect(screen.getByText('Todos')).toBeInTheDocument())
+    goLista()
     expect(screen.getByText('Cliente Georgina')).toBeInTheDocument()
     expect(screen.getByText('Cliente Sabrina')).toBeInTheDocument()
   })
 
-  it('dirección: filtrar por el badge de una línea oculta las pautas de las otras líneas', async () => {
+  it('dirección: filtrar por el pill de una línea oculta las pautas de las otras', async () => {
     renderView({
       userProfile: { user_id: 'dir-1', company_id: 'co-1', access_level: 4, admin: false },
       can: () => true,
     })
-    // Dirección también coordina (can:()=>true), así que el brief se rinde como <select>
-    // (ver nota en el test anterior) — se usa getByDisplayValue en vez de getByText.
-    await waitFor(() => {
-      expect(screen.getByDisplayValue('Cliente Georgina')).toBeInTheDocument()
-    })
-    expect(screen.getByDisplayValue('Cliente Sabrina')).toBeInTheDocument()
-
+    await waitFor(() => expect(screen.getByText('Todos')).toBeInTheDocument())
+    goLista()
+    expect(screen.getByText('Cliente Sabrina')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Georgina' }))
-
-    await waitFor(() => {
-      expect(screen.queryByDisplayValue('Cliente Sabrina')).not.toBeInTheDocument()
-    })
-    expect(screen.getByDisplayValue('Cliente Georgina')).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByText('Cliente Sabrina')).not.toBeInTheDocument())
+    expect(screen.getByText('Cliente Georgina')).toBeInTheDocument()
   })
 
-  it('sin capabilities de audiovisual: la tabla queda en modo lectura, sin botones de acción', async () => {
-    renderView({
-      userProfile: { user_id: 'u9', company_id: 'co-1', access_level: 1, admin: false },
-      can: () => false,
-      lines: [LINES[0]],
-    })
-    await waitFor(() => {
-      expect(screen.getByText('Cliente Georgina')).toBeInTheDocument()
-    })
+  it('sin capabilities de audiovisual: solo lectura, sin crear ni acciones en el detalle', async () => {
+    renderView({ userProfile: { ...JEFA, user_id: 'lector' }, can: () => false, lines: [LINES[0]] })
+    await waitFor(() => expect(screen.getByText('Georgina')).toBeInTheDocument())
     expect(screen.queryByText('+ Solicitar pauta')).not.toBeInTheDocument()
     expect(screen.queryByText('+ Agregar pauta')).not.toBeInTheDocument()
-    expect(screen.queryByText('Agendar')).not.toBeInTheDocument()
+    goLista()
+    fireEvent.click(screen.getByText('Cliente Georgina'))
+    expect(screen.queryByLabelText('Acciones')).not.toBeInTheDocument()
   })
 
-  it('recurso asignado a la pauta (sin coordina) puede editar sus piezas, pero no agendar/declinar', async () => {
+  it('la pestaña Todas muestra cuántas solicitudes esperan aprobación', async () => {
+    renderView({ userProfile: COORD, can: () => true, lines: [] })
+    await waitFor(() => expect(screen.getByText('Todos')).toBeInTheDocument())
+    expect(screen.getByLabelText('2 solicitudes por aprobar')).toBeInTheDocument()
+  })
+})
+
+describe('AudiovisualView — shell por rol (Semana como inicio)', () => {
+  it('coordinación entra a Semana con las pestañas Semana · Datos · Todas', async () => {
+    renderView({ userProfile: COORD, can: () => true, lines: [] })
+    await waitFor(() => expect(screen.getByText('Todos')).toBeInTheDocument())
+    expect(tab('Semana')).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getAllByRole('tab').map((t) => t.textContent.replace(/\d.*$/, ''))).toEqual([
+      'Semana',
+      'Datos',
+      'Todas',
+    ])
+    expect(screen.getByTestId('semana-grid')).toBeInTheDocument()
+  })
+
+  it('la jefa de línea también entra a Semana y ve solo sus solicitudes en las alertas', async () => {
+    renderView({ userProfile: JEFA, can: (key) => key === 'audiovisual.manage', lines: [LINES[0]] })
+    await waitFor(() => expect(screen.getByText('+ Solicitar pauta')).toBeInTheDocument())
+    expect(tab('Semana')).toHaveAttribute('aria-selected', 'true')
+    // Solo p1 (Georgina) está en su alcance; p2 es de Sabrina.
+    expect(screen.getByRole('button', { name: /1 solicitud por aprobar/ })).toBeInTheDocument()
+  })
+
+  it('la pestaña Semana lleva el total de cosas por atender', async () => {
+    renderView({ userProfile: COORD, can: () => true, lines: [] })
+    await waitFor(() => expect(screen.getByText('Todos')).toBeInTheDocument())
+    // 2 solicitudes por aprobar (p1, p2). p3/p4 son del día 10 de este mes: según la fecha
+    // de hoy pueden contar o no como "pasadas sin captura", así que solo se exige el mínimo.
+    const badge = within(tab('Semana')).getByLabelText(/cosas por atender/)
+    expect(Number(badge.textContent)).toBeGreaterThanOrEqual(2)
+  })
+
+  it('desde Semana, abrir "solicitudes por aprobar" permite declinar sin salir de la vista', async () => {
+    renderView({ userProfile: COORD, can: () => true, lines: [] })
+    await waitFor(() => expect(screen.getByText('Todos')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /2 solicitudes por aprobar/ }))
+    const panel = screen.getByRole('dialog')
+    expect(
+      within(panel).getByRole('article', { name: /Solicitud Cliente Georgina/ }),
+    ).toBeInTheDocument()
+    expect(within(panel).getAllByRole('button', { name: 'Agendar' })).toHaveLength(2)
+    fireEvent.click(within(panel).getByLabelText('Cerrar panel'))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(tab('Semana')).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('"Solicitar pauta" abre el asistente de 3 pasos con los clientes de la línea', async () => {
+    renderView({ userProfile: JEFA, can: (key) => key === 'audiovisual.manage', lines: [LINES[0]] })
+    await waitFor(() => expect(screen.getByText('+ Solicitar pauta')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('+ Solicitar pauta'))
+    const wizard = screen.getByRole('form', { name: 'Solicitar pauta' })
+    expect(within(wizard).getByRole('list', { name: 'Pasos' })).toHaveTextContent(
+      /Qué.*Cuándo.*Detalles/,
+    )
+    // Un solo cliente en su línea → ya viene elegido.
+    expect(within(wizard).getByText('Cliente Georgina')).toBeInTheDocument()
+    expect(within(wizard).queryByText('Cliente Sabrina')).not.toBeInTheDocument()
+    fireEvent.click(within(wizard).getByRole('button', { name: 'Cerrar' }))
+    expect(screen.queryByRole('form', { name: 'Solicitar pauta' })).not.toBeInTheDocument()
+  })
+
+  it('un recurso del equipo audiovisual entra a "Mi trabajo" y ve sus pautas asignadas', async () => {
     renderView({
       userProfile: {
         user_id: 'editor-1',
@@ -296,236 +346,178 @@ describe('AudiovisualView', () => {
         admin: false,
         department_id: 2,
       },
-      // audiovisual.piezas ya no otorga edición por sí sola: solo deja ver todas
-      // las líneas (canViewAll). La edición depende de recurso_ids en la pauta.
       can: (key) => key === 'audiovisual.piezas',
       lines: [],
-      // Deeplink directo a la pauta 'realizada' (p4), igual que abrir desde la campanita.
-      initialEntries: ['/tareas/pautas?pautaId=p4'],
     })
-    await waitFor(() => {
-      expect(screen.getByText('Edición de piezas')).toBeInTheDocument()
-    })
-    // Editable: 'editor-1' está en recurso_ids de p4 (ver MOCK_PAUTAS).
-    expect(screen.getByText('+ Agregar editor')).toBeInTheDocument()
-    // Pero no tiene audiovisual.coordina: no ve los botones de agendar/declinar.
-    expect(screen.queryByText('Agendar')).not.toBeInTheDocument()
-    expect(screen.queryByText('Declinar')).not.toBeInTheDocument()
+    await waitFor(() => expect(tab('Mi trabajo')).toBeInTheDocument())
+    expect(tab('Mi trabajo')).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('heading', { name: /^Mi trabajo/ })).toBeInTheDocument()
+    // p4 (Cliente Realizada, día 10 de este mes) lo tiene como recurso: según la fecha de hoy
+    // cae en Hoy, Próximas o Pendiente de registrar, pero siempre está en su pantalla.
+    expect(screen.getByText('Cliente Realizada')).toBeInTheDocument()
+    expect(screen.queryByText('Cliente Georgina')).not.toBeInTheDocument()
   })
 
-  it('depto Audiovisual sin ser el recurso asignado NO puede editar piezas de una pauta realizada', async () => {
-    renderView({
-      userProfile: {
-        user_id: 'otro-editor',
-        company_id: 'co-1',
-        access_level: 1,
-        admin: false,
-        department_id: 2,
-      },
-      can: (key) => key === 'audiovisual.piezas',
-      lines: [],
-      initialEntries: ['/tareas/pautas?pautaId=p4'],
-    })
-    await waitFor(() => {
-      expect(screen.getByText('Edición de piezas')).toBeInTheDocument()
-    })
-    // No editable: 'otro-editor' no está en recurso_ids de p4.
-    expect(screen.queryByPlaceholderText('Buscar empleado por nombre…')).not.toBeInTheDocument()
-  })
-
-  it('con audiovisual.pautas.gestion puede editar piezas de cualquier pauta sin ser recurso ni coordinar', async () => {
-    renderView({
-      userProfile: {
-        user_id: 'gestor-1',
-        company_id: 'co-1',
-        access_level: 1,
-        admin: false,
-        department_id: 2,
-      },
-      can: (key) => key === 'audiovisual.pautas.gestion',
-      lines: [],
-      initialEntries: ['/tareas/pautas?pautaId=p4'],
-    })
-    await waitFor(() => {
-      expect(screen.getByText('Edición de piezas')).toBeInTheDocument()
-    })
-    // Editable aunque 'gestor-1' no está en recurso_ids de p4 y no tiene audiovisual.coordina.
-    expect(screen.getByText('+ Agregar editor')).toBeInTheDocument()
-    expect(screen.queryByText('Agendar')).not.toBeInTheDocument()
-    expect(screen.queryByText('Declinar')).not.toBeInTheDocument()
-  })
-
-  it('la jefa de la línea puede editar las piezas de una pauta realizada de SU línea', async () => {
-    renderView({
-      userProfile: {
-        user_id: 'jefa-1',
-        company_id: 'co-1',
-        access_level: 3,
-        admin: false,
-        department_id: 1,
-      },
-      can: (key) => key === 'audiovisual.manage',
-      lines: [LINES[0]],
-      initialEntries: ['/tareas/pautas?pautaId=p4'],
-    })
-    await waitFor(() => {
-      expect(screen.getByText('Edición de piezas')).toBeInTheDocument()
-    })
-    // p4 es de 'line-1' y 'jefa-1' es su lead: editable aunque no esté en recurso_ids ni
-    // tenga audiovisual.coordina / audiovisual.pautas.gestion.
-    expect(screen.getByText('+ Agregar editor')).toBeInTheDocument()
-    expect(screen.queryByText('Agendar')).not.toBeInTheDocument()
-    expect(screen.queryByText('Declinar')).not.toBeInTheDocument()
-  })
-
-  it('la jefa de OTRA línea no puede editar las piezas de esa pauta', async () => {
-    renderView({
-      userProfile: {
-        user_id: 'jefa-2',
-        company_id: 'co-1',
-        access_level: 3,
-        admin: false,
-        department_id: 1,
-      },
-      can: (key) => key === 'audiovisual.manage',
-      lines: [LINES[1]],
-      initialEntries: ['/tareas/pautas?pautaId=p4'],
-    })
-    await waitFor(() => {
-      expect(screen.getByText('Edición de piezas')).toBeInTheDocument()
-    })
-    // p4 es de 'line-1'; 'jefa-2' lidera 'line-2' → solo lectura.
-    expect(screen.queryByText('+ Agregar editor')).not.toBeInTheDocument()
+  it('el KPI del mes en Semana lleva a Datos', async () => {
+    renderView({ userProfile: COORD, can: () => true, lines: [] })
+    await waitFor(() => expect(screen.getByText('Todos')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Ver datos del mes' }))
+    expect(tab('Datos')).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByText('Pendiente por editar')).toBeInTheDocument()
   })
 })
 
-describe('AudiovisualView — SummaryCard (Todas/Agendadas/Realizadas) filtra SOLO el calendario', () => {
-  // El pill del calendario tiene `title="<salida> · <client_name>"` (AvCalendar.jsx) — único,
-  // a diferencia del texto plano del client_name, que se repite en la fila de AvPhaseTable
-  // cuando su pestaña coincide con el status.
-  const calendarPill = (name) => screen.getByTitle(new RegExp(name))
-  const queryCalendarPill = (name) => screen.queryByTitle(new RegExp(name))
-  const summaryCard = (label) => screen.getByRole('button', { name: `Filtrar por ${label}` })
-
-  async function renderCoordinadora() {
-    renderView({
-      userProfile: {
-        user_id: 'coord-1',
-        company_id: 'co-1',
-        access_level: 2,
-        admin: false,
-        department_id: 2,
-      },
-      can: (key) => key === 'audiovisual.coordina',
-      lines: [],
-    })
-    await waitFor(() => {
-      expect(calendarPill('Cliente Agendada')).toBeInTheDocument()
-    })
+describe('AudiovisualView — permisos sobre captura/edición en el detalle', () => {
+  const open = async (opts) => {
+    renderView({ ...opts, initialEntries: ['/tareas/pautas?pautaId=p4'] })
+    await waitFor(() => expect(screen.getByText('quién edita cuántas piezas')).toBeInTheDocument())
+  }
+  const AV = {
+    user_id: 'editor-1',
+    company_id: 'co-1',
+    access_level: 1,
+    admin: false,
+    department_id: 2,
   }
 
-  it('solo hay 3 recuadros: Todas, Agendadas, Realizadas (sin "Solicitudes pendientes")', async () => {
-    await renderCoordinadora()
-    expect(summaryCard('Todas')).toBeInTheDocument()
-    expect(summaryCard('Agendadas')).toBeInTheDocument()
-    expect(summaryCard('Realizadas')).toBeInTheDocument()
-    expect(screen.queryByText('Solicitudes pendientes')).not.toBeInTheDocument()
+  it('recurso asignado (sin coordina) edita piezas, pero no agenda/declina', async () => {
+    await open({ userProfile: AV, can: (key) => key === 'audiovisual.piezas', lines: [] })
+    expect(screen.getByText('+ agregar editor')).toBeInTheDocument()
+    expect(screen.queryByText('Aprobar y agendar')).not.toBeInTheDocument()
+    expect(screen.queryByText('Declinar')).not.toBeInTheDocument()
   })
 
-  it('por defecto ("Todas" activo) el calendario muestra agendadas y realizadas juntas', async () => {
-    await renderCoordinadora()
-    expect(summaryCard('Todas')).toHaveClass('border-[#FFB800]')
-    expect(calendarPill('Cliente Agendada')).toBeInTheDocument()
-    expect(calendarPill('Cliente Realizada')).toBeInTheDocument()
-  })
-
-  it('click en "Agendadas" filtra el calendario a solo programadas, sin tocar la pestaña de la tabla', async () => {
-    await renderCoordinadora()
-    // Tabla por defecto en Solicitudes — sigue ahí después de filtrar el calendario.
-    expect(screen.getByDisplayValue('Cliente Georgina')).toBeInTheDocument()
-
-    fireEvent.click(summaryCard('Agendadas'))
-
-    await waitFor(() => {
-      expect(queryCalendarPill('Cliente Realizada')).not.toBeInTheDocument()
+  it('depto Audiovisual sin ser el recurso NO edita piezas', async () => {
+    await open({
+      userProfile: { ...AV, user_id: 'otro-editor' },
+      can: (key) => key === 'audiovisual.piezas',
+      lines: [],
     })
-    expect(calendarPill('Cliente Agendada')).toBeInTheDocument()
-    // La tabla sigue mostrando Solicitudes — el click en el card no cambió la pestaña.
-    expect(screen.getByDisplayValue('Cliente Georgina')).toBeInTheDocument()
+    expect(screen.queryByText('+ agregar editor')).not.toBeInTheDocument()
   })
 
-  it('click en "Realizadas" filtra el calendario a solo realizadas', async () => {
-    await renderCoordinadora()
-    fireEvent.click(summaryCard('Realizadas'))
-
-    await waitFor(() => {
-      expect(queryCalendarPill('Cliente Agendada')).not.toBeInTheDocument()
+  it('con audiovisual.pautas.gestion edita piezas de cualquier pauta', async () => {
+    await open({
+      userProfile: { ...AV, user_id: 'gestor-1' },
+      can: (key) => key === 'audiovisual.pautas.gestion',
+      lines: [],
     })
-    expect(calendarPill('Cliente Realizada')).toBeInTheDocument()
+    expect(screen.getByText('+ agregar editor')).toBeInTheDocument()
+    expect(screen.queryByText('Aprobar y agendar')).not.toBeInTheDocument()
   })
 
-  it('"Todas" restablece el calendario sin filtrar', async () => {
-    await renderCoordinadora()
-    fireEvent.click(summaryCard('Realizadas'))
-    await waitFor(() => {
-      expect(queryCalendarPill('Cliente Agendada')).not.toBeInTheDocument()
-    })
-
-    fireEvent.click(summaryCard('Todas'))
-    await waitFor(() => {
-      expect(calendarPill('Cliente Agendada')).toBeInTheDocument()
-    })
-    expect(calendarPill('Cliente Realizada')).toBeInTheDocument()
+  it('la jefa de la línea edita las piezas de SU línea', async () => {
+    await open({ userProfile: JEFA, can: (key) => key === 'audiovisual.manage', lines: [LINES[0]] })
+    expect(screen.getByText('+ agregar editor')).toBeInTheDocument()
   })
 
-  it('cambiar de pestaña en la tabla de seguimiento NO cambia lo que se ve en el calendario', async () => {
-    await renderCoordinadora()
-    // Calendario muestra ambas por defecto (statusFilter=null).
-    expect(calendarPill('Cliente Agendada')).toBeInTheDocument()
-    expect(calendarPill('Cliente Realizada')).toBeInTheDocument()
-
-    // Cambiar la pestaña de la tabla directamente (no el SummaryCard).
-    fireEvent.click(screen.getByRole('button', { name: /^Agenda [0-9]/ }))
-
-    // El calendario sigue mostrando ambas — no se filtró.
-    expect(calendarPill('Cliente Agendada')).toBeInTheDocument()
-    expect(calendarPill('Cliente Realizada')).toBeInTheDocument()
+  it('la jefa de OTRA línea no puede editar las piezas', async () => {
+    await open({
+      userProfile: { ...JEFA, user_id: 'jefa-2' },
+      can: (key) => key === 'audiovisual.manage',
+      lines: [LINES[1]],
+    })
+    expect(screen.queryByText('+ agregar editor')).not.toBeInTheDocument()
   })
 })
 
-describe('AudiovisualView — la tabla de seguimiento sigue al mes que se ve en el calendario', () => {
-  it('al navegar a otro mes, una pauta agendada de este mes deja de verse en la tabla; las solicitudes sin fecha siguen', async () => {
+describe('AudiovisualView — vista Calendario', () => {
+  const calendarPill = (name) => screen.getByTitle(new RegExp(name))
+  const queryCalendarPill = (name) => screen.queryByTitle(new RegExp(name))
+  const chip = (label) => screen.getByRole('button', { name: `Filtrar por ${label}` })
+
+  async function renderCoordinadora() {
+    renderView({ userProfile: COORD, can: (key) => key === 'audiovisual.coordina', lines: [] })
+    await waitFor(() => expect(screen.getByText('+ Agregar pauta')).toBeInTheDocument())
+    goMes()
+    await waitFor(() => expect(calendarPill('Cliente Agendada')).toBeInTheDocument())
+  }
+
+  it('por defecto muestra agendadas y realizadas; los chips filtran', async () => {
+    await renderCoordinadora()
+    expect(chip('Todas')).toHaveClass('border-[#FFB800]')
+    expect(calendarPill('Cliente Realizada')).toBeInTheDocument()
+    fireEvent.click(chip('Agendadas'))
+    await waitFor(() => expect(queryCalendarPill('Cliente Realizada')).not.toBeInTheDocument())
+    expect(calendarPill('Cliente Agendada')).toBeInTheDocument()
+    fireEvent.click(chip('Realizadas'))
+    await waitFor(() => expect(queryCalendarPill('Cliente Agendada')).not.toBeInTheDocument())
+    fireEvent.click(chip('Todas'))
+    await waitFor(() => expect(calendarPill('Cliente Agendada')).toBeInTheDocument())
+  })
+
+  it('el chip "Solicitadas" muestra solo solicitudes con fecha (ninguna en los mocks)', async () => {
+    await renderCoordinadora()
+    fireEvent.click(chip('Solicitadas'))
+    await waitFor(() => expect(queryCalendarPill('Cliente Agendada')).not.toBeInTheDocument())
+    expect(queryCalendarPill('Cliente Georgina')).not.toBeInTheDocument()
+  })
+})
+
+describe('AudiovisualView — toggle Semana / Mes', () => {
+  it('Mes abre el calendario en el mes de la semana que se estaba viendo y Semana vuelve a la grilla', async () => {
+    renderView({ userProfile: COORD, can: (key) => key === 'audiovisual.coordina', lines: [] })
+    await waitFor(() => expect(screen.getByText('+ Agregar pauta')).toBeInTheDocument())
+    // Hoy es lun 5 oct 2026: cuatro semanas adelante cae en noviembre.
+    for (let i = 0; i < 4; i++) fireEvent.click(screen.getByLabelText('Semana siguiente'))
+    goMes()
+    expect(screen.getByRole('heading', { name: /noviembre 2026/i })).toBeInTheDocument()
+    expect(screen.queryByTestId('semana-grid')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Semana' }))
+    expect(screen.getByTestId('semana-grid')).toBeInTheDocument()
+  })
+})
+
+describe('AudiovisualView — puente con el onboarding', () => {
+  it('goTo pone la pantalla donde pide el paso (pestaña y modo de Semana)', async () => {
+    const tourApiRef = { current: null }
     renderView({
-      userProfile: {
-        user_id: 'coord-1',
-        company_id: 'co-1',
-        access_level: 2,
-        admin: false,
-        department_id: 2,
-      },
+      userProfile: COORD,
       can: (key) => key === 'audiovisual.coordina',
       lines: [],
+      tourApiRef,
     })
-    await waitFor(() => {
-      expect(screen.getByTitle(/Cliente Agendada/)).toBeInTheDocument()
-    })
+    await waitFor(() => expect(screen.getByText('+ Agregar pauta')).toBeInTheDocument())
+    act(() => tourApiRef.current.goTo({ view: 'datos' }))
+    expect(tab('Datos')).toHaveAttribute('aria-selected', 'true')
+    act(() => tourApiRef.current.goTo({ view: 'semana', semanaModo: 'mes' }))
+    expect(tab('Semana')).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('button', { name: 'Mes' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.queryByTestId('semana-grid')).not.toBeInTheDocument()
+  })
 
-    // Ir a la pestaña "Agenda" de la tabla directamente (ya no depende de los SummaryCard).
-    fireEvent.click(screen.getByRole('button', { name: /^Agenda [0-9]/ }))
-    // Aparece dos veces: el pill del calendario y la fila de la pestaña "Agenda".
-    expect(screen.getAllByText('Cliente Agendada').length).toBe(2)
+  it('informa a la página si la persona tiene "Mi trabajo" y cuándo terminó de cargar', async () => {
+    const onTourCtx = vi.fn()
+    renderView({ userProfile: COORD, can: () => true, lines: [], onTourCtx })
+    await waitFor(() => expect(screen.getByText('Todos')).toBeInTheDocument())
+    expect(onTourCtx).toHaveBeenCalledWith({ tieneTrabajo: expect.any(Boolean), ready: true })
+  })
+})
 
+describe('AudiovisualView — la Lista sigue al mes del calendario', () => {
+  it('al navegar a otro mes, la agendada desaparece de la lista; las solicitudes sin fecha siguen', async () => {
+    renderView({ userProfile: COORD, can: (key) => key === 'audiovisual.coordina', lines: [] })
+    await waitFor(() => expect(screen.getByText('+ Agregar pauta')).toBeInTheDocument())
+    goMes()
+    await waitFor(() => expect(screen.getByTitle(/Cliente Agendada/)).toBeInTheDocument())
     fireEvent.click(screen.getByLabelText('Mes siguiente'))
+    goLista()
+    fireEvent.click(screen.getByRole('button', { name: /Agendadas/ }))
+    expect(screen.queryByText('Cliente Agendada')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Solicitadas/ }))
+    expect(screen.getByText('Cliente Georgina')).toBeInTheDocument()
+    expect(screen.getByText('Cliente Sabrina')).toBeInTheDocument()
+  })
+})
 
-    await waitFor(() => {
-      expect(screen.queryByText('Cliente Agendada')).not.toBeInTheDocument()
-    })
-
-    // Las solicitudes sin fecha confirmada (Cliente Georgina/Sabrina, ambas sin
-    // pauta_date) siguen viéndose sin importar el mes que se navegue.
-    fireEvent.click(screen.getByRole('button', { name: /^Solicitudes/ }))
-    expect(screen.getByDisplayValue('Cliente Georgina')).toBeInTheDocument()
-    expect(screen.getByDisplayValue('Cliente Sabrina')).toBeInTheDocument()
+describe('AudiovisualView — vista Datos', () => {
+  it('muestra pendientes por editar y los dos rankings', async () => {
+    renderView({ userProfile: COORD, can: () => true, lines: [] })
+    await waitFor(() => expect(screen.getByText('Todos')).toBeInTheDocument())
+    fireEvent.click(tab('Datos'))
+    expect(screen.getByText('Pendiente por editar')).toBeInTheDocument()
+    expect(screen.getByText('Videos 4K + Reels')).toBeInTheDocument()
+    expect(screen.getByText('Fotos')).toBeInTheDocument()
   })
 })
 
@@ -555,30 +547,24 @@ describe('AudiovisualView — deep-link ?pautaId=', () => {
   const ADMIN_PROFILE = { user_id: 'coord-1', company_id: 'co-1', access_level: 4, admin: true }
   const CAN_ALL = () => true
 
-  it('abre PautaDetailModal con la pauta indicada y limpia el param de la URL', async () => {
+  it('abre el detalle de la pauta indicada y limpia el param de la URL', async () => {
     renderWithPautaId('p1', { userProfile: ADMIN_PROFILE, can: CAN_ALL })
-    await waitFor(() => {
-      expect(screen.getByLabelText('Cerrar')).toBeInTheDocument()
-    })
-    expect(screen.getAllByText('Cliente Georgina').length).toBeGreaterThan(0)
-    await waitFor(() => {
-      expect(screen.getByTestId('loc-search').textContent).toBe('')
-    })
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Cliente Georgina' })).toBeInTheDocument(),
+    )
+    await waitFor(() => expect(screen.getByTestId('loc-search').textContent).toBe(''))
   })
 
-  it('mueve el mes/pestaña al de una pauta agendada de otro mes', async () => {
+  it('mueve el mes al de una pauta agendada', async () => {
     renderWithPautaId('p3', { userProfile: ADMIN_PROFILE, can: CAN_ALL })
-    await waitFor(() => {
-      expect(screen.getByLabelText('Cerrar')).toBeInTheDocument()
-    })
-    expect(screen.getAllByText('Cliente Agendada').length).toBeGreaterThan(0)
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Cliente Agendada' })).toBeInTheDocument(),
+    )
   })
 
   it('un pautaId inexistente no rompe la vista y limpia igual el param', async () => {
     renderWithPautaId('no-existe', { userProfile: ADMIN_PROFILE, can: CAN_ALL })
-    await waitFor(() => {
-      expect(screen.getByTestId('loc-search').textContent).toBe('')
-    })
+    await waitFor(() => expect(screen.getByTestId('loc-search').textContent).toBe(''))
     expect(screen.queryByLabelText('Cerrar')).not.toBeInTheDocument()
   })
 })
