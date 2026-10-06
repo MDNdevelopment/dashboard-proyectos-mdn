@@ -56,11 +56,12 @@ const CNPS = [
   }),
 ]
 
-function renderView(cnps = CNPS, initialEntries = ['/']) {
+function renderView(cnps = CNPS, initialEntries = ['/'], monthIdx = null) {
   return render(
     <MemoryRouter initialEntries={initialEntries}>
       <CnpBaseView
         cnps={cnps}
+        monthIdx={monthIdx}
         clientsById={CLIENTS_BY_ID}
         usersMap={USERS_MAP}
         onOpenCnp={() => {}}
@@ -129,5 +130,29 @@ describe('CnpBaseView — filtro por responsable', () => {
     renderView(CNPS_WITH_ASSIGNEE, ['/?assignee=u2'])
     expect(screen.getByText('De Beto')).toBeInTheDocument()
     expect(screen.queryByText('De Ana')).not.toBeInTheDocument()
+  })
+})
+
+describe('CnpBaseView — período', () => {
+  const MIXED = [
+    makeCnp({ id: 'ene', title: 'De enero', created_at: '2026-01-10T12:00:00Z' }),
+    makeCnp({ id: 'feb', title: 'De febrero', created_at: '2026-02-10T12:00:00Z' }),
+  ]
+
+  it('con un mes activo solo lista los CNP solicitados en ese mes', () => {
+    renderView(MIXED, ['/'], 2026 * 12 + 1)
+    expect(screen.getByText('De febrero')).toBeInTheDocument()
+    expect(screen.queryByText('De enero')).not.toBeInTheDocument()
+  })
+
+  it('con monthIdx null (todos los meses) lista todos', () => {
+    renderView(MIXED, ['/'], null)
+    expect(screen.getByText('De febrero')).toBeInTheDocument()
+    expect(screen.getByText('De enero')).toBeInTheDocument()
+  })
+
+  it('avisa cuando el mes elegido no tiene CNP', () => {
+    renderView(MIXED, ['/'], 2026 * 12 + 5)
+    expect(screen.getByText('No hay CNP en este período.')).toBeInTheDocument()
   })
 })

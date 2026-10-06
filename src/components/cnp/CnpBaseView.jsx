@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ESTADOS, COL_META, cnpPieceCount, cnpPiecesDelivered } from './constants'
+import { ESTADOS, COL_META, cnpPieceCount, cnpPiecesDelivered, cnpInMonth } from './constants'
 import { fmtShort, isLate } from '../tareas/constants'
 import { Avatar } from '../tareas/UserPickerSingle'
 import { clientIdsOf, clientDisplayName, matchesClient } from '../../utils/rowClients'
@@ -67,18 +67,23 @@ function SortableTh({ sortKey, activeKey, sortAsc, onSort, children }) {
 }
 
 /**
- * Tabla base de CNP: la lista completa, filtrable por estado/cliente/impreso/alerta
- * y buscable por título. Modelada sobre BaseView.jsx de Gestión de Tareas, sin la
+ * Tabla base de CNP: la lista del período activo (`monthIdx`; null = todos los meses),
+ * filtrable por estado/cliente/impreso/alerta y buscable por título. Modelada sobre BaseView.jsx de Gestión de Tareas, sin la
  * complejidad de arrastre/continuidad entre meses (los CNP no tienen ese concepto).
  */
 export default function CnpBaseView({
-  cnps = [],
+  cnps: allCnps = [],
+  monthIdx = null,
   clientsById = new Map(),
   usersMap = new Map(),
   onOpenCnp,
   initialFilter = null,
 }) {
   const [searchParams] = useSearchParams()
+
+  // Todo lo que sigue (opciones de cliente/responsable, contadores, filtros) trabaja sobre
+  // el período activo, para que los conteos y los selects coincidan con lo que se ve.
+  const cnps = monthIdx == null ? allCnps : allCnps.filter((c) => cnpInMonth(c, monthIdx))
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState(
@@ -262,7 +267,11 @@ export default function CnpBaseView({
 
       <div className="bg-white rounded-xl border border-[#e0ddd4] overflow-hidden">
         {filtered.length === 0 ? (
-          <p className="text-[15px] text-[#bbb] text-center py-10">No hay CNP que coincidan.</p>
+          <p className="text-[15px] text-[#bbb] text-center py-10">
+            {cnps.length === 0 && monthIdx != null
+              ? 'No hay CNP en este período.'
+              : 'No hay CNP que coincidan.'}
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-[14.5px]">

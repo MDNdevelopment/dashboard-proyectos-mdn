@@ -61,6 +61,9 @@ export default function CnpPage() {
     if (st?.cnpView) {
       setActiveView(st.cnpView)
       setPendingBaseFilter(st.baseFilter ?? null)
+      // KPIs que cuentan todos los meses (paralizados, retrasados, impresión) abren Base sin
+      // acotar el período, para que la cantidad coincida con la del KPI.
+      if (st.allMonths) setMonthIdx(null)
     } else {
       setActiveView(searchParams.get('view') === 'base' ? 'base' : 'dashboard')
       setPendingBaseFilter(null)
@@ -68,7 +71,12 @@ export default function CnpPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.key])
   const [activeTeamId, setActiveTeamId] = useState(() => searchParams.get('team') ?? null)
+  // null = todos los meses (solo en Base; el Dashboard siempre trabaja sobre un mes).
   const [monthIdx, setMonthIdx] = useState(currentMonthIndex())
+
+  useEffect(() => {
+    if (activeView === 'dashboard' && monthIdx == null) setMonthIdx(currentMonthIndex())
+  }, [activeView, monthIdx])
   // null = closed, undefined = new, object = edit
   const [cnpModal, setCnpModal] = useState(null)
 
@@ -217,11 +225,11 @@ export default function CnpPage() {
     setActiveTeamId(teamId)
   }
 
-  function goToBaseWithFilter(filter) {
+  function goToBaseWithFilter(filter, { allMonths = false } = {}) {
     // Empuja una entrada de historial (misma URL, distinto state) para que el botón
     // "atrás" del navegador regrese al Dashboard en vez de salir de CNP.
     navigate(location.pathname + location.search, {
-      state: { cnpView: 'base', baseFilter: filter ?? null },
+      state: { cnpView: 'base', baseFilter: filter ?? null, allMonths },
     })
   }
 
@@ -335,12 +343,16 @@ export default function CnpPage() {
                   Período
                 </span>
                 <select
-                  value={monthIdx % 12}
-                  onChange={(e) =>
-                    setMonthIdx(Math.floor(monthIdx / 12) * 12 + Number(e.target.value))
-                  }
+                  value={monthIdx == null ? 'all' : monthIdx % 12}
+                  onChange={(e) => {
+                    if (e.target.value === 'all') return setMonthIdx(null)
+                    const base =
+                      monthIdx == null ? CURRENT_YEAR * 12 : Math.floor(monthIdx / 12) * 12
+                    setMonthIdx(base + Number(e.target.value))
+                  }}
                   className="text-[13.5px] border border-[#e0ddd4] rounded-lg px-2 py-1.5 bg-white text-[#333] focus:outline-none focus:border-[#FFB800]"
                 >
+                  {activeView === 'base' && <option value="all">Todos los meses</option>}
                   {MONTHS.map((name, i) => (
                     <option key={i} value={i}>
                       {name}
@@ -348,9 +360,10 @@ export default function CnpPage() {
                   ))}
                 </select>
                 <select
-                  value={Math.floor(monthIdx / 12)}
+                  value={monthIdx == null ? CURRENT_YEAR : Math.floor(monthIdx / 12)}
+                  disabled={monthIdx == null}
                   onChange={(e) => setMonthIdx(Number(e.target.value) * 12 + (monthIdx % 12))}
-                  className="text-[13.5px] border border-[#e0ddd4] rounded-lg px-2 py-1.5 bg-white text-[#333] focus:outline-none focus:border-[#FFB800]"
+                  className="text-[13.5px] border border-[#e0ddd4] rounded-lg px-2 py-1.5 bg-white text-[#333] focus:outline-none focus:border-[#FFB800] disabled:opacity-50"
                 >
                   {YEARS.map((y) => (
                     <option key={y} value={y}>
@@ -390,6 +403,7 @@ export default function CnpPage() {
                 <CnpBaseView
                   key={location.key}
                   cnps={scopedCnps}
+                  monthIdx={monthIdx}
                   clientsById={clientsById}
                   usersMap={usersMap}
                   onOpenCnp={openEditCnp}
