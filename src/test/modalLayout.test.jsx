@@ -37,7 +37,9 @@ const MODALS_WITH_FOOTER = [
   'src/components/empresa/LineMetasModal.jsx',
   'src/components/ads/AdsDetail.jsx',
   'src/components/ads/AdsSpendDetail.jsx',
-  'src/components/pautas/PautaDetailModal.jsx',
+  'src/components/pautas/PautaDetail.jsx',
+  'src/components/pautas/PautaFormModal.jsx',
+  'src/components/pautas/AgendarDialog.jsx',
   'src/components/evaluaciones/ManagerRatingModal.jsx',
 ]
 

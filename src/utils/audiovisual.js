@@ -53,52 +53,6 @@ export const GRILLA_STATUS_LABELS = {
   incumple: 'Incumple',
 }
 
-/**
- * Estados de una pieza individual dentro del checklist de edición (av_pauta_piezas).
- * `PIEZA_STATUS_META` sigue el contrato de StatusPill (common/StatusPill.jsx): clases
- * Tailwind LITERALES, nunca armadas en runtime (el JIT no las generaría). Misma paleta
- * base que STATUS_BADGE de PautaDetailModal para que el módulo se vea
- * consistente.
- */
-export const PIEZA_STATUS_LABELS = {
-  pendiente: 'Pendiente',
-  en_edicion: 'En edición',
-  espera_aprobacion: 'Espera de aprobación',
-  listo: 'Listo',
-  cancelado: 'Cancelado',
-}
-
-export const PIEZA_STATUS_META = {
-  pendiente: {
-    label: 'Pendiente',
-    bg: 'bg-[#fdf4de]',
-    text: 'text-[#9a7400]',
-    dot: 'bg-[#e0b23d]',
-  },
-  en_edicion: {
-    label: 'En edición',
-    bg: 'bg-[#e6f0ff]',
-    text: 'text-[#2563eb]',
-    dot: 'bg-[#2563eb]',
-  },
-  espera_aprobacion: {
-    label: 'Espera de aprobación',
-    bg: 'bg-[#f3e8ff]',
-    text: 'text-[#7c3aed]',
-    dot: 'bg-[#7c3aed]',
-  },
-  listo: { label: 'Listo', bg: 'bg-[#e9f7ec]', text: 'text-[#1f8a43]', dot: 'bg-[#1f8a43]' },
-  cancelado: { label: 'Cancelado', bg: 'bg-[#f2f0ea]', text: 'text-[#888]', dot: 'bg-[#999]' },
-}
-
-export const PIEZA_STATUS_ORDER = [
-  'pendiente',
-  'en_edicion',
-  'espera_aprobacion',
-  'listo',
-  'cancelado',
-]
-
 const DAYNAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 const MON3 = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 
@@ -318,11 +272,6 @@ export function editorLabel(editorId, usersById) {
   return `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() || 'Editor no disponible'
 }
 
-/** Pseudo-usuario mínimo para pintar un Avatar cuando `editorId` no resuelve en `usersById`. */
-export function unresolvedEditorUser(editorId) {
-  return { user_id: editorId, first_name: '?', last_name: '', avatar_url: null }
-}
-
 /**
  * Nombre a mostrar de quien solicitó/creó la pauta (`created_by`), resuelto vía
  * `usersById`. A diferencia de `resourceName`, no tiene fallback de texto libre:
@@ -536,20 +485,12 @@ export function pautasInScope(pautas, lineId, generalLineId = null) {
  * importar el mes — de lo contrario desaparecerían de la tabla hasta que alguien les
  * ponga fecha, escondiendo justo lo que falta agendar.
  */
-export function pautasInMonth(pautas, year, month, pinnedIds = null) {
+export function pautasInMonth(pautas, year, month) {
   return pautas.filter((p) => {
     if (!p.pauta_date) return true
-    if (pinnedIds?.has(p.id)) return true
     const [y, m] = p.pauta_date.split('-').map(Number)
     return y === year && m === month
   })
-}
-
-/** true si la pauta tiene fecha y esa fecha cae fuera del año/mes que se está viendo. */
-export function isOutOfMonth(pauta, year, month) {
-  if (!pauta.pauta_date) return false
-  const [y, m] = pauta.pauta_date.split('-').map(Number)
-  return y !== year || m !== month
 }
 
 /** Nombre del mes+año de una fecha 'YYYY-MM-DD', para el aviso "↗ mes" de una fila anclada. */
@@ -581,25 +522,14 @@ export function sortAgenda(pautas) {
 // ─── Flujo de aprobación ────────────────────────────────────────────────────
 
 /**
- * Modo de edición de la sub-sección según capabilities del usuario:
- *  - 'coordina'  → agenda/aprueba solicitudes, edita Agenda y Realizadas (cualquier línea)
- *  - 'solicita'  → arma y envía el brief de Solicitudes (solo su línea)
- *  - 'lectura'   → solo ve
- */
-export function avEditMode({ canCoordinate, canManage }) {
-  if (canCoordinate) return 'coordina'
-  if (canManage) return 'solicita'
-  return 'lectura'
-}
-
-/**
- * Brief mínimo completo para poder solicitar una pauta: cliente + (enlace de
- * grilla O descripción de piezas).
+ * Brief mínimo completo para poder solicitar una pauta: cliente + algo que diga de qué va
+ * (tema, enlace de grilla o descripción de piezas). Antes exigía grilla o descripción; el
+ * formulario nuevo pide el tema como campo principal.
  */
 export function briefComplete(pauta) {
+  const filled = (v) => Boolean(v && String(v).trim())
   return Boolean(
-    pauta.client_id &&
-    ((pauta.link && pauta.link.trim()) || (pauta.piezas_desc && pauta.piezas_desc.trim())),
+    pauta.client_id && (filled(pauta.tema) || filled(pauta.link) || filled(pauta.piezas_desc)),
   )
 }
 
@@ -619,17 +549,13 @@ export function pautaErrorMessage(err) {
   ) {
     return 'No tienes permiso para editar esta pauta.'
   }
+  if (err.code === '23P01' || /av_pautas_estudio_sin_solape/.test(raw)) {
+    return 'El estudio ya está ocupado en ese horario. Elige otra hora o cambia el lugar.'
+  }
+  if (err.code === '23505' && /lote_unico/.test(raw)) {
+    return 'Ese editor ya tiene ese formato asignado en esta pauta. Recarga la página.'
+  }
   return 'No se pudo guardar el cambio. Vuelve a intentarlo; si sigue pasando, avisa a soporte.'
-}
-
-/**
- * Solicitudes visibles en la pestaña «Solicitudes»: la coordinadora solo ve las
- * ya enviadas (`submitted`); quien solicita ve las suyas en cualquier estado de
- * borrador/enviado (el alcance por línea ya viene acotado en `pautas`).
- */
-export function visibleSolicitudes(pautas, { canCoordinate }) {
-  const base = pautas.filter((p) => p.status === 'solicitada')
-  return canCoordinate ? base.filter((p) => p.submitted) : base
 }
 
 // ─── Analítica (piezas por línea / rendimiento por recurso) ────────────────
@@ -741,10 +667,14 @@ export function aggregateResourcePerformance(pautas, usersById, piezasByPauta, c
       byId.set(id, {
         id,
         name,
+        grabaV: 0,
+        grabaR: 0,
         grabaAv: 0,
         grabaFoto: 0,
         grabaSinDesglose: 0,
         grabaEstimado: false,
+        editaV: 0,
+        editaR: 0,
         editaAv: 0,
         editaFoto: 0,
         editaOtro: 0,
@@ -758,6 +688,14 @@ export function aggregateResourcePerformance(pautas, usersById, piezasByPauta, c
     const u = usersById?.get(id)
     return u ? `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() || id : id
   }
+  // Suma a grabaAv/grabaFoto y, además, al subtipo exacto (grabaV/grabaR) cuando se conoce.
+  const addGraba = (entry, code, n) => {
+    const group = formatGroupOf(code)
+    if (!group) return
+    entry[group === 'av' ? 'grabaAv' : 'grabaFoto'] += n
+    if (code === 'V') entry.grabaV += n
+    if (code === 'R') entry.grabaR += n
+  }
 
   pautas.forEach((p) => {
     if (p.status !== 'realizada') return
@@ -766,11 +704,8 @@ export function aggregateResourcePerformance(pautas, usersById, piezasByPauta, c
     if (hasGrabacionReparto(p)) {
       const reparto = grabacionPorFormato(p)
       FORMAT_KEYS.forEach((code) => {
-        const group = formatGroupOf(code)
-        if (!group) return
         Object.entries(reparto[code] ?? {}).forEach(([id, n]) => {
-          const entry = ensure(id, nameOf(id))
-          entry[group === 'av' ? 'grabaAv' : 'grabaFoto'] += n
+          addGraba(ensure(id, nameOf(id)), code, n)
         })
       })
     } else if (hasFormatoBreakdown(p)) {
@@ -782,11 +717,7 @@ export function aggregateResourcePerformance(pautas, usersById, piezasByPauta, c
       const breakdown = piezasPorFormato(p)
       ;(p.recurso_ids ?? []).forEach((id) => {
         const entry = ensure(id, nameOf(id))
-        Object.entries(breakdown).forEach(([code, { salieron }]) => {
-          const group = formatGroupOf(code)
-          if (!group) return
-          entry[group === 'av' ? 'grabaAv' : 'grabaFoto'] += salieron
-        })
+        Object.entries(breakdown).forEach(([code, { salieron }]) => addGraba(entry, code, salieron))
         entry.grabaEstimado = true
       })
     } else {
@@ -807,10 +738,14 @@ export function aggregateResourcePerformance(pautas, usersById, piezasByPauta, c
         .forEach((pz) => {
           if (!pz.editor_user_id) return
           const entry = ensure(pz.editor_user_id, nameOf(pz.editor_user_id))
-          const group = formatGroupOf(pz.formato ?? soloFormato)
+          const code = pz.formato ?? soloFormato
+          const group = formatGroupOf(code)
           const n = piezaListas(pz)
-          if (group === 'av') entry.editaAv += n
-          else if (group === 'foto') entry.editaFoto += n
+          if (group === 'av') {
+            entry.editaAv += n
+            if (code === 'V') entry.editaV += n
+            if (code === 'R') entry.editaR += n
+          } else if (group === 'foto') entry.editaFoto += n
           else entry.editaOtro += n
         })
     } else if (p.edita_user_id || p.edita_other) {
@@ -980,53 +915,8 @@ export function piezasByEditor(piezas) {
   return grouped
 }
 
-/**
- * Ordinal 1..N de cada pieza NO-lote dentro de una pauta, ordenado por `position` (empate
- * desempatado por `id` para que el resultado sea estable). Los lotes ('Fotos') no numeran
- * ni consumen número — no tiene sentido "Foto #1" cuando la fila representa 40 unidades.
- * Reemplaza a `piezas.length` como base de la numeración: ese conteo de filas crecía con
- * cada pieza creada pero nunca bajaba al borrar, así que el siguiente nombre/`position`
- * repetía uno ya existente (ver `createForEditor` en PautaDetailModal.jsx).
- * @param {Array} piezas — piezas de UNA pauta
- * @returns {Map<string, number>} piezaId -> ordinal (1-indexado)
- */
-export function piezaOrdinals(piezas) {
-  const sorted = (piezas ?? [])
-    .filter((pz) => !pz.es_lote)
-    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0) || String(a.id).localeCompare(b.id))
-  const ordinals = new Map()
-  sorted.forEach((pz, i) => ordinals.set(pz.id, i + 1))
-  return ordinals
-}
-
-/**
- * Etiqueta a mostrar de una pieza: el `nombre` que el coordinador escribió a mano manda
- * siempre; si está vacío se DERIVA del formato + ordinal ('Video #1', 'Reel #2', 'Foto #3'
- * si es una foto suelta sin lote, 'Pieza #4' sin formato). Nunca se persiste — así un
- * borrado no puede volver a producir nombres repetidos, a diferencia del viejo
- * `defaultPiezaName` que sí se guardaba en `nombre`.
- * @param {{nombre?:string, formato?:string}} pieza
- * @param {number} ordinal — de `piezaOrdinals`
- */
-export function piezaDisplayName(pieza, ordinal) {
-  if (pieza?.nombre) return pieza.nombre
-  const label = pieza?.formato ? FORMAT_LABELS[pieza.formato] : 'Pieza'
-  return `${label} #${ordinal}`
-}
-
-/** Siguiente `position` libre de una pauta: `max(position) + 1`, o 0 si no hay piezas. */
-export function nextPosition(piezas) {
-  const positions = (piezas ?? []).map((pz) => Number(pz.position) || 0)
-  return positions.length ? Math.max(...positions) + 1 : 0
-}
-
 /** Código de formato que siempre se reparte como lote (ver createLotePieza en avPautasApi.js). */
 export const FOTO_FORMAT = 'F'
-
-/** Nombre fijo del lote de fotos de un editor — no es editable, a diferencia de una pieza. */
-export function defaultLoteName() {
-  return 'Fotos'
-}
 
 // ─── Piezas por formato (Video/Reel/Foto) de una pauta 'realizada' ─────────
 
@@ -1067,120 +957,6 @@ export function setPiezaFormatoCount(pauta, code, key, value) {
   const current = next[code] ?? { salieron: 0, editadas: 0 }
   next[code] = { ...current, [key]: Math.max(0, Math.round(Number(value)) || 0) }
   return next
-}
-
-/**
- * Clasifica las piezas de una pauta en un bucket por formato activo + `sinClasificar`, para
- * que el checklist de cada editor pueda separar Video/Reel/Foto en secciones propias en vez
- * de una lista mezclada. Opera sobre TODA la pauta (no por editor) — el llamador filtra por
- * `editor_user_id` dentro de cada bucket si lo necesita.
- * Reglas:
- *  - `es_lote` (siempre Foto hoy) → bucket de su `formato`.
- *  - no-lote con `formato` en un formato activo → ese bucket.
- *  - no-lote con `formato: null`: si la pauta tiene un SOLO formato de video activo, se
- *    adopta ahí (no hay nada que adivinar); si tiene DOS (V+R) no hay forma honesta de saber
- *    cuál era → `sinClasificar`, para que el coordinador la reclasifique una vez a mano.
- *  - no-lote con un `formato` que ya no está entre los activos (basura de un formato
- *    desmarcado) → `sinClasificar`.
- * Solo tiene sentido en el camino con formatos marcados (`pauta.formats` no vacío); el
- * camino legacy (pautas sin formato) no lo usa.
- * @param {{formats?: string[]}} pauta
- * @param {Array} piezas
- * @returns {{V?:Array,R?:Array,F?:Array,sinClasificar:Array}}
- */
-export function piezasPorBucket(pauta, piezas) {
-  const activeFormats = FORMAT_KEYS.filter((code) => (pauta.formats ?? []).includes(code))
-  const nonFoto = activeFormats.filter((code) => code !== FOTO_FORMAT)
-  const out = { sinClasificar: [] }
-  activeFormats.forEach((code) => {
-    out[code] = []
-  })
-  ;(piezas ?? []).forEach((pz) => {
-    const formato = pz.es_lote ? (pz.formato ?? FOTO_FORMAT) : pz.formato
-    if (formato && activeFormats.includes(formato)) {
-      out[formato].push(pz)
-    } else if (!formato && !pz.es_lote && nonFoto.length === 1) {
-      out[nonFoto[0]].push(pz)
-    } else {
-      out.sinClasificar.push(pz)
-    }
-  })
-  return out
-}
-
-/**
- * `{salieron, repartido, faltan}` por formato activo — gemelo de `grabacionBalance` pero
- * sobre el checklist de EDICIÓN (`av_pauta_piezas`) en vez de `grabacion_por_formato`. Cada
- * formato tiene su propio cupo real, independiente de los demás: antes todos competían por
- * un único pool (`piezas_totales - asignadas`), así que repartir fotos le quitaba cupo a los
- * videos y viceversa aunque cada uno tuviera su propio "Salieron".
- * Fallback: si el desglose `piezas_por_formato` está vacío (camino legacy del trigger de BD,
- * donde `piezas_totales` es un número manual sin desglose cargado) pero `piezas_totales > 0`,
- * `salieron` de cada formato se completa con `piezas_totales` como TECHO (no como verdad por
- * formato) — el llamador debe seguir clampeando contra el remanente global para no repartir
- * de más mientras no haya desglose real cargado.
- * @param {object} pauta
- * @param {Array} piezas
- * @returns {Record<'V'|'R'|'F', {salieron:number, repartido:number, faltan:number}>}
- */
-export function piezasBalancePorFormato(pauta, piezas) {
-  const breakdown = piezasPorFormato(pauta)
-  const buckets = piezasPorBucket(pauta, piezas)
-  const totales = Number(pauta.piezas_totales) || 0
-  const sinDesglose = Object.values(breakdown).every((entry) => entry.salieron === 0)
-  const out = {}
-  Object.keys(breakdown).forEach((code) => {
-    const salieron = sinDesglose && totales > 0 ? totales : breakdown[code].salieron
-    const repartido = piezasUnidadesActivas(buckets[code])
-    out[code] = { salieron, repartido, faltan: salieron - repartido }
-  })
-  return out
-}
-
-/**
- * Decide qué piezas borrar al bajar la cantidad de un editor con el stepper `−`. Solo se
- * tocan piezas 'pendiente' (nunca trabajo con avance), empezando por el final del grupo
- * para no reordenar las que sí se conservan. Si no alcanzan las 'pendiente' para cubrir
- * `cantidad`, `toDelete` trae las que sí se pueden borrar y `blocked` las que impiden
- * llegar al número pedido — el llamador decide cómo avisarlo (nunca se borra en silencio
- * una pieza con avance).
- * @param {Array} piezasDelEditor — piezas de un solo editor, en el orden mostrado
- * @param {number} cantidad — piezas a quitar (entero positivo)
- * @returns {{ toDelete: string[], blocked: Array }}
- */
-export function planPiezaRemoval(piezasDelEditor, cantidad) {
-  const lista = piezasDelEditor ?? []
-  const removable = lista.filter((pz) => pz.status === 'pendiente')
-  const toDelete = removable.slice(Math.max(0, removable.length - cantidad))
-  const blocked = lista
-    .filter((pz) => pz.status !== 'pendiente')
-    .slice(0, cantidad - toDelete.length)
-  return { toDelete: toDelete.map((pz) => pz.id), blocked }
-}
-
-/**
- * Reparte `faltantes` piezas nuevas entre `editorIds`, una por turno empezando por quien
- * menos piezas tiene ya asignadas — así "Repartir automáticamente" empareja las cargas en
- * vez de amontonar todo en el primer editor de la lista. Sin editores, no reparte nada
- * (el llamador debe pedir agregar uno primero).
- * @param {number} faltantes — piezas por crear (`totales - asignadas`, ya positivo)
- * @param {string[]} editorIds
- * @param {Map<string, Array>} grouped — piezasByEditor(piezas), para partir de la carga real
- * @returns {{ editorId: string, count: number }[]}
- */
-export function distributePiezas(faltantes, editorIds, grouped) {
-  if (!editorIds?.length || faltantes <= 0) return []
-  // piezasUnidadesActivas (no piezaUnidades a secas): una pieza 'cancelado' no es carga real
-  // de ese editor, así que no debe pesar al decidir a quién le toca la siguiente.
-  const unitsOf = (id) => piezasUnidadesActivas(grouped?.get(id))
-  const counts = new Map(editorIds.map((id) => [id, unitsOf(id)]))
-  for (let i = 0; i < faltantes; i++) {
-    const minId = editorIds.reduce((a, b) => (counts.get(b) < counts.get(a) ? b : a))
-    counts.set(minId, counts.get(minId) + 1)
-  }
-  return editorIds
-    .map((id) => ({ editorId: id, count: counts.get(id) - unitsOf(id) }))
-    .filter((e) => e.count > 0)
 }
 
 /** Suma `salieron`/`editadas` de un objeto `piezas_por_formato` (ya acotado o crudo). */
@@ -1308,10 +1084,852 @@ export function syncRecursoIds(pauta, nextGrabacion) {
   return ids.length ? [...current, ...ids] : null
 }
 
+/**
+ * Siguiente `piezas_por_formato` con `salieron` DERIVADO de la captura: para cada formato
+ * activo, salieron = Σ de lo que registró cada recurso en `grabacion` (ya calculado con
+ * `setGrabacionCount`). Conserva `editadas` tal cual (lo recalcula el trigger de BD desde
+ * los lotes). Es el único origen de "Salieron" en el módulo rediseñado: no existe un campo
+ * aparte que alguien escriba a mano.
+ * @param {object} pauta
+ * @param {object} grabacion  valor ya calculado de `grabacion_por_formato`
+ * @returns {Record<'V'|'R'|'F', {salieron:number, editadas:number}>}
+ */
+export function syncSalieronFromGrabacion(pauta, grabacion) {
+  const next = piezasPorFormato(pauta)
+  Object.keys(next).forEach((code) => {
+    const salieron = Object.values(grabacion?.[code] ?? {}).reduce(
+      (sum, n) => sum + (Math.max(0, Math.round(Number(n))) || 0),
+      0,
+    )
+    next[code] = { ...next[code], salieron }
+  })
+  return next
+}
+
+// ─── Lugar y estudio ────────────────────────────────────────────────────────
+
+export const LUGAR_TIPOS = ['estudio', 'locacion']
+export const LUGAR_LABELS = { estudio: 'Estudio MDN', locacion: 'Locación' }
+export const ESTUDIO_NOMBRE = 'Estudio MDN'
+/** Cuántas horas ocupa una pauta en el estudio desde su hora de salida. */
+export const STUDIO_WINDOW_HOURS = 2
+
+/** 'Estudio MDN' | texto de la locación | 'Por definir'. */
+export function lugarLabel(pauta) {
+  if (pauta?.lugar_tipo === 'estudio') return ESTUDIO_NOMBRE
+  return (pauta?.place && pauta.place.trim()) || 'Por definir'
+}
+
+/**
+ * Ventana que ocupa una pauta en el estudio: [salida, salida + STUDIO_WINDOW_HOURS),
+ * topada a '24:00' (una pauta no se derrama al día siguiente).
+ * @param {string|null} salida 'HH:MM' o 'HH:MM:SS'
+ * @returns {{start:string, end:string}|null}
+ */
+export function studioWindow(salida) {
+  if (!salida) return null
+  const start = hhmm(salida)
+  const [h, m] = start.split(':').map(Number)
+  const endH = h + STUDIO_WINDOW_HOURS
+  return { start, end: endH >= 24 ? '24:00' : `${pad(endH)}:${pad(m)}` }
+}
+
+/**
+ * Pautas de estudio del mismo día que chocan con una pauta candidata. Dos niveles:
+ *  - `blocking`: pautas 'programada'|'realizada' con hora cuya ventana de 2h se cruza con
+ *    la de la candidata. Son hechos confirmados → no se deja guardar.
+ *  - `warnings`: 'solicitada' con fecha deseada en ese horario (`kind: 'solicitada'` — una
+ *    solicitud no puede vetar a otra; decide quien agenda) y pautas confirmadas de estudio
+ *    sin hora (`kind: 'sin_hora'` — no se puede saber si chocan).
+ * El mismo cliente (`clientId`) puede solaparse consigo mismo: una sesión partida en dos
+ * pautas. Ignora borradas, declinadas, locaciones y la propia pauta (`excludeId`).
+ * Espejo en BD: constraint `av_pautas_estudio_sin_solape` (20261002000001).
+ * @param {Array} pautas  todas las pautas en memoria (cualquier línea)
+ * @param {{date:string, salida:string|null, clientId?:string|null, excludeId?:string|null}} c
+ * @returns {{blocking: Array<{pauta:object}>, warnings: Array<{kind:string, pauta:object}>}}
+ */
+export function estudioConflicts(pautas, { date, salida, clientId = null, excludeId = null }) {
+  const out = { blocking: [], warnings: [] }
+  if (!date) return out
+  const mine = studioWindow(salida)
+  ;(pautas ?? []).forEach((p) => {
+    if (p.id === excludeId || p.deleted_at) return
+    if (p.lugar_tipo !== 'estudio' || p.pauta_date !== date) return
+    if (!['programada', 'realizada', 'solicitada'].includes(p.status)) return
+    if (clientId && p.client_id && p.client_id === clientId) return
+    const theirs = studioWindow(p.salida)
+    const confirmed = p.status !== 'solicitada'
+    if (!theirs || !mine) {
+      if (confirmed) out.warnings.push({ kind: 'sin_hora', pauta: p })
+      return
+    }
+    if (!timeRangesOverlap(mine.start, mine.end, theirs.start, theirs.end)) return
+    if (confirmed) out.blocking.push({ pauta: p })
+    else out.warnings.push({ kind: 'solicitada', pauta: p })
+  })
+  return out
+}
+
+/**
+ * Ocupación del estudio en un día, ordenada por hora, para pintar la línea de tiempo de
+ * disponibilidad. Incluye solicitadas (con `status`) para que se distingan visualmente.
+ * @returns {Array<{pauta:object, start:string|null, end:string|null, status:string}>}
+ */
+export function estudioSlotsForDay(pautas, date, excludeId = null) {
+  return (pautas ?? [])
+    .filter(
+      (p) =>
+        p.id !== excludeId &&
+        !p.deleted_at &&
+        p.lugar_tipo === 'estudio' &&
+        p.pauta_date === date &&
+        ['programada', 'realizada', 'solicitada'].includes(p.status),
+    )
+    .map((p) => {
+      const w = studioWindow(p.salida)
+      return { pauta: p, start: w?.start ?? null, end: w?.end ?? null, status: p.status }
+    })
+    .sort((a, b) => (a.start ?? '99:99').localeCompare(b.start ?? '99:99'))
+}
+
+// ─── Lotes por editor × formato (Edición rediseñada) ───────────────────────
+
+/**
+ * Matriz editor × formato de los LOTES de una pauta. Solo mira `es_lote` (las filas
+ * sueltas del modelo viejo se tratan en `isLegacyPiezas`/`legacyEditorSummary`). La clave
+ * `null` agrupa los lotes huérfanos (sin editor).
+ * @param {Array} piezas — piezas de UNA pauta
+ * @returns {{editorIds: Array<string|null>, byEditor: Map<string|null, Record<string, object>>}}
+ */
+export function lotesMatrix(piezas) {
+  const byEditor = new Map()
+  ;(piezas ?? [])
+    .filter((pz) => pz.es_lote)
+    .forEach((pz) => {
+      const key = pz.editor_user_id ?? null
+      if (!byEditor.has(key)) byEditor.set(key, {})
+      byEditor.get(key)[pz.formato ?? 'null'] = pz
+    })
+  return { editorIds: [...byEditor.keys()], byEditor }
+}
+
+/** Lote de un editor en un formato, o null. */
+export function loteFor(piezas, editorId, formato) {
+  return (
+    (piezas ?? []).find(
+      (pz) =>
+        pz.es_lote && (pz.editor_user_id ?? null) === (editorId ?? null) && pz.formato === formato,
+    ) ?? null
+  )
+}
+
+/**
+ * Qué hacer con un lote al mover `cantidad` (asignadas) o `listas` en `delta`, respetando
+ * los checks de BD (`cantidad >= 1`, `0 <= listas <= cantidad`) y el cupo `max` del formato
+ * (salieron − asignadas a otros). `cantidad` que llega a 0 → se borra el lote. Devuelve el
+ * delta efectivamente aplicado para que el Stepper pueda avisar si se recortó.
+ * @param {{lote:object|null, key:'cantidad'|'listas', delta:number, max?:number}} p
+ * @returns {{action:'insert'|'update'|'delete'|'noop', fields:object, applied:number}}
+ */
+export function planLoteChange({ lote, key, delta, max = Infinity }) {
+  const d = Math.round(Number(delta)) || 0
+  const cantidad = Number(lote?.cantidad) || 0
+  const listas = Number(lote?.listas) || 0
+  if (key === 'listas') {
+    if (!lote) return { action: 'noop', fields: {}, applied: 0 }
+    const next = Math.max(0, Math.min(cantidad, listas + d))
+    if (next === listas) return { action: 'noop', fields: {}, applied: 0 }
+    return { action: 'update', fields: { listas: next }, applied: next - listas }
+  }
+  // El cupo solo limita subidas; nunca se baja por debajo de lo ya entregado.
+  const next = Math.max(listas, Math.min(cantidad + d, cantidad + Math.max(0, max)))
+  if (next === cantidad) return { action: 'noop', fields: {}, applied: 0 }
+  if (next <= 0) {
+    if (!lote) return { action: 'noop', fields: {}, applied: 0 }
+    return { action: 'delete', fields: {}, applied: -cantidad }
+  }
+  if (!lote) return { action: 'insert', fields: { cantidad: next, listas: 0 }, applied: next }
+  return { action: 'update', fields: { cantidad: next }, applied: next - cantidad }
+}
+
+/** true si la pauta tiene filas del modelo viejo (una pieza por fila) → Edición en solo lectura. */
+export function isLegacyPiezas(piezas) {
+  return (piezas ?? []).some((pz) => !pz.es_lote)
+}
+
+/**
+ * Resumen por (editor, formato) de las piezas de una pauta vieja, leyendo filas sueltas y
+ * lotes por igual (`piezaUnidades`/`piezaListas`). Las canceladas no cuentan.
+ * @returns {Array<{editorId:string|null, name:string, formato:string|null, unidades:number, listas:number}>}
+ */
+export function legacyEditorSummary(piezas, usersById) {
+  const acc = new Map()
+  ;(piezas ?? [])
+    .filter((pz) => pz.status !== 'cancelado')
+    .forEach((pz) => {
+      const editorId = pz.editor_user_id ?? null
+      const formato = pz.formato ?? null
+      const key = `${editorId ?? ''}|${formato ?? ''}`
+      if (!acc.has(key)) {
+        acc.set(key, {
+          editorId,
+          name: editorLabel(editorId, usersById),
+          formato,
+          unidades: 0,
+          listas: 0,
+        })
+      }
+      const e = acc.get(key)
+      e.unidades += piezaUnidades(pz)
+      e.listas += piezaListas(pz)
+    })
+  return [...acc.values()]
+}
+
+/** Un editor se puede quitar de una pauta solo si ninguno de sus lotes tiene entregas. */
+export function editorRemovable(lotes) {
+  return (lotes ?? []).every((l) => (Number(l?.listas) || 0) === 0)
+}
+
+// ─── Permisos por pauta (UI) ───────────────────────────────────────────────
+
+/**
+ * Qué puede hacer el usuario con UNA pauta. Centraliza lo que antes estaba repartido entre
+ * `avEditMode` y condiciones sueltas en la tabla/modal. Espejo de las RLS (ver
+ * ARQUITECTURA.md §Permisos): coordina manda en agenda; el brief lo corrige quien lo
+ * solicitó (mientras siga solicitada), la jefa de esa línea o coordina; captura/edición
+ * siguen `canEditPiezasForPauta`. Reagendar queda en coordina/gestión porque mueve el
+ * estudio y los recursos de otras líneas.
+ */
+export function pautaPermissions({
+  canCoordinate = false,
+  canGestionPautas = false,
+  canManage = false,
+  userId = null,
+  pauta,
+  leadLineIds = [],
+}) {
+  if (!pauta) {
+    return {
+      canEditBrief: false,
+      canApprove: false,
+      canReagendar: false,
+      canMarkRealizada: false,
+      canEditPiezas: false,
+      canDelete: false,
+      canRestore: false,
+      canReopen: false,
+    }
+  }
+  const isLead = Boolean(pauta.line_id) && (leadLineIds ?? []).includes(pauta.line_id)
+  const isCreator = Boolean(userId) && pauta.created_by === userId
+  const solicitada = pauta.status === 'solicitada'
+  const deleted = Boolean(pauta.deleted_at)
+  const canEditPiezas = canEditPiezasForPauta({
+    canCoordinate,
+    canGestionPautas,
+    userId,
+    pauta,
+    leadLineIds,
+  })
+  return {
+    canEditBrief: !deleted && (canCoordinate || isLead || (solicitada && isCreator && canManage)),
+    canApprove: !deleted && canCoordinate && solicitada,
+    canReagendar: !deleted && (canCoordinate || canGestionPautas) && pauta.status === 'programada',
+    canMarkRealizada: !deleted && canCoordinate && pauta.status === 'programada',
+    canEditPiezas: !deleted && canEditPiezas && ['programada', 'realizada'].includes(pauta.status),
+    canDelete: !deleted && (canCoordinate || (solicitada && isCreator)),
+    canRestore: deleted && canCoordinate,
+    canReopen: !deleted && canCoordinate && pauta.status === 'declinada',
+  }
+}
+
+/** Solicitudes enviadas que esperan aprobación (badge de la pestaña). */
+export function pendingApprovalCount(pautas) {
+  return (pautas ?? []).filter((p) => p.status === 'solicitada' && p.submitted && !p.deleted_at)
+    .length
+}
+
+// ─── Vista Lista: filtros y orden ──────────────────────────────────────────
+
+export const LIST_FILTERS = ['solicitadas', 'agendadas', 'realizadas', 'declinadas', 'papelera']
+export const LIST_FILTER_LABELS = {
+  solicitadas: 'Solicitadas',
+  agendadas: 'Agendadas',
+  realizadas: 'Realizadas',
+  declinadas: 'Declinadas',
+  papelera: 'Papelera',
+}
+
+const LIST_FILTER_STATUS = {
+  solicitadas: 'solicitada',
+  agendadas: 'programada',
+  realizadas: 'realizada',
+  declinadas: 'declinada',
+}
+
+/** true si la pauta pertenece al filtro de estado de la lista. 'papelera' = borradas. */
+export function pautaMatchesList(pauta, filter) {
+  if (filter === 'papelera') return Boolean(pauta.deleted_at)
+  if (pauta.deleted_at) return false
+  const status = LIST_FILTER_STATUS[filter]
+  return status ? pauta.status === status : true
+}
+
+/**
+ * Filtro secundario de la lista: recurso asignado y texto libre (cliente, tema, lugar,
+ * nombre del solicitante o de un recurso).
+ */
+export function pautaMatchesQuery(pauta, { recursoId = null, query = '', usersById } = {}) {
+  if (recursoId && !(pauta.recurso_ids ?? []).includes(recursoId)) return false
+  const q = (query ?? '').trim().toLowerCase()
+  if (!q) return true
+  const hay = [
+    pauta.client_name,
+    pauta.tema,
+    pauta.place,
+    lugarLabel(pauta),
+    requesterName(pauta, usersById),
+    ...resourceNames(pauta, usersById),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+  return hay.includes(q)
+}
+
+/** Orden de la lista: agenda ascendente por fecha/hora; realizadas y papelera, descendente. */
+export function sortForList(pautas, filter) {
+  const sorted = sortAgenda(pautas)
+  return filter === 'realizadas' || filter === 'papelera' || filter === 'declinadas'
+    ? sorted.reverse()
+    : sorted
+}
+
+// ─── Reagendamientos ───────────────────────────────────────────────────────
+
+/** Historial de reagendados de una pauta, el más reciente primero. */
+export function reagendamientosOf(pauta) {
+  const raw = Array.isArray(pauta?.reagendamientos) ? pauta.reagendamientos : []
+  return raw
+    .filter((e) => e && typeof e === 'object')
+    .map((e) => ({
+      from_date: e.from_date ?? null,
+      from_salida: e.from_salida ?? null,
+      to_date: e.to_date ?? null,
+      to_salida: e.to_salida ?? null,
+      at: e.at ?? null,
+      by: e.by ?? null,
+    }))
+    .sort((a, b) => String(b.at ?? '').localeCompare(String(a.at ?? '')))
+}
+
+/** 'Reagendada desde 12 oct 10:00 AM · por Ana · 05 oct' */
+export function formatReagendamiento(entry, usersById) {
+  const from = `${formatDayShort(entry.from_date)}${entry.from_salida ? ` ${formatTime12(entry.from_salida)}` : ''}`
+  const u = entry.by ? usersById?.get(entry.by) : null
+  const by = u ? `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() : null
+  const at = entry.at ? formatDayShort(String(entry.at).slice(0, 10)) : null
+  return [`Reagendada desde ${from}`, by && `por ${by}`, at].filter(Boolean).join(' · ')
+}
+
+// ─── Rankings y pendientes (vista Rendimiento) ─────────────────────────────
+
+/**
+ * Ranking de Fotos por persona a partir de `aggregateResourcePerformance`. Sin filas en 0.
+ * @returns {Array<{id:string, name:string, capturadas:number, editadas:number, estimado:boolean}>}
+ */
+export function rankingFotos(perf) {
+  return (perf ?? [])
+    .map((r) => ({
+      id: r.id,
+      name: r.name,
+      capturadas: r.grabaFoto,
+      editadas: r.editaFoto,
+      estimado: Boolean(r.grabaEstimado && r.grabaFoto > 0),
+    }))
+    .filter((r) => r.capturadas + r.editadas > 0)
+    .sort((a, b) => b.capturadas + b.editadas - (a.capturadas + a.editadas))
+}
+
+/**
+ * Ranking de Videos (4K + Reel) por persona. `editadas` incluye las piezas de CNP de
+ * audiovisual (`editaCnp`); `capturadas` incluye lo sin desglosar (pautas legacy), marcado
+ * como estimado. `desglose` deja ver de dónde sale cada número.
+ */
+export function rankingVideos(perf) {
+  return (perf ?? [])
+    .map((r) => ({
+      id: r.id,
+      name: r.name,
+      capturadas: r.grabaAv + r.grabaSinDesglose,
+      editadas: r.editaAv + r.editaCnp + r.editaOtro,
+      estimado: Boolean(r.grabaEstimado && r.grabaAv + r.grabaSinDesglose > 0),
+      desglose: {
+        video4k: { capturadas: r.grabaV, editadas: r.editaV },
+        reel: { capturadas: r.grabaR, editadas: r.editaR },
+        cnp: r.editaCnp,
+        sinDesglose: { capturadas: r.grabaSinDesglose, editadas: r.editaOtro },
+      },
+    }))
+    .filter((r) => r.capturadas + r.editadas > 0)
+    .sort((a, b) => b.capturadas + b.editadas - (a.capturadas + a.editadas))
+}
+
+/**
+ * Piezas PENDIENTES por editar, por línea y por formato, de las pautas confirmadas
+ * ('programada'|'realizada', no borradas). Pendiente de un formato = salieron − listas (de
+ * lotes y, en pautas viejas, de filas sueltas), nunca negativo. Las pautas sin desglose por
+ * formato aportan `piezas_totales − piezas_editadas` a `sinDesglose`.
+ * `porPauta` permite filtrar la lista a las pautas que aportan a una celda.
+ * @returns {{porLinea: Array<{lineId:string, name:string, V:number, R:number, F:number,
+ *   sinDesglose:number, total:number}>, porPauta: Map<string, {V:number,R:number,F:number,sinDesglose:number}>}}
+ */
+export function pendientesPorEditar(pautas, piezasByPauta, lines, generalLineId = null) {
+  const porLinea = new Map()
+  const porPauta = new Map()
+  const empty = () => ({ V: 0, R: 0, F: 0, sinDesglose: 0 })
+  ;(pautas ?? []).forEach((p) => {
+    if (p.deleted_at || !['programada', 'realizada'].includes(p.status)) return
+    const piezas = (piezasByPauta?.get(p.id) ?? []).filter((pz) => pz.status !== 'cancelado')
+    const pend = empty()
+    if (hasFormatoBreakdown(p)) {
+      const breakdown = piezasPorFormato(p)
+      Object.entries(breakdown).forEach(([code, { salieron }]) => {
+        const listas = piezas
+          .filter((pz) => pz.formato === code)
+          .reduce((sum, pz) => sum + piezaListas(pz), 0)
+        pend[code] = Math.max(0, salieron - listas)
+      })
+    } else {
+      pend.sinDesglose = Math.max(
+        0,
+        (Number(p.piezas_totales) || 0) - (Number(p.piezas_editadas) || 0),
+      )
+    }
+    const total = pend.V + pend.R + pend.F + pend.sinDesglose
+    if (total === 0) return
+    porPauta.set(p.id, pend)
+    const lineId = p.line_id ?? generalLineId
+    if (!lineId) return
+    if (!porLinea.has(lineId)) {
+      const line = (lines ?? []).find((l) => l.id === lineId)
+      porLinea.set(lineId, { lineId, name: line?.name ?? 'Sin línea', ...empty(), total: 0 })
+    }
+    const entry = porLinea.get(lineId)
+    entry.V += pend.V
+    entry.R += pend.R
+    entry.F += pend.F
+    entry.sinDesglose += pend.sinDesglose
+    entry.total += total
+  })
+  return { porLinea: [...porLinea.values()].sort((a, b) => b.total - a.total), porPauta }
+}
+
+/**
+ * true si la pauta aporta pendiente al filtro `{lineId, formato}` ('V'|'R'|'F'|'sinDesglose'|
+ * null = cualquier formato). `lineId` null = cualquier línea.
+ */
+export function pautaMatchesPendiente(
+  pauta,
+  porPauta,
+  { lineId = null, formato = null } = {},
+  generalLineId = null,
+) {
+  const pend = porPauta?.get(pauta.id)
+  if (!pend) return false
+  if (lineId && (pauta.line_id ?? generalLineId) !== lineId) return false
+  if (!formato) return true
+  return (pend[formato] ?? 0) > 0
+}
+
+// ─── Semana, alertas y ocupación (vista Semana) ────────────────────────────
+
+const CONFIRMADAS = ['programada', 'realizada']
+const ACTIVAS = ['solicitada', 'programada', 'realizada']
+/** Jornada del estudio para la barra de ocupación: bloques de 2h entre 08:00 y 18:00. */
+export const STUDIO_DAY_START = 8
+export const STUDIO_DAY_END = 18
+/** Días que una pauta realizada puede tener piezas sin editar antes de marcarse atrasada. */
+export const PIEZAS_ATRASO_DIAS = 7
+
+function addDays(iso, n) {
+  const d = parseISODate(iso)
+  d.setDate(d.getDate() + n)
+  return isoDateKey(d)
+}
+
+function diffDays(fromIso, toIso) {
+  return Math.round((parseISODate(toIso) - parseISODate(fromIso)) / 86400000)
+}
+
+/** Semana laboral (lunes a sábado) que contiene `date` (Date o 'YYYY-MM-DD'). */
+export function weekRange(date) {
+  const d = typeof date === 'string' ? parseISODate(date) : startOfDay(date)
+  const dow = (d.getDay() + 6) % 7 // lunes = 0
+  d.setDate(d.getDate() - dow)
+  const start = isoDateKey(d)
+  const days = Array.from({ length: 6 }, (_, i) => addDays(start, i))
+  return { start, end: days[5], days }
+}
+
+/** Pautas activas (no borradas) con fecha dentro del rango de la semana. */
+export function pautasInWeek(pautas, range) {
+  return (pautas ?? []).filter(
+    (p) =>
+      !p.deleted_at &&
+      ACTIVAS.includes(p.status) &&
+      p.pauta_date &&
+      p.pauta_date >= range.start &&
+      p.pauta_date <= range.end,
+  )
+}
+
+/** Map 'YYYY-MM-DD' → pautas de ese día ordenadas por salida. */
+export function groupByDay(pautas) {
+  const out = new Map()
+  sortAgenda(pautas ?? []).forEach((p) => {
+    if (!p.pauta_date) return
+    if (!out.has(p.pauta_date)) out.set(p.pauta_date, [])
+    out.get(p.pauta_date).push(p)
+  })
+  return out
+}
+
+/** Σ salieron / Σ listas de una pauta a partir de `piezas_por_formato` y sus lotes. */
+function capturaYEdicion(pauta, piezas) {
+  const breakdown = piezasPorFormato(pauta)
+  const salieron = Object.values(breakdown).reduce((s, e) => s + e.salieron, 0)
+  const listas = (piezas ?? [])
+    .filter((pz) => pz.status !== 'cancelado')
+    .reduce((s, pz) => s + piezaListas(pz), 0)
+  return { salieron, listas }
+}
+
+/**
+ * Estado "humano" de una pauta para la tarjeta de la semana:
+ *  aprobar (solicitada) · sin_captura (confirmada sin nada registrado) · capturada (hay
+ *  captura, nada editado) · editando (parcial) · lista (todo editado).
+ * @returns {{kind:string, label:string, pct:number|null, salieron:number, listas:number}}
+ */
+export function pautaEstadoResumen(pauta, piezas) {
+  if (pauta.status === 'solicitada') {
+    return { kind: 'aprobar', label: 'Por aprobar', pct: null, salieron: 0, listas: 0 }
+  }
+  if (pauta.status === 'declinada') {
+    return { kind: 'declinada', label: 'Declinada', pct: null, salieron: 0, listas: 0 }
+  }
+  const { salieron, listas } = capturaYEdicion(pauta, piezas)
+  if (salieron === 0) {
+    return { kind: 'sin_captura', label: 'Sin captura', pct: null, salieron, listas }
+  }
+  const pct = Math.min(100, Math.round((listas / salieron) * 100))
+  if (listas === 0)
+    return { kind: 'capturada', label: `${salieron} capturadas`, pct: 0, salieron, listas }
+  if (listas >= salieron)
+    return { kind: 'lista', label: 'Todo editado', pct: 100, salieron, listas }
+  return { kind: 'editando', label: `${listas}/${salieron} editadas`, pct, salieron, listas }
+}
+
+/**
+ * Cosas que necesitan acción hoy. Todas derivadas de datos existentes, nada que marcar:
+ *  - porAprobar: solicitadas enviadas.
+ *  - sinCaptura: confirmadas con fecha pasada (hasta ayer) y sin captura registrada.
+ *  - grillaIncumple: programadas futuras cuya grilla ya venció sin entregarse.
+ *  - piezasAtrasadas: realizadas hace > PIEZAS_ATRASO_DIAS con piezas pendientes.
+ */
+export function alertas(pautas, piezasByPauta, today = new Date()) {
+  const hoy = typeof today === 'string' ? today : isoDateKey(today)
+  const activas = (pautas ?? []).filter((p) => !p.deleted_at)
+  const porAprobar = activas.filter((p) => p.status === 'solicitada' && p.submitted)
+  const sinCaptura = activas.filter((p) => {
+    if (!CONFIRMADAS.includes(p.status) || !p.pauta_date || p.pauta_date >= hoy) return false
+    return capturaYEdicion(p, piezasByPauta?.get(p.id)).salieron === 0
+  })
+  // La grilla debe estar 2 días antes de la pauta (misma regla que grillaStatus); aquí
+  // interesa avisar ANTES de la pauta, cuando el plazo ya venció y aún se puede corregir.
+  const grillaIncumple = activas.filter(
+    (p) =>
+      p.status === 'programada' &&
+      p.pauta_date &&
+      p.pauta_date >= hoy &&
+      !p.grilla_delivered_at &&
+      !(p.link && String(p.link).trim()) &&
+      addDays(p.pauta_date, -2) < hoy,
+  )
+  const piezasAtrasadas = activas.filter((p) => {
+    if (p.status !== 'realizada' || !p.pauta_date) return false
+    if (diffDays(p.pauta_date, hoy) <= PIEZAS_ATRASO_DIAS) return false
+    const { salieron, listas } = capturaYEdicion(p, piezasByPauta?.get(p.id))
+    return salieron > listas
+  })
+  return {
+    porAprobar,
+    sinCaptura,
+    grillaIncumple,
+    piezasAtrasadas,
+    total: porAprobar.length + sinCaptura.length + grillaIncumple.length + piezasAtrasadas.length,
+  }
+}
+
+/**
+ * Ocupación del estudio en un día: bloques de STUDIO_WINDOW_HOURS entre STUDIO_DAY_START y
+ * STUDIO_DAY_END, cada uno con la pauta confirmada que lo ocupa (o null).
+ */
+export function ocupacionEstudio(pautas, date) {
+  const slots = estudioSlotsForDay(pautas, date).filter((s) => CONFIRMADAS.includes(s.status))
+  const bloques = []
+  for (let h = STUDIO_DAY_START; h < STUDIO_DAY_END; h += STUDIO_WINDOW_HOURS) {
+    const start = `${pad(h)}:00`
+    const end = `${pad(Math.min(24, h + STUDIO_WINDOW_HOURS))}:00`
+    const hit = slots.find((s) => s.start && timeRangesOverlap(start, end, s.start, s.end))
+    bloques.push({ start, end, pauta: hit?.pauta ?? null })
+  }
+  const ocupados = bloques.filter((b) => b.pauta).length
+  return { bloques, ocupados, pct: Math.round((ocupados / bloques.length) * 100) }
+}
+
+/** % de bloques del estudio usados en los días hábiles (lun–sáb) de un mes. */
+export function ocupacionEstudioMes(pautas, year, month) {
+  const dias = new Date(year, month, 0).getDate()
+  let total = 0
+  let ocupados = 0
+  for (let d = 1; d <= dias; d++) {
+    const date = new Date(year, month - 1, d)
+    if (date.getDay() === 0) continue
+    const { bloques, ocupados: o } = ocupacionEstudio(pautas, isoDateKey(date))
+    total += bloques.length
+    ocupados += o
+  }
+  return total ? Math.round((ocupados / total) * 100) : 0
+}
+
+/** Pautas confirmadas por recurso en la semana, marcando si algún día llega al límite. */
+export function cargaRecursos(pautas, range, usersById) {
+  const semana = pautasInWeek(pautas, range).filter((p) => CONFIRMADAS.includes(p.status))
+  const acc = new Map()
+  semana.forEach((p) => {
+    ;(p.recurso_ids ?? []).forEach((id) => {
+      if (!acc.has(id)) acc.set(id, { id, name: editorLabel(id, usersById), count: 0, porDia: {} })
+      const e = acc.get(id)
+      e.count++
+      e.porDia[p.pauta_date] = (e.porDia[p.pauta_date] ?? 0) + 1
+    })
+  })
+  return [...acc.values()]
+    .map((e) => ({
+      ...e,
+      sobrecargado: Object.values(e.porDia).some((n) => n >= RESOURCE_DAILY_LIMIT),
+    }))
+    .sort((a, b) => b.count - a.count)
+}
+
+// ─── Solicitar en 3 pasos: huecos sugeridos y mis solicitudes ──────────────
+
+/** Próximos `n` días hábiles (lun–sáb) desde mañana. */
+export function diasHabiles(from = new Date(), n = 10) {
+  const out = []
+  let iso = addDays(isoDateKey(typeof from === 'string' ? parseISODate(from) : from), 1)
+  while (out.length < n) {
+    if (parseISODate(iso).getDay() !== 0) out.push(iso)
+    iso = addDays(iso, 1)
+  }
+  return out
+}
+
+/**
+ * Horas candidatas (08:00–17:00) para una pauta en `date`, con su estado:
+ *  - estudio: 'ocupado' si choca con una confirmada de otro cliente; 'aviso' si choca con
+ *    una solicitud pendiente o con una confirmada sin hora; 'libre' si no.
+ *  - locación: 'aviso' si todos los recursos de audiovisual ya tienen RESOURCE_DAILY_LIMIT
+ *    pautas ese día; 'libre' si no (no se reserva nada).
+ */
+export function sugerirHuecos(
+  pautas,
+  date,
+  { clientId = null, lugarTipo = 'locacion', recursoIds = [] } = {},
+) {
+  const horas = []
+  for (let h = STUDIO_DAY_START; h <= 17; h++) horas.push(`${pad(h)}:00`)
+  if (!date) return horas.map((hora) => ({ hora, estado: 'libre', motivo: null }))
+  const delDia = (pautas ?? []).filter(
+    (p) => !p.deleted_at && p.pauta_date === date && CONFIRMADAS.includes(p.status),
+  )
+  const saturado =
+    recursoIds.length > 0 &&
+    recursoIds.every(
+      (id) =>
+        delDia.filter((p) => (p.recurso_ids ?? []).includes(id)).length >= RESOURCE_DAILY_LIMIT,
+    )
+  return horas.map((hora) => {
+    if (lugarTipo === 'estudio') {
+      const { blocking, warnings } = estudioConflicts(pautas, { date, salida: hora, clientId })
+      if (blocking.length)
+        return { hora, estado: 'ocupado', motivo: blocking[0].pauta.client_name || 'otra pauta' }
+      if (warnings.length)
+        return {
+          hora,
+          estado: 'aviso',
+          motivo:
+            warnings[0].kind === 'solicitada'
+              ? `solicitud de ${warnings[0].pauta.client_name || 'otra línea'}`
+              : 'pauta sin hora en el estudio',
+        }
+      return { hora, estado: 'libre', motivo: null }
+    }
+    return saturado
+      ? { hora, estado: 'aviso', motivo: 'todos los recursos ya tienen pautas ese día' }
+      : { hora, estado: 'libre', motivo: null }
+  })
+}
+
+/** Pautas que pidió `userId`, no borradas, más recientes primero. */
+export function misSolicitudes(pautas, userId) {
+  if (!userId) return []
+  return (pautas ?? [])
+    .filter((p) => p.created_by === userId && !p.deleted_at)
+    .sort((a, b) => String(b.created_at ?? '').localeCompare(String(a.created_at ?? '')))
+}
+
+/** Mini-timeline Solicitada → Agendada → Realizada (o Declinada) con la fecha de cada hito. */
+export function hitosPauta(pauta) {
+  const creada = pauta.created_at ? String(pauta.created_at).slice(0, 10) : null
+  if (pauta.status === 'declinada') {
+    return [
+      { key: 'solicitada', label: 'Solicitada', date: creada, done: true },
+      { key: 'declinada', label: 'Declinada', date: null, done: true },
+    ]
+  }
+  const agendada = ['programada', 'realizada'].includes(pauta.status)
+  const realizada = pauta.status === 'realizada'
+  return [
+    { key: 'solicitada', label: 'Solicitada', date: creada, done: true },
+    {
+      key: 'agendada',
+      label: 'Agendada',
+      date: agendada ? pauta.pauta_date : null,
+      done: agendada,
+    },
+    {
+      key: 'realizada',
+      label: 'Realizada',
+      date: realizada ? pauta.pauta_date : null,
+      done: realizada,
+    },
+  ]
+}
+
+// ─── Mi trabajo (recursos) ─────────────────────────────────────────────────
+
+/**
+ * Lo que un recurso tiene que hacer: pautas de hoy y próximas donde es recurso, lotes
+ * propios con piezas por entregar, y un resumen para la cabecera.
+ */
+export function miTrabajo(pautas, piezas, userId, today = new Date()) {
+  const hoy = typeof today === 'string' ? today : isoDateKey(today)
+  const { start, end } = weekRange(hoy)
+  const mias = sortAgenda(
+    (pautas ?? []).filter(
+      (p) =>
+        !p.deleted_at && CONFIRMADAS.includes(p.status) && (p.recurso_ids ?? []).includes(userId),
+    ),
+  )
+  const hoyList = mias.filter((p) => p.pauta_date === hoy)
+  const proximas = mias.filter((p) => p.pauta_date && p.pauta_date > hoy)
+  const pasadasSinCaptura = mias.filter(
+    (p) =>
+      p.pauta_date &&
+      p.pauta_date < hoy &&
+      Object.values(grabacionPorFormato(p)).every((r) => Object.keys(r).length === 0),
+  )
+  const byPauta = new Map((pautas ?? []).map((p) => [p.id, p]))
+  const porEditar = (piezas ?? [])
+    .filter(
+      (pz) =>
+        pz.es_lote &&
+        pz.editor_user_id === userId &&
+        (Number(pz.listas) || 0) < (Number(pz.cantidad) || 0) &&
+        byPauta.get(pz.pauta_id) &&
+        !byPauta.get(pz.pauta_id).deleted_at,
+    )
+    .map((lote) => ({ lote, pauta: byPauta.get(lote.pauta_id) }))
+    .sort((a, b) => agendaSortKey(a.pauta).localeCompare(agendaSortKey(b.pauta)))
+  const pendientes = porEditar.reduce(
+    (s, { lote }) => s + ((Number(lote.cantidad) || 0) - (Number(lote.listas) || 0)),
+    0,
+  )
+  return {
+    hoy: hoyList,
+    proximas,
+    pasadasSinCaptura,
+    porEditar,
+    resumen: {
+      pautasSemana: mias.filter((p) => p.pauta_date >= start && p.pauta_date <= end).length,
+      pendientes,
+    },
+  }
+}
+
+/**
+ * Formatos con cupo por asignar (salieron − asignadas > 0) en pautas donde `canTake(pauta)`
+ * autoriza a insertar un lote. Devuelve una fila por (pauta, formato).
+ */
+export function disponiblesParaTomar(pautas, piezasByPauta, canTake) {
+  const out = []
+  ;(pautas ?? []).forEach((p) => {
+    if (p.deleted_at || !CONFIRMADAS.includes(p.status) || !canTake(p)) return
+    const breakdown = piezasPorFormato(p)
+    const lotes = (piezasByPauta?.get(p.id) ?? []).filter((pz) => pz.es_lote)
+    Object.entries(breakdown).forEach(([formato, { salieron }]) => {
+      const asignadas = lotes
+        .filter((l) => l.formato === formato)
+        .reduce((s, l) => s + (Number(l.cantidad) || 0), 0)
+      const faltan = salieron - asignadas
+      if (faltan > 0) out.push({ pauta: p, formato, faltan })
+    })
+  })
+  return out
+}
+
+// ─── Datos: resumen del mes ────────────────────────────────────────────────
+
+/**
+ * Conclusiones del mes: % editado, capturadas, editadas, pautas realizadas/solicitadas y
+ * ocupación del estudio. `pautas` ya acotadas al alcance (línea) pero NO al mes.
+ */
+export function resumenMes(pautas, piezasByPauta, { year, month }) {
+  const delMes = (pautas ?? []).filter(
+    (p) => !p.deleted_at && p.pauta_date && isoMonth(p.pauta_date) === `${year}-${pad(month)}`,
+  )
+  let capturadas = 0
+  let editadas = 0
+  delMes
+    .filter((p) => CONFIRMADAS.includes(p.status))
+    .forEach((p) => {
+      const { salieron, listas } = capturaYEdicion(p, piezasByPauta?.get(p.id))
+      capturadas += salieron
+      editadas += Math.min(salieron, listas)
+    })
+  return {
+    pctEditado: capturadas ? Math.round((editadas / capturadas) * 100) : null,
+    capturadas,
+    editadas,
+    pendientes: capturadas - editadas,
+    realizadas: delMes.filter((p) => p.status === 'realizada').length,
+    programadas: delMes.filter((p) => p.status === 'programada').length,
+    solicitadas: (pautas ?? []).filter((p) => !p.deleted_at && p.status === 'solicitada').length,
+    ocupacionEstudio: ocupacionEstudioMes(pautas, year, month),
+  }
+}
+
+function isoMonth(iso) {
+  return String(iso).slice(0, 7)
+}
+
 // ─── Generador de agenda para WhatsApp ─────────────────────────────────────
 
 /** 'YYYY-MM-DD' local, mismo formato que `pauta_date` — comparable lexicográficamente. */
-function isoDateKey(date) {
+export function isoDateKey(date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 
