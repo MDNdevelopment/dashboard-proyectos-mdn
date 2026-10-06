@@ -77,7 +77,7 @@ function SortIcon({ active, asc }) {
  * ajustes de la Caja Bs, en una sola tabla con orden y filtros.
  *
  * Es SOLO LECTURA a propósito: borrar o editar se sigue haciendo en la tab de
- * origen (Facturación, Distribución, Divisas), que es la única que conoce las reglas
+ * origen (Facturación, Distribución), que es la única que conoce las reglas
  * de borrado por fuente y su cascada.
  *
  * Carga `invoices`/`distributions` ACUMULADOS aparte de los de `shared` (que son

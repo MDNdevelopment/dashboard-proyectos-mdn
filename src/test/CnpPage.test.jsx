@@ -236,6 +236,42 @@ describe('CnpPage', () => {
     expect(screen.getByText('No hay CNP que coincidan.')).toBeInTheDocument()
   })
 
+  describe('período de Base', () => {
+    const OLD_CNP = {
+      ...CNP_ROW,
+      id: 'cnp-old',
+      title: 'CNP de hace meses',
+      status: 'Paralizado',
+      created_at: new Date(new Date().getFullYear() - 1, 0, 15).toISOString(),
+    }
+
+    it('arranca en el mes actual y oculta los CNP de otros meses', async () => {
+      const user = userEvent.setup()
+      cnpRowsHolder.current = [CNP_ROW, OLD_CNP]
+      renderPage()
+      await user.click(await screen.findByRole('button', { name: 'Base' }))
+      expect(await screen.findByText('Creatina con sello de calidad')).toBeInTheDocument()
+      expect(screen.queryByText('CNP de hace meses')).not.toBeInTheDocument()
+    })
+
+    it('"Todos los meses" muestra también los CNP de otros meses', async () => {
+      const user = userEvent.setup()
+      cnpRowsHolder.current = [CNP_ROW, OLD_CNP]
+      renderPage()
+      await user.click(await screen.findByRole('button', { name: 'Base' }))
+      await user.selectOptions(screen.getByDisplayValue(/^(?!Todos)[A-Za-zñÁ-ú]+$/), 'all')
+      expect(await screen.findByText('CNP de hace meses')).toBeInTheDocument()
+    })
+
+    it('el KPI "Paralizados" abre Base en todos los meses', async () => {
+      const user = userEvent.setup()
+      cnpRowsHolder.current = [CNP_ROW, OLD_CNP]
+      renderPage()
+      await user.click(await screen.findByRole('button', { name: /Paralizados/ }))
+      expect(await screen.findByText('CNP de hace meses')).toBeInTheDocument()
+    })
+  })
+
   it('clicking a client row in the "por cliente" dashboard table navigates to Base filtered by that client', async () => {
     const user = userEvent.setup()
     renderPage()

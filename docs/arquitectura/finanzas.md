@@ -7,7 +7,7 @@ Módulo de **nivel empresa**: facturación real de la agencia, cobranza y repart
 
 ## Rutas
 
-- `/finanzas` (Dashboard) · `/finanzas/facturacion` · `/finanzas/clientes` · `/finanzas/distribucion` (+ drill-down `/finanzas/distribucion/:partida`) · `/finanzas/movimientos` · `/finanzas/divisas` (alias `/finanzas/caja-bs`, resuelto en `pathToKey()` + su `<Route>` en `main.jsx`, para no romper enlaces guardados).
+- `/finanzas` (Dashboard) · `/finanzas/facturacion` · `/finanzas/clientes` · `/finanzas/distribucion` (+ drill-down `/finanzas/distribucion/:partida`) · `/finanzas/movimientos`. Las rutas de tabs retiradas (`/finanzas/divisas`, `/finanzas/caja-bs`, `/finanzas/por-cobrar`) redirigen a `/finanzas` conservando `?mes` (`FinanzasRedirect` en `main.jsx`).
 - Mes activo en query param `?mes=YYYY-MM` (mismo patrón que `?line=` en Ads).
 - Sidebar: botón directo "Finanzas", gateado por `canR('finanzas')`.
 
@@ -20,8 +20,8 @@ Módulo de **nivel empresa**: facturación real de la agencia, cobranza y repart
 - `src/utils/retenciones.js` — aritmética de retenciones.
 - `src/utils/clientInMonth.js` — compartido con Reportes/Métricas/Tareas/Ads/Chequeo.
 - `src/hooks/useCoalescedRefetch.js` — agrupa ráfagas realtime.
-- Vistas en `src/components/finanzas/`: `DashboardView`, `FacturacionView`, `ClientesView`, `DistribucionView`, `PartidaView`, `MovimientosView`, `CajaBsView` (= tab **Divisas**; nombre de archivo conservado a propósito).
-- Modales/componentes: `InvoiceModal.jsx`, `CobroModal.jsx`, `DistribucionModal.jsx`, `PagoPartidaModal.jsx`, `AjusteCajaBsModal.jsx`, `ClienteFinanzasModal.jsx`, `PartidasPctEditor.jsx`, `ResumenMesModal.jsx`.
+- Vistas en `src/components/finanzas/`: `DashboardView`, `FacturacionView`, `ClientesView`, `DistribucionView`, `PartidaView`, `MovimientosView`.
+- Modales/componentes: `InvoiceModal.jsx`, `CobroModal.jsx`, `DistribucionModal.jsx`, `PagoPartidaModal.jsx`, `ClienteFinanzasModal.jsx`, `PartidasPctEditor.jsx`, `ResumenMesModal.jsx`.
 - `netlify/functions/bcv-rate.js` — tasa BCV en vivo (`/api/bcv-rate`), gate `finanzas`, sin caché propia; fallback automático `pydolarve.org` → `ve.dolarapi.com`.
 - Seed histórico `supabase/seed/finanzas_202608.sql`: ya NO refleja la BD; no aplicarlo sin confirmar con el usuario.
 
@@ -40,11 +40,11 @@ Módulo de **nivel empresa**: facturación real de la agencia, cobranza y repart
 
 ## Permisos
 
-- Capability de módulo `finanzas`; por tab: `finanzas.dashboard`, `.facturacion`, `.clientes`, `.distribucion`, `finanzas.divisas`, `finanzas.movimientos` (nivel 4+).
+- Capability de módulo `finanzas`; por tab: `finanzas.dashboard`, `.facturacion`, `.clientes`, `.distribucion`, `finanzas.movimientos` (nivel 4+).
 - Escritura (seis): `finanzas.facturacion.manage`, `finanzas.cobros.manage`, `finanzas.distribucion.manage`, `finanzas.cerrar_mes`, `finanzas.partidas.manage`, `finanzas.clientes.manage`.
 - **Todas las `finanzas.*` comparten las reglas de `finanzas`** (min_level 4 + excepción del departamento Administración); quien entra al módulo entra a todo. Una capability nueva del módulo debe sembrarse con las reglas de `finanzas`, no con el default. Ajustables desde Empresa → Accesos (`module_permissions`), sin allowlist hardcodeado.
 - Gotcha: una capability sin fila en `module_permissions` queda ABIERTA a todos; por eso los renombres (p. ej. `finanzas.cajabs` → `finanzas.divisas`) se hacen con `update`, nunca borrar+recrear.
-- Reutilizaciones: `fin_month_totals`/mes resumen → `finanzas.cerrar_mes`; comprar/vender divisas, ajuste de Caja Bs (y escritura de tasa) → `finanzas.distribucion.manage`.
+- Reutilizaciones: `fin_month_totals`/mes resumen → `finanzas.cerrar_mes`; escritura de tasa → `finanzas.distribucion.manage`.
 - `fin_months`: INSERT con `finanzas.facturacion.manage` (crear el mes al vuelo); UPDATE (`closed`, %) con `finanzas.cerrar_mes` (policy `fin_months_update_pcts`). Crear ≠ cerrar.
 - `fin_payments` exige `finanzas.cobros.manage`; `fin_invoices` exige `finanzas.facturacion.manage` → registrar un cobro con retenciones necesita ambas (si se separan, el modal muestra el 42501).
 - `finanzas.clientes.manage` se hace cumplir en BD: policy de UPDATE de `metric_clients` = `empresa.clientes.manage OR finanzas.clientes.manage`, y el trigger `metric_clients_guard_economico()` decide por columna: económicas (`monthly_fee`, `payment_day`, `es_intercambio`) exigen `finanzas.clientes.manage`; cualquier otra exige `empresa.clientes.manage` (rama obligatoria: RLS es por fila). Se eligió trigger y no RPC `SECURITY DEFINER` porque `updateClient()` seguiría abierto a `empresa.clientes.manage`. Deja pasar `auth.uid() is null` (cron, `service_role`). Ni `empresa.clientes.manage` alcanza para lo económico.
@@ -125,19 +125,19 @@ Módulo de **nivel empresa**: facturación real de la agencia, cobranza y repart
 - (1) Una fila por hecho económico desde su tabla fuente: las filas generadas por triggers (`fin_bs_ledger`, partida `'cambio'`) se pliegan como columnas (`montoBs`, `tasa`, `resultadoCambioUsd`); del libro de Bs solo entra `source='ajuste'`. Una fila `'cambio'` sin operación visible se emite como fila propia.
 - (2) Pertenencia al mes por fecha del movimiento (`paidOn`/`movedOn`), no por `month_id`; por eso carga `loadInvoicesUpTo`/`loadDistributionsUpTo` además de los de `shared`. Límite: universo `month_id <= mes activo` (un prepago bajo `month_id` posterior no aparecería; hoy no existe).
 - (3) `naturaleza`: `ingreso`/`egreso` suman; `conversion`, `interno` (asignación y traspaso) y `ajuste` no (mismo criterio que `pagosRealesUsd()`).
-- Cards Entradas/Salidas/Neto del MES (no de la selección filtrada). Sin card de "neto de caja": su dueño único es `cuadreDivisas()` en Divisas.
+- Cards Entradas/Salidas/Neto del MES (no de la selección filtrada). Sin card de "neto de caja": su dueño único es `cuadreDivisas()` (cards de divisas del Dashboard).
 
-### Caja Bs y divisas (tab Divisas)
+### Caja Bs y divisas (sin tab propia)
 - Spec `MAPPI-Finanzas-Divisas` v1.0. Sin alcance por línea operativa (Bs se convierten en bloque).
-- `fin_bs_ledger` y la fila `partida='cambio'` NO se escriben desde UI/JS: las generan 3 triggers `SECURITY DEFINER` — `fin_payment_sync_bs` (cobro en Bs), `fin_fx_sync` (operación de divisas), `fin_distribution_sync_bs` (pago directo en Bs). Única fila manual: ajuste de cuadre `source='ajuste'` (`AjusteCajaBsModal.jsx`).
-- Borrado siempre por la fuente (`accionBorrado()` en `CajaBsView.jsx`): `compra_divisa`/`venta_divisa` → borrar su `fin_fx_operations` (`on delete cascade` borra fila del libro y la `'cambio'`); `'ajuste'` → se borra solo; `cobro`/`pago_directo` → solo desde Cobros/Distribución (el libro muestra la indicación). `PartidaView.jsx`, al eliminar una fila `'cambio'` con `fxOperationId`, borra la operación de divisas, no la distribución.
-- "Caja Bs" sigue siendo el nombre del saldo en Bs y su libro dentro de la tab (concepto distinto de la tab "Divisas").
+- `fin_bs_ledger` y la fila `partida='cambio'` NO se escriben desde UI/JS: las generan 3 triggers `SECURITY DEFINER` — `fin_payment_sync_bs` (cobro en Bs), `fin_fx_sync` (operación de divisas), `fin_distribution_sync_bs` (pago directo en Bs). La UI ya no registra compras/ventas de divisas ni ajustes de Caja Bs: la compra de divisas se paga por la partida de Gastos. Los datos históricos (`fin_fx_operations`, `fin_bs_ledger`) y los triggers siguen vivos y alimentan las cards de divisas del Dashboard (solo lectura) y el snapshot de `closeMonth()`.
+- Borrado por la fuente: `fin_fx_operations` (`on delete cascade` borra fila del libro y la `'cambio'`); `cobro`/`pago_directo` → solo desde Cobros/Distribución. `PartidaView.jsx`, al eliminar una fila `'cambio'` con `fxOperationId`, borra la operación de divisas, no la distribución.
+- "Caja Bs" es el nombre de la card del saldo en Bs en el Dashboard.
 - Tasa BCV: `resolveRateBcv()` intenta la API en vivo (`/api/bcv-rate`) solo si la fecha es hoy, cachea en `fin_rates` (best-effort: si el `upsert` falla por RLS la tasa igual se usa) y memoriza la tasa del día (TTL 10 min, evita repetir `getSession()` + fetch + upsert); si no, cae a los escalones históricos bcv/stale/missing. `closeMonth()` resuelve solo contra `fin_rates`, nunca la API. No hay carga manual de tasa.
 
 ### Invariante de cuadre (`cuadreDivisas()`)
 - Identidad de caja, acumulada hasta el mes seleccionado: `cobrado − pagosReales + resultadoCambio = divisaFisica + saldoBs÷BCV`. Independiente de cuánto se repartió.
 - La descomposición por partidas de la spec §7 se expone aparte como `sinDistribuir` (panel), no como test. La fórmula literal de §7 (`Σ partidas + resultado por cambio = divisa física + Caja Bs÷BCV` por `month_id = $1`) no se usa: falla con datos correctos (cobros sin distribuir y `out` de traspaso).
-- Residuo por cambio de BCV entre movimientos = revaluación del saldo en Bs parado; `CajaBsView.jsx`/`DashboardView.jsx` lo etiquetan así, nunca como descuadre en rojo.
+- Residuo por cambio de BCV entre movimientos = revaluación del saldo en Bs parado; `DashboardView.jsx` lo etiqueta así, nunca como descuadre en rojo.
 - Test: `src/test/finanzas.test.js` → describe `finanzas — invariante de cuadre (cuadreDivisas)`.
 
 ### Cierre de mes (`finanzasApi.closeMonth()`)
@@ -161,7 +161,6 @@ Módulo de **nivel empresa**: facturación real de la agencia, cobranza y repart
 
 ## Gotchas
 
-- `CajaBsView.jsx` = tab Divisas; no renombrar.
 - `fin_payments` y `fin_fx_operations` son inmutables: corregir = borrar y recrear.
 - `/api/bcv-rate` no responde con `npm run dev` (Vite solo, no lee `netlify.toml`); usar `netlify dev` (`:8888`). En producción/preview funciona.
 - El chequeo de mes cerrado debe considerar `fin_payments` vía su factura (no tiene `month_id`).

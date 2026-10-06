@@ -85,21 +85,21 @@ export default function CnpDashboardView({
           value={blocked}
           sub={blocked ? 'Cuellos de botella' : 'Sin paralizaciones'}
           color={blocked ? '#E14848' : undefined}
-          onClick={() => onNavigateToBase({ status: 'Paralizado' })}
+          onClick={() => onNavigateToBase({ status: 'Paralizado' }, { allMonths: true })}
         />
         <KpiCard
           label="Retrasados"
           value={late}
           sub="Entregas vencidas"
           color={late ? '#E14848' : undefined}
-          onClick={() => onNavigateToBase({ alert: 'late' })}
+          onClick={() => onNavigateToBase({ alert: 'late' }, { allMonths: true })}
         />
         <KpiCard
           label="Impresión pend."
           value={printPending}
           sub={printPending ? 'Por aprobar' : 'Sin pendientes'}
           color={printPending ? '#F0871F' : undefined}
-          onClick={() => onNavigateToBase({ print: 'pending' })}
+          onClick={() => onNavigateToBase({ print: 'pending' }, { allMonths: true })}
         />
       </div>
 

@@ -193,7 +193,6 @@ export const MODULES = [
       { key: 'facturacion', label: 'Facturación' },
       { key: 'clientes', label: 'Clientes' },
       { key: 'distribucion', label: 'Distribución' },
-      { key: 'divisas', label: 'Divisas' },
       { key: 'movimientos', label: 'Movimientos' },
     ],
     manageActions: [

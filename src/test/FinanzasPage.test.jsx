@@ -373,77 +373,37 @@ describe('FinanzasPage — tab Movimientos', () => {
   })
 })
 
-describe('FinanzasPage — tab Divisas', () => {
-  it('la tab "Divisas" solo aparece con la capability finanzas.divisas', async () => {
-    const can = (key) => key === 'finanzas.dashboard' || key === 'finanzas.divisas'
-    renderAt('/finanzas', can)
-    await waitFor(() => expect(mockLoadMonth).toHaveBeenCalled())
-    expect(screen.getByRole('button', { name: 'Divisas' })).toBeInTheDocument()
-  })
+describe('FinanzasPage — sin tab Divisas', () => {
+  const MES = {
+    data: { id: 'm-1', closed: false, pctGastos: 0.72, pctSocios: 0.18, pctGanancia: 0.1 },
+    error: null,
+  }
 
-  it('sin la capability, la tab no aparece y /finanzas/divisas redirige', async () => {
-    const can = (key) => key === 'finanzas.dashboard'
-    renderAt('/finanzas/divisas', can)
+  it('no hay tab "Divisas", ni siquiera con todos los permisos', async () => {
+    renderAt('/finanzas', () => true)
     await waitFor(() => expect(mockLoadMonth).toHaveBeenCalled())
     expect(screen.queryByRole('button', { name: 'Divisas' })).not.toBeInTheDocument()
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Dashboard' })).toHaveClass('bg-[#111]'),
-    )
   })
 
-  it('renderiza la vista de Divisas con sus 3 cards de composición', async () => {
-    const can = () => true
-    mockLoadMonth.mockResolvedValueOnce({
-      data: { id: 'm-1', closed: false, pctGastos: 0.72, pctSocios: 0.18, pctGanancia: 0.1 },
-      error: null,
-    })
-    renderAt('/finanzas/divisas', can)
+  it.each(['/finanzas/divisas', '/finanzas/caja-bs'])(
+    'el enlace viejo %s cae en el Dashboard y no en una página vacía',
+    async (path) => {
+      mockLoadMonth.mockResolvedValueOnce(MES)
+      renderAt(path, () => true)
+      await waitFor(() => expect(screen.getByText('Divisa física')).toBeInTheDocument())
+      expect(screen.getByRole('button', { name: 'Dashboard' })).toHaveClass('bg-[#111]')
+    },
+  )
+
+  it('el Dashboard conserva las 3 cards de composición pero ya no ofrece Comprar/Vender dólares', async () => {
+    mockLoadMonth.mockResolvedValueOnce(MES)
+    renderAt('/finanzas', () => true)
 
     await waitFor(() => expect(screen.getByText('Divisa física')).toBeInTheDocument())
-    // La card sigue llamándose "Caja Bs": nombra el saldo en bolívares, no la tab.
     expect(screen.getAllByText('Caja Bs').length).toBeGreaterThan(0)
     expect(screen.getByText('Resultado por cambio')).toBeInTheDocument()
-    // Sin operaciones/ledger, todo debería quedar en 0 sin lanzar.
-    expect(screen.getByText('Sin movimientos este mes.')).toBeInTheDocument()
-  })
-
-  /** La tab se llamaba "Caja Bs" y vivía en /finanzas/caja-bs; el alias protege enlaces guardados. */
-  it('la URL vieja /finanzas/caja-bs sigue abriendo la tab Divisas', async () => {
-    mockLoadMonth.mockResolvedValueOnce({
-      data: { id: 'm-1', closed: false, pctGastos: 0.72, pctSocios: 0.18, pctGanancia: 0.1 },
-      error: null,
-    })
-    renderAt('/finanzas/caja-bs', () => true)
-
-    await waitFor(() => expect(screen.getByText('Divisa física')).toBeInTheDocument())
-    expect(screen.getByRole('button', { name: 'Divisas' })).toHaveClass('bg-[#111]')
-  })
-
-  it('el Dashboard esconde Comprar/Vender dólares sin finanzas.distribucion.manage', async () => {
-    const can = (key) => key !== 'finanzas.distribucion.manage'
-    mockLoadMonth.mockResolvedValueOnce({
-      data: { id: 'm-1', closed: false, pctGastos: 0.72, pctSocios: 0.18, pctGanancia: 0.1 },
-      error: null,
-    })
-    renderAt('/finanzas', can)
-
-    await waitFor(() => expect(screen.getByText('Divisa física')).toBeInTheDocument())
     expect(screen.queryByRole('button', { name: 'Comprar dólares' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Vender dólares' })).not.toBeInTheDocument()
-  })
-
-  it('el Dashboard muestra Comprar/Vender dólares con la capability y el mes abierto', async () => {
-    const can = () => true
-    mockLoadMonth.mockResolvedValueOnce({
-      data: { id: 'm-1', closed: false, pctGastos: 0.72, pctSocios: 0.18, pctGanancia: 0.1 },
-      error: null,
-    })
-    renderAt('/finanzas', can)
-
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Comprar dólares' })).toBeInTheDocument(),
-    )
-    expect(screen.getByRole('button', { name: 'Vender dólares' })).toBeInTheDocument()
   })
 })
 

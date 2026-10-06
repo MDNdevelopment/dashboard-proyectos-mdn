@@ -13,7 +13,7 @@ Módulo para solicitudes de contenido no planificado de clientes (casi siempre p
 - `src/pages/CnpPage.jsx` (recorte por línea `scopedCnps`, ignora `assignee_id`).
 - `src/components/cnp/`:
   - `src/components/cnp/CnpDashboardView.jsx`.
-  - `CnpBaseView.jsx`: `initialFilter` con `status`/`clientId`/`assignee`/`print`/`alert` (patrón de `BaseView.jsx` de Tareas); `<select>` propio de Responsable.
+  - `CnpBaseView.jsx`: acota la lista al período (`monthIdx`, por `created_at` con `cnpInMonth`; `null` = todos los meses; predeterminado el mes actual en `CnpPage`). El `<select>` de mes de `CnpPage` ofrece "Todos los meses" solo en Base; el Dashboard siempre trabaja sobre un mes. Los KPIs que cuentan todos los meses (Paralizados, Retrasados, Impresión pend.) abren Base con `allMonths` (período en "Todos"). `initialFilter` con `status`/`clientId`/`assignee`/`print`/`alert` (patrón de `BaseView.jsx` de Tareas); `<select>` propio de Responsable.
   - `CnpModal.jsx`: recibe `teams` + `allLines` (pool transversal, ver "Asignables transversales" §2.4) + `defaultTeamId`; `<select>` de Línea que resetea cliente/responsable (patrón `TaskModal.jsx`), así "Nuevo CNP" funciona en vista "Todos". Snapshot local `liveCnp` para reflejar checks del servidor sin reabrir.
   - `src/components/cnp/cnpApi.js`: `canCloseCnp`, `closeBlockedReason`, `countCnpSolicitudesForLine`.
   - `constants.js`: reexporta `ESTADOS`/`COL_META` de Tareas; añade `cnpInMonth`, `cnpMonthStats`, `cnpPieceCount`, `cnpPiecesDelivered`, `resizePieces`, `relabelAutoPieces`, `autoPieceLabel` (puras; tests `src/test/cnpDashboardStats.test.js`, `src/test/cnpPieces.test.js`).

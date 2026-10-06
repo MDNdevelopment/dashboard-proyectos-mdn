@@ -1,6 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import './index.css'
 import App from './App.jsx'
 import AppLayout from './components/AppLayout.jsx'
@@ -27,6 +27,12 @@ import MonitorUsoPage from './pages/MonitorUsoPage.jsx'
 import ReunionesPage from './pages/ReunionesPage.jsx'
 import LeadsPage from './pages/LeadsPage.jsx'
 import FinanzasPage from './pages/FinanzasPage.jsx'
+
+/** Enlaces guardados a tabs de Finanzas que ya no existen: van al Dashboard, conservando ?mes. */
+function FinanzasRedirect() {
+  const { search } = useLocation()
+  return <Navigate to={{ pathname: '/finanzas', search }} replace />
+}
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -365,14 +371,6 @@ createRoot(document.getElementById('root')).render(
               }
             />
             <Route
-              path="/finanzas/por-cobrar"
-              element={
-                <RequireModule moduleKey="finanzas">
-                  <FinanzasPage />
-                </RequireModule>
-              }
-            />
-            <Route
               path="/finanzas/movimientos"
               element={
                 <RequireModule moduleKey="finanzas">
@@ -380,24 +378,11 @@ createRoot(document.getElementById('root')).render(
                 </RequireModule>
               }
             />
-            <Route
-              path="/finanzas/divisas"
-              element={
-                <RequireModule moduleKey="finanzas">
-                  <FinanzasPage />
-                </RequireModule>
-              }
-            />
-            {/* Ruta vieja de la tab (se llamaba "Caja Bs"): se mantiene para no romper
-                enlaces guardados — pathToKey() en FinanzasPage la resuelve a 'divisas'. */}
-            <Route
-              path="/finanzas/caja-bs"
-              element={
-                <RequireModule moduleKey="finanzas">
-                  <FinanzasPage />
-                </RequireModule>
-              }
-            />
+            {/* Tabs retiradas (Divisas, antes "Caja Bs", y Por cobrar): se redirigen al
+                Dashboard para no dejar enlaces guardados en una página vacía. */}
+            {['/finanzas/divisas', '/finanzas/caja-bs', '/finanzas/por-cobrar'].map((path) => (
+              <Route key={path} path={path} element={<FinanzasRedirect />} />
+            ))}
 
             {/* Proyectos */}
             <Route path="/proyectos" element={<App />} />
