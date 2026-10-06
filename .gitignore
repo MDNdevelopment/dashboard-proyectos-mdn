@@ -30,3 +30,7 @@ reports/
 
 # Supabase CLI local state
 supabase/.temp/
+
+# Claude Code (local)
+.claude/settings.local.json
+.claude/worktrees/

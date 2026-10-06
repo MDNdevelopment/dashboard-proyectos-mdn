@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "mappi": {
+      "type": "http",
+      "url": "https://mdngestion.netlify.app/mcp"
+    }
+  }
+}

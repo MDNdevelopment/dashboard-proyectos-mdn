@@ -1,6 +1,6 @@
 // Novedades mostradas en el modal "Novedades" (una vez por versión, vía localStorage).
 //
-// CONVENCIÓN (ver CLAUDE.md → "Changelog de novedades"):
+// CONVENCIÓN (ver .claude/skills/changelog/SKILL.md):
 // - CHANGELOG[0] es SIEMPRE la versión actual en desarrollo: cada fix/feature agrega
 //   un ítem a su array `changes`. NO crear una entrada nueva por cambio.
 // - Entrada SIN `date` = en desarrollo. Al publicar una versión: asignar `date` a la

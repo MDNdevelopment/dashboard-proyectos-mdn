@@ -21,12 +21,19 @@ vi.mock('./mcpWriteCnp.js', () => ({
   softDeleteCnp: vi.fn(),
 }))
 
+vi.mock('./mcpWriteTaskUpdates.js', () => ({
+  TASK_STATUSES: ['Pendiente', 'En proceso', 'Paralizado', 'Terminado'],
+  updateTask: vi.fn(),
+  addTaskComment: vi.fn(),
+}))
+
 process.env.MCP_OAUTH_SIGNING_SECRET = 'test-signing-secret'
 
 const { runReadOnlyQuery, listTables } = await import('./db.js')
 const { createTask } = await import('./mcpWrite.js')
 const { createMeeting, updateMeeting, deleteMeeting } = await import('./mcpWriteMeetings.js')
 const { createCnp, updateCnp, softDeleteCnp } = await import('./mcpWriteCnp.js')
+const { updateTask, addTaskComment } = await import('./mcpWriteTaskUpdates.js')
 const { handler, checkBearerToken } = await import('../mcp.js')
 const { issueToken } = await import('./oauthCrypto.js')
 
@@ -109,7 +116,7 @@ describe('mcp.js handler', () => {
     expect(names).toEqual(['list_tables', 'query_database'])
   })
 
-  it('responde tools/list con las 7 tools de escritura incluidas para un token writer', async () => {
+  it('responde tools/list con las tools de escritura incluidas para un token writer', async () => {
     const res = await handler(
       makeEvent({ token: writerToken(), body: { jsonrpc: '2.0', id: 2, method: 'tools/list' } }),
     )
@@ -125,6 +132,8 @@ describe('mcp.js handler', () => {
       'create_cnp',
       'update_cnp',
       'delete_cnp',
+      'update_task',
+      'add_task_comment',
     ])
   })
 
@@ -440,5 +449,79 @@ describe('mcp.js handler', () => {
     const parsed = JSON.parse(res.body)
     expect(res.statusCode).toBe(400)
     expect(parsed.error.code).toBe(-32700)
+  })
+  it('tools/call update_task con token writer fija updated_by desde el token, ignorando el de los argumentos', async () => {
+    updateTask.mockResolvedValue({ id: 'task-1', status: 'Terminado' })
+    const args = { id: 'task-1', status: 'Terminado', updated_by: 'intruso' }
+    await handler(
+      makeEvent({
+        token: writerToken('writer-uid-1'),
+        body: {
+          jsonrpc: '2.0',
+          id: 30,
+          method: 'tools/call',
+          params: { name: 'update_task', arguments: args },
+        },
+      }),
+    )
+    expect(updateTask).toHaveBeenCalledWith({
+      id: 'task-1',
+      status: 'Terminado',
+      updated_by: 'writer-uid-1',
+    })
+  })
+
+  it('tools/call update_task con token reader devuelve isError:true y no llama a updateTask', async () => {
+    const res = await handler(
+      makeEvent({
+        body: {
+          jsonrpc: '2.0',
+          id: 31,
+          method: 'tools/call',
+          params: { name: 'update_task', arguments: { id: 'task-1', status: 'Terminado' } },
+        },
+      }),
+    )
+    const parsed = JSON.parse(res.body)
+    expect(parsed.result.isError).toBe(true)
+    expect(updateTask).not.toHaveBeenCalled()
+  })
+
+  it('tools/call add_task_comment fija author_id desde el token', async () => {
+    addTaskComment.mockResolvedValue({ id: 'c-1' })
+    await handler(
+      makeEvent({
+        token: writerToken('writer-uid-2'),
+        body: {
+          jsonrpc: '2.0',
+          id: 32,
+          method: 'tools/call',
+          params: {
+            name: 'add_task_comment',
+            arguments: { task_id: 'task-1', content: 'PR listo', author_id: 'otro' },
+          },
+        },
+      }),
+    )
+    expect(addTaskComment).toHaveBeenCalledWith({
+      task_id: 'task-1',
+      content: 'PR listo',
+      author_id: 'writer-uid-2',
+    })
+  })
+
+  it('tools/call add_task_comment con token reader devuelve isError:true', async () => {
+    const res = await handler(
+      makeEvent({
+        body: {
+          jsonrpc: '2.0',
+          id: 33,
+          method: 'tools/call',
+          params: { name: 'add_task_comment', arguments: { task_id: 't', content: 'x' } },
+        },
+      }),
+    )
+    expect(JSON.parse(res.body).result.isError).toBe(true)
+    expect(addTaskComment).not.toHaveBeenCalled()
   })
 })

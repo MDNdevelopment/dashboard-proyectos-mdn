@@ -2,6 +2,7 @@ import { runReadOnlyQuery, listTables } from './_lib/db.js'
 import { createTask } from './_lib/mcpWrite.js'
 import { createMeeting, updateMeeting, deleteMeeting } from './_lib/mcpWriteMeetings.js'
 import { createCnp, updateCnp, softDeleteCnp } from './_lib/mcpWriteCnp.js'
+import { updateTask, addTaskComment, TASK_STATUSES } from './_lib/mcpWriteTaskUpdates.js'
 import { verifyToken } from './_lib/oauthCrypto.js'
 
 const json = (statusCode, body, extraHeaders = {}) => ({
@@ -63,8 +64,8 @@ const READER_TOOLS = [
 ]
 
 // Solo se anuncia/permite cuando el access_token trae role='writer' (hoy, exclusivo
-// del director — ver netlify/functions/oauth.js). Alcance deliberadamente angosto:
-// crear tareas, nada más (no editar, no borrar, no finanzas).
+// del grupo en MCP_WRITERS — ver netlify/functions/oauth.js). Alcance deliberadamente angosto:
+// tareas (crear; cambiar estado y comentar solo las propias), reuniones y CNP. Nada de finanzas.
 const WRITER_TOOLS = [
   {
     name: 'create_task',
@@ -273,6 +274,38 @@ const WRITER_TOOLS = [
       additionalProperties: false,
     },
   },
+  {
+    name: 'update_task',
+    description:
+      'Cambia el estado de una tarea existente (solo tareas en las que eres responsable o creador). Terminado fija la fecha de cierre a hoy; Paralizado exige blocked_reason. Resuelve el id con query_database (tasks.id) — nunca lo inventes.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'uuid de la tarea (tasks.id)' },
+        status: { type: 'string', enum: TASK_STATUSES, description: 'Nuevo estado' },
+        blocked_reason: {
+          type: 'string',
+          description: 'Motivo, obligatorio si status es Paralizado',
+        },
+      },
+      required: ['id', 'status'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'add_task_comment',
+    description:
+      'Agrega un comentario a una tarea (solo tareas en las que eres responsable o creador), a nombre de quien usa esta conexión. Notifica a los involucrados. Útil para dejar el link del PR que la resuelve o preguntas cuando la tarea es ambigua.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        task_id: { type: 'string', description: 'uuid de la tarea (tasks.id)' },
+        content: { type: 'string', description: 'Texto del comentario (máx. 4000 caracteres)' },
+      },
+      required: ['task_id', 'content'],
+      additionalProperties: false,
+    },
+  },
 ]
 
 async function callTool(name, args, role, writerUserId) {
@@ -324,6 +357,16 @@ async function callTool(name, args, role, writerUserId) {
     if (role !== 'writer') throw new Error('Esta herramienta requiere permisos de escritura')
     const deleted = await softDeleteCnp(args ?? {})
     return { content: [{ type: 'text', text: JSON.stringify(deleted, null, 2) }] }
+  }
+  if (name === 'update_task') {
+    if (role !== 'writer') throw new Error('Esta herramienta requiere permisos de escritura')
+    const task = await updateTask({ ...(args ?? {}), updated_by: writerUserId })
+    return { content: [{ type: 'text', text: JSON.stringify(task, null, 2) }] }
+  }
+  if (name === 'add_task_comment') {
+    if (role !== 'writer') throw new Error('Esta herramienta requiere permisos de escritura')
+    const comment = await addTaskComment({ ...(args ?? {}), author_id: writerUserId })
+    return { content: [{ type: 'text', text: JSON.stringify(comment, null, 2) }] }
   }
   throw new Error(`Unknown tool: ${name}`)
 }
