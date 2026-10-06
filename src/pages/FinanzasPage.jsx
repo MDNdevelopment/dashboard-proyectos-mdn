@@ -24,7 +24,6 @@ import FacturacionView from '../components/finanzas/FacturacionView'
 import ClientesView from '../components/finanzas/ClientesView'
 import DistribucionView from '../components/finanzas/DistribucionView'
 import PartidaView from '../components/finanzas/PartidaView'
-import CajaBsView from '../components/finanzas/CajaBsView'
 import MovimientosView from '../components/finanzas/MovimientosView'
 
 const ALL_TABS = [
@@ -32,7 +31,6 @@ const ALL_TABS = [
   { key: 'facturacion', label: 'Facturación', path: '/finanzas/facturacion' },
   { key: 'clientes', label: 'Clientes', path: '/finanzas/clientes' },
   { key: 'distribucion', label: 'Distribución', path: '/finanzas/distribucion' },
-  { key: 'divisas', label: 'Divisas', path: '/finanzas/divisas' },
   { key: 'movimientos', label: 'Movimientos', path: '/finanzas/movimientos' },
 ]
 
@@ -44,11 +42,7 @@ function pathToKey(pathname) {
   if (pathname.startsWith('/finanzas/facturacion')) return 'facturacion'
   if (pathname.startsWith('/finanzas/clientes')) return 'clientes'
   if (pathname.startsWith('/finanzas/distribucion')) return 'distribucion'
-  if (pathname.startsWith('/finanzas/por-cobrar')) return 'porcobrar'
   if (pathname.startsWith('/finanzas/movimientos')) return 'movimientos'
-  if (pathname.startsWith('/finanzas/divisas')) return 'divisas'
-  // Alias del nombre viejo de la tab ("Caja Bs"), para no romper enlaces guardados.
-  if (pathname.startsWith('/finanzas/caja-bs')) return 'divisas'
   return 'dashboard'
 }
 
@@ -253,9 +247,6 @@ export default function FinanzasPage() {
   // impuestos). Desde 20260929170000 es el único camino: ni siquiera
   // empresa.clientes.manage alcanza, y la base lo hace cumplir con un trigger.
   const canManageClientes = can('finanzas.clientes.manage')
-  // Comprar/vender divisas, cargar la tasa BCV y el ajuste de cuadre de Caja Bs
-  // reusan finanzas.distribucion.manage — decisión A2, sin capability nueva.
-  const canManageDivisas = canManageDistribucion
 
   const shared = {
     companyId,
@@ -309,11 +300,7 @@ export default function FinanzasPage() {
         </div>
 
         {activeKey === 'dashboard' && can('finanzas.dashboard') && (
-          <DashboardView
-            {...shared}
-            canCerrarMes={canCerrarMes}
-            canManageDivisas={canManageDivisas}
-          />
+          <DashboardView {...shared} canCerrarMes={canCerrarMes} />
         )}
 
         {activeKey === 'facturacion' && can('finanzas.facturacion') && (
@@ -349,10 +336,6 @@ export default function FinanzasPage() {
               canManagePartidas={canManagePartidas}
             />
           ))}
-
-        {activeKey === 'divisas' && can('finanzas.divisas') && (
-          <CajaBsView {...shared} canManage={canManageDivisas} />
-        )}
 
         {/* Solo lectura: no recibe ninguna capability de escritura. */}
         {activeKey === 'movimientos' && can('finanzas.movimientos') && (

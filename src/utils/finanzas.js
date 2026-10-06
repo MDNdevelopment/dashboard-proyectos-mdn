@@ -689,8 +689,8 @@ function firmado(monto, kind) {
  * REGLA DE DEDUPLICACIÓN — una fila por HECHO económico, emitida desde la tabla
  * donde el usuario lo creó. Las filas que escriben los triggers (`fin_bs_ledger` y
  * la partida técnica `cambio`) nunca son filas propias: se pliegan como columnas de
- * su fuente. Es la misma doctrina que ya rige el borrado (ver `accionBorrado()` en
- * CajaBsView.jsx). Sin esto, una compra de divisas ocuparía 3 renglones y cualquier
+ * su fuente. Es la misma doctrina que ya rige el borrado (la cascada de borrado
+ * vive en `deleteFxOperation`/`deleteBsLedgerEntry`). Sin esto, una compra de divisas ocuparía 3 renglones y cualquier
  * suma daría basura.
  *   - compra/venta de divisas → 1 fila desde `fin_fx_operations`; su pata en Bs va
  *     en `montoBs` y su resultado por cambio en `resultadoCambioUsd`.
@@ -874,7 +874,7 @@ export function movimientosDelMes({
  * Totales de un conjunto de filas de `movimientosDelMes()`. Solo agrega lo que de
  * verdad entra y sale de la empresa: las conversiones de divisa, las asignaciones,
  * los traspasos y los ajustes quedan fuera del neto a propósito — si se sumaran, el
- * neto contradiría el cuadre de caja que publica la tab Divisas (`cuadreDivisas()`),
+ * neto contradiría el cuadre de caja que publica el Dashboard (`cuadreDivisas()`),
  * que es el dueño de ese número.
  */
 export function totalesMovimientos(rows) {

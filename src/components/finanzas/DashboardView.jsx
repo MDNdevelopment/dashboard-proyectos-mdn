@@ -31,7 +31,6 @@ import { PARTIDAS, PARTIDA_KEYS, NOTA_TRASPASO_PARTIDA } from './constants'
 import { MONTHS } from '../metricas/constants'
 import CerrarMesButton from './CerrarMesButton'
 import ResumenMesModal from './ResumenMesModal'
-import FxOperacionModal from './FxOperacionModal'
 
 function trendKeysLastN(year, month, n) {
   const out = []
@@ -61,14 +60,12 @@ export default function DashboardView({
   loading,
   refetch,
   canCerrarMes,
-  canManageDivisas,
   fxOperations,
   bsLedger,
   rateBcv,
 }) {
   const [trend, setTrend] = useState(null)
   const [resumenOpen, setResumenOpen] = useState(false)
-  const [fxOpen, setFxOpen] = useState(null) // null=cerrado, 'compra'|'venta'
 
   useEffect(() => {
     let cancelled = false
@@ -295,24 +292,6 @@ export default function DashboardView({
             </p>
           </div>
         </div>
-        {canManageDivisas && finMonth && !finMonth.closed && (
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setFxOpen('venta')}
-              className="px-3 py-2 rounded-xl text-[13.5px] font-semibold text-[#666] border border-[#e0ddd4] hover:bg-[#f5f3eb]"
-            >
-              Vender dólares
-            </button>
-            <button
-              type="button"
-              onClick={() => setFxOpen('compra')}
-              className="px-3 py-2 rounded-xl text-[13.5px] font-semibold bg-[#111] text-white hover:bg-[#333]"
-            >
-              Comprar dólares
-            </button>
-          </div>
-        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -491,22 +470,6 @@ export default function DashboardView({
           onClose={() => setResumenOpen(false)}
           onSaved={() => {
             setResumenOpen(false)
-            refetch()
-          }}
-        />
-      )}
-
-      {fxOpen && (
-        <FxOperacionModal
-          companyId={companyId}
-          monthId={finMonth?.id}
-          opType={fxOpen}
-          rateBcv={rateBcv}
-          saldoBs={cuadre.saldoBs}
-          divisaFisica={cuadre.divisaFisica}
-          onClose={() => setFxOpen(null)}
-          onSaved={() => {
-            setFxOpen(null)
             refetch()
           }}
         />

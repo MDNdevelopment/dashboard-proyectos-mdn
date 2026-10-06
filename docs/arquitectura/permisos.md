@@ -70,7 +70,7 @@ Gotcha: el seed `20260706000002` nunca se aplicó en prod; los defaults de prod 
 - `finanzas.clientes` — tab Clientes (solo lectura financiera).
 - `finanzas.distribucion` — Distribución y drill-down de Partida.
 - `finanzas.movimientos` — Movimientos (diario consolidado, solo lectura).
-- `finanzas.divisas` — Divisas (compra/venta y libro de Caja Bs). Antes `finanzas.cajabs`.
+- `finanzas.divisas` — sin uso: la tab Divisas se retiró de la UI; la fila en `module_permissions` queda sin efecto.
 - `finanzas.facturacion.manage` — crear/editar/eliminar facturación.
 - `finanzas.cobros.manage` — registrar/quitar cobros y abonos.
 - `finanzas.distribucion.manage` — registrar distribuciones y pagos de partida.
