@@ -363,8 +363,9 @@ describe('HomePage — nivel 4 (dirección)', () => {
   it('muestra el widget de Apoyo de dirección con el conteo correcto', async () => {
     renderPage({ access_level: 4 })
     await waitFor(() => expect(screen.getByText(/apoyo de dirección/i)).toBeInTheDocument())
-    // t3 tiene support_id = u1 y está activa
-    expect(screen.getByText('1 atrasada(s)')).toBeInTheDocument()
+    // t3 tiene support_id = u1 y está activa. El título se pinta antes de que carguen las
+    // tareas (`loadingTasks`); el conteo llega después, así que hay que esperarlo.
+    expect(await screen.findByText('1 atrasada(s)')).toBeInTheDocument()
   })
 
   it('SÍ muestra "Asignadas activas" y "Atrasadas" además del apoyo de dirección (nivel 4 también recibe tareas asignadas)', async () => {
