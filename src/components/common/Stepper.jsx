@@ -47,6 +47,7 @@ function clamp(n, min, max) {
  *   max      — límite superior (opcional)
  *   step     — magnitud de los botones −/+ (default 1); no limita lo que se puede escribir
  *   disabled — deshabilita botones e input (p. ej. mientras hay una escritura en vuelo)
+ *   size     — 'sm' (default) o 'lg' (botones de 44px para el celular, p. ej. Mi trabajo)
  *   label    — texto para aria-label, ej. "piezas de Ana Pérez" → "Agregar piezas de Ana
  *              Pérez" / "Quitar piezas de Ana Pérez" / "Cantidad de piezas de Ana Pérez"
  */
@@ -58,6 +59,7 @@ export default function Stepper({
   step = 1,
   disabled = false,
   label = 'cantidad',
+  size = 'sm',
 }) {
   const [pending, setPending] = useState(0) // delta acumulado, aún no enviado
   const [inFlight, setInFlight] = useState(0) // delta ya enviado, cuyo write no resolvió
@@ -128,6 +130,20 @@ export default function Stepper({
     }
   }
 
+  const lg = size === 'lg'
+  const btnBase = lg
+    ? 'w-11 h-11 flex items-center justify-center rounded-xl text-[20px] disabled:opacity-30 transition-colors'
+    : 'w-6 h-6 flex items-center justify-center rounded-lg border border-[#e0ddd4] text-[#666] hover:bg-[#f5f3eb] disabled:opacity-30 disabled:hover:bg-transparent transition-colors'
+  const minusClass = lg
+    ? `${btnBase} border border-[#e0ddd4] bg-white text-[#444] hover:bg-[#f5f3eb]`
+    : btnBase
+  const plusClass = lg
+    ? `${btnBase} bg-[#FFB800] font-bold text-[#111] hover:brightness-95`
+    : btnBase
+  const inputClass = lg
+    ? 'font-mono text-[20px] font-bold text-[#111] w-14 h-11 text-center tabular-nums rounded-xl border border-[#e0ddd4] bg-white focus:border-[#FFB800] focus:outline-none disabled:opacity-50'
+    : 'font-mono text-[13px] font-semibold text-[#222] w-11 text-center tabular-nums rounded-lg border border-[#e0ddd4] bg-transparent focus:border-[#FFB800] focus:outline-none disabled:opacity-50'
+
   const canDecrement = !disabled && shown - step >= min
   const canIncrement = !disabled && (max === undefined || shown + step <= max)
 
@@ -157,7 +173,7 @@ export default function Stepper({
         aria-label={`Quitar ${label}`}
         disabled={!canDecrement}
         onClick={() => queue(-step)}
-        className="w-6 h-6 flex items-center justify-center rounded-lg border border-[#e0ddd4] text-[#666] hover:bg-[#f5f3eb] disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+        className={minusClass}
       >
         −
       </button>
@@ -191,14 +207,14 @@ export default function Stepper({
             e.target.blur()
           }
         }}
-        className="font-mono text-[13px] font-semibold text-[#222] w-11 text-center tabular-nums rounded-lg border border-[#e0ddd4] bg-transparent focus:border-[#FFB800] focus:outline-none disabled:opacity-50"
+        className={inputClass}
       />
       <button
         type="button"
         aria-label={`Agregar ${label}`}
         disabled={!canIncrement}
         onClick={() => queue(step)}
-        className="w-6 h-6 flex items-center justify-center rounded-lg border border-[#e0ddd4] text-[#666] hover:bg-[#f5f3eb] disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+        className={plusClass}
       >
         +
       </button>

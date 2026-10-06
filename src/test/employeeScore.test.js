@@ -239,6 +239,31 @@ describe('calcPiezasAv', () => {
     expect(r.aplica).toBe(true)
     expect(r.pct).toBeCloseTo(2 / 3)
   })
+
+  it('un lote cuenta por sus unidades (cantidad/listas), no como una fila', () => {
+    const piezas = [
+      {
+        editor_user_id: USER,
+        es_lote: true,
+        cantidad: 50,
+        listas: 32,
+        status: 'en_edicion',
+        created_at: `${isoInMonth(5)}T00:00:00Z`,
+      },
+    ]
+    const r = calcPiezasAv({ userId: USER, monthIdx: MONTH_IDX, piezas })
+    expect(r.detalle).toEqual({ unidades: 50, listas: 32 })
+    expect(r.pct).toBeCloseTo(32 / 50)
+  })
+
+  it('las piezas canceladas no cuentan', () => {
+    const piezas = [
+      { editor_user_id: USER, status: 'listo', created_at: `${isoInMonth(5)}T00:00:00Z` },
+      { editor_user_id: USER, status: 'cancelado', created_at: `${isoInMonth(5)}T00:00:00Z` },
+    ]
+    const r = calcPiezasAv({ userId: USER, monthIdx: MONTH_IDX, piezas })
+    expect(r.detalle).toEqual({ unidades: 1, listas: 1 })
+  })
 })
 
 describe('calcReuniones', () => {

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { vi } from 'vitest'
 import { createSupabaseMock, makeQuery } from './helpers/supabaseMock'
@@ -38,6 +38,36 @@ function renderPage() {
     </MemoryRouter>,
   )
 }
+
+describe('PautasPage — onboarding', () => {
+  const coord = () =>
+    useAuth.mockReturnValue({
+      userProfile: { user_id: 'coord-1', company_id: 'co-1', access_level: 2, admin: false },
+      can: (key) => key === 'audiovisual.coordina',
+    })
+
+  beforeEach(() => localStorage.clear())
+
+  it('muestra el ⓘ junto al título y la primera vez abre el menú de recorridos', async () => {
+    coord()
+    renderPage()
+    expect(await screen.findByRole('button', { name: 'Guía del módulo' })).toBeInTheDocument()
+    expect(await screen.findByRole('menu')).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /Coordinar la agenda/ })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: /Pedir una pauta/ })).not.toBeInTheDocument()
+  })
+
+  it('después de verlo una vez, ya no se abre solo', async () => {
+    coord()
+    const first = renderPage()
+    await screen.findByRole('menu')
+    fireEvent.keyDown(document, { key: 'Escape' })
+    first.unmount()
+    renderPage()
+    await screen.findByRole('button', { name: 'Guía del módulo' })
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+  })
+})
 
 describe('PautasPage — visibilidad de líneas', () => {
   it('con audiovisual.ver_todo, un coordinador de nivel bajo y sin membresía en ninguna línea ve TODAS las líneas (bug: antes recibía [])', async () => {
@@ -151,8 +181,11 @@ describe('PautasPage — team "Independientes" para cuentas sin línea', () => {
     await waitFor(() => {
       expect(screen.getByText('Independientes')).toBeInTheDocument()
     })
-    // En "Todos" se ven ambas (la cuenta aparece además como opción del selector de cliente).
-    expect(screen.getAllByText('ConLinea').length).toBeGreaterThan(0)
+    screen.getByRole('tab', { name: /^Todas/ }).click()
+    // En "Todos" se ven ambas.
+    await waitFor(() => {
+      expect(screen.getAllByText('ConLinea').length).toBeGreaterThan(0)
+    })
     expect(screen.getAllByText('SinLinea').length).toBeGreaterThan(0)
 
     screen.getByText('Independientes').click()
@@ -167,6 +200,7 @@ describe('PautasPage — team "Independientes" para cuentas sin línea', () => {
     await waitFor(() => {
       expect(screen.getByText('Georgina')).toBeInTheDocument()
     })
+    screen.getByRole('tab', { name: /^Todas/ }).click()
     screen.getByText('Georgina').click()
     await waitFor(() => {
       expect(screen.queryAllByText('SinLinea')).toHaveLength(0)
