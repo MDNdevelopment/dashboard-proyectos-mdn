@@ -12,6 +12,7 @@ export const CHANGELOG = [
     version: '1.2.0',
     title: 'Mejoras en Campañas y Empresa',
     changes: [
+      'En Pautas → Mi trabajo hay una sección nueva, "Entregadas", con las piezas que ya marcaste como listas. Antes, al marcar "todo listo" la tarjeta desaparecía de "Por editar" y no había dónde volver a verla. Ahora la abres, ves lo entregado (las 10 más recientes, con "ver todas") y, si te equivocaste, bajas las listas y la pieza regresa a "Por editar".',
       'En Finanzas se quitó la pestaña "Divisas", y con ella los botones "Comprar dólares" y "Vender dólares" del Dashboard: la compra de divisas se va a registrar por la partida de Gastos. El Dashboard sigue mostrando las cards de Divisa física, Caja Bs y Resultado por cambio con lo ya registrado, y los enlaces guardados a la pestaña llevan al Dashboard.',
       'En CNP → Base ahora se puede elegir el período: arranca en el mes actual, así que ya no salen mezclados todos los CNP de todas las fechas. El selector de mes de arriba tiene la opción "Todos los meses" para ver la lista completa. Los indicadores Paralizados, Retrasados e Impresión pendiente del Dashboard (que cuentan todos los meses) abren Base en "Todos los meses" para que la cantidad coincida.',
       'En Finanzas, al marcar una marca como "Intercambio" ahora se quitan sus facturas de los meses abiertos que no tengan cobros. Antes quedaban en la tabla de Facturación con su monto aunque la marca ya no pagara en dinero. Las facturas que ya tienen cobros, o que están en un mes cerrado, se conservan.',

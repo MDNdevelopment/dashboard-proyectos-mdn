@@ -164,6 +164,12 @@ export default function MiTrabajoView({
         )}
       </Seccion>
 
+      <Entregadas
+        entregadas={mio.entregadas}
+        onPiezaChanged={onPiezaChanged}
+        onPautaClick={onPautaClick}
+      />
+
       {disponibles.length > 0 && (
         <Seccion titulo="Disponible para tomar" tour="mt-disponible">
           <ul className="space-y-2">
@@ -183,6 +189,55 @@ export default function MiTrabajoView({
         </Seccion>
       )}
     </div>
+  )
+}
+
+const ENTREGADAS_VISIBLES = 10
+
+/** Lotes propios ya completos, colapsados; EdicionRapida permite bajar listas y deshacer. */
+function Entregadas({ entregadas, onPiezaChanged, onPautaClick }) {
+  const [abierta, setAbierta] = useState(false)
+  const [todas, setTodas] = useState(false)
+  if (entregadas.length === 0) return null
+  const titulo = `Entregadas (${entregadas.length})`
+  const visibles = todas ? entregadas : entregadas.slice(0, ENTREGADAS_VISIBLES)
+  return (
+    <section aria-label={titulo} data-tour="mt-entregadas">
+      <h3 className="mb-2">
+        <button
+          type="button"
+          onClick={() => setAbierta((v) => !v)}
+          aria-expanded={abierta}
+          className="text-[11.5px] font-mono font-bold uppercase tracking-[0.12em] text-[#999] hover:text-[#666]"
+        >
+          {abierta ? '▾' : '▸'} {titulo}
+        </button>
+      </h3>
+      {abierta && (
+        <div className="space-y-2">
+          <ul className="space-y-2">
+            {visibles.map(({ lote, pauta }) => (
+              <EdicionRapida
+                key={lote.id}
+                lote={lote}
+                pauta={pauta}
+                onPiezaChanged={onPiezaChanged}
+                onPautaClick={onPautaClick}
+              />
+            ))}
+          </ul>
+          {!todas && entregadas.length > ENTREGADAS_VISIBLES && (
+            <button
+              type="button"
+              onClick={() => setTodas(true)}
+              className="text-[12.5px] font-semibold text-[#2563eb] hover:underline"
+            >
+              ver todas ({entregadas.length})
+            </button>
+          )}
+        </div>
+      )}
+    </section>
   )
 }
 
