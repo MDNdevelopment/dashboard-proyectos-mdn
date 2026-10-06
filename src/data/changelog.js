@@ -12,6 +12,7 @@ export const CHANGELOG = [
     version: '1.2.0',
     title: 'Mejoras en Campañas y Empresa',
     changes: [
+      'En Finanzas, al marcar una marca como "Intercambio" ahora se quitan sus facturas de los meses abiertos que no tengan cobros. Antes quedaban en la tabla de Facturación con su monto aunque la marca ya no pagara en dinero. Las facturas que ya tienen cobros, o que están en un mes cerrado, se conservan.',
       'En "Mi trabajo" de Pautas ahora puedes escribir el número directamente en los contadores, en vez de tocar + muchas veces: si en una pauta salieron 80 fotos, tocas el número, escribes 80 y listo. Funciona tanto al registrar lo capturado o grabado como en las piezas listas de "Por editar" (ahí no deja pasar del total asignado). Los botones − y + siguen igual.',
       'Pautas tiene ahora una guía integrada: el botón "i" junto al título abre un menú de recorridos paso a paso (Lo básico, Pedir una pauta, Coordinar la agenda, Registrar captura y edición, Leer los datos) y cada persona ve solo los que le sirven según lo que puede hacer. Se puede salir en cualquier momento con la X o con Esc. La primera vez que entras al módulo el menú se abre solo para que elijas.',
       'En Pautas, la pestaña "Mes" desapareció: ahora el calendario del mes se ve desde la misma pantalla de inicio, con un botón Semana | Mes arriba a la izquierda. Al pasar a Mes se abre en el mes de la semana que estabas viendo, y las alertas y el resumen del mes siguen a la vista.',

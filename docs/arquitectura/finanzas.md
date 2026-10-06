@@ -65,7 +65,7 @@ Módulo de **nivel empresa**: facturación real de la agencia, cobranza y repart
 - Monto por prioridad: (1) factura `recurring` del mes anterior tal cual (montos/conceptos ajustados, con `amount_bs`/`rate`; como el carry-forward de `initMetricReport.js`); (2) `monthly_fee`; (3) 0 = "Sin monto" (badge ámbar + aviso con nombres, para editar el monto).
 - Se descartan: marcas dadas de baja (`clientInMonth` falso), `es_intercambio`, cargos puntuales (`recurring: false`), clientes con exclusión vigente. Cargos externos (sin `client_id`) del mes anterior se copian solo si el mes está VACÍO.
 - La factura sale a inicio de mes; la cobranza es 100% manual (`CobroModal.jsx`).
-- Cambiar una marca a intercambio NO borra facturación ya emitida (la reconciliación solo inserta); el modal lo advierte.
+- Cambiar una marca a intercambio borra su facturación ya emitida en meses ABIERTOS sin cobros ni distribuciones: trigger `metric_clients_limpia_facturas_intercambio` (AFTER UPDATE OF `es_intercambio` false→true, SECURITY DEFINER para no depender de `finanzas.facturacion.manage`; migración `20261005150000`). Las facturas con cobros o en meses cerrados se conservan; el modal lo avisa.
 
 ### Exclusiones de facturación
 - Borrar en `FacturacionView.jsx` un cargo con `client_id` inserta exclusión (`addInvoiceExclusion`); `InvoiceModal.jsx` la levanta al volver a facturar a esa marca (`clearInvoiceExclusions`).
