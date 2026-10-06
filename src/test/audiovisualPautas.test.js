@@ -250,6 +250,33 @@ describe('lotes por editor × formato', () => {
     ])
   })
 
+  it('una fila suelta que duplica un lote del mismo (editor, formato) no suma ni fuerza solo lectura', () => {
+    const suelta = (id) => ({
+      id,
+      es_lote: false,
+      editor_user_id: 'u1',
+      formato: 'R',
+      cantidad: 1,
+      listas: 1,
+      status: 'listo',
+    })
+    const duplicada = [
+      lote({ id: 'l', editor_user_id: 'u1', formato: 'R', cantidad: 4, listas: 4 }),
+      suelta('a'),
+      suelta('b'),
+      suelta('c'),
+      suelta('d'),
+    ]
+    expect(isLegacyPiezas(duplicada)).toBe(false)
+    expect(legacyEditorSummary(duplicada, users)).toEqual([
+      { editorId: 'u1', name: 'Ana Pérez', formato: 'R', unidades: 4, listas: 4 },
+    ])
+
+    // Sueltas de OTRO formato del mismo editor siguen siendo registro anterior.
+    const mixta = [lote({ id: 'l', editor_user_id: 'u1', formato: 'F' }), suelta('a')]
+    expect(isLegacyPiezas(mixta)).toBe(true)
+  })
+
   it('editorRemovable solo si ningún lote tiene entregas', () => {
     expect(editorRemovable([lote({ listas: 0 }), lote({ listas: 0 })])).toBe(true)
     expect(editorRemovable([lote({ listas: 0 }), lote({ listas: 1 })])).toBe(false)
