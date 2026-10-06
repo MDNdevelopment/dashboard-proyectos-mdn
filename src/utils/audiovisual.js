@@ -1254,7 +1254,17 @@ export function planLoteChange({ lote, key, delta, max = Infinity }) {
 
 /** true si la pauta tiene filas del modelo viejo (una pieza por fila) → Edición en solo lectura. */
 export function isLegacyPiezas(piezas) {
-  return (piezas ?? []).some((pz) => !pz.es_lote)
+  return piezasLegacy(piezas).length > 0
+}
+
+/**
+ * Filas sueltas del modelo viejo que NO están cubiertas por un lote del mismo (editor,
+ * formato). Una suelta cubierta duplica al lote: no suma ni fuerza el modo solo lectura.
+ */
+function piezasLegacy(piezas) {
+  const keyOf = (pz) => `${pz.editor_user_id ?? ''}|${pz.formato ?? ''}`
+  const lotes = new Set((piezas ?? []).filter((pz) => pz.es_lote).map(keyOf))
+  return (piezas ?? []).filter((pz) => !pz.es_lote && !lotes.has(keyOf(pz)))
 }
 
 /**
@@ -1264,8 +1274,9 @@ export function isLegacyPiezas(piezas) {
  */
 export function legacyEditorSummary(piezas, usersById) {
   const acc = new Map()
+  const sueltas = new Set(piezasLegacy(piezas))
   ;(piezas ?? [])
-    .filter((pz) => pz.status !== 'cancelado')
+    .filter((pz) => pz.status !== 'cancelado' && (pz.es_lote || sueltas.has(pz)))
     .forEach((pz) => {
       const editorId = pz.editor_user_id ?? null
       const formato = pz.formato ?? null
