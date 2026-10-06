@@ -55,7 +55,7 @@
 - `id`, `pauta_id→av_pautas (on delete cascade)`, `company_id`, `editor_user_id text` (uuid o `ext:uuid`, sin FK), `nombre`, `status` (`pendiente | en_edicion | espera_aprobacion | listo | cancelado`; en lotes lo deriva `av_pauta_piezas_sync_lote`), `position`, `formato` ⊆ {V,R,F}, `es_lote`, `cantidad ≥ 1`, `0 ≤ listas ≤ cantidad`, `prev_editor_user_id` (sin uso), `created_at`, `updated_at`.
 - Índice único parcial `av_pauta_piezas_lote_unico_por_editor_formato (pauta_id, editor_user_id, formato) WHERE es_lote`.
 - Trigger `av_pauta_piezas_sync_counters` recalcula `av_pautas.piezas_editadas` (suma de `listas`).
-- Pautas con filas sueltas del modelo anterior (`isLegacyPiezas`) se muestran en solo lectura; no se migraron datos.
+- Pautas con filas sueltas del modelo anterior (`isLegacyPiezas`) se muestran en solo lectura. Una suelta que ya tiene un lote del mismo (editor, formato) es un duplicado: no suma ni fuerza el solo lectura, y `20261006160000_av_pauta_piezas_quitar_sueltas_duplicadas.sql` las borra cuando el lote las cubre exactamente.
 
 ### `external_resources`
 - `id, company_id, full_name, roles text[]` ⊆ {grabacion,edicion,ads}, `deleted_at`. Sin realtime (la vista recarga on-mount). Desacoplada de `users`.
