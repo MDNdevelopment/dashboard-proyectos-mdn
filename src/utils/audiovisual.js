@@ -1865,6 +1865,19 @@ export function miTrabajo(pautas, piezas, userId, today = new Date()) {
     )
     .map((lote) => ({ lote, pauta: byPauta.get(lote.pauta_id) }))
     .sort((a, b) => agendaSortKey(a.pauta).localeCompare(agendaSortKey(b.pauta)))
+  // Lo ya entregado, lo más reciente primero: así se puede revisar o deshacer un "todo listo".
+  const entregadas = (piezas ?? [])
+    .filter(
+      (pz) =>
+        pz.es_lote &&
+        pz.editor_user_id === userId &&
+        (Number(pz.cantidad) || 0) > 0 &&
+        (Number(pz.listas) || 0) >= (Number(pz.cantidad) || 0) &&
+        byPauta.get(pz.pauta_id) &&
+        !byPauta.get(pz.pauta_id).deleted_at,
+    )
+    .map((lote) => ({ lote, pauta: byPauta.get(lote.pauta_id) }))
+    .sort((a, b) => agendaSortKey(b.pauta).localeCompare(agendaSortKey(a.pauta)))
   const pendientes = porEditar.reduce(
     (s, { lote }) => s + ((Number(lote.cantidad) || 0) - (Number(lote.listas) || 0)),
     0,
@@ -1874,6 +1887,7 @@ export function miTrabajo(pautas, piezas, userId, today = new Date()) {
     proximas,
     pasadasSinCaptura,
     porEditar,
+    entregadas,
     resumen: {
       pautasSemana: mias.filter((p) => p.pauta_date >= start && p.pauta_date <= end).length,
       pendientes,

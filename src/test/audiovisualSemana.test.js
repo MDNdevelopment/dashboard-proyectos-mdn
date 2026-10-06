@@ -307,6 +307,25 @@ describe('mi trabajo', () => {
     expect(r.pasadasSinCaptura.map((p) => p.id)).toEqual(['pasada'])
     expect(r.porEditar.map(({ lote: l }) => l.id)).toEqual(['l1', 'l4'])
     expect(r.resumen).toEqual({ pautasSemana: 5, pendientes: 9 })
+    expect(r.entregadas.map(({ lote: l }) => l.id)).toEqual(['l2'])
+  })
+
+  it('entregadas: solo lotes propios completos, de pautas vigentes, la más reciente primero', () => {
+    const lista = [
+      pauta({ id: 'a', pauta_date: '2026-10-01' }),
+      pauta({ id: 'b', pauta_date: '2026-10-05' }),
+      pauta({ id: 'c', pauta_date: '2026-10-06', deleted_at: '2026-10-07' }),
+    ]
+    const pz = [
+      lote({ id: 'la', pauta_id: 'a', cantidad: 4, listas: 4 }),
+      lote({ id: 'lb', pauta_id: 'b', cantidad: 2, listas: 2 }),
+      lote({ id: 'lc', pauta_id: 'c', cantidad: 2, listas: 2 }),
+      lote({ id: 'ld', pauta_id: 'b', cantidad: 3, listas: 1 }),
+      lote({ id: 'le', pauta_id: 'b', editor_user_id: 'u2', cantidad: 2, listas: 2 }),
+    ]
+    const r = miTrabajo(lista, pz, 'u1', hoy)
+    expect(r.entregadas.map(({ lote: l }) => l.id)).toEqual(['lb', 'la'])
+    expect(r.porEditar.map(({ lote: l }) => l.id)).toEqual(['ld'])
   })
 
   it('disponiblesParaTomar lista formatos con cupo solo donde canTake lo permite', () => {

@@ -170,6 +170,49 @@ describe('MiTrabajoView — cabecera y secciones', () => {
   })
 })
 
+describe('MiTrabajoView — entregadas', () => {
+  const lotesListos = (n) =>
+    Array.from({ length: n }, (_, i) => ({
+      id: `done${i}`,
+      pauta_id: 'lun',
+      editor_user_id: ME,
+      formato: ['R', 'V', 'F'][i % 3],
+      es_lote: true,
+      cantidad: 2,
+      listas: 2,
+    }))
+
+  it('sin lotes completos no pinta la sección', () => {
+    setup()
+    expect(screen.queryByRole('region', { name: /Entregadas/ })).not.toBeInTheDocument()
+  })
+
+  it('aparece colapsada y al abrirla lista el lote entregado; bajar una lo regresa a edición', async () => {
+    const piezas = [...PIEZAS, ...lotesListos(1)]
+    const { onPiezaChanged } = setup({ piezas })
+    const region = screen.getByRole('region', { name: 'Entregadas (1)' })
+    expect(within(region).queryByText('Push')).not.toBeInTheDocument()
+
+    fireEvent.click(within(region).getByRole('button', { name: /Entregadas \(1\)/ }))
+    expect(within(region).getByText('Push')).toBeInTheDocument()
+    expect(within(region).getByRole('button', { name: '✓ todo listo' })).toBeDisabled()
+
+    updatePieza.mockResolvedValue({ data: { id: 'done0', listas: 1 }, error: null })
+    fireEvent.click(within(region).getByRole('button', { name: /Quitar listas|Restar listas/i }))
+    await waitFor(() => expect(onPiezaChanged).toHaveBeenCalled())
+    expect(updatePieza).toHaveBeenCalledWith('done0', expect.objectContaining({ listas: 1 }))
+  })
+
+  it('muestra 10 y "ver todas" despliega el resto', () => {
+    setup({ piezas: [...PIEZAS, ...lotesListos(12)] })
+    const region = screen.getByRole('region', { name: 'Entregadas (12)' })
+    fireEvent.click(within(region).getByRole('button', { name: /Entregadas \(12\)/ }))
+    expect(within(region).getAllByRole('button', { name: /Ver pauta/ })).toHaveLength(10)
+    fireEvent.click(within(region).getByRole('button', { name: 'ver todas (12)' }))
+    expect(within(region).getAllByRole('button', { name: /Ver pauta/ })).toHaveLength(12)
+  })
+})
+
 describe('MiTrabajoView — captura rápida', () => {
   it('+1 en un formato registra mi captura, deriva "salieron" y me mantiene como recurso', async () => {
     const { onFields } = setup()

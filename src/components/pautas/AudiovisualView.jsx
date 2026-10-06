@@ -283,7 +283,12 @@ export default function AudiovisualView({
   const mio = calcMiTrabajo(visibleScopedPautas, piezas, userProfile?.user_id)
   const tieneTrabajo =
     esRecurso ||
-    mio.hoy.length + mio.proximas.length + mio.pasadasSinCaptura.length + mio.porEditar.length > 0
+    mio.hoy.length +
+      mio.proximas.length +
+      mio.pasadasSinCaptura.length +
+      mio.porEditar.length +
+      mio.entregadas.length >
+      0
   // `ready`: el módulo ya pintó su contenido; la guía no puede empezar antes porque no
   // encontraría los elementos que señala.
   useEffect(() => {
