@@ -9,6 +9,8 @@ import {
   totalRetenidoDelMes,
   netoACobrarDe,
   totalCobrado,
+  totalCanjeado,
+  canjeadoDe,
   cobradoPorMoneda,
   facturadoPorMoneda,
   sinMonto,
@@ -30,7 +32,7 @@ const ESTADO_LABEL = {
   cobrado: { label: 'Cobrado', cls: 'bg-[#e6f4ec] text-[#1f9d57]' },
 }
 
-const MONEDA_FILTROS = ['Todas', 'USD', 'Bs']
+const MONEDA_FILTROS = ['Todas', 'USD', 'Bs', 'Intercambio']
 
 const VISTAS = [
   { key: 'facturacion', label: 'Facturación' },
@@ -138,7 +140,11 @@ export default function FacturacionView({
   // al 100% aunque se hubiera cobrado todo.
   const netoACobrar = totalNetoACobrar(invoices)
   const retenido = totalRetenidoDelMes(invoices)
-  const pct = netoACobrar ? Math.round((cobrado / netoACobrar) * 100) : 0
+  // Lo recibido en intercambio no es caja (no entra a "Total cobrado") pero sí
+  // salda facturas, así que cuenta para el avance y para lo que falta.
+  const canjeado = totalCanjeado(invoices)
+  const saldado = cobrado + canjeado
+  const pct = netoACobrar ? Math.round((saldado / netoACobrar) * 100) : 0
   // Siempre sobre el total real (invoices), sin filtrar — el filtro de moneda de
   // abajo solo afecta las filas mostradas en la tabla, no estos resúmenes.
   const { usd: facturadoUsd, bs: facturadoBs } = useMemo(
@@ -249,7 +255,7 @@ export default function FacturacionView({
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className={`grid gap-3 ${enCobros && canjeado > 0 ? 'grid-cols-4' : 'grid-cols-3'}`}>
         {enCobros ? (
           <>
             <div className="bg-white border border-[#e0ddd4] rounded-xl p-3">
@@ -264,6 +270,12 @@ export default function FacturacionView({
               <p className="text-[11px] uppercase text-[#999]">Cobrado en Bs</p>
               <p className="font-bold text-[#111] text-[16px]">{fmtUSD(cobradoBs)}</p>
             </div>
+            {canjeado > 0 && (
+              <div className="bg-white border border-[#e0ddd4] rounded-xl p-3">
+                <p className="text-[11px] uppercase text-[#999]">Recibido en intercambio</p>
+                <p className="font-bold text-[#9a6800] text-[16px]">{fmtUSD(canjeado)}</p>
+              </div>
+            )}
           </>
         ) : (
           <>
@@ -296,11 +308,12 @@ export default function FacturacionView({
         <div className="flex-1 min-w-[240px]">
           <div className="flex justify-between text-[13px] text-[#666] mb-1">
             <span>
-              {fmtUSD(cobrado)} cobrado de {fmtUSD(netoACobrar)}
+              {fmtUSD(cobrado)} cobrado{canjeado > 0 ? ` + ${fmtUSD(canjeado)} en intercambio` : ''}{' '}
+              de {fmtUSD(netoACobrar)}
               {retenido > 0 ? ' neto' : ' facturado'}
             </span>
             <span>
-              {pct}% · faltan {fmtUSD(netoACobrar - cobrado)}
+              {pct}% · faltan {fmtUSD(netoACobrar - saldado)}
             </span>
           </div>
           <div className="h-2 rounded-full bg-[#f0ede3] overflow-hidden">
@@ -408,6 +421,12 @@ export default function FacturacionView({
                 const { usd, bs, monedas } = cobrosPorMonedaDe(inv)
                 const mixto = monedas.length > 1
                 const soloBs = monedas.length === 1 && monedas[0] === 'Bs'
+                const soloCanje = monedas.length === 1 && monedas[0] === 'Intercambio'
+                const canje = canjeadoDe(inv)
+                const partes = []
+                if (monedas.includes('USD')) partes.push(fmtUSD(usd))
+                if (monedas.includes('Bs')) partes.push(`Bs ${fmtBs(bs)}`)
+                if (canje > 0) partes.push(`${fmtUSD(canje)} en intercambio`)
                 return (
                   <tr key={inv.id} className="border-b border-[#f5f3eb] last:border-0">
                     <td className="px-4 py-2.5">
@@ -435,18 +454,16 @@ export default function FacturacionView({
                     {enCobros ? (
                       <>
                         <td className="text-right px-4 py-2.5 font-mono text-[#1F9D57]">
-                          {mixto
-                            ? `${fmtUSD(usd)} + Bs ${fmtBs(bs)}`
-                            : soloBs
-                              ? `Bs ${fmtBs(bs)}`
-                              : fmtUSD(usd)}
+                          {partes.join(' + ')}
                         </td>
                         <td className="text-center px-4 py-2.5">
                           <span
                             className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                              soloBs || mixto
-                                ? 'bg-[#eef0ff] text-[#4c3fd0]'
-                                : 'bg-[#f0ede3] text-[#666]'
+                              soloCanje
+                                ? 'bg-[#fff3d1] text-[#9a6800]'
+                                : soloBs || mixto
+                                  ? 'bg-[#eef0ff] text-[#4c3fd0]'
+                                  : 'bg-[#f0ede3] text-[#666]'
                             }`}
                           >
                             {monedas.join(' + ')}
@@ -524,13 +541,14 @@ export default function FacturacionView({
 
       {cobroInvoice && (
         <CobroModal
-          invoice={cobroInvoice}
+          // La factura viva, no el snapshot del click: el modal sigue abierto tras
+          // un abono parcial y tiene que ver los abonos nuevos.
+          invoice={invoices.find((i) => i.id === cobroInvoice.id) ?? cobroInvoice}
           companyId={companyId}
           canManage={canManageCobros && !closed}
           onClose={() => setCobroInvoice(null)}
-          onSaved={() => {
-            refetch()
-          }}
+          // En segundo plano: con la carga visible FacturacionView desmonta el modal.
+          onSaved={() => refetch(false)}
         />
       )}
 

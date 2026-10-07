@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import {
   cobradoDe,
+  canjeadoDe,
+  saldadoDe,
+  totalCanjeado,
+  sinDistribuir,
   cobrosPorMonedaDe,
   pendienteDe,
   estadoFactura,
@@ -1456,5 +1460,103 @@ describe('totalesMovimientos', () => {
   it('sin filas devuelve todo en cero', () => {
     expect(totalesMovimientos([])).toEqual({ entradas: 0, salidas: 0, neto: 0, cuenta: 0 })
     expect(totalesMovimientos()).toEqual({ entradas: 0, salidas: 0, neto: 0, cuenta: 0 })
+  })
+})
+
+describe('cobro mixto: dinero + intercambio', () => {
+  // $1.000 facturados: $500 en Zelle y $500 en canje.
+  const mixta = () =>
+    invoice({
+      payments: [
+        { id: 'p-1', paidOn: '2026-09-02', amount: 500, currency: 'USD' },
+        { id: 'p-2', paidOn: '2026-09-03', amount: 500, currency: 'Intercambio' },
+      ],
+    })
+
+  it('el canje salda la factura pero no cuenta como dinero cobrado', () => {
+    const inv = mixta()
+    expect(cobradoDe(inv)).toBe(500)
+    expect(canjeadoDe(inv)).toBe(500)
+    expect(saldadoDe(inv)).toBe(1000)
+    expect(pendienteDe(inv)).toBe(0)
+    expect(estadoFactura(inv)).toBe('cobrado')
+  })
+
+  it('solo la mitad en dinero deja la factura abonada, no cobrada', () => {
+    const inv = invoice({ payments: [{ amount: 500, currency: 'USD' }] })
+    expect(pendienteDe(inv)).toBe(500)
+    expect(estadoFactura(inv)).toBe('abonado')
+  })
+
+  it('una factura pagada solo en canje queda cobrada con $0 de caja', () => {
+    const inv = invoice({ payments: [{ amount: 1000, currency: 'Intercambio' }] })
+    expect(estadoFactura(inv)).toBe('cobrado')
+    expect(cobradoDe(inv)).toBe(0)
+  })
+
+  it('los totales de caja ignoran el canje; por cobrar y cobranza lo descuentan', () => {
+    const invoices = [mixta(), invoice({ id: 'i2', amount: 400 })]
+    expect(totalCobrado(invoices)).toBe(500)
+    expect(totalCanjeado(invoices)).toBe(500)
+    expect(totalPorCobrar(invoices)).toBe(400)
+    expect(tasaCobranza(invoices)).toBeCloseTo(1000 / 1400)
+    expect(cobradoPorMoneda(invoices)).toEqual({ bs: 0, divisa: 500 })
+  })
+
+  it('con retenciones, el canje también se mide contra el neto', () => {
+    const inv = invoice({
+      retenciones: RET_TODAS,
+      payments: [
+        { amount: 344.83, currency: 'Intercambio' },
+        { amount: 500, currency: 'USD' },
+      ],
+    })
+    expect(estadoFactura(inv)).toBe('cobrado')
+  })
+
+  it('cobrosPorMonedaDe lista el canje como una forma de pago más, sin sumarlo a usd/bs', () => {
+    expect(cobrosPorMonedaDe(mixta())).toEqual({
+      usd: 500,
+      bs: 0,
+      monedas: ['USD', 'Intercambio'],
+    })
+    const soloCanje = invoice({ payments: [{ amount: 300, currency: 'Intercambio' }] })
+    expect(cobrosPorMonedaDe(soloCanje)).toEqual({ usd: 0, bs: 0, monedas: ['Intercambio'] })
+  })
+
+  it('el canje no se puede repartir en partidas: solo lo cobrado en dinero queda por distribuir', () => {
+    expect(sinDistribuir([mixta()], [])).toBe(500)
+  })
+
+  it('el canje no infla la divisa física ni descuadra el cuadre de caja', () => {
+    const invoices = [mixta()]
+    const r = cuadreDivisas({
+      invoices,
+      distributions: [{ partida: 'gastos', kind: 'in', amount: 500, currency: 'USD' }],
+      fxOperations: [],
+      ledger: [],
+      rateBcv: 816,
+    })
+    expect(r.divisaFisica).toBe(500)
+    expect(r.diferencia).toBe(0)
+  })
+
+  it('en Movimientos el canje es una fila propia que no suma a las entradas', () => {
+    const rows = movimientosDelMes({
+      ...MES,
+      invoices: [
+        invoiceCon([
+          { id: 'p-1', paidOn: '2026-09-02', amount: 500, currency: 'USD' },
+          { id: 'p-2', paidOn: '2026-09-03', amount: 250, currency: 'Intercambio' },
+        ]),
+      ],
+      distributions: [],
+      fxOperations: [],
+      bsLedger: [],
+    })
+    const canje = rows.find((r) => r.sourceId === 'p-2')
+    expect(canje.tipo).toBe('canje')
+    expect(canje.afectaCaja).toBe('ninguna')
+    expect(totalesMovimientos(rows).entradas).toBe(500)
   })
 })

@@ -29,9 +29,33 @@ const EPS = 0.5
 
 // ─── Facturas y cobros ──────────────────────────────────────────────────────────
 
-/** Suma de los abonos registrados a una factura. */
+/** Un abono pagado en intercambio (canje): salda la factura pero no entra a caja. */
+export function esIntercambio(payment) {
+  return payment?.currency === 'Intercambio'
+}
+
+/**
+ * Dinero que realmente entró de una factura (USD o Bs). Excluye el intercambio a
+ * propósito: es la cifra de CAJA, y de ella cuelgan la distribución en partidas,
+ * la divisa física y el cuadre. Para saber si la factura está saldada usa
+ * `saldadoDe()`.
+ */
 export function cobradoDe(invoice) {
-  return (invoice?.payments ?? []).reduce((a, p) => a + Number(p.amount ?? 0), 0)
+  return (invoice?.payments ?? [])
+    .filter((p) => !esIntercambio(p))
+    .reduce((a, p) => a + Number(p.amount ?? 0), 0)
+}
+
+/** Valor de la factura saldado en intercambio (no es dinero en caja). */
+export function canjeadoDe(invoice) {
+  return (invoice?.payments ?? [])
+    .filter(esIntercambio)
+    .reduce((a, p) => a + Number(p.amount ?? 0), 0)
+}
+
+/** Lo saldado de una factura: dinero cobrado + intercambio recibido. */
+export function saldadoDe(invoice) {
+  return cobradoDe(invoice) + canjeadoDe(invoice)
 }
 
 /**
@@ -51,7 +75,7 @@ export function netoACobrarDe(invoice) {
  * contra el bruto, toda marca con retención quedaría "abonada" para siempre.
  */
 export function pendienteDe(invoice) {
-  return netoACobrarDe(invoice) - cobradoDe(invoice)
+  return netoACobrarDe(invoice) - saldadoDe(invoice)
 }
 
 /**
@@ -61,8 +85,7 @@ export function pendienteDe(invoice) {
  * @returns {'pendiente'|'abonado'|'cobrado'}
  */
 export function estadoFactura(invoice) {
-  const cobrado = cobradoDe(invoice)
-  if (cobrado <= EPS) return 'pendiente'
+  if (saldadoDe(invoice) <= EPS) return 'pendiente'
   if (pendienteDe(invoice) > EPS) return 'abonado'
   return 'cobrado'
 }
@@ -76,22 +99,26 @@ export function estadoFactura(invoice) {
  * Todas/USD/Bs.
  *
  * Un abono cuenta como Bs si tiene `amountBs` cargado (mismo criterio que
- * `cobradoPorMoneda()`); si no, es divisa.
+ * `cobradoPorMoneda()`); si no, es divisa. Un abono en intercambio no es
+ * dinero: no suma a `usd` ni a `bs` (su monto sale de `canjeadoDe()`), solo
+ * agrega `'Intercambio'` a `monedas`.
  *
- * @returns {{ usd: number, bs: number, monedas: ('USD'|'Bs')[] }}
+ * @returns {{ usd: number, bs: number, monedas: ('USD'|'Bs'|'Intercambio')[] }}
  *   `usd` suma en dólares de los abonos en divisa; `bs` suma en bolívares de
- *   los abonos en Bs; `monedas` las monedas realmente presentes — vacío si la
- *   factura no tiene abonos, y con las dos si el cobro fue mixto (ahí la
- *   factura aparece tanto al filtrar USD como al filtrar Bs, porque entró
- *   dinero en ambas).
+ *   los abonos en Bs; `monedas` las formas de pago realmente presentes — vacío
+ *   si la factura no tiene abonos, y con varias si el cobro fue mixto (ahí la
+ *   factura aparece en cada filtro correspondiente).
  */
 export function cobrosPorMonedaDe(invoice) {
   let usd = 0
   let bs = 0
   let hayUsd = false
   let hayBs = false
+  let hayIntercambio = false
   for (const p of invoice?.payments ?? []) {
-    if (p.amountBs != null) {
+    if (esIntercambio(p)) {
+      hayIntercambio = true
+    } else if (p.amountBs != null) {
       bs += Number(p.amountBs ?? 0)
       hayBs = true
     } else {
@@ -102,6 +129,7 @@ export function cobrosPorMonedaDe(invoice) {
   const monedas = []
   if (hayUsd) monedas.push('USD')
   if (hayBs) monedas.push('Bs')
+  if (hayIntercambio) monedas.push('Intercambio')
   return { usd, bs, monedas }
 }
 
@@ -109,8 +137,19 @@ export function totalFacturado(invoices) {
   return (invoices ?? []).reduce((a, i) => a + Number(i.amount ?? 0), 0)
 }
 
+/** Dinero cobrado del mes (sin intercambio — ver `cobradoDe`). */
 export function totalCobrado(invoices) {
   return (invoices ?? []).reduce((a, i) => a + cobradoDe(i), 0)
+}
+
+/** Valor recibido en intercambio en el mes (KPI informativo, no es caja). */
+export function totalCanjeado(invoices) {
+  return (invoices ?? []).reduce((a, i) => a + canjeadoDe(i), 0)
+}
+
+/** Dinero + intercambio: lo que ya dejó de ser deuda del cliente. */
+export function totalSaldado(invoices) {
+  return totalCobrado(invoices) + totalCanjeado(invoices)
 }
 
 /**
@@ -132,7 +171,7 @@ export function totalRetenidoDelMes(invoices) {
  * las retenciones figurarían como deuda eterna de los clientes.
  */
 export function totalPorCobrar(invoices) {
-  return totalNetoACobrar(invoices) - totalCobrado(invoices)
+  return totalNetoACobrar(invoices) - totalSaldado(invoices)
 }
 
 /**
@@ -146,6 +185,7 @@ export function cobradoPorMoneda(invoices) {
   let divisa = 0
   for (const inv of invoices ?? []) {
     for (const p of inv.payments ?? []) {
+      if (esIntercambio(p)) continue
       if (p.amountBs != null) bs += Number(p.amount ?? 0)
       else divisa += Number(p.amount ?? 0)
     }
@@ -425,7 +465,7 @@ export function esMesPreparable(year, month, ref = new Date()) {
  */
 export function tasaCobranza(invoices) {
   const neto = totalNetoACobrar(invoices)
-  return neto ? totalCobrado(invoices) / neto : 0
+  return neto ? totalSaldado(invoices) / neto : 0
 }
 
 /** Ticket promedio: facturado / clientes activos facturados (0 si no hay clientes). */
@@ -584,7 +624,7 @@ export function divisaFisica({ invoices, fxOperations, distributions }) {
     (a, inv) =>
       a +
       (inv.payments ?? [])
-        .filter((p) => p.currency !== 'Bs')
+        .filter((p) => p.currency === 'USD' || p.currency == null)
         .reduce((b, p) => b + Number(p.amount ?? 0), 0),
     0,
   )
@@ -748,8 +788,9 @@ export function movimientosDelMes({
       // Mismo criterio de moneda que cobrosPorMonedaDe(): un abono cuenta como Bs si
       // trae amountBs, no por invoice.currency (que es configuración del cliente).
       const enBs = p.amountBs != null
+      const canje = esIntercambio(p)
       rows.push(
-        fila('cobro', {
+        fila(canje ? 'canje' : 'cobro', {
           id: `pay:${p.id}`,
           sourceTable: 'fin_payments',
           sourceId: p.id,
@@ -761,7 +802,7 @@ export function movimientosDelMes({
           montoUsd: firmado(p.amount, 'in'),
           montoBs: enBs ? firmado(p.amountBs, 'in') : null,
           tasa: p.rate ?? null,
-          afectaCaja: enBs ? 'bs' : 'divisa',
+          afectaCaja: canje ? 'ninguna' : enBs ? 'bs' : 'divisa',
         }),
       )
     }
