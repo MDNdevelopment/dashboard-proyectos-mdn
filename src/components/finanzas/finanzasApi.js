@@ -459,6 +459,35 @@ export async function addPayment(
   return { data: normalizePayment(data), error }
 }
 
+/**
+ * Registra varios abonos de una misma factura en UN solo insert (p. ej. parte en
+ * dinero y parte en intercambio dentro del mismo cobro). A propósito no es un
+ * bucle de `addPayment()`: `fin_payments` es inmutable, y si la segunda llamada
+ * fallara quedaría la factura abonada con solo una parte de lo que el usuario
+ * registró. Un solo insert es atómico: entran todas las filas o ninguna.
+ * @param {string} invoiceId
+ * @param {Array<{paidOn, amount, amountBs?, rate?, method?, note?, currency?, rateSource?}>} rows
+ */
+export async function addPaymentsBatch(invoiceId, rows) {
+  const { data, error } = await supabase
+    .from('fin_payments')
+    .insert(
+      rows.map((r) => ({
+        invoice_id: invoiceId,
+        paid_on: r.paidOn,
+        amount: r.amount,
+        amount_bs: r.amountBs ?? null,
+        rate: r.rate ?? null,
+        method: r.method ?? null,
+        note: r.note ?? null,
+        currency: r.currency ?? 'USD',
+        rate_source: r.rateSource ?? null,
+      })),
+    )
+    .select()
+  return { data: (data ?? []).map(normalizePayment), error }
+}
+
 export async function deletePayment(paymentId) {
   return supabase.from('fin_payments').delete().eq('id', paymentId)
 }

@@ -1,9 +1,10 @@
 /**
  * CobroModal sigue el mismo patrón que InvoiceModal.jsx: el monto se escribe
- * SIEMPRE en USD (nunca en Bs); un toggle de moneda decide si el cobro entró
- * en Bs, y en ese caso solo se pide/confirma la tasa (BCV auto-resuelta con
- * los 3 escalones de resolveRateBcv, o una tasa personalizada). El
- * equivalente en Bs se deriva de `amount × tasa`. Una tasa personalizada
+ * SIEMPRE en USD (nunca en Bs). Hay una fila por forma de pago (USD, Bs,
+ * Intercambio) y se guardan todas juntas; si la fila Bs tiene monto solo se
+ * pide/confirma la tasa (BCV auto-resuelta con los 3 escalones de
+ * resolveRateBcv, o una tasa personalizada). El equivalente en Bs se deriva de
+ * `amount × tasa`. Una tasa personalizada
  * nunca se sube a fin_rates (upsertRate no se llama nunca desde este modal).
  */
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
@@ -13,12 +14,12 @@ vi.mock('../context/AuthContext', () => ({
   useAuth: () => ({ userProfile: { user_id: 'u-1' } }),
 }))
 
-const mockAddPayment = vi.fn().mockResolvedValue({ data: {}, error: null })
+const mockAddPaymentsBatch = vi.fn().mockResolvedValue({ data: {}, error: null })
 const mockResolveRateBcv = vi.fn()
 const mockUpdateInvoice = vi.fn().mockResolvedValue({ data: {}, error: null })
 const mockLoadUltimasRetenciones = vi.fn().mockResolvedValue({ data: null, error: null })
 vi.mock('../components/finanzas/finanzasApi', () => ({
-  addPayment: (...a) => mockAddPayment(...a),
+  addPaymentsBatch: (...a) => mockAddPaymentsBatch(...a),
   deletePayment: vi.fn(),
   deleteDistributionsForInvoice: vi.fn(),
   resolveRateBcv: (...a) => mockResolveRateBcv(...a),
@@ -36,8 +37,9 @@ const invoice = {
   payments: [],
 }
 
-function selectBs() {
-  fireEvent.click(screen.getByRole('button', { name: 'Bs' }))
+/** Llena la fila Bs (monto en USD); eso activa la sección de tasa. */
+function llenarBs(valor = '750') {
+  fireEvent.change(screen.getByLabelText('Monto Bs'), { target: { value: valor } })
 }
 
 beforeEach(() => {
@@ -59,7 +61,7 @@ describe('CobroModal — el monto siempre se escribe en USD', () => {
     expect(mockResolveRateBcv).not.toHaveBeenCalled()
   })
 
-  it('el monto USD es editable también en modo Bs', async () => {
+  it('al llenar Bs, el USD sugerido baja a lo que falta y sigue siendo editable', async () => {
     mockResolveRateBcv.mockResolvedValue({
       data: { rate: 816, rateDate: '2026-09-23', source: 'bcv' },
       error: null,
@@ -73,13 +75,15 @@ describe('CobroModal — el monto siempre se escribe en USD', () => {
         onSaved={() => {}}
       />,
     )
-    selectBs()
+    llenarBs('400')
     await screen.findByText(/BCV 23\/09\/2026/)
 
-    const amountInput = screen.getAllByRole('spinbutton')[0]
-    expect(amountInput).not.toHaveAttribute('readonly')
-    fireEvent.change(amountInput, { target: { value: '500' } })
-    expect(amountInput.value).toBe('500')
+    // 750 facturados − 400 en Bs → quedan 350 sugeridos en la fila USD.
+    const usd = screen.getByLabelText('Monto USD')
+    expect(usd).toHaveValue(350)
+    expect(usd).not.toHaveAttribute('readonly')
+    fireEvent.change(usd, { target: { value: '300' } })
+    expect(usd).toHaveValue(300)
   })
 })
 
@@ -98,7 +102,7 @@ describe('CobroModal — resolución de la tasa BCV', () => {
         onSaved={() => {}}
       />,
     )
-    selectBs()
+    llenarBs()
 
     expect(mockResolveRateBcv).toHaveBeenCalledWith('co-1', expect.any(String))
     expect(await screen.findByText(/BCV 23\/09\/2026/)).toBeInTheDocument()
@@ -118,7 +122,7 @@ describe('CobroModal — resolución de la tasa BCV', () => {
         onSaved={() => {}}
       />,
     )
-    selectBs()
+    llenarBs()
 
     expect(await screen.findByText(/No se pudo obtener la tasa de hoy/)).toBeInTheDocument()
     expect(screen.getByText(/20\/09\/2026/)).toBeInTheDocument()
@@ -138,7 +142,7 @@ describe('CobroModal — resolución de la tasa BCV', () => {
         onSaved={() => {}}
       />,
     )
-    selectBs()
+    llenarBs()
 
     expect(
       await screen.findByText(/No hay tasa BCV disponible — usa una tasa personalizada/),
@@ -161,12 +165,12 @@ describe('CobroModal — "Usar tasa personalizada"', () => {
         onSaved={() => {}}
       />,
     )
-    selectBs()
+    llenarBs()
     await screen.findByText(/BCV 23\/09\/2026/)
 
     fireEvent.click(screen.getByRole('button', { name: 'Usar tasa personalizada' }))
 
-    const rateInput = screen.getAllByRole('spinbutton').at(-1)
+    const rateInput = screen.getByLabelText('Tasa personalizada')
     expect(rateInput.value).toBe('816')
     expect(screen.getByRole('button', { name: 'Usar tasa BCV' })).toBeInTheDocument()
   })
@@ -187,9 +191,8 @@ describe('CobroModal — guardar el cobro', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Registrar cobro' }))
 
-    await waitFor(() => expect(mockAddPayment).toHaveBeenCalled())
-    expect(mockAddPayment).toHaveBeenCalledWith(
-      'inv-1',
+    await waitFor(() => expect(mockAddPaymentsBatch).toHaveBeenCalled())
+    expect(mockAddPaymentsBatch).toHaveBeenCalledWith('inv-1', [
       expect.objectContaining({
         currency: 'USD',
         amount: 750,
@@ -197,7 +200,7 @@ describe('CobroModal — guardar el cobro', () => {
         rate: null,
         rateSource: null,
       }),
-    )
+    ])
   })
 
   it('con la BCV auto-resuelta, deriva amountBs de amount × tasa', async () => {
@@ -214,15 +217,13 @@ describe('CobroModal — guardar el cobro', () => {
         onSaved={() => {}}
       />,
     )
-    fireEvent.change(screen.getAllByRole('spinbutton')[0], { target: { value: '750' } })
-    selectBs()
+    llenarBs()
     await screen.findByText(/BCV 23\/09\/2026/)
 
     fireEvent.click(screen.getByRole('button', { name: 'Registrar cobro' }))
 
-    await waitFor(() => expect(mockAddPayment).toHaveBeenCalled())
-    expect(mockAddPayment).toHaveBeenCalledWith(
-      'inv-1',
+    await waitFor(() => expect(mockAddPaymentsBatch).toHaveBeenCalled())
+    expect(mockAddPaymentsBatch).toHaveBeenCalledWith('inv-1', [
       expect.objectContaining({
         currency: 'Bs',
         amount: 750,
@@ -230,7 +231,7 @@ describe('CobroModal — guardar el cobro', () => {
         rate: 816,
         rateSource: 'bcv',
       }),
-    )
+    ])
   })
 
   it('con tasa personalizada, deriva amountBs con esa tasa y no llama a upsertRate', async () => {
@@ -247,19 +248,17 @@ describe('CobroModal — guardar el cobro', () => {
         onSaved={() => {}}
       />,
     )
-    fireEvent.change(screen.getAllByRole('spinbutton')[0], { target: { value: '750' } })
-    selectBs()
+    llenarBs()
     await screen.findByText(/BCV 23\/09\/2026/)
 
     fireEvent.click(screen.getByRole('button', { name: 'Usar tasa personalizada' }))
-    const rateInput = screen.getAllByRole('spinbutton').at(-1)
+    const rateInput = screen.getByLabelText('Tasa personalizada')
     fireEvent.change(rateInput, { target: { value: '800' } })
 
     fireEvent.click(screen.getByRole('button', { name: 'Registrar cobro' }))
 
-    await waitFor(() => expect(mockAddPayment).toHaveBeenCalled())
-    expect(mockAddPayment).toHaveBeenCalledWith(
-      'inv-1',
+    await waitFor(() => expect(mockAddPaymentsBatch).toHaveBeenCalled())
+    expect(mockAddPaymentsBatch).toHaveBeenCalledWith('inv-1', [
       expect.objectContaining({
         currency: 'Bs',
         amount: 750,
@@ -267,7 +266,7 @@ describe('CobroModal — guardar el cobro', () => {
         rate: 800,
         rateSource: 'manual',
       }),
-    )
+    ])
   })
 
   it('valida que haya una tasa antes de guardar', async () => {
@@ -284,14 +283,13 @@ describe('CobroModal — guardar el cobro', () => {
         onSaved={() => {}}
       />,
     )
-    fireEvent.change(screen.getAllByRole('spinbutton')[0], { target: { value: '750' } })
-    selectBs()
+    llenarBs()
     await screen.findByText(/No hay tasa BCV disponible/)
 
     fireEvent.click(screen.getByRole('button', { name: 'Registrar cobro' }))
 
     expect(await screen.findByText('Ingresa o confirma la tasa BCV')).toBeInTheDocument()
-    expect(mockAddPayment).not.toHaveBeenCalled()
+    expect(mockAddPaymentsBatch).not.toHaveBeenCalled()
   })
 })
 
@@ -352,16 +350,16 @@ describe('CobroModal — retenciones de impuestos', () => {
       orden.push('updateInvoice')
       return { data: {}, error: null }
     })
-    mockAddPayment.mockImplementationOnce(async () => {
-      orden.push('addPayment')
+    mockAddPaymentsBatch.mockImplementationOnce(async () => {
+      orden.push('addPaymentsBatch')
       return { data: {}, error: null }
     })
     renderCobro()
     fireEvent.click(screen.getByLabelText('ISL'))
     fireEvent.click(screen.getByRole('button', { name: 'Registrar cobro' }))
 
-    await waitFor(() => expect(mockAddPayment).toHaveBeenCalled())
-    expect(orden).toEqual(['updateInvoice', 'addPayment'])
+    await waitFor(() => expect(mockAddPaymentsBatch).toHaveBeenCalled())
+    expect(orden).toEqual(['updateInvoice', 'addPaymentsBatch'])
     expect(mockUpdateInvoice).toHaveBeenCalledWith(
       'inv-1',
       expect.objectContaining({
@@ -379,13 +377,13 @@ describe('CobroModal — retenciones de impuestos', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Registrar cobro' }))
 
     await waitFor(() => expect(screen.getByText(/sin permiso/)).toBeInTheDocument())
-    expect(mockAddPayment).not.toHaveBeenCalled()
+    expect(mockAddPaymentsBatch).not.toHaveBeenCalled()
   })
 
   it('sin tocar las retenciones no escribe la factura', async () => {
     renderCobro()
     fireEvent.click(screen.getByRole('button', { name: 'Registrar cobro' }))
-    await waitFor(() => expect(mockAddPayment).toHaveBeenCalled())
+    await waitFor(() => expect(mockAddPaymentsBatch).toHaveBeenCalled())
     expect(mockUpdateInvoice).not.toHaveBeenCalled()
   })
 
@@ -418,40 +416,94 @@ describe('CobroModal — cobro mixto dinero + intercambio', () => {
     return { onClose, onSaved }
   }
 
-  it('Intercambio no pide tasa y guarda el abono sin Bs ni tasa', async () => {
-    renderModal()
-    fireEvent.click(screen.getByRole('button', { name: 'Intercambio' }))
+  const escribir = (etiqueta, valor) =>
+    fireEvent.change(screen.getByLabelText(etiqueta), { target: { value: valor } })
 
-    expect(screen.queryByText('Tasa BCV')).not.toBeInTheDocument()
-    expect(mockResolveRateBcv).not.toHaveBeenCalled()
+  it('dinero e intercambio van en UN solo guardado, una fila por forma', async () => {
+    renderModal()
+    escribir('Monto USD', '375')
+    escribir('Monto Intercambio', '375')
+    escribir('Nota Intercambio', '3 sesiones de fotos')
 
     fireEvent.click(screen.getByRole('button', { name: 'Registrar cobro' }))
-    await waitFor(() => expect(mockAddPayment).toHaveBeenCalled())
-    expect(mockAddPayment).toHaveBeenCalledWith(
-      'inv-1',
+    await waitFor(() => expect(mockAddPaymentsBatch).toHaveBeenCalledTimes(1))
+    expect(mockAddPaymentsBatch).toHaveBeenCalledWith('inv-1', [
+      expect.objectContaining({
+        currency: 'USD',
+        amount: 375,
+        amountBs: null,
+        rate: null,
+        rateSource: null,
+        method: 'Zelle',
+      }),
       expect.objectContaining({
         currency: 'Intercambio',
-        amount: 750,
+        amount: 375,
         amountBs: null,
         rate: null,
         rateSource: null,
         method: 'Productos',
+        note: '3 sesiones de fotos',
       }),
+    ])
+  })
+
+  it('escribir en Intercambio deja la fila USD con lo que falta, sin hacer cuentas', () => {
+    renderModal()
+    expect(screen.getByLabelText('Monto USD')).toHaveValue(750)
+    escribir('Monto Intercambio', '250')
+    expect(screen.getByLabelText('Monto USD')).toHaveValue(500)
+    expect(screen.getByText(/Falta \$0/)).toBeInTheDocument()
+  })
+
+  it('USD + Bs + Intercambio a la vez: la tasa solo se pide por la fila Bs', async () => {
+    mockResolveRateBcv.mockResolvedValue({
+      data: { rate: 800, rateDate: '2026-09-23', source: 'bcv' },
+      error: null,
+    })
+    renderModal()
+    escribir('Monto USD', '300')
+    escribir('Monto Intercambio', '250')
+    expect(screen.queryByText('Tasa BCV')).not.toBeInTheDocument()
+
+    escribir('Monto Bs', '200')
+    await screen.findByText(/BCV 23\/09\/2026/)
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar cobro' }))
+
+    await waitFor(() => expect(mockAddPaymentsBatch).toHaveBeenCalledTimes(1))
+    const [, filas] = mockAddPaymentsBatch.mock.calls[0]
+    expect(filas.map((f) => [f.currency, f.amount])).toEqual([
+      ['USD', 300],
+      ['Bs', 200],
+      ['Intercambio', 250],
+    ])
+    expect(filas[1]).toEqual(
+      expect.objectContaining({ amountBs: 160000, rate: 800, rateSource: 'bcv' }),
     )
   })
 
-  it('tras un abono parcial sigue abierto con el pendiente restante precargado', async () => {
+  it('si lo asignado supera lo pendiente, avisa y no guarda nada', async () => {
+    renderModal()
+    escribir('Monto USD', '500')
+    escribir('Monto Intercambio', '500')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar cobro' }))
+    expect(await screen.findByText('No puedes cobrar más de lo pendiente')).toBeInTheDocument()
+    expect(mockAddPaymentsBatch).not.toHaveBeenCalled()
+  })
+
+  it('un cobro parcial deja el modal abierto con lo que falta precargado', async () => {
     const { onClose, onSaved } = renderModal()
-    const monto = screen.getAllByRole('spinbutton')[0]
-    fireEvent.change(monto, { target: { value: '375' } })
+    escribir('Monto USD', '375')
     fireEvent.click(screen.getByRole('button', { name: 'Registrar cobro' }))
 
     await waitFor(() => expect(onSaved).toHaveBeenCalled())
     expect(onClose).not.toHaveBeenCalled()
-    await waitFor(() => expect(screen.getAllByRole('spinbutton')[0].value).toBe('375'))
+    await waitFor(() => expect(screen.getByLabelText('Monto USD')).toHaveValue(750))
+    expect(screen.getByLabelText('Monto Intercambio')).toHaveValue(null)
   })
 
-  it('un abono que salda la factura cierra el modal', async () => {
+  it('un cobro que salda la factura cierra el modal', async () => {
     const { onClose } = renderModal()
     fireEvent.click(screen.getByRole('button', { name: 'Registrar cobro' }))
     await waitFor(() => expect(onClose).toHaveBeenCalled())
@@ -468,6 +520,6 @@ describe('CobroModal — cobro mixto dinero + intercambio', () => {
     // Cobrado (dinero) en $0; el canje aparece en su propia card y en el abono.
     expect(screen.getAllByText('Intercambio').length).toBeGreaterThan(1)
     // El pendiente sugerido descuenta el canje: 750 − 250.
-    expect(screen.getAllByRole('spinbutton')[0].value).toBe('500')
+    expect(screen.getByLabelText('Monto USD')).toHaveValue(500)
   })
 })

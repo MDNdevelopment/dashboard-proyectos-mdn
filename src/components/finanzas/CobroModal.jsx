@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { fmtUSD } from '../../utils/metricsFinance'
 import { fmtDate } from '../../utils/formatDate'
-import { cobradoDe, canjeadoDe, saldadoDe, esIntercambio } from '../../utils/finanzas'
+import { cobradoDe, canjeadoDe, esIntercambio } from '../../utils/finanzas'
 import { hayRetenciones, normalizarRetenciones, retencionesDe } from '../../utils/retenciones'
 import {
-  addPayment,
+  addPaymentsBatch,
   deletePayment,
   deleteDistributionsForInvoice,
   resolveRateBcv,
@@ -14,7 +14,16 @@ import {
 import RetencionesFields from './RetencionesFields'
 import { METODOS_PAGO_USD, METODOS_PAGO_BS, METODOS_PAGO_INTERCAMBIO } from './constants'
 
-const MONEDAS_COBRO = ['USD', 'Bs', 'Intercambio']
+// Una fila por forma de pago: un mismo cobro puede repartirse entre dinero en
+// USD, dinero en Bs e intercambio. Máximo una línea por forma, así hay un solo
+// estado de tasa (la fila Bs) y cada fila es un abono de `fin_payments`.
+const FORMAS = [
+  { key: 'USD', label: 'Dinero USD', metodos: METODOS_PAGO_USD },
+  { key: 'Bs', label: 'Dinero Bs', metodos: METODOS_PAGO_BS },
+  { key: 'Intercambio', label: 'Intercambio', metodos: METODOS_PAGO_INTERCAMBIO },
+]
+
+const round2 = (n) => Math.round(n * 100) / 100
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10)
@@ -30,24 +39,18 @@ function fmtBs(n) {
 /**
  * Modal de registro de cobro y abonos de una factura, más "quitar cobro"
  * (revierte todo). Mismo patrón que InvoiceModal.jsx: el monto SIEMPRE se
- * escribe en USD — un toggle de moneda decide si el cobro entró en Bs, y en
- * ese caso solo se pide/confirma la tasa (BCV auto-resuelta o personalizada).
- * El equivalente en Bs (fin_payments.amount_bs) se deriva de `amount × tasa`,
- * nunca se escribe a mano. Una tasa personalizada nunca se sube a fin_rates
- * (eso contaminaría la BCV oficial del día que usan otros cobros/pagos) — se
- * guarda solo en el pago (`rate` + `rate_source='manual'`).
+ * escribe en USD; si la fila Bs tiene monto solo se pide/confirma la tasa (BCV
+ * auto-resuelta o personalizada). El equivalente en Bs (fin_payments.amount_bs)
+ * se deriva de `amount × tasa`, nunca se escribe a mano. Una tasa personalizada
+ * nunca se sube a fin_rates (eso contaminaría la BCV oficial del día que usan
+ * otros cobros/pagos) — se guarda solo en el pago (`rate` + `rate_source='manual'`).
  *
- * Una factura puede saldarse parte en dinero y parte en intercambio (canje): la
- * tercera opción del toggle registra un abono `currency='Intercambio'`, sin tasa
- * ni Bs. Salda la factura pero no es caja (ver `cobradoDe` vs `saldadoDe`). Tras
- * un abono parcial el modal sigue abierto con el pendiente restante, para
- * registrar el siguiente.
+ * Un cobro puede repartirse entre dinero (USD/Bs) e intercambio (canje): una
+ * fila por forma, y todas se guardan juntas en un solo insert
+ * (`addPaymentsBatch`). El intercambio es un abono `currency='Intercambio'`, sin
+ * tasa ni Bs; salda la factura pero no es caja (ver `cobradoDe` vs `saldadoDe`).
+ * Tras un cobro parcial el modal sigue abierto con el pendiente restante.
  */
-/** Neto pendiente de una factura bajo una config de retenciones dada. */
-function pendienteLocalDe(invoice, ret) {
-  return retencionesDe(invoice?.amount, ret).neto - saldadoDe(invoice)
-}
-
 export default function CobroModal({ invoice, companyId, canManage, onClose, onSaved }) {
   // Las retenciones se marcan AQUÍ, no en el perfil del cliente ni al emitir la
   // factura: el ISLR de una misma marca varía entre 2% y 5% de un mes a otro y
@@ -55,14 +58,16 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
   // comprobante. Se guardan en la factura (`fin_invoices.ret_*`) porque son de
   // la factura, no de cada abono.
   const [ret, setRet] = useState(() => normalizarRetenciones(invoice?.retenciones))
-  // El monto sugerido sigue al neto mientras el usuario no lo haya escrito a
-  // mano: sin esto, marcar un impuesto le pisaría la cifra que acaba de teclear.
-  const [montoTocado, setMontoTocado] = useState(false)
-  const [amount, setAmount] = useState(() => pendienteLocalDe(invoice, invoice?.retenciones))
-  const [currency, setCurrency] = useState('USD')
-  const [method, setMethod] = useState(METODOS_PAGO_USD[0])
+  // Lo que el usuario escribió en cada fila (texto del input). La fila USD es
+  // especial: mientras `usdTocado` sea falso su valor NO se guarda aquí sino que se
+  // deriva al renderizar (lo que falta por cobrar), ver `usdValue` más abajo.
+  const [montos, setMontos] = useState({ USD: '', Bs: '', Intercambio: '' })
+  const [usdTocado, setUsdTocado] = useState(false)
+  const [metodos, setMetodos] = useState(() =>
+    Object.fromEntries(FORMAS.map((f) => [f.key, f.metodos[0]])),
+  )
+  const [notas, setNotas] = useState({ USD: '', Bs: '', Intercambio: '' })
   const [date, setDate] = useState(todayISO())
-  const [note, setNote] = useState('')
   const [rateInfo, setRateInfo] = useState(null) // { rate, rateDate, source }
   const [customRate, setCustomRate] = useState(false)
   const [manualRate, setManualRate] = useState('')
@@ -84,14 +89,20 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
     ret.iva !== guardadas.iva ||
     ret.ivaRate !== guardadas.ivaRate ||
     ret.municipal !== guardadas.municipal
-  const isBs = currency === 'Bs'
-  const isCanje = currency === 'Intercambio'
-  const metodos = isCanje ? METODOS_PAGO_INTERCAMBIO : isBs ? METODOS_PAGO_BS : METODOS_PAGO_USD
+  const bsNum = Number(montos.Bs) || 0
+  const canjeNum = Number(montos.Intercambio) || 0
+  // Mientras no escriban en la fila USD, esta sigue a lo que falta por cobrar
+  // (neto − saldado − Bs − Intercambio). Es DERIVADO, no un efecto: así marcar una
+  // retención o llenar otra fila la mueve en el mismo render, sin estado duplicado.
+  const usdAuto = Math.max(round2(pendiente - bsNum - canjeNum), 0)
+  const usdValue = usdTocado ? montos.USD : usdAuto > 0 ? String(usdAuto) : ''
+  const usdNum = Number(usdValue) || 0
+  const asignado = usdNum + bsNum + canjeNum
+  const falta = pendiente - asignado
+  const valorDe = { USD: usdValue, Bs: montos.Bs, Intercambio: montos.Intercambio }
+  const bsActivo = bsNum > 0
   const effectiveRate = customRate ? Number(manualRate) || null : (rateInfo?.rate ?? null)
-  const amountBs =
-    isBs && effectiveRate && Number(amount) > 0
-      ? Math.round(Number(amount) * effectiveRate * 100) / 100
-      : null
+  const amountBs = bsActivo && effectiveRate ? round2(bsNum * effectiveRate) : null
 
   // Precarga desde el historial: lo que esa marca retuvo la última vez. Solo si
   // la factura no trae ya las suyas (segundo abono, o consultar un cobro hecho)
@@ -102,7 +113,6 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
     loadUltimasRetenciones(invoice.clientId).then(({ data }) => {
       if (cancelled || !data) return
       setRet(data)
-      setAmount((prev) => (montoTocado ? prev : retencionesDe(invoice.amount, data).neto - saldado))
     })
     return () => {
       cancelled = true
@@ -111,18 +121,14 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invoice?.id])
 
-  /** Cambia una retención y arrastra el monto sugerido, si no lo escribieron. */
+  /** Cambia una retención; el monto USD sugerido la sigue solo (es derivado). */
   function cambiarRet(patch) {
-    setRet((prev) => {
-      const next = { ...prev, ...patch }
-      if (!montoTocado) setAmount(retencionesDe(invoice?.amount, next).neto - saldado)
-      return next
-    })
+    setRet((prev) => ({ ...prev, ...patch }))
   }
 
-  // Resuelve la BCV vigente para la fecha elegida en cuanto la moneda es Bs.
+  // Resuelve la BCV vigente para la fecha elegida en cuanto la fila Bs tiene monto.
   useEffect(() => {
-    if (!isBs || !companyId) return
+    if (!bsActivo || !companyId) return
     let cancelled = false
     resolveRateBcv(companyId, date).then(({ data }) => {
       if (!cancelled) setRateInfo(data)
@@ -130,22 +136,17 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
     return () => {
       cancelled = true
     }
-  }, [isBs, companyId, date])
+  }, [bsActivo, companyId, date])
 
-  function handleSetCurrency(cur) {
-    setCurrency(cur)
-    if (cur !== 'Bs') {
-      // Sin esto, volver a Bs mostraría datos de una elección anterior.
+  function cambiarMonto(key, value) {
+    // Vaciar la fila USD la devuelve al autocompletado.
+    if (key === 'USD') setUsdTocado(value !== '')
+    setMontos((prev) => ({ ...prev, [key]: value }))
+    if (key === 'Bs' && !(Number(value) > 0)) {
+      // Sin esto, volver a llenar Bs reutilizaría una tasa personalizada vieja.
       setManualRate('')
       setCustomRate(false)
     }
-    setMethod(
-      cur === 'Intercambio'
-        ? METODOS_PAGO_INTERCAMBIO[0]
-        : cur === 'Bs'
-          ? METODOS_PAGO_BS[0]
-          : METODOS_PAGO_USD[0],
-    )
   }
 
   function toggleCustomRate() {
@@ -158,16 +159,19 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
   }
 
   async function handleAddPayment() {
-    const amt = Number(amount)
-    if (!amt || amt <= 0) {
+    if (usdNum < 0 || bsNum < 0 || canjeNum < 0) {
+      setError('Los montos no pueden ser negativos')
+      return
+    }
+    if (asignado <= 0) {
       setError('El monto debe ser mayor a 0')
       return
     }
-    if (amt > pendiente + 0.5) {
+    if (asignado > pendiente + 0.5) {
       setError('No puedes cobrar más de lo pendiente')
       return
     }
-    if (isBs && (!effectiveRate || effectiveRate <= 0)) {
+    if (bsActivo && (!effectiveRate || effectiveRate <= 0)) {
       setError('Ingresa o confirma la tasa BCV')
       return
     }
@@ -186,29 +190,45 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
       }
     }
 
-    const { error: err } = await addPayment(invoice.id, {
+    // Una fila por forma con monto; todas entran en un solo insert.
+    const filas = []
+    const base = (key, amount) => ({
       paidOn: date,
-      amount: amt,
-      amountBs: isBs ? amountBs : null,
-      rate: isBs ? effectiveRate : null,
-      method,
-      note,
-      currency,
-      rateSource: isBs ? (customRate ? 'manual' : 'bcv') : null,
+      amount,
+      // Solo la fila Bs lleva equivalente y tasa; USD e Intercambio, nulos explícitos.
+      amountBs: null,
+      rate: null,
+      rateSource: null,
+      method: metodos[key],
+      note: notas[key].trim() || null,
+      currency: key,
     })
+    if (usdNum > 0) filas.push(base('USD', usdNum))
+    if (bsActivo) {
+      filas.push({
+        ...base('Bs', bsNum),
+        amountBs,
+        rate: effectiveRate,
+        rateSource: customRate ? 'manual' : 'bcv',
+      })
+    }
+    if (canjeNum > 0) filas.push(base('Intercambio', canjeNum))
+
+    const { error: err } = await addPaymentsBatch(invoice.id, filas)
     setSaving(false)
     if (err) {
       setError(err.message)
       return
     }
     onSaved()
-    const restante = pendiente - amt
-    if (restante > 0.5) {
-      // Abono parcial (p. ej. la mitad en dinero): sigue abierto con lo que falta
-      // precargado para registrar el resto, que puede ser en otra forma de pago.
-      setMontoTocado(false)
-      setAmount(Math.round(restante * 100) / 100)
-      setNote('')
+    if (falta > 0.5) {
+      // Cobro parcial: sigue abierto con lo que falta precargado (la fila USD
+      // vuelve al autocompletado) para registrar el resto más adelante.
+      setMontos({ USD: '', Bs: '', Intercambio: '' })
+      setUsdTocado(false)
+      setNotas({ USD: '', Bs: '', Intercambio: '' })
+      setCustomRate(false)
+      setManualRate('')
       return
     }
     onClose()
@@ -234,7 +254,7 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/25 backdrop-blur-[3px]">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
         <div className="px-6 pt-5 pb-3 border-b border-[#ece9df]">
           <h2 className="text-[18px] font-bold text-[#111]">
             {saldado > 0.5 ? 'Cobro y abonos' : 'Registrar cobro'}
@@ -366,73 +386,79 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
 
           {canManage && pendiente > 0.5 && (
             <>
-              <div className="grid grid-cols-5 gap-3">
-                <div className="col-span-2">
-                  <label className="block text-[12px] font-mono font-bold uppercase tracking-wide text-[#888] mb-1.5">
-                    {isCanje ? 'Valor recibido (USD)' : 'Monto cobrado (USD)'}
-                  </label>
-                  <input
-                    type="number"
-                    className="input-base"
-                    value={amount}
-                    onChange={(e) => {
-                      setMontoTocado(true)
-                      setAmount(e.target.value)
-                    }}
-                  />
-                </div>
-                <div className="col-span-3">
-                  <label className="block text-[12px] font-mono font-bold uppercase tracking-wide text-[#888] mb-1.5">
-                    Forma de pago
-                  </label>
-                  <div className="flex rounded-lg border border-[#e0ddd4] overflow-hidden">
-                    {MONEDAS_COBRO.map((cur) => (
-                      <button
-                        key={cur}
-                        type="button"
-                        onClick={() => handleSetCurrency(cur)}
-                        className={`flex-1 py-2 text-[13px] font-semibold ${
-                          currency === cur
-                            ? 'bg-[#111] text-white'
-                            : 'text-[#666] hover:bg-[#f5f3eb]'
-                        }`}
+              <div>
+                <label
+                  htmlFor="cobro-fecha"
+                  className="block text-[12px] font-mono font-bold uppercase tracking-wide text-[#888] mb-1.5"
+                >
+                  Fecha
+                </label>
+                <input
+                  id="cobro-fecha"
+                  type="date"
+                  className="input-base"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                />
+              </div>
+
+              {/* Una fila por forma de pago: se llenan las que apliquen (p. ej.
+                  $500 en USD y $500 en Intercambio) y un solo botón las guarda. */}
+              <div className="space-y-2.5">
+                <p className="text-[12px] font-mono font-bold uppercase tracking-wide text-[#888]">
+                  Forma de pago (monto en USD)
+                </p>
+                {FORMAS.map((f) => (
+                  <div key={f.key} className="space-y-1.5">
+                    <div className="grid grid-cols-[88px_1fr_1fr] items-center gap-2">
+                      <span className="text-[12.5px] font-semibold text-[#333]">{f.label}</span>
+                      <input
+                        type="number"
+                        min="0"
+                        aria-label={`Monto ${f.key}`}
+                        className="input-base"
+                        placeholder="0.00"
+                        value={valorDe[f.key]}
+                        onChange={(e) => cambiarMonto(f.key, e.target.value)}
+                      />
+                      <select
+                        aria-label={`Método ${f.key}`}
+                        className="input-base"
+                        value={metodos[f.key]}
+                        onChange={(e) =>
+                          setMetodos((prev) => ({ ...prev, [f.key]: e.target.value }))
+                        }
                       >
-                        {cur}
-                      </button>
-                    ))}
+                        {f.metodos.map((m) => (
+                          <option key={m}>{m}</option>
+                        ))}
+                      </select>
+                    </div>
+                    {Number(valorDe[f.key]) > 0 && (
+                      <input
+                        type="text"
+                        aria-label={`Nota ${f.key}`}
+                        className="input-base"
+                        value={notas[f.key]}
+                        onChange={(e) => setNotas((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                        placeholder={
+                          f.key === 'Intercambio'
+                            ? 'Qué se recibió a cambio (ej. 3 sesiones de fotos)'
+                            : 'Nota (opcional): referencia, banco…'
+                        }
+                      />
+                    )}
                   </div>
-                </div>
+                ))}
+                <p className={`text-[12px] ${falta < -0.5 ? 'text-[#D6453F]' : 'text-[#666]'}`}>
+                  Asignado {fmtUSD(asignado)} de {fmtUSD(pendiente)} ·{' '}
+                  {falta < -0.5
+                    ? `Excede por ${fmtUSD(-falta)}`
+                    : `Falta ${fmtUSD(Math.max(falta, 0))}`}
+                </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[12px] font-mono font-bold uppercase tracking-wide text-[#888] mb-1.5">
-                    Método de pago
-                  </label>
-                  <select
-                    className="input-base"
-                    value={method}
-                    onChange={(e) => setMethod(e.target.value)}
-                  >
-                    {metodos.map((m) => (
-                      <option key={m}>{m}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[12px] font-mono font-bold uppercase tracking-wide text-[#888] mb-1.5">
-                    Fecha
-                  </label>
-                  <input
-                    type="date"
-                    className="input-base"
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              {isBs && (
+              {bsActivo && (
                 <div className="rounded-xl border border-[#e0ddd4] p-3 space-y-3">
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
@@ -451,6 +477,7 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
                       <input
                         type="number"
                         step="0.0001"
+                        aria-label="Tasa personalizada"
                         className="input-base"
                         value={manualRate}
                         onChange={(e) => setManualRate(e.target.value)}
@@ -486,23 +513,6 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
                   )}
                 </div>
               )}
-
-              <div>
-                <label className="block text-[12px] font-mono font-bold uppercase tracking-wide text-[#888] mb-1.5">
-                  Nota (opcional)
-                </label>
-                <input
-                  type="text"
-                  className="input-base"
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  placeholder={
-                    isCanje
-                      ? 'Qué se recibió a cambio (ej. 3 sesiones de fotos)'
-                      : 'Ej. referencia, banco, tasa Bs…'
-                  }
-                />
-              </div>
             </>
           )}
 

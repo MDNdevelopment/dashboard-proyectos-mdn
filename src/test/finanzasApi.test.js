@@ -94,6 +94,7 @@ import {
   createDistributionsBatch,
   createDistribution,
   addPayment,
+  addPaymentsBatch,
   updateMonthPcts,
   loadMonthTotals,
   loadAllMonthTotals,
@@ -285,6 +286,68 @@ describe('finanzasApi — addPayment', () => {
     expect(query.insert).toHaveBeenCalledWith(
       expect.objectContaining({ amount_bs: null, rate: null }),
     )
+  })
+})
+
+describe('finanzasApi — addPaymentsBatch', () => {
+  it('guarda dinero e intercambio con UN solo insert, mapeando cada fila', async () => {
+    const fromCallsBefore = supabase.from.mock.calls.length
+    await addPaymentsBatch('inv-1', [
+      { paidOn: '2026-08-05', amount: 500, method: 'Zelle', currency: 'USD' },
+      {
+        paidOn: '2026-08-05',
+        amount: 500,
+        method: 'Servicios',
+        note: '3 sesiones de fotos',
+        currency: 'Intercambio',
+      },
+    ])
+    // Un solo viaje a la BD: es lo que lo hace atómico (entran todas o ninguna).
+    expect(supabase.from.mock.calls.length).toBe(fromCallsBefore + 1)
+    const query = supabase.from.mock.results.at(-1).value
+    expect(supabase.from).toHaveBeenLastCalledWith('fin_payments')
+    expect(query.insert).toHaveBeenCalledTimes(1)
+    expect(query.insert).toHaveBeenCalledWith([
+      expect.objectContaining({
+        invoice_id: 'inv-1',
+        amount: 500,
+        currency: 'USD',
+        amount_bs: null,
+        rate: null,
+        rate_source: null,
+      }),
+      expect.objectContaining({
+        invoice_id: 'inv-1',
+        amount: 500,
+        currency: 'Intercambio',
+        note: '3 sesiones de fotos',
+        amount_bs: null,
+        rate: null,
+        rate_source: null,
+      }),
+    ])
+  })
+
+  it('conserva amount_bs, tasa y origen de la tasa en la fila en Bs', async () => {
+    await addPaymentsBatch('inv-1', [
+      {
+        paidOn: '2026-08-05',
+        amount: 100,
+        amountBs: 84000,
+        rate: 840,
+        rateSource: 'manual',
+        currency: 'Bs',
+      },
+    ])
+    const query = supabase.from.mock.results.at(-1).value
+    expect(query.insert).toHaveBeenCalledWith([
+      expect.objectContaining({
+        currency: 'Bs',
+        amount_bs: 84000,
+        rate: 840,
+        rate_source: 'manual',
+      }),
+    ])
   })
 })
 
