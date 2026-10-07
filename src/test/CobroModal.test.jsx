@@ -28,6 +28,7 @@ vi.mock('../components/finanzas/finanzasApi', () => ({
 }))
 
 import CobroModal from '../components/finanzas/CobroModal'
+import { MAX_PAGOS } from '../utils/cobroPagos'
 
 const invoice = {
   id: 'inv-1',
@@ -37,9 +38,15 @@ const invoice = {
   payments: [],
 }
 
-/** Llena la fila Bs (monto en USD); eso activa la sección de tasa. */
+const escribir = (etiqueta, valor) =>
+  fireEvent.change(screen.getByLabelText(etiqueta), { target: { value: valor } })
+
+const agregarPago = () => fireEvent.click(screen.getByRole('button', { name: '+ Agregar pago' }))
+
+/** Pone el primer pago en Bs con ese monto (USD); eso activa la sección de tasa. */
 function llenarBs(valor = '750') {
-  fireEvent.change(screen.getByLabelText('Monto Bs'), { target: { value: valor } })
+  escribir('Forma de pago 1', 'Bs')
+  escribir('Monto pago 1', valor)
 }
 
 beforeEach(() => {
@@ -61,7 +68,7 @@ describe('CobroModal — el monto siempre se escribe en USD', () => {
     expect(mockResolveRateBcv).not.toHaveBeenCalled()
   })
 
-  it('al llenar Bs, el USD sugerido baja a lo que falta y sigue siendo editable', async () => {
+  it('con un pago en Bs y otro en USD, el USD sugerido es lo que falta y sigue editable', async () => {
     mockResolveRateBcv.mockResolvedValue({
       data: { rate: 816, rateDate: '2026-09-23', source: 'bcv' },
       error: null,
@@ -77,11 +84,12 @@ describe('CobroModal — el monto siempre se escribe en USD', () => {
     )
     llenarBs('400')
     await screen.findByText(/BCV 23\/09\/2026/)
+    agregarPago()
+    escribir('Forma de pago 2', 'USD')
 
-    // 750 facturados − 400 en Bs → quedan 350 sugeridos en la fila USD.
-    const usd = screen.getByLabelText('Monto USD')
+    // 750 facturados − 400 en Bs → quedan 350 sugeridos en el segundo pago.
+    const usd = screen.getByLabelText('Monto pago 2')
     expect(usd).toHaveValue(350)
-    expect(usd).not.toHaveAttribute('readonly')
     fireEvent.change(usd, { target: { value: '300' } })
     expect(usd).toHaveValue(300)
   })
@@ -399,7 +407,7 @@ describe('CobroModal — retenciones de impuestos', () => {
   })
 })
 
-describe('CobroModal — cobro mixto dinero + intercambio', () => {
+describe('CobroModal — cobro dividido en varios pagos', () => {
   function renderModal(props = {}) {
     const onClose = vi.fn()
     const onSaved = vi.fn()
@@ -416,16 +424,26 @@ describe('CobroModal — cobro mixto dinero + intercambio', () => {
     return { onClose, onSaved }
   }
 
-  const escribir = (etiqueta, valor) =>
-    fireEvent.change(screen.getByLabelText(etiqueta), { target: { value: valor } })
+  const registrar = () => fireEvent.click(screen.getByRole('button', { name: 'Registrar cobro' }))
 
-  it('dinero e intercambio van en UN solo guardado, una fila por forma', async () => {
+  it('arranca con un solo pago en USD con todo el pendiente y sin botón de quitar', () => {
     renderModal()
-    escribir('Monto USD', '375')
-    escribir('Monto Intercambio', '375')
-    escribir('Nota Intercambio', '3 sesiones de fotos')
+    expect(screen.getByLabelText('Forma de pago 1')).toHaveValue('USD')
+    expect(screen.getByLabelText('Monto pago 1')).toHaveValue(750)
+    expect(screen.queryByLabelText('Monto pago 2')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Quitar pago/ })).not.toBeInTheDocument()
+  })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Registrar cobro' }))
+  it('dinero e intercambio van en UN solo guardado, un abono por pago', async () => {
+    renderModal()
+    escribir('Monto pago 1', '375')
+    agregarPago()
+    // El segundo pago arranca en Intercambio y ya trae lo que falta.
+    expect(screen.getByLabelText('Forma de pago 2')).toHaveValue('Intercambio')
+    expect(screen.getByLabelText('Monto pago 2')).toHaveValue(375)
+    escribir('Nota pago 2', '3 sesiones de fotos')
+
+    registrar()
     await waitFor(() => expect(mockAddPaymentsBatch).toHaveBeenCalledTimes(1))
     expect(mockAddPaymentsBatch).toHaveBeenCalledWith('inv-1', [
       expect.objectContaining({
@@ -448,64 +466,130 @@ describe('CobroModal — cobro mixto dinero + intercambio', () => {
     ])
   })
 
-  it('escribir en Intercambio deja la fila USD con lo que falta, sin hacer cuentas', () => {
+  it('bajar el primer pago reparte el resto en el segundo, sin hacer cuentas', () => {
     renderModal()
-    expect(screen.getByLabelText('Monto USD')).toHaveValue(750)
-    escribir('Monto Intercambio', '250')
-    expect(screen.getByLabelText('Monto USD')).toHaveValue(500)
+    agregarPago()
+    // Con el primero en 750 no queda saldo para el segundo…
+    expect(screen.getByLabelText('Monto pago 2')).toHaveValue(null)
+    // …pero al bajar el primero, el segundo toma la diferencia solo.
+    escribir('Monto pago 1', '500')
+    expect(screen.getByLabelText('Monto pago 2')).toHaveValue(250)
     expect(screen.getByText(/Falta \$0/)).toBeInTheDocument()
   })
 
-  it('USD + Bs + Intercambio a la vez: la tasa solo se pide por la fila Bs', async () => {
+  it('USD + Intercambio + Bs: la tasa se pide una sola vez, por el pago en Bs', async () => {
     mockResolveRateBcv.mockResolvedValue({
       data: { rate: 800, rateDate: '2026-09-23', source: 'bcv' },
       error: null,
     })
     renderModal()
-    escribir('Monto USD', '300')
-    escribir('Monto Intercambio', '250')
+    escribir('Monto pago 1', '300')
+    agregarPago()
+    escribir('Monto pago 2', '250')
     expect(screen.queryByText('Tasa BCV')).not.toBeInTheDocument()
 
-    escribir('Monto Bs', '200')
+    agregarPago() // el tercero es Bs y trae los 200 que faltan
+    expect(screen.getByLabelText('Forma de pago 3')).toHaveValue('Bs')
     await screen.findByText(/BCV 23\/09\/2026/)
-    fireEvent.click(screen.getByRole('button', { name: 'Registrar cobro' }))
+    expect(screen.getAllByText('Tasa BCV')).toHaveLength(1)
 
+    registrar()
     await waitFor(() => expect(mockAddPaymentsBatch).toHaveBeenCalledTimes(1))
     const [, filas] = mockAddPaymentsBatch.mock.calls[0]
     expect(filas.map((f) => [f.currency, f.amount])).toEqual([
       ['USD', 300],
-      ['Bs', 200],
       ['Intercambio', 250],
+      ['Bs', 200],
     ])
-    expect(filas[1]).toEqual(
+    expect(filas[2]).toEqual(
       expect.objectContaining({ amountBs: 160000, rate: 800, rateSource: 'bcv' }),
     )
   })
 
+  it('dos pagos en Bs comparten una sola tasa', async () => {
+    mockResolveRateBcv.mockResolvedValue({
+      data: { rate: 816, rateDate: '2026-09-23', source: 'bcv' },
+      error: null,
+    })
+    renderModal()
+    llenarBs('400')
+    agregarPago()
+    escribir('Forma de pago 2', 'Bs')
+    escribir('Monto pago 2', '350')
+    await screen.findByText(/BCV 23\/09\/2026/)
+    expect(screen.getAllByText('Tasa BCV')).toHaveLength(1)
+
+    registrar()
+    await waitFor(() => expect(mockAddPaymentsBatch).toHaveBeenCalledTimes(1))
+    const [, filas] = mockAddPaymentsBatch.mock.calls[0]
+    expect(filas.map((f) => [f.amount, f.amountBs, f.rate])).toEqual([
+      [400, 326400, 816],
+      [350, 285600, 816],
+    ])
+  })
+
+  it('se puede repetir una forma con otro método (Zelle + Efectivo $)', async () => {
+    renderModal()
+    escribir('Monto pago 1', '500')
+    agregarPago()
+    escribir('Forma de pago 2', 'USD')
+    escribir('Método pago 2', 'Efectivo $')
+
+    registrar()
+    await waitFor(() => expect(mockAddPaymentsBatch).toHaveBeenCalledTimes(1))
+    const [, filas] = mockAddPaymentsBatch.mock.calls[0]
+    expect(filas.map((f) => [f.currency, f.method, f.amount])).toEqual([
+      ['USD', 'Zelle', 500],
+      ['USD', 'Efectivo $', 250],
+    ])
+  })
+
+  it('✕ quita un pago y el que queda vuelve a autocompletarse', () => {
+    renderModal()
+    escribir('Monto pago 1', '500')
+    agregarPago()
+    fireEvent.click(screen.getByRole('button', { name: 'Quitar pago 1' }))
+
+    expect(screen.queryByLabelText('Monto pago 2')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Monto pago 1')).toHaveValue(750)
+    expect(screen.queryByRole('button', { name: /Quitar pago/ })).not.toBeInTheDocument()
+  })
+
+  it('"+ Agregar pago" se deshabilita al llegar al tope de pagos', () => {
+    renderModal()
+    const boton = screen.getByRole('button', { name: '+ Agregar pago' })
+    for (let i = 1; i < MAX_PAGOS; i++) fireEvent.click(boton)
+    expect(screen.getByLabelText(`Monto pago ${MAX_PAGOS}`)).toBeInTheDocument()
+    expect(boton).toBeDisabled()
+  })
+
   it('si lo asignado supera lo pendiente, avisa y no guarda nada', async () => {
     renderModal()
-    escribir('Monto USD', '500')
-    escribir('Monto Intercambio', '500')
+    escribir('Monto pago 1', '500')
+    agregarPago()
+    escribir('Monto pago 2', '500')
+    expect(screen.getByText(/Excede por \$250/)).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Registrar cobro' }))
+    registrar()
     expect(await screen.findByText('No puedes cobrar más de lo pendiente')).toBeInTheDocument()
     expect(mockAddPaymentsBatch).not.toHaveBeenCalled()
   })
 
-  it('un cobro parcial deja el modal abierto con lo que falta precargado', async () => {
+  it('un cobro parcial deja el modal abierto con un pago nuevo que trae lo que falta', async () => {
     const { onClose, onSaved } = renderModal()
-    escribir('Monto USD', '375')
-    fireEvent.click(screen.getByRole('button', { name: 'Registrar cobro' }))
+    escribir('Monto pago 1', '375')
+    registrar()
 
     await waitFor(() => expect(onSaved).toHaveBeenCalled())
     expect(onClose).not.toHaveBeenCalled()
-    await waitFor(() => expect(screen.getByLabelText('Monto USD')).toHaveValue(750))
-    expect(screen.getByLabelText('Monto Intercambio')).toHaveValue(null)
+    // La lista se reinicia a un solo pago autocompletado.
+    await waitFor(() => expect(screen.getByLabelText('Monto pago 1')).toHaveValue(750))
+    expect(screen.queryByLabelText('Monto pago 2')).not.toBeInTheDocument()
   })
 
   it('un cobro que salda la factura cierra el modal', async () => {
     const { onClose } = renderModal()
-    fireEvent.click(screen.getByRole('button', { name: 'Registrar cobro' }))
+    registrar()
     await waitFor(() => expect(onClose).toHaveBeenCalled())
   })
 
@@ -520,6 +604,18 @@ describe('CobroModal — cobro mixto dinero + intercambio', () => {
     // Cobrado (dinero) en $0; el canje aparece en su propia card y en el abono.
     expect(screen.getAllByText('Intercambio').length).toBeGreaterThan(1)
     // El pendiente sugerido descuenta el canje: 750 − 250.
-    expect(screen.getByLabelText('Monto USD')).toHaveValue(500)
+    expect(screen.getByLabelText('Monto pago 1')).toHaveValue(500)
+  })
+
+  it('la fecha por defecto es la de HOY en hora local, no la UTC', () => {
+    // 22:30 locales: en una zona detrás de UTC (Caracas), toISOString() ya diría el día siguiente.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      vi.setSystemTime(new Date(2026, 9, 7, 22, 30))
+      renderModal()
+      expect(screen.getByLabelText('Fecha')).toHaveValue('2026-10-07')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
