@@ -134,19 +134,15 @@ describe('EdicionSection', () => {
     expect(onPiezaDeleted).toHaveBeenCalledWith('z2')
   })
 
-  it('pauta vieja (filas sueltas) se muestra en solo lectura con resumen', () => {
+  it('ya no hay modo solo lectura: la matriz editable se muestra aunque queden filas sueltas', () => {
     setup({
       piezas: [
         { id: 'a', es_lote: false, editor_user_id: 'e1', formato: 'R', status: 'listo' },
-        { id: 'b', es_lote: false, editor_user_id: 'e1', formato: 'R', status: 'pendiente' },
+        lote(),
       ],
     })
-    expect(screen.getByText('registro anterior, solo lectura')).toBeInTheDocument()
-    expect(screen.queryByText('+ agregar editor')).not.toBeInTheDocument()
-    const row = screen.getByText('Eva Ed').closest('tr')
-    expect(row).toHaveTextContent('Reel')
-    expect(row).toHaveTextContent('2')
-    expect(row).toHaveTextContent('1')
+    expect(screen.queryByText('registro anterior, solo lectura')).not.toBeInTheDocument()
+    expect(screen.getByText('+ agregar editor')).toBeInTheDocument()
   })
 
   it('sin captura avisa que el cupo sale de lo capturado', () => {

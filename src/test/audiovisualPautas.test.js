@@ -12,8 +12,6 @@ import {
   lotesMatrix,
   loteFor,
   planLoteChange,
-  isLegacyPiezas,
-  legacyEditorSummary,
   editorRemovable,
   pautaPermissions,
   pendingApprovalCount,
@@ -168,6 +166,25 @@ describe('syncSalieronFromGrabacion', () => {
     const next = syncSalieronFromGrabacion(pauta({ formats: ['R'] }), { V: { u1: 3 } })
     expect(next).toEqual({ R: { salieron: 0, editadas: 0 } })
   })
+
+  it('pauta vieja: un formato sin captura previa conserva su salieron tecleado a mano', () => {
+    const p = pauta({
+      formats: ['V', 'R'],
+      piezas_por_formato: { V: { salieron: 4, editadas: 0 }, R: { salieron: 6, editadas: 2 } },
+      grabacion_por_formato: {},
+    })
+    const next = syncSalieronFromGrabacion(p, { V: { u1: 3 }, R: {} })
+    expect(next).toEqual({ V: { salieron: 3, editadas: 0 }, R: { salieron: 6, editadas: 2 } })
+  })
+
+  it('bajar a 0 la última captura de un formato sí lo deja en 0', () => {
+    const p = pauta({
+      formats: ['V'],
+      piezas_por_formato: { V: { salieron: 3, editadas: 0 } },
+      grabacion_por_formato: { V: { u1: 3 } },
+    })
+    expect(syncSalieronFromGrabacion(p, { V: {} })).toEqual({ V: { salieron: 0, editadas: 0 } })
+  })
 })
 
 describe('lotes por editor × formato', () => {
@@ -230,51 +247,6 @@ describe('lotes por editor × formato', () => {
     })
     expect(planLoteChange({ lote: l, key: 'listas', delta: 0 }).action).toBe('noop')
     expect(planLoteChange({ lote: null, key: 'listas', delta: 1 }).action).toBe('noop')
-  })
-
-  it('isLegacyPiezas / legacyEditorSummary leen filas sueltas y lotes por igual', () => {
-    const piezas = [
-      { id: 'a', es_lote: false, editor_user_id: 'u1', formato: 'V', status: 'listo' },
-      { id: 'b', es_lote: false, editor_user_id: 'u1', formato: 'V', status: 'pendiente' },
-      { id: 'c', es_lote: false, editor_user_id: 'u1', formato: 'V', status: 'cancelado' },
-      lote({ id: 'd', editor_user_id: 'u2', formato: 'F', cantidad: 10, listas: 4 }),
-      { id: 'e', es_lote: false, editor_user_id: null, formato: null, status: 'listo' },
-    ]
-    expect(isLegacyPiezas(piezas)).toBe(true)
-    expect(isLegacyPiezas([lote()])).toBe(false)
-    expect(isLegacyPiezas([])).toBe(false)
-    expect(legacyEditorSummary(piezas, users)).toEqual([
-      { editorId: 'u1', name: 'Ana Pérez', formato: 'V', unidades: 2, listas: 1 },
-      { editorId: 'u2', name: 'Luis Gómez', formato: 'F', unidades: 10, listas: 4 },
-      { editorId: null, name: 'Sin asignar', formato: null, unidades: 1, listas: 1 },
-    ])
-  })
-
-  it('una fila suelta que duplica un lote del mismo (editor, formato) no suma ni fuerza solo lectura', () => {
-    const suelta = (id) => ({
-      id,
-      es_lote: false,
-      editor_user_id: 'u1',
-      formato: 'R',
-      cantidad: 1,
-      listas: 1,
-      status: 'listo',
-    })
-    const duplicada = [
-      lote({ id: 'l', editor_user_id: 'u1', formato: 'R', cantidad: 4, listas: 4 }),
-      suelta('a'),
-      suelta('b'),
-      suelta('c'),
-      suelta('d'),
-    ]
-    expect(isLegacyPiezas(duplicada)).toBe(false)
-    expect(legacyEditorSummary(duplicada, users)).toEqual([
-      { editorId: 'u1', name: 'Ana Pérez', formato: 'R', unidades: 4, listas: 4 },
-    ])
-
-    // Sueltas de OTRO formato del mismo editor siguen siendo registro anterior.
-    const mixta = [lote({ id: 'l', editor_user_id: 'u1', formato: 'F' }), suelta('a')]
-    expect(isLegacyPiezas(mixta)).toBe(true)
   })
 
   it('editorRemovable solo si ningún lote tiene entregas', () => {

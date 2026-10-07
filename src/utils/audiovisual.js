@@ -1096,12 +1096,16 @@ export function syncRecursoIds(pauta, nextGrabacion) {
  */
 export function syncSalieronFromGrabacion(pauta, grabacion) {
   const next = piezasPorFormato(pauta)
+  const antes = grabacionPorFormato(pauta)
   Object.keys(next).forEach((code) => {
     const salieron = Object.values(grabacion?.[code] ?? {}).reduce(
       (sum, n) => sum + (Math.max(0, Math.round(Number(n))) || 0),
       0,
     )
-    next[code] = { ...next[code], salieron }
+    // Pauta vieja: `salieron` se tecleó a mano y este formato nunca tuvo captura. Tocar
+    // otro formato no debe ponerlo en 0 (dejaría la Edición sin cupo).
+    const manual = salieron === 0 && Object.keys(antes[code] ?? {}).length === 0
+    if (!manual) next[code] = { ...next[code], salieron }
   })
   return next
 }
@@ -1195,8 +1199,7 @@ export function estudioSlotsForDay(pautas, date, excludeId = null) {
 // ─── Lotes por editor × formato (Edición rediseñada) ───────────────────────
 
 /**
- * Matriz editor × formato de los LOTES de una pauta. Solo mira `es_lote` (las filas
- * sueltas del modelo viejo se tratan en `isLegacyPiezas`/`legacyEditorSummary`). La clave
+ * Matriz editor × formato de los LOTES de una pauta. Solo mira `es_lote`. La clave
  * `null` agrupa los lotes huérfanos (sin editor).
  * @param {Array} piezas — piezas de UNA pauta
  * @returns {{editorIds: Array<string|null>, byEditor: Map<string|null, Record<string, object>>}}
@@ -1250,51 +1253,6 @@ export function planLoteChange({ lote, key, delta, max = Infinity }) {
   }
   if (!lote) return { action: 'insert', fields: { cantidad: next, listas: 0 }, applied: next }
   return { action: 'update', fields: { cantidad: next }, applied: next - cantidad }
-}
-
-/** true si la pauta tiene filas del modelo viejo (una pieza por fila) → Edición en solo lectura. */
-export function isLegacyPiezas(piezas) {
-  return piezasLegacy(piezas).length > 0
-}
-
-/**
- * Filas sueltas del modelo viejo que NO están cubiertas por un lote del mismo (editor,
- * formato). Una suelta cubierta duplica al lote: no suma ni fuerza el modo solo lectura.
- */
-function piezasLegacy(piezas) {
-  const keyOf = (pz) => `${pz.editor_user_id ?? ''}|${pz.formato ?? ''}`
-  const lotes = new Set((piezas ?? []).filter((pz) => pz.es_lote).map(keyOf))
-  return (piezas ?? []).filter((pz) => !pz.es_lote && !lotes.has(keyOf(pz)))
-}
-
-/**
- * Resumen por (editor, formato) de las piezas de una pauta vieja, leyendo filas sueltas y
- * lotes por igual (`piezaUnidades`/`piezaListas`). Las canceladas no cuentan.
- * @returns {Array<{editorId:string|null, name:string, formato:string|null, unidades:number, listas:number}>}
- */
-export function legacyEditorSummary(piezas, usersById) {
-  const acc = new Map()
-  const sueltas = new Set(piezasLegacy(piezas))
-  ;(piezas ?? [])
-    .filter((pz) => pz.status !== 'cancelado' && (pz.es_lote || sueltas.has(pz)))
-    .forEach((pz) => {
-      const editorId = pz.editor_user_id ?? null
-      const formato = pz.formato ?? null
-      const key = `${editorId ?? ''}|${formato ?? ''}`
-      if (!acc.has(key)) {
-        acc.set(key, {
-          editorId,
-          name: editorLabel(editorId, usersById),
-          formato,
-          unidades: 0,
-          listas: 0,
-        })
-      }
-      const e = acc.get(key)
-      e.unidades += piezaUnidades(pz)
-      e.listas += piezaListas(pz)
-    })
-  return [...acc.values()]
 }
 
 /** Un editor se puede quitar de una pauta solo si ninguno de sus lotes tiene entregas. */

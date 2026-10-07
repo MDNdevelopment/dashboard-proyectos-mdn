@@ -10,8 +10,6 @@ import {
   lotesMatrix,
   loteFor,
   planLoteChange,
-  isLegacyPiezas,
-  legacyEditorSummary,
   editorRemovable,
   editorLabel,
   canActOnEditorGroup,
@@ -23,7 +21,6 @@ import {
  * tocan) y listas (cuántas entregó). Cada celda es un lote (`av_pauta_piezas.es_lote`).
  * El cupo de un formato es `salieron − asignadas a todos`, con `salieron` derivado de la
  * captura. Un editor puede mover solo sus "listas"; quien puede editar la pauta mueve todo.
- * Pautas con filas del modelo viejo (`isLegacyPiezas`) se muestran en solo lectura.
  */
 export default function EdicionSection({
   pauta,
@@ -40,7 +37,6 @@ export default function EdicionSection({
   const [pickerOpen, setPickerOpen] = useState(false)
   const activeFormats = FORMAT_KEYS.filter((code) => (pauta.formats ?? []).includes(code))
   const breakdown = piezasPorFormato(pauta)
-  const legacy = isLegacyPiezas(piezas)
   const { editorIds, byEditor } = lotesMatrix(piezas)
 
   const asignadasPorFormato = {}
@@ -91,36 +87,6 @@ export default function EdicionSection({
   }
 
   const sinCaptura = activeFormats.every((code) => (breakdown[code]?.salieron ?? 0) === 0)
-
-  if (legacy) {
-    const rows = legacyEditorSummary(piezas, usersById)
-    return (
-      <Block title="Edición" hint="registro anterior, solo lectura">
-        <table className="w-full text-[12.5px]">
-          <thead>
-            <tr className="text-[10.5px] font-mono uppercase tracking-wide text-[#999] text-left">
-              <th className="py-1 pr-2">Editor</th>
-              <th className="py-1 pr-2">Formato</th>
-              <th className="py-1 pr-2 text-right">Asignadas</th>
-              <th className="py-1 text-right">Listas</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={`${r.editorId}-${r.formato}`} className="border-t border-[#f2efe6]">
-                <td className="py-1.5 pr-2">{r.name}</td>
-                <td className="py-1.5 pr-2 text-[#777]">
-                  {r.formato ? FORMAT_LABELS[r.formato] : 'Sin formato'}
-                </td>
-                <td className="py-1.5 pr-2 text-right font-mono">{r.unidades}</td>
-                <td className="py-1.5 text-right font-mono">{r.listas}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Block>
-    )
-  }
 
   const available = (editorUsers ?? []).filter(
     (u) => !u.deleted_at && !editorIds.includes(u.user_id),
