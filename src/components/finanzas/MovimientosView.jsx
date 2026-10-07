@@ -151,7 +151,8 @@ export default function MovimientosView({
       if (fPartida === 'none' ? r.partida != null : fPartida !== 'all' && r.partida !== fPartida)
         return false
       if (fMoneda !== 'all' && r.moneda !== fMoneda) return false
-      if (fFlujo === 'real' && r.naturaleza === 'interno') return false
+      if (fFlujo === 'real' && (r.naturaleza === 'interno' || r.naturaleza === 'canje'))
+        return false
       if (fFlujo === 'interno' && r.naturaleza !== 'interno') return false
       if (needle) {
         // La nota también entra: es justo lo que uno busca ("factura 1042").

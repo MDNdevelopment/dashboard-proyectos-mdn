@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { fmtUSD } from '../../utils/metricsFinance'
 import { fmtDate } from '../../utils/formatDate'
-import { cobradoDe } from '../../utils/finanzas'
+import { cobradoDe, canjeadoDe, saldadoDe, esIntercambio } from '../../utils/finanzas'
 import { hayRetenciones, normalizarRetenciones, retencionesDe } from '../../utils/retenciones'
 import {
   addPayment,
@@ -12,7 +12,9 @@ import {
   loadUltimasRetenciones,
 } from './finanzasApi'
 import RetencionesFields from './RetencionesFields'
-import { METODOS_PAGO_USD, METODOS_PAGO_BS } from './constants'
+import { METODOS_PAGO_USD, METODOS_PAGO_BS, METODOS_PAGO_INTERCAMBIO } from './constants'
+
+const MONEDAS_COBRO = ['USD', 'Bs', 'Intercambio']
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10)
@@ -34,10 +36,16 @@ function fmtBs(n) {
  * nunca se escribe a mano. Una tasa personalizada nunca se sube a fin_rates
  * (eso contaminaría la BCV oficial del día que usan otros cobros/pagos) — se
  * guarda solo en el pago (`rate` + `rate_source='manual'`).
+ *
+ * Una factura puede saldarse parte en dinero y parte en intercambio (canje): la
+ * tercera opción del toggle registra un abono `currency='Intercambio'`, sin tasa
+ * ni Bs. Salda la factura pero no es caja (ver `cobradoDe` vs `saldadoDe`). Tras
+ * un abono parcial el modal sigue abierto con el pendiente restante, para
+ * registrar el siguiente.
  */
 /** Neto pendiente de una factura bajo una config de retenciones dada. */
 function pendienteLocalDe(invoice, ret) {
-  return retencionesDe(invoice?.amount, ret).neto - cobradoDe(invoice)
+  return retencionesDe(invoice?.amount, ret).neto - saldadoDe(invoice)
 }
 
 export default function CobroModal({ invoice, companyId, canManage, onClose, onSaved }) {
@@ -62,11 +70,13 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
   const [error, setError] = useState(null)
 
   const cobrado = cobradoDe(invoice)
+  const canjeado = canjeadoDe(invoice)
+  const saldado = cobrado + canjeado
   // Contra el estado del FORMULARIO, no contra lo guardado en la factura: al
   // marcar un impuesto la cifra sugerida tiene que moverse ya, que es lo que el
   // usuario necesita ver para decidir cuánto cobrar.
   const desglose = retencionesDe(invoice?.amount, ret)
-  const pendiente = desglose.neto - cobrado
+  const pendiente = desglose.neto - saldado
   const guardadas = normalizarRetenciones(invoice?.retenciones)
   const retCambiaron =
     ret.isl !== guardadas.isl ||
@@ -75,6 +85,8 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
     ret.ivaRate !== guardadas.ivaRate ||
     ret.municipal !== guardadas.municipal
   const isBs = currency === 'Bs'
+  const isCanje = currency === 'Intercambio'
+  const metodos = isCanje ? METODOS_PAGO_INTERCAMBIO : isBs ? METODOS_PAGO_BS : METODOS_PAGO_USD
   const effectiveRate = customRate ? Number(manualRate) || null : (rateInfo?.rate ?? null)
   const amountBs =
     isBs && effectiveRate && Number(amount) > 0
@@ -90,7 +102,7 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
     loadUltimasRetenciones(invoice.clientId).then(({ data }) => {
       if (cancelled || !data) return
       setRet(data)
-      setAmount((prev) => (montoTocado ? prev : retencionesDe(invoice.amount, data).neto - cobrado))
+      setAmount((prev) => (montoTocado ? prev : retencionesDe(invoice.amount, data).neto - saldado))
     })
     return () => {
       cancelled = true
@@ -103,7 +115,7 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
   function cambiarRet(patch) {
     setRet((prev) => {
       const next = { ...prev, ...patch }
-      if (!montoTocado) setAmount(retencionesDe(invoice?.amount, next).neto - cobrado)
+      if (!montoTocado) setAmount(retencionesDe(invoice?.amount, next).neto - saldado)
       return next
     })
   }
@@ -122,14 +134,18 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
 
   function handleSetCurrency(cur) {
     setCurrency(cur)
-    if (cur === 'USD') {
+    if (cur !== 'Bs') {
       // Sin esto, volver a Bs mostraría datos de una elección anterior.
       setManualRate('')
       setCustomRate(false)
-      setMethod(METODOS_PAGO_USD[0])
-    } else {
-      setMethod(METODOS_PAGO_BS[0])
     }
+    setMethod(
+      cur === 'Intercambio'
+        ? METODOS_PAGO_INTERCAMBIO[0]
+        : cur === 'Bs'
+          ? METODOS_PAGO_BS[0]
+          : METODOS_PAGO_USD[0],
+    )
   }
 
   function toggleCustomRate() {
@@ -186,6 +202,15 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
       return
     }
     onSaved()
+    const restante = pendiente - amt
+    if (restante > 0.5) {
+      // Abono parcial (p. ej. la mitad en dinero): sigue abierto con lo que falta
+      // precargado para registrar el resto, que puede ser en otra forma de pago.
+      setMontoTocado(false)
+      setAmount(Math.round(restante * 100) / 100)
+      setNote('')
+      return
+    }
     onClose()
   }
 
@@ -212,7 +237,7 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
         <div className="px-6 pt-5 pb-3 border-b border-[#ece9df]">
           <h2 className="text-[18px] font-bold text-[#111]">
-            {cobrado > 0.5 ? 'Cobro y abonos' : 'Registrar cobro'}
+            {saldado > 0.5 ? 'Cobro y abonos' : 'Registrar cobro'}
           </h2>
           <p className="text-[13px] text-[#888] mt-0.5">
             {invoice.clientName} · {invoice.concept} · facturado {fmtUSD(invoice.amount)}
@@ -230,6 +255,12 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
               <p className="text-[11px] text-[#999]">Cobrado</p>
               <p className="font-bold text-[#1F9D57]">{fmtUSD(cobrado)}</p>
             </div>
+            {canjeado > 0.5 && (
+              <div className="flex-1 bg-[#f5f3eb] rounded-lg px-3 py-2">
+                <p className="text-[11px] text-[#999]">Intercambio</p>
+                <p className="font-bold text-[#9a6800]">{fmtUSD(canjeado)}</p>
+              </div>
+            )}
             <div className="flex-1 bg-[#f5f3eb] rounded-lg px-3 py-2">
               <p className="text-[11px] text-[#999]">Pendiente</p>
               <p className={`font-bold ${pendiente > 0.5 ? 'text-[#D6453F]' : 'text-[#999]'}`}>
@@ -249,6 +280,11 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
                   >
                     <div>
                       <span className="font-bold text-[#111]">{fmtUSD(p.amount)}</span>{' '}
+                      {esIntercambio(p) && (
+                        <span className="px-1.5 py-0.5 rounded-full text-[10.5px] font-semibold bg-[#fff3d1] text-[#9a6800]">
+                          Intercambio
+                        </span>
+                      )}{' '}
                       {p.amountBs != null && (
                         <span className="text-[#999]">
                           (Bs {fmtBs(p.amountBs)} · tasa {p.rate}){' '}
@@ -330,10 +366,10 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
 
           {canManage && pendiente > 0.5 && (
             <>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
+              <div className="grid grid-cols-5 gap-3">
+                <div className="col-span-2">
                   <label className="block text-[12px] font-mono font-bold uppercase tracking-wide text-[#888] mb-1.5">
-                    Monto cobrado (USD)
+                    {isCanje ? 'Valor recibido (USD)' : 'Monto cobrado (USD)'}
                   </label>
                   <input
                     type="number"
@@ -345,12 +381,12 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
                     }}
                   />
                 </div>
-                <div>
+                <div className="col-span-3">
                   <label className="block text-[12px] font-mono font-bold uppercase tracking-wide text-[#888] mb-1.5">
-                    Moneda de pago
+                    Forma de pago
                   </label>
                   <div className="flex rounded-lg border border-[#e0ddd4] overflow-hidden">
-                    {['USD', 'Bs'].map((cur) => (
+                    {MONEDAS_COBRO.map((cur) => (
                       <button
                         key={cur}
                         type="button"
@@ -378,7 +414,7 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
                     value={method}
                     onChange={(e) => setMethod(e.target.value)}
                   >
-                    {(isBs ? METODOS_PAGO_BS : METODOS_PAGO_USD).map((m) => (
+                    {metodos.map((m) => (
                       <option key={m}>{m}</option>
                     ))}
                   </select>
@@ -460,7 +496,11 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
                   className="input-base"
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  placeholder="Ej. referencia, banco, tasa Bs…"
+                  placeholder={
+                    isCanje
+                      ? 'Qué se recibió a cambio (ej. 3 sesiones de fotos)'
+                      : 'Ej. referencia, banco, tasa Bs…'
+                  }
                 />
               </div>
             </>
@@ -480,7 +520,7 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
             >
               Cerrar
             </button>
-            {canManage && cobrado > 0.5 && (
+            {canManage && saldado > 0.5 && (
               <button
                 type="button"
                 onClick={handleQuitarCobro}

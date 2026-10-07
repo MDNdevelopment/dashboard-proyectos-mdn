@@ -146,7 +146,13 @@ export const METODOS_PAGO_USD = ['Zelle', 'Efectivo $', 'Otro']
  */
 export const METODOS_PAGO_BS = ['Transferencia Bs', 'Efectivo Bs', 'Otro']
 
-/** Unión de ambas, para listados/filtros que necesiten conocer todos los métodos. */
+/**
+ * Qué se recibió cuando el abono se paga en intercambio (canje). No es dinero: el
+ * detalle de lo recibido va en la nota del abono.
+ */
+export const METODOS_PAGO_INTERCAMBIO = ['Productos', 'Servicios', 'Otro']
+
+/** Unión de las formas de dinero, para listados/filtros que necesiten conocer todos los métodos. */
 export const METODOS_PAGO = [...new Set([...METODOS_PAGO_USD, ...METODOS_PAGO_BS])]
 
 export const FX_OP_TYPES = {
@@ -166,9 +172,12 @@ export const FX_OP_TYPES = {
  *   - `interno`: asignación a partida y traspaso entre partidas. El dólar ya entró
  *     en su cobro; contarlo otra vez al etiquetarlo infla el mes ~1.72×.
  *   - `ajuste`: conciliación de la Caja Bs contra el banco.
+ *   - `canje`: abono pagado en intercambio. Salda la factura pero no es dinero, así
+ *     que no suma a Entradas ni toca ninguna caja.
  */
 export const MOVIMIENTO_TIPOS = {
   cobro: { key: 'cobro', label: 'Cobro', naturaleza: 'ingreso', orden: 0 },
+  canje: { key: 'canje', label: 'Cobro en intercambio', naturaleza: 'canje', orden: 0.5 },
   asignacion: { key: 'asignacion', label: 'Asignación a partida', naturaleza: 'interno', orden: 1 },
   pago: { key: 'pago', label: 'Pago', naturaleza: 'egreso', orden: 2 },
   traspaso: {

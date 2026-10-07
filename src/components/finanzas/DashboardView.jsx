@@ -14,6 +14,8 @@ import { clientInMonth } from '../../utils/clientInMonth'
 import {
   totalFacturado,
   totalCobrado,
+  totalCanjeado,
+  saldadoDe,
   totalPorCobrar,
   totalNetoACobrar,
   totalRetenidoDelMes,
@@ -114,6 +116,9 @@ export default function DashboardView({
   const pcts = pctsDelMes(finMonth)
   const facturado = isSummary ? (monthTotals?.totalFacturado ?? 0) : totalFacturado(invoices)
   const cobrado = isSummary ? (monthTotals?.totalCobrado ?? 0) : totalCobrado(invoices)
+  // Intercambio recibido: salda facturas (baja "Por cobrar") pero no es caja, así
+  // que no entra en `cobrado` ni en lo que se reparte en partidas.
+  const canjeado = isSummary ? 0 : totalCanjeado(invoices)
   const porCobrar = isSummary ? 0 : totalPorCobrar(invoices)
   // En un mes resumen no hay filas de factura: sus totales ya son lo realmente
   // cobrado, así que el neto cae a lo facturado y todo se comporta como antes.
@@ -166,8 +171,7 @@ export default function DashboardView({
       const label = lineId ? (linesById.get(lineId)?.name ?? 'Sin línea') : 'Sin línea'
       const row = byLine.get(key) ?? { label, facturado: 0, cobrado: 0 }
       row.facturado += inv.amount
-      const cobradoInv = (inv.payments ?? []).reduce((a, p) => a + p.amount, 0)
-      row.cobrado += cobradoInv
+      row.cobrado += saldadoDe(inv)
       byLine.set(key, row)
     }
     return [...byLine.values()].filter((r) => r.facturado > 0)
@@ -243,7 +247,7 @@ export default function DashboardView({
           // retenciones no entran a caja, así que medirlas como cobranza
           // pendiente dejaría el indicador tope por debajo del 100% para
           // siempre.
-          sub={`Bs ${fmtUSD(cobradoBs)} · Divisa ${fmtUSD(cobradoDivisa)} · ${netoACobrar ? Math.round((cobrado / netoACobrar) * 100) : 0}%`}
+          sub={`Bs ${fmtUSD(cobradoBs)} · Divisa ${fmtUSD(cobradoDivisa)}${canjeado > 0 ? ` · Canje ${fmtUSD(canjeado)}` : ''} · ${netoACobrar ? Math.round(((cobrado + canjeado) / netoACobrar) * 100) : 0}%`}
           accent="#1F9D57"
         />
         <KpiCard

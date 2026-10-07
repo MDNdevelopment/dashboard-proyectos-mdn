@@ -400,3 +400,74 @@ describe('CobroModal — retenciones de impuestos', () => {
     expect(screen.getByLabelText('ISL')).toBeDisabled()
   })
 })
+
+describe('CobroModal — cobro mixto dinero + intercambio', () => {
+  function renderModal(props = {}) {
+    const onClose = vi.fn()
+    const onSaved = vi.fn()
+    render(
+      <CobroModal
+        invoice={invoice}
+        companyId="co-1"
+        canManage={true}
+        onClose={onClose}
+        onSaved={onSaved}
+        {...props}
+      />,
+    )
+    return { onClose, onSaved }
+  }
+
+  it('Intercambio no pide tasa y guarda el abono sin Bs ni tasa', async () => {
+    renderModal()
+    fireEvent.click(screen.getByRole('button', { name: 'Intercambio' }))
+
+    expect(screen.queryByText('Tasa BCV')).not.toBeInTheDocument()
+    expect(mockResolveRateBcv).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar cobro' }))
+    await waitFor(() => expect(mockAddPayment).toHaveBeenCalled())
+    expect(mockAddPayment).toHaveBeenCalledWith(
+      'inv-1',
+      expect.objectContaining({
+        currency: 'Intercambio',
+        amount: 750,
+        amountBs: null,
+        rate: null,
+        rateSource: null,
+        method: 'Productos',
+      }),
+    )
+  })
+
+  it('tras un abono parcial sigue abierto con el pendiente restante precargado', async () => {
+    const { onClose, onSaved } = renderModal()
+    const monto = screen.getAllByRole('spinbutton')[0]
+    fireEvent.change(monto, { target: { value: '375' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar cobro' }))
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled())
+    expect(onClose).not.toHaveBeenCalled()
+    await waitFor(() => expect(screen.getAllByRole('spinbutton')[0].value).toBe('375'))
+  })
+
+  it('un abono que salda la factura cierra el modal', async () => {
+    const { onClose } = renderModal()
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar cobro' }))
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
+  })
+
+  it('el intercambio ya recibido salda parte de la factura y no cuenta como cobrado', () => {
+    renderModal({
+      invoice: {
+        ...invoice,
+        payments: [{ id: 'p-1', amount: 250, currency: 'Intercambio', method: 'Productos' }],
+      },
+    })
+    expect(screen.getByText('Cobro y abonos')).toBeInTheDocument()
+    // Cobrado (dinero) en $0; el canje aparece en su propia card y en el abono.
+    expect(screen.getAllByText('Intercambio').length).toBeGreaterThan(1)
+    // El pendiente sugerido descuenta el canje: 750 − 250.
+    expect(screen.getAllByRole('spinbutton')[0].value).toBe('500')
+  })
+})
