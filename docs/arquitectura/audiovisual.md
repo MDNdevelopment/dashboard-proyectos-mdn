@@ -23,7 +23,7 @@
 - Recursos externos (gestión): `ExternalResourcesView.jsx`/`ExternalResourceModal.jsx` en `src/components/empresa/` (Empresa → Empleados).
 - Lógica pura en `src/utils/audiovisual.js`:
   - estudio: `STUDIO_WINDOW_HOURS`, `studioWindow`, `estudioConflicts`, `estudioSlotsForDay`, `lugarLabel`.
-  - lotes: `lotesMatrix`, `loteFor`, `planLoteChange`, `isLegacyPiezas`, `legacyEditorSummary`, `editorRemovable`.
+  - lotes: `lotesMatrix`, `loteFor`, `planLoteChange`, `editorRemovable`.
   - permisos: `pautaPermissions`, `canEditPiezasForPauta`, `canActOnEditorGroup`, `leadLineIdsFor`.
   - lista: `LIST_FILTERS`, `pautaMatchesList`, `pautaMatchesQuery`, `sortForList`.
   - reagendado: `reagendamientosOf`, `formatReagendamiento`.
@@ -55,7 +55,7 @@
 - `id`, `pauta_id→av_pautas (on delete cascade)`, `company_id`, `editor_user_id text` (uuid o `ext:uuid`, sin FK), `nombre`, `status` (`pendiente | en_edicion | espera_aprobacion | listo | cancelado`; en lotes lo deriva `av_pauta_piezas_sync_lote`), `position`, `formato` ⊆ {V,R,F}, `es_lote`, `cantidad ≥ 1`, `0 ≤ listas ≤ cantidad`, `prev_editor_user_id` (sin uso), `created_at`, `updated_at`.
 - Índice único parcial `av_pauta_piezas_lote_unico_por_editor_formato (pauta_id, editor_user_id, formato) WHERE es_lote`.
 - Trigger `av_pauta_piezas_sync_counters` recalcula `av_pautas.piezas_editadas` (suma de `listas`).
-- Pautas con filas sueltas del modelo anterior (`isLegacyPiezas`) se muestran en solo lectura. Una suelta que ya tiene un lote del mismo (editor, formato) es un duplicado: no suma ni fuerza el solo lectura, y `20261006160000_av_pauta_piezas_quitar_sueltas_duplicadas.sql` las borra cuando el lote las cubre exactamente.
+- Todas las pautas usan lotes (`es_lote = true`); ya no hay modo solo lectura. `20261007120000_av_pauta_piezas_convertir_sueltas_a_lotes.sql` convirtió las filas sueltas del modelo anterior: un lote por (pauta, editor, formato) con las piezas que había (`listas` = las que estaban en `listo`), conservando el `created_at` de la fila más antigua; si ya existía un lote, ese gana y las sueltas se descartan sin sumar. Un grupo sin editor queda como lote huérfano (`editor_user_id` null), que Edición muestra como "Sin editor".
 
 ### `external_resources`
 - `id, company_id, full_name, roles text[]` ⊆ {grabacion,edicion,ads}, `deleted_at`. Sin realtime (la vista recarga on-mount). Desacoplada de `users`.
