@@ -127,8 +127,10 @@ export function pagosReducer(pagos, accion) {
       return pagos.map((p) => {
         if (p.id !== accion.id) return p
         if (accion.campo === 'monto') {
-          // Vaciar el monto lo devuelve al autocompletado.
-          return { ...p, monto: accion.valor, tocado: accion.valor !== '' }
+          // Tocado SIEMPRE, incluso al vaciar el campo: si un input vacío volviera al
+          // autocompletado, al borrar el último dígito reaparecería el monto sugerido
+          // y no se podría escribir otro (borrar el 9 de 900 lo devolvía a 900).
+          return { ...p, monto: accion.valor, tocado: true }
         }
         if (accion.campo === 'forma') {
           // El método depende de la forma: se reinicia al primero de la nueva.

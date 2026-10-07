@@ -434,6 +434,12 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
                           ))}
                         </select>
                       </div>
+                      {p.forma === 'Intercambio' && (
+                        <p className="text-[11.5px] text-[#9a6800]">
+                          El monto es el equivalente en $ del intercambio: lo que vale, en dólares,
+                          lo que se recibe a cambio.
+                        </p>
+                      )}
                       <input
                         type="text"
                         aria-label={`Nota pago ${n}`}

@@ -587,6 +587,32 @@ describe('CobroModal — cobro dividido en varios pagos', () => {
     expect(screen.queryByLabelText('Monto pago 2')).not.toBeInTheDocument()
   })
 
+  // Regresión: con Intercambio (o cualquier forma) no se podía borrar el monto sugerido
+  // para escribir otro, porque al vaciar el campo el autocompletado reaparecía.
+  it('se puede borrar el monto sugerido y escribir otro', () => {
+    renderModal()
+    escribir('Forma de pago 1', 'Intercambio')
+    const monto = screen.getByLabelText('Monto pago 1')
+    expect(monto).toHaveValue(750)
+
+    for (const valor of ['75', '7', '']) {
+      fireEvent.change(monto, { target: { value: valor } })
+      expect(monto).toHaveValue(valor === '' ? null : Number(valor))
+    }
+    fireEvent.change(monto, { target: { value: '400' } })
+    expect(monto).toHaveValue(400)
+    expect(screen.getByText(/Falta \$350/)).toBeInTheDocument()
+  })
+
+  it('en Intercambio aclara que el monto es el equivalente en $; en dinero no', () => {
+    renderModal()
+    expect(screen.queryByText(/equivalente en \$ del intercambio/)).not.toBeInTheDocument()
+    escribir('Forma de pago 1', 'Intercambio')
+    expect(screen.getByText(/equivalente en \$ del intercambio/)).toBeInTheDocument()
+    escribir('Forma de pago 1', 'Bs')
+    expect(screen.queryByText(/equivalente en \$ del intercambio/)).not.toBeInTheDocument()
+  })
+
   it('un cobro que salda la factura cierra el modal', async () => {
     const { onClose } = renderModal()
     registrar()

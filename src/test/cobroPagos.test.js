@@ -137,13 +137,24 @@ describe('cobroPagos — pagosReducer', () => {
     expect(pagosReducer(uno, { tipo: 'quitar', id: 1 })).toBe(uno)
   })
 
-  it('editar el monto lo marca como tocado; vaciarlo lo devuelve al autocompletado', () => {
+  it('editar el monto lo marca como tocado', () => {
     let pagos = [pago(1)]
     pagos = pagosReducer(pagos, { tipo: 'editar', id: 1, campo: 'monto', valor: '250' })
     expect(pagos[0]).toMatchObject({ monto: '250', tocado: true })
-    pagos = pagosReducer(pagos, { tipo: 'editar', id: 1, campo: 'monto', valor: '' })
-    expect(pagos[0].tocado).toBe(false)
-    expect(montoMostrado(pagos, 0, 1000)).toBe('1000')
+  })
+
+  // Regresión: antes, vaciar el campo lo devolvía al autocompletado, así que al
+  // borrar el último dígito (el 9 de 900) reaparecía el monto sugerido al instante y
+  // no se podía escribir otro.
+  it('vaciar el campo lo deja vacío: el autocompletado NO reaparece', () => {
+    let pagos = [pago(1)]
+    expect(montoMostrado(pagos, 0, 900)).toBe('900')
+    for (const valor of ['90', '9', '']) {
+      pagos = pagosReducer(pagos, { tipo: 'editar', id: 1, campo: 'monto', valor })
+      expect(montoMostrado(pagos, 0, 900)).toBe(valor)
+    }
+    pagos = pagosReducer(pagos, { tipo: 'editar', id: 1, campo: 'monto', valor: '450' })
+    expect(montoMostrado(pagos, 0, 900)).toBe('450')
   })
 
   it('cambiar la forma reinicia el método al primero de esa forma', () => {
