@@ -81,7 +81,7 @@ describe('HuecosSugeridos', () => {
 
   it('en el estudio, las horas ocupadas no se pueden elegir y las avisadas sí', () => {
     const { onPickHora } = setup({ date: '2026-10-07' })
-    expect(horas().getAllByRole('button')).toHaveLength(10) // 08:00 … 17:00
+    expect(horas().getAllByRole('button')).toHaveLength(19) // 08:00, 08:30 … 17:00
     const ocupada = horas().getByRole('button', { name: /^13:00 · Fein/ })
     expect(ocupada).toBeDisabled()
     expect(horas().getByRole('button', { name: /^12:00 · Fein/ })).toBeDisabled()
@@ -91,6 +91,8 @@ describe('HuecosSugeridos', () => {
     expect(onPickHora).toHaveBeenCalledWith('16:00')
     fireEvent.click(horas().getByRole('button', { name: '09:00' }))
     expect(onPickHora).toHaveBeenCalledWith('09:00')
+    fireEvent.click(horas().getByRole('button', { name: '08:30' }))
+    expect(onPickHora).toHaveBeenCalledWith('08:30')
   })
 
   it('marca la hora ya elegida', () => {

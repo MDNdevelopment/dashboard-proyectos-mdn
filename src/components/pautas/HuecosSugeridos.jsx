@@ -14,7 +14,7 @@ const ESTADO_ICON = { libre: '', aviso: '⚠ ', ocupado: '✗ ' }
 
 /**
  * Elegir fecha y hora viendo primero lo que está libre: 10 días hábiles como fichas (o
- * cualquier otra fecha) y, para el día elegido, las horas 08:00–17:00 marcadas según el
+ * cualquier otra fecha) y, para el día elegido, las horas (cada 30 min, 08:00–17:00) marcadas según el
  * estudio / la carga de los recursos (`sugerirHuecos`). Controlado por `date` y `salida`.
  */
 export default function HuecosSugeridos({
@@ -109,7 +109,7 @@ export default function HuecosSugeridos({
                   title={h.motivo ?? undefined}
                   aria-label={`${h.hora}${h.motivo ? ` · ${h.motivo}` : ''}`}
                   onClick={() => onPickHora(h.hora)}
-                  className={`min-h-[44px] min-w-[72px] px-2 rounded-xl border text-[13px] font-mono font-semibold transition-colors ${
+                  className={`min-h-[44px] min-w-[64px] px-2 rounded-xl border text-[13px] font-mono font-semibold transition-colors ${
                     on ? 'bg-[#111] border-[#111] text-[#FFB800]' : ESTADO_STYLE[h.estado]
                   }`}
                 >
