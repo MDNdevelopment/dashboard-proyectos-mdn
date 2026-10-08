@@ -1707,7 +1707,7 @@ export function diasHabiles(from = new Date(), n = 10) {
 }
 
 /**
- * Horas candidatas (08:00–17:00) para una pauta en `date`, con su estado:
+ * Horas candidatas (cada 30 min, 08:00–17:00) para una pauta en `date`, con su estado:
  *  - estudio: 'ocupado' si choca con una confirmada de otro cliente; 'aviso' si choca con
  *    una solicitud pendiente o con una confirmada sin hora; 'libre' si no.
  *  - locación: 'aviso' si todos los recursos de audiovisual ya tienen RESOURCE_DAILY_LIMIT
@@ -1719,7 +1719,8 @@ export function sugerirHuecos(
   { clientId = null, lugarTipo = 'locacion', recursoIds = [] } = {},
 ) {
   const horas = []
-  for (let h = STUDIO_DAY_START; h <= 17; h++) horas.push(`${pad(h)}:00`)
+  for (let m = STUDIO_DAY_START * 60; m <= 17 * 60; m += 30)
+    horas.push(`${pad(Math.floor(m / 60))}:${pad(m % 60)}`)
   if (!date) return horas.map((hora) => ({ hora, estado: 'libre', motivo: null }))
   const delDia = (pautas ?? []).filter(
     (p) => !p.deleted_at && p.pauta_date === date && CONFIRMADAS.includes(p.status),

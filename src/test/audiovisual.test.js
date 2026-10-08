@@ -139,6 +139,7 @@ describe('formatCodes', () => {
 describe('formatTime12', () => {
   it('convierte horas de Postgres (HH:MM:SS) a 12h', () => {
     expect(formatTime12('09:05:00')).toBe('09:05 A.M.')
+    expect(formatTime12('08:30:00')).toBe('08:30 A.M.')
     expect(formatTime12('15:30:00')).toBe('03:30 P.M.')
     expect(formatTime12('00:00:00')).toBe('12:00 A.M.')
     expect(formatTime12('12:00:00')).toBe('12:00 P.M.')

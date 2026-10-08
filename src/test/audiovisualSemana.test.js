@@ -221,7 +221,12 @@ describe('huecos sugeridos', () => {
     ]
     const huecos = sugerirHuecos(list, '2026-10-07', { clientId: 'c1', lugarTipo: 'estudio' })
     const by = Object.fromEntries(huecos.map((h) => [h.hora, h]))
-    expect(huecos).toHaveLength(10)
+    expect(huecos).toHaveLength(19)
+    expect(huecos.map((h) => h.hora).slice(0, 3)).toEqual(['08:00', '08:30', '09:00'])
+    expect(by['08:30'].estado).toBe('libre')
+    expect(by['11:30']).toMatchObject({ estado: 'ocupado', motivo: 'Fein' })
+    expect(by['10:30'].estado).toBe('libre')
+    expect(by['15:30']).toMatchObject({ estado: 'aviso', motivo: 'solicitud de Push' })
     expect(by['09:00'].estado).toBe('libre')
     expect(by['12:00']).toMatchObject({ estado: 'ocupado', motivo: 'Fein' })
     expect(by['14:00'].estado).toBe('ocupado')
