@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import CnpDashboardView from '../components/cnp/CnpDashboardView'
 import CnpBaseView from '../components/cnp/CnpBaseView'
 import CnpModal from '../components/cnp/CnpModal'
+import { CNP_TYPES, cnpMatchesType } from '../components/cnp/constants'
 import { loadLines, loadClients } from '../components/metricas/metricsApi'
 import { currentMonthIndex, isClosed } from '../components/tareas/constants'
 import { MONTHS } from '../components/metricas/constants'
@@ -77,6 +78,8 @@ export default function CnpPage() {
   useEffect(() => {
     if (activeView === 'dashboard' && monthIdx == null) setMonthIdx(currentMonthIndex())
   }, [activeView, monthIdx])
+  // Tipo de CNP (Todos / Impresos / Audiovisual): recorta Dashboard y Base por igual.
+  const [typeFilter, setTypeFilter] = useState('all')
   // null = closed, undefined = new, object = edit
   const [cnpModal, setCnpModal] = useState(null)
 
@@ -238,11 +241,12 @@ export default function CnpPage() {
   const myCnps = myUserId ? cnps.filter((c) => c.assignee_id === myUserId) : []
   const myOpenCnpsCount = myCnps.filter((c) => !isClosed(c)).length
   const visibleLineIds = new Set(teams.map((t) => t.id))
-  const scopedCnps = isMine
+  const lineCnps = isMine
     ? myCnps
     : isAll
       ? cnps.filter((c) => visibleLineIds.has(c.line_id))
       : cnps.filter((c) => c.line_id === activeTeamId)
+  const scopedCnps = lineCnps.filter((c) => cnpMatchesType(c, typeFilter))
 
   return (
     <>
@@ -337,6 +341,28 @@ export default function CnpPage() {
                     {v.label}
                   </button>
                 ))}
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[12px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] mr-1">
+                  Tipo
+                </span>
+                <div className="flex bg-white border border-[#e0ddd4] rounded-lg p-0.5">
+                  {CNP_TYPES.map((t) => (
+                    <button
+                      key={t.key}
+                      onClick={() => setTypeFilter(t.key)}
+                      aria-pressed={typeFilter === t.key}
+                      aria-label={`Tipo: ${t.label}`}
+                      className={`px-2.5 py-1 rounded-md text-[13.5px] font-semibold transition-all ${
+                        typeFilter === t.key
+                          ? 'bg-[#FFB800] text-[#111]'
+                          : 'text-[#666] hover:text-[#111] hover:bg-[#f5f3eb]'
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="text-[12px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] mr-1">

@@ -149,6 +149,31 @@ describe('CnpPage', () => {
     expect(await screen.findByText('Creatina con sello de calidad')).toBeInTheDocument()
   })
 
+  it('filtra Base por tipo: Todos / Impresos / Audiovisual', async () => {
+    const user = userEvent.setup()
+    cnpRowsHolder.current = [
+      { ...CNP_ROW, id: 'a', title: 'Pieza gráfica' },
+      { ...CNP_ROW, id: 'b', title: 'Volante impreso', is_print: true },
+      { ...CNP_ROW, id: 'c', title: 'Reel de lanzamiento', is_audiovisual: true },
+    ]
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: 'Base' }))
+    expect(await screen.findByText('Pieza gráfica')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Tipo: Audiovisual' }))
+    expect(screen.getByText('Reel de lanzamiento')).toBeInTheDocument()
+    expect(screen.queryByText('Pieza gráfica')).not.toBeInTheDocument()
+    expect(screen.queryByText('Volante impreso')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Tipo: Impresos' }))
+    expect(screen.getByText('Volante impreso')).toBeInTheDocument()
+    expect(screen.queryByText('Reel de lanzamiento')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Tipo: Todos' }))
+    expect(screen.getByText('Pieza gráfica')).toBeInTheDocument()
+    expect(screen.getByText('Reel de lanzamiento')).toBeInTheDocument()
+  })
+
   it('opens the create modal from "Nuevo CNP" and sends the expected payload on submit', async () => {
     const user = userEvent.setup()
     renderPage()

@@ -5,6 +5,19 @@ import { ESTADOS, COL_META, isClosed, isBlocked, isLate } from '../tareas/consta
 
 export { ESTADOS, COL_META }
 
+export const CNP_TYPES = [
+  { key: 'all', label: 'Todos' },
+  { key: 'print', label: 'Impresos' },
+  { key: 'audiovisual', label: 'Audiovisual' },
+]
+
+/** Filtro de tipo de CNP: 'all' | 'print' (is_print) | 'audiovisual' (is_audiovisual). */
+export function cnpMatchesType(cnp, type) {
+  if (type === 'print') return !!cnp?.is_print
+  if (type === 'audiovisual') return !!cnp?.is_audiovisual
+  return true
+}
+
 /**
  * Un CNP pertenece al mes en que fue solicitado (created_at). A diferencia de
  * taskInMonth (tareas), los CNP no tienen request_date/closed_date ni concepto de
