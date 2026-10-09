@@ -66,14 +66,24 @@ export default function PagoPartidaModal({
   const [amountBs, setAmountBs] = useState('')
   const [rateInfo, setRateInfo] = useState(null)
   const [manualRate, setManualRate] = useState('')
+  const [customRate, setCustomRate] = useState(false)
   const [date, setDate] = useState(todayISO())
   const [sourcePartida, setSourcePartida] = useState(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
   const isBs = payIn === 'bs'
-  const rate =
-    rateInfo?.rate ?? (rateInfo?.source === 'missing' ? Number(manualRate) || null : null)
+  // Sin BCV disponible solo queda la tasa que escribe el usuario; con BCV, es opcional
+  // ("la tasa a la que pagué"). Solo aplica a este pago: no toca `fin_rates`.
+  const bcvMissing = rateInfo?.source === 'missing'
+  const usaTasaManual = customRate || bcvMissing
+  const rate = usaTasaManual ? Number(manualRate) || null : (rateInfo?.rate ?? null)
+
+  function toggleCustomRate() {
+    // Al pasar a personalizada se precarga la BCV para editarla, no para partir de cero.
+    if (!customRate && !manualRate && rateInfo?.rate) setManualRate(String(rateInfo.rate))
+    setCustomRate((v) => !v)
+  }
 
   // Al pagar en Bs, la BCV se resuelve sola (mismo camino que CobroModal); el
   // pago sigue registrándose en USD-equivalente, como siempre.
@@ -122,7 +132,7 @@ export default function PagoPartidaModal({
       }
     }
     if (isBs && (!Number(amountBs) || !rate)) {
-      setError('Ingresa el monto en Bs y asegúrate de tener una tasa BCV')
+      setError('Ingresa el monto en Bs y indica la tasa')
       return
     }
 
@@ -132,7 +142,7 @@ export default function PagoPartidaModal({
     // fin_distributions no tiene rate_source (esa columna es solo de fin_payments):
     // si no había ninguna tasa aplicable, se carga en fin_rates para los próximos
     // movimientos, igual que hace CobroModal.
-    if (isBs && rateInfo?.source === 'missing') {
+    if (isBs && bcvMissing) {
       await upsertRate({ companyId, rateDate: date, rateBcv: rate, userId: userProfile?.user_id })
     }
 
@@ -279,32 +289,62 @@ export default function PagoPartidaModal({
                 value={amountBs}
                 onChange={(e) => setAmountBs(e.target.value)}
               />
-              {rateInfo?.source === 'bcv' && (
-                <p className="text-[12px] text-[#666] mt-1.5">
-                  BCV {fmtDate(rateInfo.rateDate)}:{' '}
-                  <span className="font-mono">{fmtBs(rateInfo.rate)}</span>
-                </p>
-              )}
-              {rateInfo?.source === 'stale' && (
-                <p className="text-[12px] text-[#9a6800] mt-1.5">
-                  No hay tasa cargada para hoy — se usa la del {fmtDate(rateInfo.rateDate)}:{' '}
-                  <span className="font-mono">{fmtBs(rateInfo.rate)}</span>
-                </p>
-              )}
-              {rateInfo?.source === 'missing' && (
-                <div className="mt-1.5">
-                  <label className="block text-[12px] font-mono font-bold uppercase tracking-wide text-[#888] mb-1.5">
-                    No hay tasa BCV cargada — ingrésala
+              <div className="mt-2">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[12px] font-mono font-bold uppercase tracking-wide text-[#888]">
+                    {usaTasaManual ? 'Tasa de pago (Bs por USD)' : 'Tasa BCV'}
                   </label>
-                  <input
-                    type="number"
-                    step="0.0001"
-                    className="input-base"
-                    value={manualRate}
-                    onChange={(e) => setManualRate(e.target.value)}
-                  />
+                  {!bcvMissing && (
+                    <button
+                      type="button"
+                      onClick={toggleCustomRate}
+                      className="text-[11.5px] font-semibold text-[#666] hover:text-[#111] hover:underline"
+                    >
+                      {customRate ? 'Usar tasa BCV' : 'Usar tasa personalizada'}
+                    </button>
+                  )}
                 </div>
-              )}
+                {usaTasaManual ? (
+                  <>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      aria-label="Tasa de pago"
+                      className="input-base"
+                      value={manualRate}
+                      onChange={(e) => setManualRate(e.target.value)}
+                    />
+                    {bcvMissing ? (
+                      <p className="text-[12px] text-[#9a6800] mt-1.5">
+                        No hay tasa BCV cargada — ingresa la tasa a la que pagaste.
+                      </p>
+                    ) : (
+                      rateInfo?.rate && (
+                        <p className="text-[12px] text-[#666] mt-1.5">
+                          BCV {fmtDate(rateInfo.rateDate)}:{' '}
+                          <span className="font-mono">{fmtBs(rateInfo.rate)}</span>
+                        </p>
+                      )
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {rateInfo?.source === 'bcv' && (
+                      <p className="text-[12px] text-[#666]">
+                        BCV {fmtDate(rateInfo.rateDate)}:{' '}
+                        <span className="font-mono">{fmtBs(rateInfo.rate)}</span>
+                      </p>
+                    )}
+                    {rateInfo?.source === 'stale' && (
+                      <p className="text-[12px] text-[#9a6800]">
+                        No hay tasa cargada para hoy — se usa la del {fmtDate(rateInfo.rateDate)}:{' '}
+                        <span className="font-mono">{fmtBs(rateInfo.rate)}</span>
+                      </p>
+                    )}
+                    {!rateInfo && <p className="text-[12px] text-[#999]">Cargando tasa…</p>}
+                  </>
+                )}
+              </div>
             </div>
           )}
 
