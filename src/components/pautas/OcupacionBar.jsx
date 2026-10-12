@@ -34,7 +34,7 @@ export default function OcupacionBar({ pautas, range, usersById }) {
       </div>
       <div className="flex flex-wrap items-center gap-2" aria-label="Carga de recursos">
         <span className="font-mono uppercase tracking-wide text-[#999] text-[10.5px]">
-          Recursos
+          Pautas por recurso
         </span>
         {carga.length === 0 ? (
           <span className="text-[#bbb]">sin pautas asignadas</span>
