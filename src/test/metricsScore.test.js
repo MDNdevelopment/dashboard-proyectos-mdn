@@ -455,6 +455,18 @@ describe('calcPautas', () => {
 })
 
 // ─── calcPiezas (peso 10) ─────────────────────────────────────────────────────
+describe('calcPiezas con la fuente CNP audiovisual (solo informativa)', () => {
+  const rep = (piezas, editadas, cnp) => makeReport({ piezas: { piezas, editadas, cnp } })
+
+  it('los CNP audiovisuales no puntúan: los 10 pts se miden solo con las pautas', () => {
+    expect(calcPiezas(rep(4, 2, { solicitudes: 3, entregados: 3 }))).toBe(5)
+  })
+
+  it('sin pautas, 3/3 de CNP audiovisual sigue dando 0', () => {
+    expect(calcPiezas(rep(0, 0, { solicitudes: 3, entregados: 3 }))).toBe(0)
+  })
+})
+
 describe('calcPiezas', () => {
   it('retorna 10 cuando editadas === piezas (peso nuevo)', () => {
     const r = makeReport({ piezas: { piezas: 20, editadas: 20 } })

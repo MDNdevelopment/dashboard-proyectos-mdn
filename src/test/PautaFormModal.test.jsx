@@ -124,3 +124,22 @@ describe('PautaFormModal — editar', () => {
     expect(onSaved).not.toHaveBeenCalled()
   })
 })
+
+describe('PautaFormModal — recursos de una pauta ya agendada', () => {
+  const agendada = { ...pauta, status: 'programada', recurso_ids: ['u1'] }
+  const usersById = new Map([['u1', employees[0]]])
+
+  it('una solicitud no muestra Recursos (se eligen al aprobar y agendar)', () => {
+    setup({ recursoUsers: employees, usersById })
+    expect(screen.queryByText(/Recursos \(quién graba/)).not.toBeInTheDocument()
+  })
+
+  it('una pauta agendada permite cambiar los recursos y manda solo recurso_ids', async () => {
+    const { onSaved } = setup({ pauta: agendada, recursoUsers: employees, usersById })
+    expect(screen.getByText(/Recursos \(quién graba/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Quitar a Ana Pérez' }))
+    fireEvent.click(submit())
+    await waitFor(() => expect(onSaved).toHaveBeenCalled())
+    expect(updatePauta).toHaveBeenCalledWith('p1', { recurso_ids: [] })
+  })
+})

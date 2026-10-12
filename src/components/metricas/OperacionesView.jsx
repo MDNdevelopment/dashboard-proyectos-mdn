@@ -1063,7 +1063,7 @@ export default function OperacionesView({ line, companyId, year, month, closed =
         max={INDICATORS[5].peso}
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Field label="Piezas totales">
+          <Field label={isAvEra ? 'Piezas totales (pautas)' : 'Piezas totales'}>
             <input
               type="number"
               min="0"
@@ -1092,7 +1092,7 @@ export default function OperacionesView({ line, companyId, year, month, closed =
               <p className="mt-1 text-[12px] font-mono text-[#888]">Derivado de Audiovisual</p>
             )}
           </Field>
-          <Field label="Piezas editadas">
+          <Field label={isAvEra ? 'Piezas editadas (pautas)' : 'Piezas editadas'}>
             <input
               type="number"
               min="0"
@@ -1126,6 +1126,35 @@ export default function OperacionesView({ line, companyId, year, month, closed =
           <p className="text-[12px] text-[#888] bg-[#faf9f3] border border-[#e8e4d8] rounded-lg px-3 py-2 mt-3">
             {piezasPorGrupoResumen}
           </p>
+        )}
+        {/* Los CNP de audiovisual son pedidos de solo edición: se muestran aparte de las pautas,
+            con su propio entregado/solicitado, pero NO entran al puntaje (`calcPiezas` mide los
+            10 pts solo con las pautas). */}
+        {isAvEra && (
+          <div
+            className="overflow-x-auto mt-4"
+            title="Derivado automáticamente de CNP (los marcados como audiovisual)"
+          >
+            <table className="w-full text-[14px]">
+              <thead>
+                <tr className="text-left text-[11px] font-mono font-bold tracking-[0.1em] uppercase text-[#aaa]">
+                  <th className="pb-1.5 font-normal">Fuente</th>
+                  <th className="pb-1.5 font-normal text-right">Entregadas / Solicitadas</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-t border-[#ece9df]">
+                  <td className="py-1.5 text-[#333]">CNP audiovisual (solo edición)</td>
+                  <td className="py-1.5 text-right font-mono text-[#555]">
+                    {report.piezas.cnp?.entregados ?? 0} / {report.piezas.cnp?.solicitudes ?? 0}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <p className="mt-1 text-[12px] font-mono text-[#888]">
+              Derivado de CNP · solo informativo: el puntaje se mide únicamente con las pautas
+            </p>
+          </div>
         )}
       </Section>
 

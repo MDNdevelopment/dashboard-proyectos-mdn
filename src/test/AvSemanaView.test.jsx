@@ -107,6 +107,20 @@ function setup(props = {}) {
   return { onFields, onPautaClick, onGoDatos }
 }
 
+const CNPS = [
+  {
+    id: 'n1',
+    title: 'Reel lanzamiento',
+    client_id: 'c1',
+    status: 'En proceso',
+    is_audiovisual: true,
+    due_date: '2026-10-05',
+    assignee_id: 'r1',
+    pieces: [],
+  },
+]
+const clientsById = new Map([['c1', { id: 'c1', name: 'Smashack' }]])
+
 const grid = () => screen.getByTestId('semana-grid')
 
 describe('AvSemanaView — cabecera y navegación', () => {
@@ -238,5 +252,36 @@ describe('AvSemanaView — toggle Semana / Mes', () => {
     expect(screen.getByRole('button', { name: 'Mes' })).toHaveAttribute('aria-pressed', 'true')
     // Las alertas y el KPI del mes siguen visibles.
     expect(screen.getByRole('button', { name: 'Ver datos del mes' })).toBeInTheDocument()
+  })
+})
+
+describe('AvSemanaView — CNP pendientes en el chip de piezas atrasadas', () => {
+  it('el chip suma los CNP y el panel separa Pautas y CNPs; clic en un CNP lo abre', () => {
+    const onCnpClick = vi.fn()
+    setup({ cnps: CNPS, clientsById, onCnpClick })
+    fireEvent.click(screen.getByRole('button', { name: /1 CNP pendiente/ }))
+    expect(screen.getByRole('heading', { name: 'CNPs pendientes' })).toBeInTheDocument()
+    const card = screen.getByRole('button', { name: /CNP Reel lanzamiento · En proceso/ })
+    expect(card).toHaveTextContent('Smashack')
+    fireEvent.click(card)
+    expect(onCnpClick).toHaveBeenCalledWith(CNPS[0])
+  })
+
+  it('sin pautas atrasadas, un CNP pendiente igual muestra el chip', () => {
+    setup({ pautas: [], cnps: CNPS, clientsById })
+    expect(screen.getByRole('button', { name: /1 CNP pendiente/ })).toBeInTheDocument()
+    expect(screen.queryByTestId('alertas-ok')).not.toBeInTheDocument()
+  })
+
+  it('arriba de la lista resume lo pendiente por formato y por cliente', () => {
+    setup({ cnps: CNPS, clientsById })
+    fireEvent.click(screen.getByRole('button', { name: /1 CNP pendiente/ }))
+    const resumen = screen.getByRole('region', { name: 'Resumen de piezas pendientes' })
+    expect(within(resumen).getByText('🎞️ Reels')).toBeInTheDocument()
+    expect(within(resumen).getByText('🎬 Videos 4K')).toBeInTheDocument()
+    expect(within(resumen).getByText('📷 Fotos')).toBeInTheDocument()
+    // El CNP (1 pieza) cae en su propio contador y en su cliente.
+    expect(within(resumen).getByText('CNP')).toBeInTheDocument()
+    expect(within(resumen).getByText('Smashack')).toBeInTheDocument()
   })
 })

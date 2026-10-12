@@ -38,7 +38,7 @@ Reportes mensuales ponderados (100 pts) por línea operativa: reuniones, product
 { reuniones:{realizadas,meta,comentario,justificativos:{[clienteId]:'no_aplica'|'reprogramado_cliente'|'no_cumplio'}},
   productividad:{tareas:[{nombre,realizado,meta}]},
   crecimiento:{items:[{clienteId,seguidoresGanados,seguidoresGanadosPrev,seguidoresActuales,seguidoresBase,meta}]},
-  solicitudes:{solicitudes,editadas}, pautas:{items:[{clienteId,realizadas,meta}]}, piezas:{piezas,editadas},
+  solicitudes:{solicitudes,editadas}, pautas:{items:[{clienteId,realizadas,meta}]}, piezas:{piezas,editadas,porGrupo,cnp:{solicitudes,entregados}},
   finanzas:{ingresos:[],gastosOperativos:[],sueldos:[],otrosGastos:[]}, incompleto?:boolean }
 ```
 - `crecimiento.items`: `seguidoresGanados` (mes actual, editable, se compara contra `meta`); `seguidoresGanadosPrev` (ganados del periodo anterior, línea base, solo informativo, no puntúa); `seguidoresActuales` (totales al cierre, editable); `seguidoresBase` (totales del periodo anterior; tras bootstrap = `seguidoresActuales` del mes previo vía `loadPrevReport`).
@@ -61,7 +61,7 @@ Reportes mensuales ponderados (100 pts) por línea operativa: reuniones, product
 ## Reglas de negocio / cálculos
 
 ### Score (100 pts, 6 indicadores)
-`reuniones` 20 · `productividad` 20 · `crecimiento` 20 · `pautas` 20 · `solicitudes` 10 · `piezas` 10. Pesos en `constants.js` (`INDICATORS`); lógica en `src/utils/metricsScore.js` (`calcTotal`, `calcReuniones`, `monthLineScore`). No existe indicador `feedback`.
+`reuniones` 20 · `productividad` 20 · `crecimiento` 20 · `pautas` 20 · `solicitudes` 10 · `piezas` 10. `piezas` se puntúa solo con las pautas (`calcPiezas`: `editadas / piezas × 10`, solo video); `piezas.cnp` (CNP de audiovisual, solo edición) se guarda y se muestra aparte pero NO puntúa. Pesos en `constants.js` (`INDICATORS`); lógica en `src/utils/metricsScore.js` (`calcTotal`, `calcReuniones`, `monthLineScore`). No existe indicador `feedback`.
 - `calcReuniones`: si la meta derivada es 0 (línea sin marcas o todas "No aplica") puntúa 20/20.
 - Crecimiento: cumplimiento por cliente `seguidoresGanados/meta×100`.
 

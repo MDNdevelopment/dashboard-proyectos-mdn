@@ -111,7 +111,8 @@ export function needsSourcesFor(year, month, closed, now = new Date()) {
  *   heldClientIds?: string[],
  *   fixedTaskMarks?: Array,
  *   checks?: Array,
- *   piezas?: { piezas?: number, editadas?: number, porGrupo?: object|null },
+ *   piezas?: { piezas?: number, editadas?: number, porGrupo?: object|null,
+ *     cnp?: { solicitudes?: number, entregados?: number } },
  *   pautasByClient?: Record<string, number>,
  *   cnpSolicitudes?: { solicitudes?: number, entregados?: number },
  *   tareasSolicitudes?: { solicitudes?: number, entregados?: number },
@@ -197,7 +198,9 @@ export function buildEffectiveReport(storedData, sources, ctx) {
   }
 
   // "Nº Piezas vs Piezas editadas" — derivado de las pautas 'realizada' de Tareas Fijas
-  // → Audiovisual (av_pautas). Solo cuenta piezas de VIDEO (Video/Reel).
+  // → Audiovisual (av_pautas). Solo cuenta piezas de VIDEO (Video/Reel). Los CNP de
+  // audiovisual (solo edición) van aparte en `piezas.cnp` con su solicitado/entregado, solo
+  // para mostrarse: no se mezclan con `piezas`/`editadas` ni entran al puntaje (calcPiezas).
   if (isAvEra && !closed) {
     const piezas = sources.piezas ?? {}
     synced.piezas = {
@@ -205,6 +208,10 @@ export function buildEffectiveReport(storedData, sources, ctx) {
       piezas: piezas.piezas ?? 0,
       editadas: piezas.editadas ?? 0,
       porGrupo: piezas.porGrupo ?? null,
+      cnp: {
+        solicitudes: piezas.cnp?.solicitudes ?? 0,
+        entregados: piezas.cnp?.entregados ?? 0,
+      },
     }
   }
 
