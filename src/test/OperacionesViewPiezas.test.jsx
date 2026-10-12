@@ -185,6 +185,35 @@ describe('OperacionesView — "6. Nº Piezas vs Piezas editadas"', () => {
     expect(screen.getByText(/Sin desglosar: 7 piezas \/ 5 editadas/)).toBeInTheDocument()
   })
 
+  it('muestra los CNP de audiovisual como fuente aparte de las pautas', async () => {
+    mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
+    mockCountPiezasForLine.mockResolvedValue({
+      piezas: 4,
+      editadas: 2,
+      porGrupo: {
+        video4k: { piezas: 4, editadas: 2 },
+        reel: { piezas: 0, editadas: 0 },
+        sinDesglose: { piezas: 0, editadas: 0 },
+      },
+      cnp: { solicitudes: 3, entregados: 3 },
+      error: null,
+    })
+    renderView({ month: 9 })
+    await waitFor(() => {
+      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+    })
+    const section = screen.getByText('6. Nº Piezas vs Piezas editadas').closest('div.space-y-3')
+    const fila = within(section).getByText('CNP audiovisual (solo edición)').closest('tr')
+    expect(within(fila).getByText('3 / 3')).toBeInTheDocument()
+    // Las piezas de las pautas no se inflan con los CNP.
+    expect(within(section).getByText('Piezas totales (pautas)')).toBeInTheDocument()
+    expect(
+      within(section)
+        .getAllByRole('spinbutton')
+        .map((i) => i.value),
+    ).toEqual(['4', '2'])
+  })
+
   it('sin piezas de video en el mes (porGrupo en cero), no muestra el desglose', async () => {
     mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
     mockCountPiezasForLine.mockResolvedValue({

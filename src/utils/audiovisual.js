@@ -8,7 +8,9 @@
  * (se capturan piezas) | 'declinada' (no se agenda).
  */
 
-import { cnpPiecesDelivered } from '../components/cnp/constants'
+import { cnpPieceCount, cnpPiecesDelivered } from '../components/cnp/constants'
+import { isClosed } from '../components/tareas/constants'
+import { clientIdsOf } from './rowClients'
 
 export const FORMAT_KEYS = ['V', 'R', 'F']
 
@@ -649,9 +651,9 @@ export function aggregatePiezasByLine(pautas, lines, generalLineId = null) {
  * pasa por una pauta. Se contabilizan en `editaCnp`, incluido en el total `edita`, pero se
  * mantienen separadas del resto de `edita*` para poder mostrar cuántas de las piezas
  * editadas de un recurso vienen de CNP vs. de pautas. Deliberadamente NO tocan
- * `sumPiezasVideoForLine`/`sumPiezasVideoBreakdownForLine` (indicador «6» del reporte por
- * línea): ese indicador sigue leyendo solo `av_pauta_piezas`, para que el trabajo de CNP
- * cuente en el rendimiento del recurso sin inflar el score de la línea en Reportes.
+ * `sumPiezasVideoForLine`/`sumPiezasVideoBreakdownForLine`: en el reporte por línea (indicador
+ * «6») los CNP de audiovisual son una fuente aparte (`sumCnpAudiovisual`), no se mezclan con
+ * las piezas de las pautas.
  * @param {Array} pautas
  * @param {Map<string,object>} usersById
  * @param {Map<string,Array>} [piezasByPauta] — pauta_id → piezas de esa pauta
@@ -780,6 +782,27 @@ export function sumPiezasForLine(pautas) {
       return acc
     },
     { piezas: 0, editadas: 0 },
+  )
+}
+
+/**
+ * Fuente «CNP audiovisual» del indicador «6. Nº Piezas vs Piezas editadas»: los CNP con
+ * `is_audiovisual` son pedidos de SOLO edición (el material ya está grabado), así que no
+ * son piezas que salieron de una pauta y NO se mezclan con `piezas`/`editadas` de las
+ * pautas — van como fuente aparte, con su propio solicitado/entregado, igual que CNP y
+ * Gestión de Tareas en «4. Solicitudes». Cuenta piezas (`cnpPieceCount`) y entregadas
+ * (`cnpPiecesDelivered`: un CNP Terminado cuenta todas). El llamador acota línea y mes
+ * (`created_at`, el mismo criterio que Solicitudes).
+ * @param {Array} cnpAv — CNP de audiovisual de la línea y el mes
+ * @returns {{solicitudes:number, entregados:number}}
+ */
+export function sumCnpAudiovisual(cnpAv) {
+  return (cnpAv ?? []).reduce(
+    (acc, c) => ({
+      solicitudes: acc.solicitudes + cnpPieceCount(c),
+      entregados: acc.entregados + cnpPiecesDelivered(c),
+    }),
+    { solicitudes: 0, entregados: 0 },
   )
 }
 
@@ -1457,25 +1480,9 @@ export function rankingVideos(perf) {
 export function pendientesPorEditar(pautas, piezasByPauta, lines, generalLineId = null) {
   const porLinea = new Map()
   const porPauta = new Map()
-  const empty = () => ({ V: 0, R: 0, F: 0, sinDesglose: 0 })
   ;(pautas ?? []).forEach((p) => {
     if (p.deleted_at || !['programada', 'realizada'].includes(p.status)) return
-    const piezas = (piezasByPauta?.get(p.id) ?? []).filter((pz) => pz.status !== 'cancelado')
-    const pend = empty()
-    if (hasFormatoBreakdown(p)) {
-      const breakdown = piezasPorFormato(p)
-      Object.entries(breakdown).forEach(([code, { salieron }]) => {
-        const listas = piezas
-          .filter((pz) => pz.formato === code)
-          .reduce((sum, pz) => sum + piezaListas(pz), 0)
-        pend[code] = Math.max(0, salieron - listas)
-      })
-    } else {
-      pend.sinDesglose = Math.max(
-        0,
-        (Number(p.piezas_totales) || 0) - (Number(p.piezas_editadas) || 0),
-      )
-    }
+    const pend = pendientePauta(p, piezasByPauta?.get(p.id))
     const total = pend.V + pend.R + pend.F + pend.sinDesglose
     if (total === 0) return
     porPauta.set(p.id, pend)
@@ -1483,7 +1490,12 @@ export function pendientesPorEditar(pautas, piezasByPauta, lines, generalLineId 
     if (!lineId) return
     if (!porLinea.has(lineId)) {
       const line = (lines ?? []).find((l) => l.id === lineId)
-      porLinea.set(lineId, { lineId, name: line?.name ?? 'Sin línea', ...empty(), total: 0 })
+      porLinea.set(lineId, {
+        lineId,
+        name: line?.name ?? 'Sin línea',
+        ...emptyPendiente(),
+        total: 0,
+      })
     }
     const entry = porLinea.get(lineId)
     entry.V += pend.V
@@ -1493,6 +1505,74 @@ export function pendientesPorEditar(pautas, piezasByPauta, lines, generalLineId 
     entry.total += total
   })
   return { porLinea: [...porLinea.values()].sort((a, b) => b.total - a.total), porPauta }
+}
+
+const emptyPendiente = () => ({ V: 0, R: 0, F: 0, sinDesglose: 0 })
+
+/**
+ * Piezas pendientes de UNA pauta por formato (salieron − listas, nunca negativo); sin
+ * desglose por formato aporta `piezas_totales − piezas_editadas` a `sinDesglose`.
+ * @returns {{V:number, R:number, F:number, sinDesglose:number}}
+ */
+export function pendientePauta(pauta, piezas) {
+  const pend = emptyPendiente()
+  const vivas = (piezas ?? []).filter((pz) => pz.status !== 'cancelado')
+  if (hasFormatoBreakdown(pauta)) {
+    Object.entries(piezasPorFormato(pauta)).forEach(([code, { salieron }]) => {
+      const listas = vivas
+        .filter((pz) => pz.formato === code)
+        .reduce((sum, pz) => sum + piezaListas(pz), 0)
+      pend[code] = Math.max(0, salieron - listas)
+    })
+  } else {
+    pend.sinDesglose = Math.max(
+      0,
+      (Number(pauta.piezas_totales) || 0) - (Number(pauta.piezas_editadas) || 0),
+    )
+  }
+  return pend
+}
+
+/**
+ * Resumen del panel "piezas atrasadas": cuántas piezas faltan por formato y por cliente,
+ * sumando las pautas atrasadas (por formato) y los CNP audiovisuales abiertos (`cnp` aparte:
+ * un CNP no guarda formato). Un CNP con varias marcas se atribuye a la primera. Solo entran
+ * clientes con algo pendiente, de mayor a menor.
+ * @returns {{porFormato:{V:number,R:number,F:number,sinDesglose:number,cnp:number,total:number},
+ *   porCliente:Array<{key:string,name:string,V:number,R:number,F:number,sinDesglose:number,cnp:number,total:number}>}}
+ */
+export function resumenPendientesAtrasados(pautas, piezasByPauta, cnps, clientsById) {
+  const porFormato = { ...emptyPendiente(), cnp: 0, total: 0 }
+  const clientes = new Map()
+  const entryFor = (key, name) => {
+    if (!clientes.has(key)) clientes.set(key, { key, name, ...emptyPendiente(), cnp: 0, total: 0 })
+    return clientes.get(key)
+  }
+  const add = (entry, field, n) => {
+    if (n <= 0) return
+    entry[field] += n
+    entry.total += n
+    porFormato[field] += n
+    porFormato.total += n
+  }
+  ;(pautas ?? []).forEach((p) => {
+    const pend = pendientePauta(p, piezasByPauta?.get(p.id))
+    const entry = entryFor(
+      p.client_id ?? p.client_name ?? 'sin-cliente',
+      p.client_name ?? 'Sin cliente',
+    )
+    ;['V', 'R', 'F', 'sinDesglose'].forEach((f) => add(entry, f, pend[f]))
+  })
+  ;(cnps ?? []).forEach((c) => {
+    const pendientes = cnpPieceCount(c) - cnpPiecesDelivered(c)
+    const id = clientIdsOf(c)[0]
+    const entry = entryFor(id ?? 'sin-cliente', (id && clientsById?.get(id)?.name) || 'Sin cliente')
+    add(entry, 'cnp', pendientes)
+  })
+  return {
+    porFormato,
+    porCliente: [...clientes.values()].filter((e) => e.total > 0).sort((a, b) => b.total - a.total),
+  }
 }
 
 /**
@@ -1606,8 +1686,10 @@ export function pautaEstadoResumen(pauta, piezas) {
  *  - sinCaptura: confirmadas con fecha pasada (hasta ayer) y sin captura registrada.
  *  - grillaIncumple: programadas futuras cuya grilla ya venció sin entregarse.
  *  - piezasAtrasadas: realizadas hace > PIEZAS_ATRASO_DIAS con piezas pendientes.
+ *  - cnpPendientes: CNP audiovisuales sin terminar (los `cnps` ya vienen filtrados por línea
+ *    por quien llama, igual que las pautas), por fecha de entrega y los sin fecha al final.
  */
-export function alertas(pautas, piezasByPauta, today = new Date()) {
+export function alertas(pautas, piezasByPauta, today = new Date(), { cnps = [] } = {}) {
   const hoy = typeof today === 'string' ? today : isoDateKey(today)
   const activas = (pautas ?? []).filter((p) => !p.deleted_at)
   const porAprobar = activas.filter((p) => p.status === 'solicitada' && p.submitted)
@@ -1632,12 +1714,21 @@ export function alertas(pautas, piezasByPauta, today = new Date()) {
     const { salieron, listas } = capturaYEdicion(p, piezasByPauta?.get(p.id))
     return salieron > listas
   })
+  const cnpPendientes = (cnps ?? [])
+    .filter((c) => !c.deleted_at && c.is_audiovisual && !isClosed(c))
+    .sort((a, b) => (a.due_date ?? '9999-99-99').localeCompare(b.due_date ?? '9999-99-99'))
   return {
     porAprobar,
     sinCaptura,
     grillaIncumple,
     piezasAtrasadas,
-    total: porAprobar.length + sinCaptura.length + grillaIncumple.length + piezasAtrasadas.length,
+    cnpPendientes,
+    total:
+      porAprobar.length +
+      sinCaptura.length +
+      grillaIncumple.length +
+      piezasAtrasadas.length +
+      cnpPendientes.length,
   }
 }
 

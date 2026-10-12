@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../supabase'
 import { loadCompanyEmployees } from '../metricas/metricsApi'
 import { loadPautas, loadPiezas, updatePauta } from './avPautasApi'
@@ -100,6 +100,7 @@ export default function AudiovisualView({
   const [dayDetail, setDayDetail] = useState(null)
   const [waOpen, setWaOpen] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
 
   const defaultLineId = !canViewAll ? (lines[0]?.id ?? null) : null
   const scopeLine = canViewAll ? (scopeLineId === ALL_LINES ? null : scopeLineId) : defaultLineId
@@ -261,6 +262,13 @@ export default function AudiovisualView({
     scopeLine,
     generalLineId,
   ).filter((c) => cnpInMonth(c, cnpMonthIdx))
+  // CNP audiovisuales de la línea en scope, sin filtro de mes: alimentan la alerta de pendientes.
+  const cnpAvAbiertos = pautasInScope(
+    cnpRequests.filter((c) => c.is_audiovisual && !c.deleted_at),
+    scopeLine,
+    generalLineId,
+  )
+  const clientsById = new Map(clients.map((c) => [c.id, c]))
   const pendientes = pendientesPorEditar(
     visiblePautas,
     piezasByPautaMap,
@@ -268,7 +276,9 @@ export default function AudiovisualView({
     generalLineId,
   )
   const pendingCount = pendingApprovalCount(scopedPautas)
-  const alertas = calcAlertas(visibleScopedPautas, piezasByPautaMap)
+  const alertas = calcAlertas(visibleScopedPautas, piezasByPautaMap, undefined, {
+    cnps: cnpAvAbiertos,
+  })
   const permsFor = (p) =>
     pautaPermissions({
       canCoordinate,
@@ -384,6 +394,9 @@ export default function AudiovisualView({
         <AvSemanaView
           pautas={visibleScopedPautas}
           piezasByPauta={piezasByPautaMap}
+          cnps={cnpAvAbiertos}
+          clientsById={clientsById}
+          onCnpClick={(c) => navigate(`/cnp?cnpId=${c.id}`)}
           usersById={usersById}
           recursoUsers={recursoOptions}
           allEmployees={activeEmployees}
@@ -537,6 +550,8 @@ export default function AudiovisualView({
           pauta={form.pauta}
           clients={scopedClients}
           employees={activeEmployees}
+          recursoUsers={recursoOptions}
+          usersById={usersById}
           pautas={pautas}
           onClose={() => setForm(null)}
           onSaved={(p) => {

@@ -7,6 +7,7 @@ import {
   groupByDay,
   pautaEstadoResumen,
   alertas,
+  resumenPendientesAtrasados,
   ocupacionEstudio,
   ocupacionEstudioMes,
   cargaRecursos,
@@ -150,9 +151,84 @@ describe('alertas', () => {
     expect(a.total).toBe(4)
   })
 
+  it('cnpPendientes: solo CNP audiovisuales abiertos, por entrega y sumados al total', () => {
+    const cnp = (o) => ({ id: 'x', is_audiovisual: true, status: 'Pendiente', ...o })
+    const cnps = [
+      cnp({ id: 'sin-fecha' }),
+      cnp({ id: 'tarde', due_date: '2026-10-20', status: 'En proceso' }),
+      cnp({ id: 'pronto', due_date: '2026-10-09', status: 'Paralizado' }),
+      cnp({ id: 'terminado', status: 'Terminado' }),
+      cnp({ id: 'borrado', deleted_at: 'x' }),
+      cnp({ id: 'diseno', is_audiovisual: false }),
+    ]
+    const a = alertas([pauta({ status: 'solicitada' })], new Map(), hoy, { cnps })
+    expect(a.cnpPendientes.map((c) => c.id)).toEqual(['pronto', 'tarde', 'sin-fecha'])
+    expect(a.total).toBe(1 + 3)
+    expect(alertas([], new Map(), hoy).cnpPendientes).toEqual([])
+  })
+
   it('acepta Date como hoy', () => {
     const a = alertas([pauta({ status: 'solicitada' })], new Map(), new Date(2026, 9, 8))
     expect(a.porAprobar).toHaveLength(1)
+  })
+})
+
+describe('resumenPendientesAtrasados', () => {
+  const cnp = (o) => ({ id: 'n', is_audiovisual: true, status: 'Pendiente', pieces: [], ...o })
+
+  it('suma pendientes por formato y por cliente; los CNP van aparte y solo cuentan clientes con algo', () => {
+    const pautas = [
+      pauta({
+        id: 'a',
+        client_id: 'c1',
+        client_name: 'Smashack',
+        status: 'realizada',
+        formats: ['V', 'R', 'F'],
+        piezas_por_formato: {
+          V: { salieron: 2, editadas: 0 },
+          R: { salieron: 5, editadas: 0 },
+          F: { salieron: 10, editadas: 0 },
+        },
+      }),
+      pauta({
+        id: 'b',
+        client_id: 'c2',
+        client_name: 'Push',
+        status: 'realizada',
+        formats: ['R'],
+        piezas_por_formato: { R: { salieron: 3, editadas: 0 } },
+      }),
+    ]
+    const piezas = new Map([
+      ['a', [lote({ pauta_id: 'a', formato: 'R', cantidad: 5, listas: 2 })]],
+      ['b', [lote({ id: 'z2', pauta_id: 'b', formato: 'R', cantidad: 3, listas: 3 })]],
+    ])
+    const cnps = [
+      cnp({
+        id: 'n1',
+        client_id: 'c2',
+        client_ids: ['c2'],
+        pieces: [{ done: true }, { done: false }],
+      }),
+      cnp({ id: 'n2', client_id: 'c1', client_ids: ['c1', 'c2'] }),
+    ]
+    const clientsById = new Map([
+      ['c1', { id: 'c1', name: 'Smashack' }],
+      ['c2', { id: 'c2', name: 'Push' }],
+    ])
+    const r = resumenPendientesAtrasados(pautas, piezas, cnps, clientsById)
+    expect(r.porFormato).toMatchObject({ V: 2, R: 3, F: 10, cnp: 2, total: 17 })
+    // Smashack: 2 V + 3 R + 10 F + 1 CNP (n2, primera marca). Push: 0 de pauta + 1 CNP.
+    expect(r.porCliente.map((c) => [c.name, c.total])).toEqual([
+      ['Smashack', 16],
+      ['Push', 1],
+    ])
+  })
+
+  it('un CNP terminado o sin pendientes no aporta; sin nada devuelve totales en 0', () => {
+    const r = resumenPendientesAtrasados([], new Map(), [cnp({ status: 'Terminado' })], new Map())
+    expect(r.porFormato.total).toBe(0)
+    expect(r.porCliente).toEqual([])
   })
 })
 

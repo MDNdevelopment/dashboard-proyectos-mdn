@@ -1,15 +1,18 @@
 import { useState } from 'react'
-import AlertasStrip, { ALERTA_META } from './AlertasStrip'
+import AlertasStrip, { ALERTA_META, alertaCount } from './AlertasStrip'
 import SemanaGrid from './SemanaGrid'
 import OcupacionBar from './OcupacionBar'
 import AvDrawer from './AvDrawer'
 import ColaAprobacion from './ColaAprobacion'
 import PautaCard from './PautaCard'
+import CnpPendienteCard from './CnpPendienteCard'
+import PendientesResumen from './PendientesResumen'
 import {
   weekRange,
   pautasInWeek,
   groupByDay,
   alertas as calcAlertas,
+  resumenPendientesAtrasados,
   resumenMes,
   isoDateKey,
   parseISODate,
@@ -38,6 +41,9 @@ const MESES = [
 export default function AvSemanaView({
   pautas,
   piezasByPauta,
+  cnps = [],
+  clientsById,
+  onCnpClick,
   usersById,
   recursoUsers,
   allEmployees,
@@ -57,7 +63,7 @@ export default function AvSemanaView({
   const range = weekRange(anchor)
   const semana = pautasInWeek(pautas, range)
   const byDay = groupByDay(semana)
-  const alertas = calcAlertas(pautas, piezasByPauta, hoy)
+  const alertas = calcAlertas(pautas, piezasByPauta, hoy, { cnps })
   const d0 = parseISODate(range.start)
   const resumen = resumenMes(pautas, piezasByPauta, {
     year: d0.getFullYear(),
@@ -179,7 +185,7 @@ export default function AvSemanaView({
 
       {drawer && (
         <AvDrawer
-          title={ALERTA_META[drawer].label(alertas[drawer].length)}
+          title={ALERTA_META[drawer].label(alertaCount(alertas, drawer), alertas)}
           subtitle={DRAWER_HINT[drawer]}
           onClose={() => setDrawer(null)}
         >
@@ -197,6 +203,44 @@ export default function AvSemanaView({
                 onPautaClick(p)
               }}
             />
+          ) : drawer === 'piezasAtrasadas' ? (
+            <>
+              <PendientesResumen
+                resumen={resumenPendientesAtrasados(
+                  alertas.piezasAtrasadas,
+                  piezasByPauta,
+                  alertas.cnpPendientes,
+                  clientsById,
+                )}
+              />
+              {alertas.piezasAtrasadas.length > 0 && <SeccionTitulo>Pautas</SeccionTitulo>}
+              {alertas.piezasAtrasadas.map((p) => (
+                <PautaCard
+                  key={p.id}
+                  pauta={p}
+                  piezas={piezasByPauta?.get(p.id) ?? []}
+                  usersById={usersById}
+                  showDate
+                  onClick={(x) => {
+                    setDrawer(null)
+                    onPautaClick(x)
+                  }}
+                />
+              ))}
+              {alertas.cnpPendientes.length > 0 && <SeccionTitulo>CNPs pendientes</SeccionTitulo>}
+              {alertas.cnpPendientes.map((c) => (
+                <CnpPendienteCard
+                  key={c.id}
+                  cnp={c}
+                  clientsById={clientsById}
+                  usersById={usersById}
+                  onClick={(x) => {
+                    setDrawer(null)
+                    onCnpClick?.(x)
+                  }}
+                />
+              ))}
+            </>
           ) : (
             alertas[drawer].map((p) => (
               <PautaCard
@@ -222,7 +266,16 @@ const DRAWER_HINT = {
   porAprobar: 'Agenda cada una con fecha, lugar y recursos, o declínala.',
   sinCaptura: 'Pautas que ya pasaron y nadie registró cuántas piezas salieron.',
   grillaIncumple: 'La grilla debía estar 2 días antes de la pauta y no se ha cargado.',
-  piezasAtrasadas: 'Realizadas hace más de una semana con piezas todavía por editar.',
+  piezasAtrasadas:
+    'Pautas realizadas hace más de una semana con piezas por editar y CNPs audiovisuales sin terminar de tu línea.',
+}
+
+function SeccionTitulo({ children }) {
+  return (
+    <h3 className="font-mono text-[10.5px] uppercase tracking-wider text-[#999] pt-1">
+      {children}
+    </h3>
+  )
 }
 
 function Kpi({ value, label, tone }) {

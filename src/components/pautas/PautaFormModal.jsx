@@ -9,6 +9,7 @@ import {
   briefComplete,
   estudioConflicts,
   pautaErrorMessage,
+  resourceConflicts,
 } from '../../utils/audiovisual'
 
 const FIELDS = [
@@ -24,6 +25,7 @@ const FIELDS = [
   'lugar_tipo',
   'place',
   'attendee_ids',
+  'recurso_ids',
   'extra',
 ]
 
@@ -41,6 +43,7 @@ function initialValues(pauta) {
     lugar_tipo: pauta?.lugar_tipo ?? 'locacion',
     place: pauta?.place ?? '',
     attendee_ids: pauta?.attendee_ids ?? [],
+    recurso_ids: pauta?.recurso_ids ?? [],
     extra: Boolean(pauta?.extra),
   }
 }
@@ -54,7 +57,16 @@ function sameValue(a, b) {
  * `SolicitarWizard` (tres pasos con huecos sugeridos). En una pauta ya programada/realizada
  * la fecha, hora y lugar no se tocan desde aquí — para eso está "Reagendar" en el detalle.
  */
-export default function PautaFormModal({ pauta, clients, employees, pautas, onClose, onSaved }) {
+export default function PautaFormModal({
+  pauta,
+  clients,
+  employees,
+  recursoUsers,
+  usersById,
+  pautas,
+  onClose,
+  onSaved,
+}) {
   const [values, setValues] = useState(() => initialValues(pauta))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -71,15 +83,41 @@ export default function PautaFormModal({ pauta, clients, employees, pautas, onCl
         excludeId: pauta.id,
       })
     : { blocking: [], warnings: [] }
+  // Mientras sigue solicitada, los recursos se eligen al "Aprobar y agendar"; en una pauta ya
+  // agendada este es el único lugar para asignarlos o cambiarlos sin reagendar.
+  const editaRecursos = lockSchedule
+  const recursosConflicts =
+    editaRecursos && pauta.pauta_date && values.recurso_ids.length
+      ? resourceConflicts(
+          { ...pauta, recurso_ids: values.recurso_ids },
+          (pautas ?? []).filter(
+            (p) =>
+              p.id !== pauta.id &&
+              !p.deleted_at &&
+              ['programada', 'realizada'].includes(p.status) &&
+              p.pauta_date === pauta.pauta_date,
+          ),
+          usersById,
+          pauta.recurso_ids ?? [],
+        )
+      : { blocking: [], warnings: [] }
   const missingStudioTime = esEstudio && !lockSchedule && (!values.pauta_date || !values.salida)
   const complete = briefComplete(values)
-  const canSave = complete && !missingStudioTime && conflicts.blocking.length === 0 && !saving
+  const canSave =
+    complete &&
+    !missingStudioTime &&
+    conflicts.blocking.length === 0 &&
+    recursosConflicts.blocking.length === 0 &&
+    !saving
 
   const blockers = []
   if (!values.client_id) blockers.push('elige el cliente')
   if (complete === false && values.client_id) blockers.push('escribe de qué trata la pauta')
   if (missingStudioTime) blockers.push('el estudio necesita fecha y hora de salida')
   if (conflicts.blocking.length > 0) blockers.push('el estudio está ocupado a esa hora')
+  recursosConflicts.blocking.forEach((b) =>
+    blockers.push(`${b.name} ya tiene otra pauta a esa hora`),
+  )
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -90,6 +128,7 @@ export default function PautaFormModal({ pauta, clients, employees, pautas, onCl
     FIELDS.forEach((f) => {
       if (lockSchedule && ['pauta_date', 'salida', 'llegada', 'lugar_tipo', 'place'].includes(f))
         return
+      if (f === 'recurso_ids' && !editaRecursos) return
       if (!sameValue(values[f], initialValues(pauta)[f])) changed[f] = values[f]
     })
     if (Object.keys(changed).length === 0) {
@@ -241,6 +280,23 @@ export default function PautaFormModal({ pauta, clients, employees, pautas, onCl
               />
             )}
           </Section>
+
+          {editaRecursos && (
+            <Section title="Recursos (quién graba / captura)">
+              <AttendeePicker
+                employees={recursoUsers ?? []}
+                selectedIds={values.recurso_ids}
+                onChange={(ids) => set('recurso_ids', ids)}
+                hideQuickGroups
+              />
+              {recursosConflicts.blocking.map((b) => (
+                <p key={b.resourceId} className="text-[12.5px] text-[#c0392b] mt-1" role="alert">
+                  {b.name} ya está en la pauta de {b.pauta.client_name || 'otro cliente'} ese día.
+                  Ajusta el horario o elige otro recurso.
+                </p>
+              ))}
+            </Section>
+          )}
 
           <Section title="Asistentes">
             <AttendeePicker

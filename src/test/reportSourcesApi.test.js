@@ -100,7 +100,12 @@ describe('loadReportSources', () => {
       heldClientIds: [],
       fixedTaskMarks: [],
       checks: [],
-      piezas: { piezas: 0, editadas: 0, porGrupo: expect.any(Object) },
+      piezas: {
+        piezas: 0,
+        editadas: 0,
+        porGrupo: expect.any(Object),
+        cnp: { solicitudes: 0, entregados: 0 },
+      },
       pautasByClient: {},
       cnpSolicitudes: { solicitudes: 0, entregados: 0 },
       tareasSolicitudes: { solicitudes: 0, entregados: 0 },
@@ -272,6 +277,60 @@ describe('loadReportSources', () => {
     })
     expect(data['A__9'].cnpSolicitudes.solicitudes).toBe(2)
     expect(data['A__9'].cnpSolicitudes.entregados).toBe(2) // Terminado → todas cuentan
+  })
+
+  it('cnp_requests: los CNP de audiovisual van como fuente aparte, sin mezclarse con las piezas de las pautas', async () => {
+    resetMocks()
+    mockAvPautas.mockReturnValue({
+      data: [
+        {
+          line_id: 'A',
+          client_id: 'c1',
+          pauta_date: '2026-09-10',
+          status: 'realizada',
+          formats: ['V'],
+          piezas_totales: 4,
+          piezas_editadas: 2,
+          piezas_por_formato: null,
+        },
+      ],
+      error: null,
+    })
+    mockCnp.mockReturnValue({
+      data: [
+        { line_id: 'A', status: 'Terminado', pieces: [], created_at: SEP_15, is_audiovisual: true },
+        {
+          line_id: 'A',
+          status: 'Terminado',
+          pieces: [],
+          created_at: SEP_15,
+          is_audiovisual: false,
+        },
+        { line_id: 'B', status: 'Terminado', pieces: [], created_at: SEP_15, is_audiovisual: true },
+      ],
+      error: null,
+    })
+    const { data } = await loadReportSources('co1', {
+      year: 2026,
+      months: [8, 9],
+      lineIds: ['A', 'B'],
+    })
+    // A: las pautas siguen en 4/2; el CNP audiovisual (el de diseño no cuenta) es su propia fuente.
+    expect(data['A__9'].piezas).toMatchObject({
+      piezas: 4,
+      editadas: 2,
+      cnp: { solicitudes: 1, entregados: 1 },
+    })
+    // B: sin pautas, solo el CNP audiovisual.
+    expect(data['B__9'].piezas).toMatchObject({
+      piezas: 0,
+      editadas: 0,
+      cnp: { solicitudes: 1, entregados: 1 },
+    })
+    // «4. Solicitudes» sigue contando todos los CNP de la línea.
+    expect(data['A__9'].cnpSolicitudes.solicitudes).toBe(2)
+    // Otro mes: nada.
+    expect(data['A__8'].piezas.cnp).toEqual({ solicitudes: 0, entregados: 0 })
   })
 
   it('tasks: solicitudes/entregados por team_id + mes', async () => {

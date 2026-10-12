@@ -22,6 +22,7 @@ import {
   sumPiezasForLine,
   sumPiezasVideoForLine,
   sumPiezasVideoBreakdownForLine,
+  sumCnpAudiovisual,
   generateAgendaText,
   generateDayAgendaText,
   piezasProgress,
@@ -1678,5 +1679,31 @@ describe('resourceConflicts', () => {
     }
     const result = resourceConflicts(candidate, [clashing], usersById)
     expect(result.blocking[0].name).toBe('Alan Puentes')
+  })
+})
+
+describe('sumCnpAudiovisual', () => {
+  const cnp = (over = {}) => ({ status: 'Terminado', pieces: [], is_audiovisual: true, ...over })
+
+  it('sin CNP da 0 / 0', () => {
+    expect(sumCnpAudiovisual([])).toEqual({ solicitudes: 0, entregados: 0 })
+    expect(sumCnpAudiovisual(undefined)).toEqual({ solicitudes: 0, entregados: 0 })
+  })
+
+  it('los 3 CNP terminados de octubre de Team Sabrina dan 3 solicitadas y 3 entregadas', () => {
+    expect(sumCnpAudiovisual([cnp(), cnp(), cnp()])).toEqual({ solicitudes: 3, entregados: 3 })
+  })
+
+  it('un CNP abierto con 3 piezas solo entrega las tildadas', () => {
+    const abierto = cnp({
+      status: 'En proceso',
+      pieces: [{ done: true }, { done: false }, { done: true }],
+    })
+    expect(sumCnpAudiovisual([abierto])).toEqual({ solicitudes: 3, entregados: 2 })
+  })
+
+  it('no toca el conteo de las pautas', () => {
+    const pauta = { status: 'realizada', formats: ['V'], piezas_totales: 4, piezas_editadas: 2 }
+    expect(sumPiezasVideoForLine([pauta])).toEqual({ piezas: 4, editadas: 2 })
   })
 })
