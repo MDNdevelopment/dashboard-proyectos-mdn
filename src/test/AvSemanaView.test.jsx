@@ -239,8 +239,8 @@ describe('AvSemanaView — ocupación legible', () => {
   it('rotula los bloques por hora, muestra el cliente en los ocupados y explica qué son', () => {
     setup()
     const estudio = screen.getByLabelText('Ocupación del estudio')
-    expect(within(estudio).getByText('12–14 h')).toBeInTheDocument()
-    expect(within(estudio).getByText('14–16 h')).toBeInTheDocument()
+    expect(within(estudio).getByText('12:00 PM - 2:00 PM')).toBeInTheDocument()
+    expect(within(estudio).getByText('2:00 PM - 4:00 PM')).toBeInTheDocument()
     // Fein Kaffee ocupa los bloques 12–14 y 14–16 del miércoles.
     expect(within(estudio).getAllByText('Fein Kaffee')).toHaveLength(2)
     expect(within(estudio).getByText('Ocupado')).toBeInTheDocument()

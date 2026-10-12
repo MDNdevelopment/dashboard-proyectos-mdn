@@ -9,8 +9,11 @@ import {
 const DOW = ['L', 'M', 'X', 'J', 'V', 'S']
 const DIA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
-/** «14:00» → 14, para rotular los bloques como «14–16». */
-const hora = (hhmm) => Number(hhmm.slice(0, 2))
+/** «14:00» → «2:00 PM», para rotular cada bloque como «2:00 PM - 4:00 PM». */
+const hora12 = (hhmm) => {
+  const h = Number(hhmm.slice(0, 2))
+  return `${h % 12 || 12}:00 ${h < 12 || h === 24 ? 'AM' : 'PM'}`
+}
 
 /**
  * Ocupación del estudio por día (una fila por día, un recuadro por bloque de 2 h con el
@@ -22,7 +25,7 @@ export default function OcupacionBar({ pautas, range, usersById }) {
   const columnas = dias[0]?.bloques ?? []
   return (
     <div
-      className="grid gap-x-8 gap-y-4 rounded-xl border border-[#ece9df] bg-white px-4 py-3.5 text-[12px] lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]"
+      className="space-y-4 rounded-xl border border-[#ece9df] bg-white px-4 py-3.5 text-[12px]"
       data-tour="ocupacion"
     >
       <div aria-label="Ocupación del estudio">
@@ -57,10 +60,10 @@ export default function OcupacionBar({ pautas, range, usersById }) {
           {columnas.map((b) => (
             <span
               key={b.start}
-              className="text-center font-mono text-[10.5px] text-[#999]"
-              title={`Bloque de ${hora(b.start)} a ${hora(b.end)} h`}
+              className="text-center font-mono text-[10.5px] leading-tight text-[#999]"
+              title={`Bloque de ${hora12(b.start)} a ${hora12(b.end)}`}
             >
-              {hora(b.start)}–{hora(b.end)} h
+              {hora12(b.start)} - {hora12(b.end)}
             </span>
           ))}
           <span aria-hidden="true" />
@@ -95,7 +98,7 @@ export default function OcupacionBar({ pautas, range, usersById }) {
           ))}
         </div>
       </div>
-      <div aria-label="Carga de recursos">
+      <div aria-label="Carga de recursos" className="border-t border-[#ece9df] pt-3.5">
         <span className="block font-mono uppercase tracking-wide text-[#999] text-[10.5px] mb-2">
           Pautas por recurso
         </span>
