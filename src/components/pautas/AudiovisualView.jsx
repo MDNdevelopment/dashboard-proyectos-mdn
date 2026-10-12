@@ -51,6 +51,20 @@ const DEFAULT_LIST_FILTER = {
 }
 
 /**
+ * Filtro de la lista Todas al elegir una acción en el panel de una persona. Siempre en
+ * Realizadas: captura y edición solo existen en pautas realizadas (si no, abriría en
+ * Solicitadas y la lista saldría vacía).
+ */
+export function filtroPorPersona({ id, rol, grupo }) {
+  return {
+    ...DEFAULT_LIST_FILTER,
+    status: 'realizadas',
+    formatGroup: grupo,
+    ...(rol === 'captura' ? { recursoId: id } : { editorId: id }),
+  }
+}
+
+/**
  * Módulo Pautas (Tareas Fijas → Audiovisual): dueño del estado (pautas, piezas, empleados,
  * recursos externos, CNP de audiovisual) y del realtime; reparte a tres vistas (Calendario /
  * Lista / Rendimiento) y a los modales (detalle, formulario, día, WhatsApp). Se monta desde
@@ -489,17 +503,8 @@ export default function AudiovisualView({
             setListFilter({ ...DEFAULT_LIST_FILTER, pendiente: sel })
             setView('todas')
           }}
-          onSelectPersona={({ id, rol, grupo }) => {
-            setListFilter(
-              rol === 'captura'
-                ? {
-                    ...DEFAULT_LIST_FILTER,
-                    status: 'realizadas',
-                    recursoId: id,
-                    formatGroup: grupo,
-                  }
-                : { ...DEFAULT_LIST_FILTER, editorId: id, formatGroup: grupo },
-            )
+          onSelectPersona={(sel) => {
+            setListFilter(filtroPorPersona(sel))
             setView('todas')
           }}
           onSelectLine={(lineId) => {

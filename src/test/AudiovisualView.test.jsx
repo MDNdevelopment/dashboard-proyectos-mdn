@@ -155,7 +155,7 @@ vi.mock('../supabase', () => ({
   }),
 }))
 
-import AudiovisualView from '../components/pautas/AudiovisualView'
+import AudiovisualView, { filtroPorPersona } from '../components/pautas/AudiovisualView'
 
 function renderView({
   userProfile,
@@ -518,6 +518,26 @@ describe('AudiovisualView — vista Datos', () => {
     expect(screen.getByText('Pendiente por editar')).toBeInTheDocument()
     expect(screen.getByText('Videos 4K + Reels')).toBeInTheDocument()
     expect(screen.getByText('Fotos')).toBeInTheDocument()
+  })
+})
+
+describe('filtroPorPersona', () => {
+  it('captura filtra por recurso, en Realizadas y por grupo de formato', () => {
+    expect(filtroPorPersona({ id: 'u1', rol: 'captura', grupo: 'foto' })).toMatchObject({
+      status: 'realizadas',
+      recursoId: 'u1',
+      editorId: null,
+      formatGroup: 'foto',
+    })
+  })
+
+  it('edición filtra por editor y también abre en Realizadas (no en Solicitadas)', () => {
+    expect(filtroPorPersona({ id: 'u1', rol: 'edicion', grupo: 'av' })).toMatchObject({
+      status: 'realizadas',
+      editorId: 'u1',
+      recursoId: null,
+      formatGroup: 'av',
+    })
   })
 })
 
