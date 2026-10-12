@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { autoPieceLabel, resizePieces, relabelAutoPieces } from '../components/cnp/constants'
+import {
+  autoPieceLabel,
+  resizePieces,
+  relabelAutoPieces,
+  cnpMatchesType,
+} from '../components/cnp/constants'
 
 describe('autoPieceLabel', () => {
   it('appends a 1-based index to the title', () => {
@@ -59,5 +64,23 @@ describe('relabelAutoPieces', () => {
     const result = relabelAutoPieces(pieces, 'Nuevo título')
     expect(result[0].label).toBe('Nuevo título 1')
     expect(result[1].label).toBe('Editada a mano')
+  })
+})
+
+describe('cnpMatchesType', () => {
+  const print = { is_print: true, is_audiovisual: false }
+  const av = { is_print: false, is_audiovisual: true }
+  const plain = { is_print: false, is_audiovisual: false }
+
+  it('"all" lets everything through', () => {
+    expect([print, av, plain].every((c) => cnpMatchesType(c, 'all'))).toBe(true)
+  })
+
+  it('"print" only keeps is_print', () => {
+    expect([print, av, plain].filter((c) => cnpMatchesType(c, 'print'))).toEqual([print])
+  })
+
+  it('"audiovisual" only keeps is_audiovisual', () => {
+    expect([print, av, plain].filter((c) => cnpMatchesType(c, 'audiovisual'))).toEqual([av])
   })
 })

@@ -92,7 +92,8 @@ export default function CnpBaseView({
   const [clientFilter, setClientFilter] = useState(
     () => initialFilter?.clientId ?? searchParams.get('client') ?? '',
   )
-  const [printFilter, setPrintFilter] = useState(() => initialFilter?.print ?? 'all')
+  // Solo lo activa el KPI "Impresión pendiente"; el tipo (impreso/audiovisual) se filtra en CnpPage.
+  const [printPending, setPrintPending] = useState(() => initialFilter?.print === 'pending')
   const [alertFilter, setAlertFilter] = useState(() => initialFilter?.alert ?? '')
   const [assigneeFilter, setAssigneeFilter] = useState(
     () => initialFilter?.assignee ?? searchParams.get('assignee') ?? '',
@@ -117,9 +118,7 @@ export default function CnpBaseView({
     if (statusFilter !== 'all' && statusFilter && c.status !== statusFilter) return false
     if (clientFilter && !matchesClient(c, clientFilter)) return false
     if (assigneeFilter && c.assignee_id !== assigneeFilter) return false
-    if (printFilter === 'print' && !c.is_print) return false
-    if (printFilter === 'noprint' && c.is_print) return false
-    if (printFilter === 'pending' && !(c.is_print && !c.print_approved_at)) return false
+    if (printPending && !(c.is_print && !c.print_approved_at)) return false
     if (alertFilter === 'late' && !isLate(c)) return false
     if (search) {
       const q = search.toLowerCase()
@@ -146,7 +145,7 @@ export default function CnpBaseView({
   }
 
   const hasFilters =
-    search || statusFilter || clientFilter || assigneeFilter || printFilter !== 'all' || alertFilter
+    search || statusFilter || clientFilter || assigneeFilter || printPending || alertFilter
   const activeClientName = clientFilter ? (clientsById.get(clientFilter)?.name ?? null) : null
 
   function clearFilters() {
@@ -154,13 +153,13 @@ export default function CnpBaseView({
     setStatusFilter('')
     setClientFilter('')
     setAssigneeFilter('')
-    setPrintFilter('all')
+    setPrintPending(false)
     setAlertFilter('')
   }
 
   return (
     <div className="space-y-1.5">
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
         <div className="relative col-span-2 sm:col-span-1">
           <svg
             className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#999] pointer-events-none"
@@ -218,16 +217,6 @@ export default function CnpBaseView({
           ))}
         </select>
         <select
-          value={printFilter}
-          onChange={(e) => setPrintFilter(e.target.value)}
-          className="input-base text-[14.5px] py-2"
-        >
-          <option value="all">Impreso: todos</option>
-          <option value="print">Solo impresos</option>
-          <option value="noprint">Solo no impresos</option>
-          <option value="pending">Impresos sin aprobar</option>
-        </select>
-        <select
           value={alertFilter}
           onChange={(e) => setAlertFilter(e.target.value)}
           className="input-base text-[14.5px] py-2"
@@ -242,6 +231,18 @@ export default function CnpBaseView({
           <span className="text-[14px] text-[#888]">
             {hasFilters ? `${filtered.length} de ${cnps.length}` : cnps.length} CNP
           </span>
+          {printPending && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-[#fff6e0] border border-[#e8c96a] rounded-full text-[12.5px] font-semibold text-[#a06a00]">
+              Impresión sin aprobar
+              <button
+                onClick={() => setPrintPending(false)}
+                className="text-[#b58a00] hover:text-[#7a5c00] leading-none"
+                title="Quitar filtro de impresión pendiente"
+              >
+                ×
+              </button>
+            </span>
+          )}
           {activeClientName && (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-[#fff6e0] border border-[#e8c96a] rounded-full text-[12.5px] font-semibold text-[#a06a00]">
               {activeClientName}

@@ -214,6 +214,62 @@ describe('PagoPartidaModal — pago en bolívares (§6.5)', () => {
   })
 })
 
+describe('PagoPartidaModal — tasa personalizada al pagar en Bs', () => {
+  function renderBs(onSaved = vi.fn()) {
+    render(
+      <PagoPartidaModal
+        monthId="m-1"
+        companyId="co-1"
+        partida="gastos"
+        saldos={saldos}
+        onClose={() => {}}
+        onSaved={onSaved}
+      />,
+    )
+    fillCommon()
+    fireEvent.click(screen.getByRole('button', { name: 'Pagué en Bs' }))
+    return onSaved
+  }
+
+  it('usa la tasa a la que se pagó, recalcula el USD y guarda esa tasa', async () => {
+    const onSaved = renderBs()
+    await waitFor(() => expect(mockResolveRateBcv).toHaveBeenCalled())
+    fireEvent.click(await screen.findByRole('button', { name: 'Usar tasa personalizada' }))
+
+    // Se precarga con la BCV (816) y se reemplaza por la tasa real del pago.
+    const tasa = screen.getByLabelText('Tasa de pago')
+    expect(tasa).toHaveValue(816)
+    fireEvent.change(tasa, { target: { value: '800' } })
+    // 80.000 Bs @ 800 = $100 (a la BCV serían $98,04).
+    fireEvent.change(screen.getAllByRole('spinbutton')[0], { target: { value: '80000' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar pago' }))
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled())
+    expect(mockCreateDistribution).toHaveBeenLastCalledWith(
+      'm-1',
+      expect.objectContaining({ amount: 100, currency: 'Bs', amountBs: 80000, rate: 800 }),
+    )
+    // Es solo de este pago: no toca fin_rates.
+    expect(mockUpsertRate).not.toHaveBeenCalled()
+  })
+
+  it('volver a "Usar tasa BCV" descarta la tasa personalizada', async () => {
+    const onSaved = renderBs()
+    await waitFor(() => expect(mockResolveRateBcv).toHaveBeenCalled())
+    fireEvent.click(await screen.findByRole('button', { name: 'Usar tasa personalizada' }))
+    fireEvent.change(screen.getByLabelText('Tasa de pago'), { target: { value: '800' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Usar tasa BCV' }))
+    fireEvent.change(screen.getAllByRole('spinbutton')[0], { target: { value: '81600' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar pago' }))
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled())
+    expect(mockCreateDistribution).toHaveBeenLastCalledWith(
+      'm-1',
+      expect.objectContaining({ amount: 100, rate: 816 }),
+    )
+  })
+})
+
 /**
  * El "¿En qué?" de Gastos pasó de texto libre a una lista cerrada de rubros: el mismo
  * gasto entraba escrito de cinco formas distintas y no se podía agrupar. Socios y
