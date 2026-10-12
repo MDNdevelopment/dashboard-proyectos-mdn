@@ -1,6 +1,13 @@
 [build]
-  command = "npm test && npm run build"
+  # Los tests, el lint y el build ya corren en GitHub Actions (ci.yml) en cada
+  # push y PR; repetirlos aquí duplicaba el gasto de minutos de build.
+  command = "npm run build"
   publish = "dist"
+
+# Sin deploy previews: cada push a un PR gastaba ~4 min de build. Para volver a
+# activarlos, borra este bloque.
+[context.deploy-preview]
+  ignore = "exit 0"
 
 [build.environment]
   # El seed histórico de agosto (ya deprecado, ver ARQUITECTURA.md §2.15
