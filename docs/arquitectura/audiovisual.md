@@ -25,7 +25,7 @@
   - estudio: `STUDIO_WINDOW_HOURS`, `studioWindow`, `estudioConflicts`, `estudioSlotsForDay`, `lugarLabel`.
   - lotes: `lotesMatrix`, `loteFor`, `planLoteChange`, `editorRemovable`.
   - permisos: `pautaPermissions`, `canEditPiezasForPauta`, `canActOnEditorGroup`, `leadLineIdsFor`.
-  - lista: `LIST_FILTERS`, `pautaMatchesList`, `pautaMatchesQuery` (recurso, texto, `editorId` — lote no cancelado del editor, acotado al grupo si hay `formatGroup` — y `formatGroup` `'av'|'foto'`; recibe `piezasByPauta`), `sortForList`. `DEFAULT_LIST_FILTER` incluye `editorId` y `formatGroup`; `AvListView` los muestra como chips removibles («Editado por X», «Solo videos/fotos»).
+  - lista: `LIST_FILTERS`, `pautaMatchesList`, `pautaMatchesQuery` (recurso, texto, `editorId` — lote no cancelado del editor, acotado al grupo si hay `formatGroup` — y `formatGroup` `'av'|'foto'`; recibe `piezasByPauta`), `sortForList`. `DEFAULT_LIST_FILTER` incluye `editorId` y `formatGroup`; `AvListView` los ofrece como selectores («Todos los editores», «Videos y fotos / Solo videos / Solo fotos») junto al de recurso; el panel de persona de Datos los deja preseleccionados.
   - reagendado: `reagendamientosOf`, `formatReagendamiento`.
   - rendimiento: `aggregateResourcePerformance` (con `grabaV/R`, `editaV/R`, `editaCnp`), `rankingFotos`, `rankingVideos`, `pendientesPorEditar`, `pautaMatchesPendiente`, `aggregatePiezasByLine`.
   - captura: `grabacionPorFormato`, `setGrabacionCount`, `syncRecursoIds`, `syncSalieronFromGrabacion`.

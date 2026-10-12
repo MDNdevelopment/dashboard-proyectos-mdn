@@ -476,6 +476,7 @@ export default function AudiovisualView({
           generalLineId={generalLineId}
           usersById={usersById}
           recursoUsers={recursoOptions}
+          editorUsers={editorOptions}
           filter={listFilter}
           onFilterChange={setListFilter}
           pendientes={pendientes}

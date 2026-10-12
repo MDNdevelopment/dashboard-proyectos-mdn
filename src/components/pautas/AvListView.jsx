@@ -33,7 +33,7 @@ function Chip({ children, onRemove, label }) {
 }
 
 /**
- * Vista Lista: chips de estado, filtro por recurso, búsqueda y — cuando se llega desde
+ * Vista Lista: chips de estado, filtros por recurso, editor y formato, búsqueda y — cuando se llega desde
  * "Pendiente por editar" — un chip removible que acota a las pautas con pendiente.
  */
 export default function AvListView({
@@ -43,6 +43,7 @@ export default function AvListView({
   generalLineId,
   usersById,
   recursoUsers,
+  editorUsers,
   filter,
   onFilterChange,
   pendientes,
@@ -97,16 +98,6 @@ export default function AvListView({
             </button>
           </span>
         )}
-        {editorId && (
-          <Chip onRemove={() => set({ editorId: null })} label="Quitar filtro de editor">
-            Editado por {personName(editorId, usersById)}
-          </Chip>
-        )}
-        {formatGroup && (
-          <Chip onRemove={() => set({ formatGroup: null })} label="Quitar filtro de formato">
-            {formatGroup === 'av' ? 'Solo videos' : 'Solo fotos'}
-          </Chip>
-        )}
         {pendiente ? (
           <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#fdf4de] text-[#9a7400] text-[13px] font-semibold">
             Pendiente por editar: {pendiente.formato ? PENDIENTE_LABELS[pendiente.formato] : 'todo'}
@@ -151,6 +142,29 @@ export default function AvListView({
                 {u.first_name} {u.last_name}
               </option>
             ))}
+          </select>
+          <select
+            className="input-base input-compact w-auto"
+            aria-label="Filtrar por editor"
+            value={editorId ?? ''}
+            onChange={(e) => set({ editorId: e.target.value || null })}
+          >
+            <option value="">Todos los editores</option>
+            {(editorUsers ?? []).map((u) => (
+              <option key={u.user_id} value={u.user_id}>
+                {u.first_name} {u.last_name}
+              </option>
+            ))}
+          </select>
+          <select
+            className="input-base input-compact w-auto"
+            aria-label="Filtrar por formato"
+            value={formatGroup ?? ''}
+            onChange={(e) => set({ formatGroup: e.target.value || null })}
+          >
+            <option value="">Videos y fotos</option>
+            <option value="av">Solo videos</option>
+            <option value="foto">Solo fotos</option>
           </select>
           <input
             className="input-base input-compact w-[180px]"

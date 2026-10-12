@@ -132,21 +132,27 @@ describe('AvListView', () => {
     expect(onFilterChange).toHaveBeenCalledWith(expect.objectContaining({ lineId: null }))
   })
 
-  it('chips de editor y formato filtran y se pueden quitar', () => {
+  it('los selectores de editor y formato filtran y se pueden limpiar', () => {
     const conLotes = new Map([
       ['c', [{ es_lote: true, formato: 'R', cantidad: 6, listas: 4, editor_user_id: 'r1' }]],
     ])
     const { onFilterChange } = setup(
       { status: 'realizadas', editorId: 'r1', formatGroup: 'av' },
-      { piezasByPauta: conLotes },
+      { piezasByPauta: conLotes, editorUsers: [...users.values()] },
     )
     expect(screen.getByText('Realizada C')).toBeInTheDocument()
-    expect(screen.getByText('Editado por Rafa Cam')).toBeInTheDocument()
-    expect(screen.getByText('Solo videos')).toBeInTheDocument()
-    fireEvent.click(screen.getByLabelText('Quitar filtro de editor'))
+    expect(screen.getByLabelText('Filtrar por editor')).toHaveValue('r1')
+    expect(screen.getByLabelText('Filtrar por formato')).toHaveValue('av')
+    fireEvent.change(screen.getByLabelText('Filtrar por editor'), { target: { value: '' } })
     expect(onFilterChange).toHaveBeenCalledWith(expect.objectContaining({ editorId: null }))
-    fireEvent.click(screen.getByLabelText('Quitar filtro de formato'))
-    expect(onFilterChange).toHaveBeenCalledWith(expect.objectContaining({ formatGroup: null }))
+    fireEvent.change(screen.getByLabelText('Filtrar por formato'), { target: { value: 'foto' } })
+    expect(onFilterChange).toHaveBeenCalledWith(expect.objectContaining({ formatGroup: 'foto' }))
+  })
+
+  it('se puede elegir un editor desde el selector sin venir del panel', () => {
+    const { onFilterChange } = setup({ status: 'realizadas' }, { editorUsers: [...users.values()] })
+    fireEvent.change(screen.getByLabelText('Filtrar por editor'), { target: { value: 'r1' } })
+    expect(onFilterChange).toHaveBeenCalledWith(expect.objectContaining({ editorId: 'r1' }))
   })
 
   it('un editor sin lotes en esa pauta la excluye', () => {
