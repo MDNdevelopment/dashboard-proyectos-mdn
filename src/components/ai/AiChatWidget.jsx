@@ -10,8 +10,12 @@ import AiAvatar from './AiAvatar'
  * AiChatProvider (ver src/context/AiChatContext.jsx) — el estado (open, mensajes) vive en
  * el contexto para que otros componentes (ej. RecomendacionesCard) puedan abrir el panel
  * con contexto precargado.
+ *
+ * El botón flotante y su burbuja de CTA están ocultos (`mostrarBoton = false`) porque no se
+ * usan; el panel sigue montado y se abre desde RecomendacionesCard (`openWithContext`). Para
+ * volver a mostrarlos basta pasar `mostrarBoton` o cambiar el valor por defecto.
  */
-export default function AiChatWidget() {
+export default function AiChatWidget({ mostrarBoton = false }) {
   const { userProfile } = useAuth()
   const { open, setOpen, ...chat } = useAiChatContext()
   const [ctasDismissed, setCtasDismissed] = useState(false)
@@ -44,7 +48,7 @@ export default function AiChatWidget() {
 
       {open && <AiChatPanel {...chat} onClose={() => setOpen(false)} />}
 
-      {!open && !ctasDismissed && (
+      {mostrarBoton && !open && !ctasDismissed && (
         <div className="fixed right-4 bottom-[168px] lg:right-6 lg:bottom-28 z-40 rounded-2xl bg-white shadow-xl border border-[#e0ddd4] pl-4 pr-2 py-2.5 flex items-center gap-2">
           <button
             type="button"
@@ -64,17 +68,19 @@ export default function AiChatWidget() {
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={() => {
-          setCtasDismissed(true)
-          setOpen((v) => !v)
-        }}
-        aria-label={open ? 'Cerrar asistente IA' : 'Abrir asistente IA'}
-        className="fixed right-4 bottom-24 lg:right-6 lg:bottom-6 z-40 w-16 h-16 rounded-full bg-[#111] shadow-lg flex items-center justify-center hover:scale-105 transition-transform"
-      >
-        {open ? <span className="text-white text-xl">✕</span> : <AiAvatar size={58} />}
-      </button>
+      {mostrarBoton && (
+        <button
+          type="button"
+          onClick={() => {
+            setCtasDismissed(true)
+            setOpen((v) => !v)
+          }}
+          aria-label={open ? 'Cerrar asistente IA' : 'Abrir asistente IA'}
+          className="fixed right-4 bottom-24 lg:right-6 lg:bottom-6 z-40 w-16 h-16 rounded-full bg-[#111] shadow-lg flex items-center justify-center hover:scale-105 transition-transform"
+        >
+          {open ? <span className="text-white text-xl">✕</span> : <AiAvatar size={58} />}
+        </button>
+      )}
     </>
   )
 }
