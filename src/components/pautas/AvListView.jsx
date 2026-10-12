@@ -81,57 +81,57 @@ export default function AvListView({
 
   return (
     <div className="bg-white border border-[#e0ddd4] rounded-2xl overflow-hidden">
-      <div
-        className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-[#ece9df]"
-        data-tour="lista-filtros"
-      >
-        {lineId && (
-          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#111] text-[#FFB800] text-[13px] font-semibold">
-            Línea: {lineName({ line_id: lineId })}
-            <button
-              type="button"
-              onClick={() => set({ lineId: null })}
-              aria-label="Quitar filtro de línea"
-              className="w-4 h-4 rounded-full hover:bg-white/20 flex items-center justify-center"
-            >
-              ✕
-            </button>
-          </span>
-        )}
-        {pendiente ? (
-          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#fdf4de] text-[#9a7400] text-[13px] font-semibold">
-            Pendiente por editar: {pendiente.formato ? PENDIENTE_LABELS[pendiente.formato] : 'todo'}
-            {pendiente.lineId && ` · ${lineName({ line_id: pendiente.lineId })}`}
-            <button
-              type="button"
-              onClick={() => set({ pendiente: null })}
-              aria-label="Quitar filtro de pendientes"
-              className="w-4 h-4 rounded-full hover:bg-[#f3e2ad] flex items-center justify-center"
-            >
-              ✕
-            </button>
-          </span>
-        ) : (
-          LIST_FILTERS.map((f) => (
-            <button
-              key={f}
-              type="button"
-              onClick={() => set({ status: f })}
-              aria-pressed={status === f}
-              className={`px-3 py-1 rounded-full text-[13px] font-semibold transition-colors ${
-                status === f
-                  ? 'bg-[#111] text-[#FFB800]'
-                  : 'bg-white border border-[#e0ddd4] text-[#555] hover:border-[#111]'
-              }`}
-            >
-              {LIST_FILTER_LABELS[f]}
-              <span className="ml-1.5 font-mono text-[11px] opacity-70">{counts[f]}</span>
-            </button>
-          ))
-        )}
-        <div className="ml-auto flex items-center gap-2">
+      <div className="px-4 py-3 border-b border-[#ece9df] space-y-3" data-tour="lista-filtros">
+        <div className="flex flex-wrap items-center gap-2">
+          {lineId && (
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#111] text-[#FFB800] text-[13px] font-semibold">
+              Línea: {lineName({ line_id: lineId })}
+              <button
+                type="button"
+                onClick={() => set({ lineId: null })}
+                aria-label="Quitar filtro de línea"
+                className="w-4 h-4 rounded-full hover:bg-white/20 flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </span>
+          )}
+          {pendiente ? (
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#fdf4de] text-[#9a7400] text-[13px] font-semibold">
+              Pendiente por editar:{' '}
+              {pendiente.formato ? PENDIENTE_LABELS[pendiente.formato] : 'todo'}
+              {pendiente.lineId && ` · ${lineName({ line_id: pendiente.lineId })}`}
+              <button
+                type="button"
+                onClick={() => set({ pendiente: null })}
+                aria-label="Quitar filtro de pendientes"
+                className="w-4 h-4 rounded-full hover:bg-[#f3e2ad] flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </span>
+          ) : (
+            LIST_FILTERS.map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => set({ status: f })}
+                aria-pressed={status === f}
+                className={`px-3 py-1 rounded-full text-[13px] font-semibold transition-colors ${
+                  status === f
+                    ? 'bg-[#111] text-[#FFB800]'
+                    : 'bg-white border border-[#e0ddd4] text-[#555] hover:border-[#111]'
+                }`}
+              >
+                {LIST_FILTER_LABELS[f]}
+                <span className="ml-1.5 font-mono text-[11px] opacity-70">{counts[f]}</span>
+              </button>
+            ))
+          )}
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[repeat(3,minmax(0,1fr))_minmax(0,1.4fr)] gap-2">
           <select
-            className="input-base input-compact w-auto"
+            className="input-base input-compact w-full"
             aria-label="Filtrar por recurso"
             value={recursoId ?? ''}
             onChange={(e) => set({ recursoId: e.target.value || null })}
@@ -144,7 +144,7 @@ export default function AvListView({
             ))}
           </select>
           <select
-            className="input-base input-compact w-auto"
+            className="input-base input-compact w-full"
             aria-label="Filtrar por editor"
             value={editorId ?? ''}
             onChange={(e) => set({ editorId: e.target.value || null })}
@@ -157,7 +157,7 @@ export default function AvListView({
             ))}
           </select>
           <select
-            className="input-base input-compact w-auto"
+            className="input-base input-compact w-full"
             aria-label="Filtrar por formato"
             value={formatGroup ?? ''}
             onChange={(e) => set({ formatGroup: e.target.value || null })}
@@ -167,7 +167,7 @@ export default function AvListView({
             <option value="foto">Solo fotos</option>
           </select>
           <input
-            className="input-base input-compact w-[180px]"
+            className="input-base input-compact w-full"
             placeholder="Buscar cliente, tema…"
             aria-label="Buscar"
             value={query ?? ''}
