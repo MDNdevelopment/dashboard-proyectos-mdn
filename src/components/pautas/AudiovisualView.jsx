@@ -43,6 +43,8 @@ function currentYearMonth() {
 const DEFAULT_LIST_FILTER = {
   status: 'solicitadas',
   recursoId: null,
+  editorId: null,
+  formatGroup: null,
   query: '',
   pendiente: null,
   lineId: null,
@@ -485,6 +487,19 @@ export default function AudiovisualView({
           }}
           onSelectPendiente={(sel) => {
             setListFilter({ ...DEFAULT_LIST_FILTER, pendiente: sel })
+            setView('todas')
+          }}
+          onSelectPersona={({ id, rol, grupo }) => {
+            setListFilter(
+              rol === 'captura'
+                ? {
+                    ...DEFAULT_LIST_FILTER,
+                    status: 'realizadas',
+                    recursoId: id,
+                    formatGroup: grupo,
+                  }
+                : { ...DEFAULT_LIST_FILTER, editorId: id, formatGroup: grupo },
+            )
             setView('todas')
           }}
           onSelectLine={(lineId) => {

@@ -1372,8 +1372,31 @@ export function pautaMatchesList(pauta, filter) {
  * Filtro secundario de la lista: recurso asignado y texto libre (cliente, tema, lugar,
  * nombre del solicitante o de un recurso).
  */
-export function pautaMatchesQuery(pauta, { recursoId = null, query = '', usersById } = {}) {
+export function pautaMatchesQuery(
+  pauta,
+  {
+    recursoId = null,
+    editorId = null,
+    formatGroup = null,
+    piezasByPauta = null,
+    query = '',
+    usersById,
+  } = {},
+) {
   if (recursoId && !(pauta.recurso_ids ?? []).includes(recursoId)) return false
+  if (formatGroup && !(pauta.formats ?? []).some((c) => formatGroupOf(c) === formatGroup)) {
+    return false
+  }
+  if (editorId) {
+    const lotes = piezasByPauta?.get(pauta.id) ?? []
+    const ok = lotes.some(
+      (pz) =>
+        pz.status !== 'cancelado' &&
+        pz.editor_user_id === editorId &&
+        (!formatGroup || formatGroupOf(pz.formato ?? soloFormatoDe(pauta)) === formatGroup),
+    )
+    if (!ok) return false
+  }
   const q = (query ?? '').trim().toLowerCase()
   if (!q) return true
   const hay = [
@@ -1645,14 +1668,36 @@ export function groupByDay(pautas) {
   return out
 }
 
-/** Σ salieron / Σ listas de una pauta a partir de `piezas_por_formato` y sus lotes. */
+/** Formato único de la pauta (si solo marca uno); sirve para piezas sin `formato`. */
+function soloFormatoDe(pauta) {
+  return (pauta.formats ?? []).length === 1 ? pauta.formats[0] : null
+}
+
+/**
+ * Σ salieron / Σ listas de una pauta a partir de `piezas_por_formato` y sus lotes, más el
+ * desglose por grupo (`av` = Video + Reel, `foto`). Las listas sin formato conocido solo
+ * entran al total.
+ */
 function capturaYEdicion(pauta, piezas) {
   const breakdown = piezasPorFormato(pauta)
-  const salieron = Object.values(breakdown).reduce((s, e) => s + e.salieron, 0)
-  const listas = (piezas ?? [])
+  const porGrupo = { av: { salieron: 0, listas: 0 }, foto: { salieron: 0, listas: 0 } }
+  let salieron = 0
+  Object.entries(breakdown).forEach(([code, e]) => {
+    salieron += e.salieron
+    const g = formatGroupOf(code)
+    if (g) porGrupo[g].salieron += e.salieron
+  })
+  const solo = soloFormatoDe(pauta)
+  let listas = 0
+  ;(piezas ?? [])
     .filter((pz) => pz.status !== 'cancelado')
-    .reduce((s, pz) => s + piezaListas(pz), 0)
-  return { salieron, listas }
+    .forEach((pz) => {
+      const n = piezaListas(pz)
+      listas += n
+      const g = formatGroupOf(pz.formato ?? solo)
+      if (g) porGrupo[g].listas += n
+    })
+  return { salieron, listas, porGrupo }
 }
 
 /**
@@ -1978,14 +2023,26 @@ export function resumenMes(pautas, piezasByPauta, { year, month }) {
   )
   let capturadas = 0
   let editadas = 0
+  let capturadasVideo = 0
+  let editadasVideo = 0
+  let capturadasFoto = 0
+  let editadasFoto = 0
   delMes
     .filter((p) => CONFIRMADAS.includes(p.status))
     .forEach((p) => {
-      const { salieron, listas } = capturaYEdicion(p, piezasByPauta?.get(p.id))
+      const { salieron, listas, porGrupo } = capturaYEdicion(p, piezasByPauta?.get(p.id))
       capturadas += salieron
       editadas += Math.min(salieron, listas)
+      capturadasVideo += porGrupo.av.salieron
+      editadasVideo += Math.min(porGrupo.av.salieron, porGrupo.av.listas)
+      capturadasFoto += porGrupo.foto.salieron
+      editadasFoto += Math.min(porGrupo.foto.salieron, porGrupo.foto.listas)
     })
   return {
+    capturadasVideo,
+    editadasVideo,
+    capturadasFoto,
+    editadasFoto,
     pctEditado: capturadas ? Math.round((editadas / capturadas) * 100) : null,
     capturadas,
     editadas,
@@ -1999,6 +2056,43 @@ export function resumenMes(pautas, piezasByPauta, { year, month }) {
 
 function isoMonth(iso) {
   return String(iso).slice(0, 7)
+}
+
+/**
+ * Pautas por semana de una persona en un mes: semanas lunes–sábado que tocan el mes, con
+ * pautas DISTINTAS confirmadas (programada/realizada) según `pauta_date`. `capturo`: está en
+ * `recurso_ids` o en el reparto de grabación; `edito`: tiene un lote no cancelado. No hay
+ * fecha de edición, así que la semana es la de la pauta. `total` = pautas donde participó.
+ * @returns {Array<{start:string,end:string,total:number,capturo:number,edito:number}>}
+ */
+export function pautasPorSemanaPersona(pautas, piezasByPauta, personId, { year, month }) {
+  const prefix = `${year}-${pad(month)}`
+  const last = new Date(year, month, 0).getDate()
+  const semanas = []
+  const seen = new Set()
+  for (let d = 1; d <= last; d++) {
+    const r = weekRange(`${prefix}-${pad(d)}`)
+    if (!seen.has(r.start)) {
+      seen.add(r.start)
+      semanas.push({ start: r.start, end: r.end, total: 0, capturo: 0, edito: 0 })
+    }
+  }
+  ;(pautas ?? []).forEach((p) => {
+    if (p.deleted_at || !CONFIRMADAS.includes(p.status) || !p.pauta_date) return
+    if (isoMonth(p.pauta_date) !== prefix) return
+    const sem = semanas.find((s) => p.pauta_date >= s.start && p.pauta_date <= s.end)
+    if (!sem) return
+    const capturo =
+      (p.recurso_ids ?? []).includes(personId) ||
+      FORMAT_KEYS.some((code) => personId in (grabacionPorFormato(p)[code] ?? {}))
+    const edito = (piezasByPauta?.get(p.id) ?? []).some(
+      (pz) => pz.status !== 'cancelado' && pz.editor_user_id === personId,
+    )
+    if (capturo) sem.capturo += 1
+    if (edito) sem.edito += 1
+    if (capturo || edito) sem.total += 1
+  })
+  return semanas
 }
 
 // ─── Generador de agenda para WhatsApp ─────────────────────────────────────

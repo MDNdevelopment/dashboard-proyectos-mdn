@@ -1,4 +1,7 @@
+import { useState } from 'react'
 import KpiMes from './KpiMes'
+import FotosVsVideos from './FotosVsVideos'
+import PersonaPanel from './PersonaPanel'
 import RankingTable from './RankingTable'
 import PendientesPanel from './PendientesPanel'
 import {
@@ -29,7 +32,9 @@ export default function AvDatosView({
   onMonthChange,
   onSelectPendiente,
   onSelectLine,
+  onSelectPersona,
 }) {
+  const [persona, setPersona] = useState(null)
   const actual = resumenMes(allPautas, piezasByPauta, { year, month })
   const prev = month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 }
   const anterior = resumenMes(allPautas, piezasByPauta, prev)
@@ -52,12 +57,14 @@ export default function AvDatosView({
         onMonthChange={onMonthChange}
         onGoPendientes={() => onSelectPendiente({ lineId: null, formato: null })}
       />
+      <FotosVsVideos actual={actual} anterior={anterior} />
       <PendientesPanel porLinea={pendientes.porLinea} onSelect={onSelectPendiente} />
       <div className="grid md:grid-cols-2 gap-4">
         <RankingTable
           title="Videos 4K + Reels"
           subtitle="Capturadas y editadas por persona en pautas realizadas. Las piezas de CNP de audiovisual suman en editadas."
           rows={videos}
+          onSelectRow={setPersona}
           usersById={usersById}
           empty="Aún no hay videos capturados ni editados este mes."
           renderDesglose={(r) => ({
@@ -80,6 +87,7 @@ export default function AvDatosView({
           title="Fotos"
           subtitle="Capturadas y editadas por persona en pautas realizadas."
           rows={fotos}
+          onSelectRow={setPersona}
           usersById={usersById}
           empty="Aún no hay fotos capturadas ni editadas este mes."
         />
@@ -139,6 +147,22 @@ export default function AvDatosView({
           </div>
         )}
       </div>
+      {persona && (
+        <PersonaPanel
+          persona={persona}
+          perf={perf}
+          pautas={pautas}
+          piezasByPauta={piezasByPauta}
+          usersById={usersById}
+          year={year}
+          month={month}
+          onClose={() => setPersona(null)}
+          onVerLista={(sel) => {
+            setPersona(null)
+            onSelectPersona?.(sel)
+          }}
+        />
+      )}
     </div>
   )
 }

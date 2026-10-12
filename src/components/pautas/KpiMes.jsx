@@ -104,7 +104,7 @@ export default function KpiMes({ year, month, actual, anterior, onMonthChange, o
   )
 }
 
-function Delta({ cur, ant, mejorSi, unit }) {
+export function Delta({ cur, ant, mejorSi, unit }) {
   if (cur === null || cur === undefined || ant === null || ant === undefined) {
     return <span className="text-[#bbb]">sin mes anterior</span>
   }

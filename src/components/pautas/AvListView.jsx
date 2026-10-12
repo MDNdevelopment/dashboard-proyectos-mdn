@@ -11,6 +11,27 @@ import {
 
 const PENDIENTE_LABELS = { ...FORMAT_LABELS, sinDesglose: 'Sin desglosar' }
 
+function personName(id, usersById) {
+  const u = usersById?.get(id)
+  return u ? `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() || id : id
+}
+
+function Chip({ children, onRemove, label }) {
+  return (
+    <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#111] text-[#FFB800] text-[13px] font-semibold">
+      {children}
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label={label}
+        className="w-4 h-4 rounded-full hover:bg-white/20 flex items-center justify-center"
+      >
+        ✕
+      </button>
+    </span>
+  )
+}
+
 /**
  * Vista Lista: chips de estado, filtro por recurso, búsqueda y — cuando se llega desde
  * "Pendiente por editar" — un chip removible que acota a las pautas con pendiente.
@@ -27,7 +48,15 @@ export default function AvListView({
   pendientes,
   onPautaClick,
 }) {
-  const { status, recursoId, query, pendiente, lineId = null } = filter
+  const {
+    status,
+    recursoId,
+    query,
+    pendiente,
+    lineId = null,
+    editorId = null,
+    formatGroup = null,
+  } = filter
   const enLinea = (p) => !lineId || (p.line_id ?? generalLineId) === lineId
   const counts = Object.fromEntries(
     LIST_FILTERS.map((f) => [f, pautas.filter((p) => enLinea(p) && pautaMatchesList(p, f)).length]),
@@ -39,7 +68,7 @@ export default function AvListView({
         (pendiente
           ? pautaMatchesPendiente(p, pendientes.porPauta, pendiente, generalLineId)
           : pautaMatchesList(p, status)) &&
-        pautaMatchesQuery(p, { recursoId, query, usersById }),
+        pautaMatchesQuery(p, { recursoId, editorId, formatGroup, piezasByPauta, query, usersById }),
     ),
     pendiente ? 'agendadas' : status,
   )
@@ -67,6 +96,16 @@ export default function AvListView({
               ✕
             </button>
           </span>
+        )}
+        {editorId && (
+          <Chip onRemove={() => set({ editorId: null })} label="Quitar filtro de editor">
+            Editado por {personName(editorId, usersById)}
+          </Chip>
+        )}
+        {formatGroup && (
+          <Chip onRemove={() => set({ formatGroup: null })} label="Quitar filtro de formato">
+            {formatGroup === 'av' ? 'Solo videos' : 'Solo fotos'}
+          </Chip>
         )}
         {pendiente ? (
           <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#fdf4de] text-[#9a7400] text-[13px] font-semibold">

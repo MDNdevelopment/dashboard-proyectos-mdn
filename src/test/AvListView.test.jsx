@@ -132,6 +132,28 @@ describe('AvListView', () => {
     expect(onFilterChange).toHaveBeenCalledWith(expect.objectContaining({ lineId: null }))
   })
 
+  it('chips de editor y formato filtran y se pueden quitar', () => {
+    const conLotes = new Map([
+      ['c', [{ es_lote: true, formato: 'R', cantidad: 6, listas: 4, editor_user_id: 'r1' }]],
+    ])
+    const { onFilterChange } = setup(
+      { status: 'realizadas', editorId: 'r1', formatGroup: 'av' },
+      { piezasByPauta: conLotes },
+    )
+    expect(screen.getByText('Realizada C')).toBeInTheDocument()
+    expect(screen.getByText('Editado por Rafa Cam')).toBeInTheDocument()
+    expect(screen.getByText('Solo videos')).toBeInTheDocument()
+    fireEvent.click(screen.getByLabelText('Quitar filtro de editor'))
+    expect(onFilterChange).toHaveBeenCalledWith(expect.objectContaining({ editorId: null }))
+    fireEvent.click(screen.getByLabelText('Quitar filtro de formato'))
+    expect(onFilterChange).toHaveBeenCalledWith(expect.objectContaining({ formatGroup: null }))
+  })
+
+  it('un editor sin lotes en esa pauta la excluye', () => {
+    setup({ status: 'realizadas', editorId: 'otro' })
+    expect(screen.queryByText('Realizada C')).not.toBeInTheDocument()
+  })
+
   it('papelera lista solo las borradas', () => {
     setup({ status: 'papelera' })
     expect(screen.getByText('Borrada D')).toBeInTheDocument()
