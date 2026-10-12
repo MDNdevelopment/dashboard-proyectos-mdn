@@ -12,9 +12,23 @@ export const ALERTA_META = {
     tone: 'red',
   },
   piezasAtrasadas: {
-    label: (n) => `${n} ${n === 1 ? 'pauta' : 'pautas'} con piezas atrasadas`,
+    label: (n, a) => {
+      const cnps = a?.cnpPendientes?.length ?? 0
+      const pautas = n - cnps
+      const partes = []
+      if (pautas > 0)
+        partes.push(`${pautas} ${pautas === 1 ? 'pauta' : 'pautas'} con piezas atrasadas`)
+      if (cnps > 0) partes.push(`${cnps} ${cnps === 1 ? 'CNP pendiente' : 'CNPs pendientes'}`)
+      return partes.join(' · ')
+    },
     tone: 'amber',
   },
+}
+
+/** Cantidad del chip: `piezasAtrasadas` junta pautas atrasadas y CNP pendientes. */
+export function alertaCount(alertas, kind) {
+  const n = alertas?.[kind]?.length ?? 0
+  return kind === 'piezasAtrasadas' ? n + (alertas?.cnpPendientes?.length ?? 0) : n
 }
 
 const TONE = {
@@ -25,7 +39,7 @@ const TONE = {
 /** Chips de "cosas que necesitan acción"; cada uno abre su cola en el panel lateral. */
 export default function AlertasStrip({ alertas, onOpen }) {
   const items = Object.keys(ALERTA_META)
-    .map((kind) => ({ kind, count: alertas?.[kind]?.length ?? 0 }))
+    .map((kind) => ({ kind, count: alertaCount(alertas, kind) }))
     .filter((i) => i.count > 0)
   if (items.length === 0) {
     return (
@@ -47,7 +61,7 @@ export default function AlertasStrip({ alertas, onOpen }) {
           onClick={() => onOpen(kind)}
           className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[12.5px] font-semibold transition-colors ${TONE[ALERTA_META[kind].tone]}`}
         >
-          ⚠ {ALERTA_META[kind].label(count)}
+          ⚠ {ALERTA_META[kind].label(count, alertas)}
           <span className="text-[11px] opacity-70">ver ›</span>
         </button>
       ))}

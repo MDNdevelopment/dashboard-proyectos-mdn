@@ -5,7 +5,11 @@
  * components/reuniones/meetingsApi.js.
  */
 import { supabase } from '../../supabase'
-import { sumPiezasVideoForLine, sumPiezasVideoBreakdownForLine } from '../../utils/audiovisual'
+import {
+  sumPiezasVideoForLine,
+  sumPiezasVideoBreakdownForLine,
+  sumCnpAudiovisual,
+} from '../../utils/audiovisual'
 import { selectAllPages } from '../../lib/supabasePaginate'
 
 // ─── Lectura ──────────────────────────────────────────────────────────────────
@@ -38,26 +42,50 @@ export async function loadPautas(companyId) {
  * Video 4K (`video4k`, formato V) vs Reel (`reel`, formato R) para mostrar la distinción en
  * el reporte — ver sumPiezasVideoForLine/sumPiezasVideoBreakdownForLine
  * (utils/audiovisual.js) para el criterio exacto de qué pauta cuenta y cómo se reparte.
+ * Devuelve además `cnp` ({solicitudes, entregados}): los CNP de audiovisual de la línea
+ * solicitados en el mes (`created_at`, como el indicador de Solicitudes). Son pedidos de solo
+ * edición y van como fuente aparte — NO se suman a `piezas`/`editadas` de las pautas.
  */
 export async function countPiezasForLine(companyId, lineId, { month, year }) {
   const monthStart = new Date(year, month - 1, 1)
   const monthEnd = new Date(year, month, 1)
   const toISODate = (d) => d.toISOString().slice(0, 10)
 
-  const { data, error } = await supabase
-    .from('av_pautas')
-    .select('piezas_totales, piezas_editadas, status, formats, piezas_por_formato')
-    .eq('company_id', companyId)
-    .eq('line_id', lineId)
-    .eq('status', 'realizada')
-    .gte('pauta_date', toISODate(monthStart))
-    .lt('pauta_date', toISODate(monthEnd))
+  const [{ data, error }, { data: cnpData, error: cnpError }] = await Promise.all([
+    supabase
+      .from('av_pautas')
+      .select('piezas_totales, piezas_editadas, status, formats, piezas_por_formato')
+      .eq('company_id', companyId)
+      .eq('line_id', lineId)
+      .eq('status', 'realizada')
+      .gte('pauta_date', toISODate(monthStart))
+      .lt('pauta_date', toISODate(monthEnd)),
+    supabase
+      .from('cnp_requests')
+      .select('status, pieces')
+      .eq('company_id', companyId)
+      .eq('line_id', lineId)
+      .eq('is_audiovisual', true)
+      .is('deleted_at', null)
+      .gte('created_at', toISODate(monthStart))
+      .lt('created_at', toISODate(monthEnd)),
+  ])
 
-  if (error) return { piezas: 0, editadas: 0, porGrupo: sumPiezasVideoBreakdownForLine([]), error }
+  const err = error ?? cnpError
+  if (err) {
+    return {
+      piezas: 0,
+      editadas: 0,
+      porGrupo: sumPiezasVideoBreakdownForLine([]),
+      cnp: sumCnpAudiovisual([]),
+      error: err,
+    }
+  }
   const rows = data ?? []
   return {
     ...sumPiezasVideoForLine(rows),
     porGrupo: sumPiezasVideoBreakdownForLine(rows),
+    cnp: sumCnpAudiovisual(cnpData),
     error: null,
   }
 }

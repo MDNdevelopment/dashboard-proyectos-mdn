@@ -21,7 +21,11 @@
  */
 import { supabase } from '../../supabase'
 import { clientIdsForLine } from '../reuniones/meetingsApi'
-import { sumPiezasVideoForLine, sumPiezasVideoBreakdownForLine } from '../../utils/audiovisual'
+import {
+  sumPiezasVideoForLine,
+  sumPiezasVideoBreakdownForLine,
+  sumCnpAudiovisual,
+} from '../../utils/audiovisual'
 import { cnpPieceCount, cnpPiecesDelivered } from '../cnp/constants'
 import { selectAllPages } from '../../lib/supabasePaginate'
 
@@ -41,7 +45,12 @@ function emptySources() {
     heldClientIds: [],
     fixedTaskMarks: [],
     checks: [],
-    piezas: { piezas: 0, editadas: 0, porGrupo: sumPiezasVideoBreakdownForLine([]) },
+    piezas: {
+      piezas: 0,
+      editadas: 0,
+      porGrupo: sumPiezasVideoBreakdownForLine([]),
+      cnp: sumCnpAudiovisual([]),
+    },
     pautasByClient: {},
     cnpSolicitudes: { solicitudes: 0, entregados: 0 },
     tareasSolicitudes: { solicitudes: 0, entregados: 0 },
@@ -147,7 +156,7 @@ export async function loadReportSources(companyId, { year, months, lineIds }) {
       .lt('pauta_date', dateStr(rangeEnd)),
     supabase
       .from('cnp_requests')
-      .select('line_id, status, pieces, created_at')
+      .select('line_id, status, pieces, created_at, is_audiovisual')
       .eq('company_id', companyId)
       .in('line_id', lineIds)
       .is('deleted_at', null)
@@ -228,6 +237,18 @@ export async function loadReportSources(companyId, { year, months, lineIds }) {
   })
 
   // ── Piezas + Pautas (av_pautas) ───────────────────────────────────────────
+  // Los CNP de audiovisual (solo edición) son una fuente aparte del indicador de piezas, con
+  // su propio solicitado/entregado; se agrupan por línea×mes con el mismo bucket (instante
+  // UTC de created_at) que usa la sección de CNP más abajo.
+  const cnpAvByLineMonth = {}
+  ;(cnpRes.data ?? []).forEach((row) => {
+    if (!row.is_audiovisual) return
+    const m = monthForUtcInstant(Date.parse(row.created_at))
+    if (m == null) return
+    const key = `${row.line_id}__${m}`
+    if (!cnpAvByLineMonth[key]) cnpAvByLineMonth[key] = []
+    cnpAvByLineMonth[key].push(row)
+  })
   const avByLineMonth = {}
   ;(avRes.data ?? []).forEach((row) => {
     const m = monthForDateString(row.pauta_date ?? '')
@@ -243,6 +264,7 @@ export async function loadReportSources(companyId, { year, months, lineIds }) {
       entry.piezas = {
         ...sumPiezasVideoForLine(rows),
         porGrupo: sumPiezasVideoBreakdownForLine(rows),
+        cnp: sumCnpAudiovisual(cnpAvByLineMonth[`${lineId}__${month}`]),
       }
       const byClient = {}
       rows.forEach((row) => {
