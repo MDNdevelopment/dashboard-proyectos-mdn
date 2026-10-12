@@ -18,6 +18,7 @@ import {
   miTrabajo,
   disponiblesParaTomar,
   resumenMes,
+  pautasPorSemanaPersona,
   isoDateKey,
 } from '../utils/audiovisual'
 
@@ -463,6 +464,10 @@ describe('resumenMes', () => {
       ['b', [lote({ pauta_id: 'b', cantidad: 10, listas: 5 })]],
     ])
     expect(resumenMes(list, piezas, { year: 2026, month: 10 })).toEqual({
+      capturadasVideo: 20,
+      editadasVideo: 15,
+      capturadasFoto: 0,
+      editadasFoto: 0,
       pctEditado: 75,
       capturadas: 20,
       editadas: 15,
@@ -475,7 +480,102 @@ describe('resumenMes', () => {
     expect(resumenMes([], new Map(), { year: 2026, month: 10 }).pctEditado).toBeNull()
   })
 
+  it('desglosa video (V+R) y foto con min(salieron, listas) por grupo', () => {
+    const list = [
+      pauta({
+        id: 'a',
+        status: 'realizada',
+        formats: ['V', 'R', 'F'],
+        piezas_por_formato: {
+          V: { salieron: 2, editadas: 0 },
+          R: { salieron: 3, editadas: 0 },
+          F: { salieron: 10, editadas: 0 },
+        },
+      }),
+    ]
+    const piezas = new Map([
+      [
+        'a',
+        [
+          lote({ pauta_id: 'a', formato: 'R', cantidad: 3, listas: 9 }),
+          lote({ id: 'z2', pauta_id: 'a', formato: 'F', cantidad: 10, listas: 4 }),
+          lote({
+            id: 'z3',
+            pauta_id: 'a',
+            formato: 'F',
+            cantidad: 5,
+            listas: 5,
+            status: 'cancelado',
+          }),
+        ],
+      ],
+    ])
+    expect(resumenMes(list, piezas, { year: 2026, month: 10 })).toMatchObject({
+      capturadasVideo: 5,
+      editadasVideo: 5,
+      capturadasFoto: 10,
+      editadasFoto: 4,
+    })
+  })
+
   it('isoDateKey queda exportado', () => {
     expect(isoDateKey(new Date(2026, 9, 7))).toBe('2026-10-07')
+  })
+})
+
+describe('pautasPorSemanaPersona', () => {
+  const list = [
+    pauta({ id: 'a', status: 'realizada', pauta_date: '2026-10-05', recurso_ids: ['u1'] }),
+    pauta({ id: 'b', status: 'programada', pauta_date: '2026-10-07', recurso_ids: ['u2'] }),
+    pauta({ id: 'c', status: 'realizada', pauta_date: '2026-10-14', recurso_ids: ['u2'] }),
+    pauta({ id: 'd', status: 'solicitada', pauta_date: '2026-10-06', recurso_ids: ['u1'] }),
+    pauta({ id: 'e', status: 'declinada', pauta_date: '2026-10-06', recurso_ids: ['u1'] }),
+    pauta({
+      id: 'f',
+      status: 'realizada',
+      pauta_date: '2026-10-08',
+      recurso_ids: [],
+      deleted_at: 'x',
+    }),
+    pauta({
+      id: 'g',
+      status: 'realizada',
+      pauta_date: '2026-10-09',
+      recurso_ids: [],
+      grabacion_por_formato: { R: { u1: 2 } },
+    }),
+    pauta({ id: 'h', status: 'realizada', pauta_date: '2026-09-20', recurso_ids: ['u1'] }),
+  ]
+  const piezas = new Map([
+    ['b', [lote({ pauta_id: 'b', editor_user_id: 'u1' })]],
+    ['c', [lote({ pauta_id: 'c', editor_user_id: 'u1', status: 'cancelado' })]],
+    ['f', [lote({ pauta_id: 'f', editor_user_id: 'u1' })]],
+  ])
+
+  it('lista las semanas lunes-sábado que tocan el mes', () => {
+    const sem = pautasPorSemanaPersona(list, piezas, 'u1', { year: 2026, month: 10 })
+    expect(sem.map((s) => s.start)).toEqual([
+      '2026-09-28',
+      '2026-10-05',
+      '2026-10-12',
+      '2026-10-19',
+      '2026-10-26',
+    ])
+  })
+
+  it('cuenta pautas distintas confirmadas y separa capturó de editó', () => {
+    const sem = pautasPorSemanaPersona(list, piezas, 'u1', { year: 2026, month: 10 })
+    // Semana 5-10: a (capturó), b (editó), g (capturó por reparto). d, e y f no cuentan.
+    expect(sem[1]).toMatchObject({ total: 3, capturo: 2, edito: 1 })
+    // Semana 12-17: c solo tiene un lote cancelado.
+    expect(sem[2]).toMatchObject({ total: 0, capturo: 0, edito: 0 })
+    expect(sem[0].total).toBe(0)
+  })
+
+  it('una pauta donde captura y edita cuenta una sola vez en el total', () => {
+    const both = [pauta({ id: 'a', status: 'realizada', recurso_ids: ['u1'] })]
+    const pz = new Map([['a', [lote({ pauta_id: 'a', editor_user_id: 'u1' })]]])
+    const sem = pautasPorSemanaPersona(both, pz, 'u1', { year: 2026, month: 10 })
+    expect(sem[1]).toMatchObject({ total: 1, capturo: 1, edito: 1 })
   })
 })

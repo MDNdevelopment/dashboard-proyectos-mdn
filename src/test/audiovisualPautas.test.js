@@ -344,6 +344,31 @@ describe('vista Lista', () => {
     expect(pautaMatchesList(pauta(), 'papelera')).toBe(false)
   })
 
+  it('pautaMatchesQuery por editor y por grupo de formato', () => {
+    const p = pauta({ id: 'p9', formats: ['R', 'F'] })
+    const piezas = new Map([
+      [
+        'p9',
+        [
+          { editor_user_id: 'u1', formato: 'R', status: 'en_edicion' },
+          { editor_user_id: 'u2', formato: 'F', status: 'listo' },
+          { editor_user_id: 'u3', formato: 'F', status: 'cancelado' },
+        ],
+      ],
+    ])
+    const q = (o) => pautaMatchesQuery(p, { piezasByPauta: piezas, usersById: users, ...o })
+    expect(q({ editorId: 'u1' })).toBe(true)
+    expect(q({ editorId: 'u9' })).toBe(false)
+    expect(q({ editorId: 'u3' })).toBe(false)
+    expect(q({ formatGroup: 'av' })).toBe(true)
+    expect(q({ formatGroup: 'foto' })).toBe(true)
+    expect(q({ editorId: 'u1', formatGroup: 'av' })).toBe(true)
+    expect(q({ editorId: 'u1', formatGroup: 'foto' })).toBe(false)
+    expect(q({ editorId: 'u2', formatGroup: 'foto' })).toBe(true)
+    const soloReel = pauta({ id: 'p8', formats: ['R'] })
+    expect(pautaMatchesQuery(soloReel, { formatGroup: 'foto' })).toBe(false)
+  })
+
   it('pautaMatchesQuery por recurso y texto', () => {
     const p = pauta({ client_name: 'Smashack', tema: 'Lanzamiento', recurso_ids: ['u2'] })
     expect(pautaMatchesQuery(p, { recursoId: 'u2', usersById: users })).toBe(true)

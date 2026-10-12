@@ -95,6 +95,7 @@ function setup(props = {}) {
   const onSelectPendiente = vi.fn()
   const onSelectLine = vi.fn()
   const onMonthChange = vi.fn()
+  const onSelectPersona = vi.fn()
   render(
     <AvDatosView
       pautas={OCT}
@@ -110,10 +111,11 @@ function setup(props = {}) {
       onMonthChange={onMonthChange}
       onSelectPendiente={onSelectPendiente}
       onSelectLine={onSelectLine}
+      onSelectPersona={onSelectPersona}
       {...props}
     />,
   )
-  return { onSelectPendiente, onSelectLine, onMonthChange }
+  return { onSelectPendiente, onSelectLine, onMonthChange, onSelectPersona }
 }
 
 const kpi = (label) =>
@@ -193,5 +195,47 @@ describe('AvDatosView — paneles heredados de Rendimiento', () => {
     expect(screen.getByText(/no hay fotos/)).toBeInTheDocument()
     expect(screen.getByText('Sin piezas registradas este mes.')).toBeInTheDocument()
     expect(kpi('% editado')).toHaveTextContent('—')
+  })
+})
+
+describe('AvDatosView — videos vs fotos y panel de persona', () => {
+  it('la tarjeta muestra piezas capturadas/editadas por grupo con delta', () => {
+    setup()
+    const card = within(screen.getByRole('region', { name: 'Videos vs. fotos del mes' }))
+    const video = card.getByLabelText('Total de videos (4K + Reel)')
+    expect(video).toHaveTextContent('6')
+    expect(video).toHaveTextContent('2')
+    expect(video).toHaveTextContent('33% editado')
+    expect(video).toHaveTextContent('▼ -4')
+    const foto = card.getByLabelText('Total de fotos')
+    expect(foto).toHaveTextContent('20')
+    expect(foto).toHaveTextContent('100% editado')
+    expect(foto).toHaveTextContent('▲ +20')
+  })
+
+  it('clic en una persona abre el panel con totales y semanas', () => {
+    setup()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Ver detalle de Diego' })[0])
+    const panel = within(screen.getByRole('dialog', { name: 'Diego' }))
+    expect(panel.getByText('Totales del mes')).toBeInTheDocument()
+    expect(panel.getByLabelText('Semana 5/10 a 10/10')).toHaveTextContent('1')
+    fireEvent.click(panel.getByLabelText('Cerrar panel'))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('un botón del panel llama a onSelectPersona con id, rol y grupo', () => {
+    const { onSelectPersona } = setup()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Ver detalle de Diego' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Videos editados' }))
+    expect(onSelectPersona).toHaveBeenCalledWith({ id: 'u1', rol: 'edicion', grupo: 'av' })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('captura de fotos de Nadia', () => {
+    const { onSelectPersona } = setup()
+    fireEvent.click(screen.getByRole('button', { name: 'Ver detalle de Nadia' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Fotos capturadas' }))
+    expect(onSelectPersona).toHaveBeenCalledWith({ id: 'u2', rol: 'captura', grupo: 'foto' })
   })
 })

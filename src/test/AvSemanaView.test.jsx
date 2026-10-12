@@ -235,6 +235,21 @@ describe('AvSemanaView — ocupación', () => {
   })
 })
 
+describe('AvSemanaView — ocupación legible', () => {
+  it('rotula los bloques por hora, muestra el cliente en los ocupados y explica qué son', () => {
+    setup()
+    const estudio = screen.getByLabelText('Ocupación del estudio')
+    expect(within(estudio).getByText('12:00 PM - 2:00 PM')).toBeInTheDocument()
+    expect(within(estudio).getByText('2:00 PM - 4:00 PM')).toBeInTheDocument()
+    // Fein Kaffee ocupa los bloques 12–14 y 14–16 del miércoles.
+    expect(within(estudio).getAllByText('Fein Kaffee')).toHaveLength(2)
+    expect(within(estudio).getByText('Ocupado')).toBeInTheDocument()
+    expect(within(estudio).getByText('Libre')).toBeInTheDocument()
+    expect(within(estudio).getByText(/bloque de 2 horas del estudio/)).toBeInTheDocument()
+    expect(within(estudio).getByText('2/5')).toBeInTheDocument()
+  })
+})
+
 describe('AvSemanaView — toggle Semana / Mes', () => {
   it('en modo semana marca Semana y pulsar Mes avisa con la fecha ancla', () => {
     const onModoChange = vi.fn()

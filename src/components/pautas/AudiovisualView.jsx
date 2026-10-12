@@ -43,9 +43,25 @@ function currentYearMonth() {
 const DEFAULT_LIST_FILTER = {
   status: 'solicitadas',
   recursoId: null,
+  editorId: null,
+  formatGroup: null,
   query: '',
   pendiente: null,
   lineId: null,
+}
+
+/**
+ * Filtro de la lista Todas al elegir una acción en el panel de una persona. Siempre en
+ * Realizadas: captura y edición solo existen en pautas realizadas (si no, abriría en
+ * Solicitadas y la lista saldría vacía).
+ */
+export function filtroPorPersona({ id, rol, grupo }) {
+  return {
+    ...DEFAULT_LIST_FILTER,
+    status: 'realizadas',
+    formatGroup: grupo,
+    ...(rol === 'captura' ? { recursoId: id } : { editorId: id }),
+  }
 }
 
 /**
@@ -460,6 +476,7 @@ export default function AudiovisualView({
           generalLineId={generalLineId}
           usersById={usersById}
           recursoUsers={recursoOptions}
+          editorUsers={editorOptions}
           filter={listFilter}
           onFilterChange={setListFilter}
           pendientes={pendientes}
@@ -485,6 +502,10 @@ export default function AudiovisualView({
           }}
           onSelectPendiente={(sel) => {
             setListFilter({ ...DEFAULT_LIST_FILTER, pendiente: sel })
+            setView('todas')
+          }}
+          onSelectPersona={(sel) => {
+            setListFilter(filtroPorPersona(sel))
             setView('todas')
           }}
           onSelectLine={(lineId) => {

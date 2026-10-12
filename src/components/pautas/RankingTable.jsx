@@ -4,7 +4,15 @@ import Avatar from '../Avatar'
  * Tabla genérica de ranking por persona: Capturadas / Editadas, con un desglose chico
  * opcional por fila (`renderDesglose(row)`).
  */
-export default function RankingTable({ title, subtitle, rows, usersById, empty, renderDesglose }) {
+export default function RankingTable({
+  title,
+  subtitle,
+  rows,
+  usersById,
+  empty,
+  renderDesglose,
+  onSelectRow,
+}) {
   const anyEstimado = rows.some((r) => r.estimado)
   return (
     <div className="bg-white border border-[#e0ddd4] rounded-xl p-5" data-tour="datos-ranking">
@@ -38,7 +46,18 @@ export default function RankingTable({ title, subtitle, rows, usersById, empty, 
                     <td className="px-3 py-2.5">
                       <div className="flex items-center gap-2.5 min-w-[140px]">
                         <Avatar user={user} size={26} />
-                        <span className="font-semibold text-[#111] truncate">{r.name}</span>
+                        {onSelectRow ? (
+                          <button
+                            type="button"
+                            onClick={() => onSelectRow(r)}
+                            aria-label={`Ver detalle de ${r.name}`}
+                            className="font-semibold text-[#111] truncate text-left cursor-pointer hover:underline hover:decoration-[#FFB800] decoration-2 underline-offset-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FFB800] rounded"
+                          >
+                            {r.name}
+                          </button>
+                        ) : (
+                          <span className="font-semibold text-[#111] truncate">{r.name}</span>
+                        )}
                       </div>
                     </td>
                     <td className="px-3 py-2.5 text-right">
