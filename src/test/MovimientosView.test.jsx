@@ -427,3 +427,24 @@ describe('MovimientosView — nota del movimiento', () => {
     expect(screen.queryByText('traspaso_entre_partidas')).not.toBeInTheDocument()
   })
 })
+
+describe('MovimientosView — cards clickeables', () => {
+  it('"Entradas del mes" filtra a los cobros y otro click quita el filtro', async () => {
+    renderView({ invoices: [COBRO_USD, COBRO_BS], distributions: [PAGO] })
+    await waitFor(() => expect(screen.getByText('Pago proveedor')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /Entradas del mes/ }))
+    expect(conceptosVisibles()).toEqual(['Pauta', 'Gestión de redes'])
+
+    fireEvent.click(screen.getByRole('button', { name: /Entradas del mes/ }))
+    expect(conceptosVisibles()).toHaveLength(3)
+  })
+
+  it('"Salidas del mes" filtra a los pagos', async () => {
+    renderView({ invoices: [COBRO_USD, COBRO_BS], distributions: [PAGO] })
+    await waitFor(() => expect(screen.getByText('Pago proveedor')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /Salidas del mes/ }))
+    expect(conceptosVisibles()).toEqual(['Pago proveedor'])
+  })
+})

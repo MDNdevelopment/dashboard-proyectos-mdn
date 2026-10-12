@@ -4,6 +4,7 @@ import { fmtDate } from '../../utils/formatDate'
 import { movimientosDelMes, totalesMovimientos } from '../../utils/finanzas'
 import { loadInvoicesUpTo, loadDistributionsUpTo } from './finanzasApi'
 import FilterBar, { FilterField } from '../common/FilterBar'
+import FinStat from './FinStat'
 import {
   MOVIMIENTO_TIPOS,
   MOVIMIENTO_TIPO_KEYS,
@@ -230,26 +231,31 @@ export default function MovimientosView({
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3 max-w-2xl">
-        <div className="bg-white border border-[#e0ddd4] rounded-xl p-3">
-          <p className="text-[11px] uppercase text-[#999]">Entradas del mes</p>
-          <p className="font-bold text-[#1F9D57] text-[16px]">{fmtUSD(totales.entradas)}</p>
-          <p className="text-[11px] text-[#999]">cobros, por fecha de pago</p>
-        </div>
-        <div className="bg-white border border-[#e0ddd4] rounded-xl p-3">
-          <p className="text-[11px] uppercase text-[#999]">Salidas del mes</p>
-          <p className="font-bold text-[#D6453F] text-[16px]">{fmtUSD(totales.salidas)}</p>
-          <p className="text-[11px] text-[#999]">pagos, por fecha de pago</p>
-        </div>
-        <div className="bg-white border border-[#e0ddd4] rounded-xl p-3">
-          <p className="text-[11px] uppercase text-[#999]">Neto del mes</p>
-          <p
-            className="font-bold text-[16px]"
-            style={{ color: totales.neto < 0 ? '#D6453F' : '#111' }}
-          >
-            {fmtUSD(totales.neto)}
-          </p>
-          <p className="text-[11px] text-[#999]">excluye internos, divisas y ajustes</p>
-        </div>
+        {/* Cada card deja puesto el filtro que la explica; otro click lo quita. */}
+        <FinStat
+          label="Entradas del mes"
+          value={fmtUSD(totales.entradas)}
+          accent="#1F9D57"
+          sub="cobros, por fecha de pago"
+          active={fTipo === 'cobro'}
+          onClick={() => setFTipo((t) => (t === 'cobro' ? 'all' : 'cobro'))}
+        />
+        <FinStat
+          label="Salidas del mes"
+          value={fmtUSD(totales.salidas)}
+          accent="#D6453F"
+          sub="pagos, por fecha de pago"
+          active={fTipo === 'pago'}
+          onClick={() => setFTipo((t) => (t === 'pago' ? 'all' : 'pago'))}
+        />
+        <FinStat
+          label="Neto del mes"
+          value={fmtUSD(totales.neto)}
+          accent={totales.neto < 0 ? '#D6453F' : '#111'}
+          sub="excluye internos, divisas y ajustes"
+          active={fFlujo === 'real'}
+          onClick={() => setFFlujo((f) => (f === 'real' ? 'all' : 'real'))}
+        />
       </div>
 
       <FilterBar cols={5} onClear={hasFilters ? clearFilters : undefined}>

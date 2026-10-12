@@ -51,6 +51,7 @@ const MODALS_HEADER_ONLY = [
   'src/components/tickets/TicketDetail.jsx',
   'src/components/ads/AdsBudgetOverview.jsx',
   'src/components/evaluaciones/EmployeeScoreModal.jsx',
+  'src/components/finanzas/DesgloseDivisasModal.jsx',
 ]
 
 // ── Casos: "cuerpo embebible" sin overlay propio (fragment). Su `flex flex-col`
