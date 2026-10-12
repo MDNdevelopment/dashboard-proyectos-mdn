@@ -149,7 +149,7 @@ describe('CnpPage', () => {
     expect(await screen.findByText('Creatina con sello de calidad')).toBeInTheDocument()
   })
 
-  it('filtra Base por tipo: Todos / Impresos / Audiovisual', async () => {
+  it('filtra Base por tipo: Todos / Diseño / Audiovisual', async () => {
     const user = userEvent.setup()
     cnpRowsHolder.current = [
       { ...CNP_ROW, id: 'a', title: 'Pieza gráfica' },
@@ -165,7 +165,9 @@ describe('CnpPage', () => {
     expect(screen.queryByText('Pieza gráfica')).not.toBeInTheDocument()
     expect(screen.queryByText('Volante impreso')).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Tipo: Impresos' }))
+    // Diseño = todo lo que no es audiovisual, impresos incluidos.
+    await user.click(screen.getByRole('button', { name: 'Tipo: Diseño' }))
+    expect(screen.getByText('Pieza gráfica')).toBeInTheDocument()
     expect(screen.getByText('Volante impreso')).toBeInTheDocument()
     expect(screen.queryByText('Reel de lanzamiento')).not.toBeInTheDocument()
 

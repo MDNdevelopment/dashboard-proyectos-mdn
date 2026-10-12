@@ -7,13 +7,16 @@ export { ESTADOS, COL_META }
 
 export const CNP_TYPES = [
   { key: 'all', label: 'Todos' },
-  { key: 'print', label: 'Impresos' },
+  { key: 'design', label: 'Diseño' },
   { key: 'audiovisual', label: 'Audiovisual' },
 ]
 
-/** Filtro de tipo de CNP: 'all' | 'print' (is_print) | 'audiovisual' (is_audiovisual). */
+/**
+ * Filtro de tipo de CNP: 'all' | 'design' (todo lo que no es audiovisual, incluidos los
+ * impresos: `is_print` es una marca dentro de Diseño) | 'audiovisual' (is_audiovisual).
+ */
 export function cnpMatchesType(cnp, type) {
-  if (type === 'print') return !!cnp?.is_print
+  if (type === 'design') return !cnp?.is_audiovisual
   if (type === 'audiovisual') return !!cnp?.is_audiovisual
   return true
 }
