@@ -604,11 +604,26 @@ export function pagosRealesUsd(distributions) {
     .reduce((a, d) => a + Number(d.amount ?? 0), 0)
 }
 
-/** Resultado por cambio acumulado: Σ `in` − Σ `out` de la partida técnica 'cambio'. */
-export function resultadoCambio(distributions) {
+/**
+ * Filas que componen el resultado por cambio: los movimientos de la partida
+ * técnica 'cambio', con `monto` firmado (+ si entra, − si sale). La suma de
+ * `monto` ES el resultado, así la lista del desglose siempre cuadra con la card.
+ */
+export function detalleResultadoCambio(distributions) {
   return (distributions ?? [])
     .filter((d) => d.partida === PARTIDA_CAMBIO)
-    .reduce((a, d) => a + (d.kind === 'out' ? -Number(d.amount ?? 0) : Number(d.amount ?? 0)), 0)
+    .map((d) => ({
+      id: d.id,
+      fecha: d.movedOn,
+      concepto: d.concept,
+      contraparte: d.beneficiary ?? null,
+      monto: d.kind === 'out' ? -Number(d.amount ?? 0) : Number(d.amount ?? 0),
+    }))
+}
+
+/** Resultado por cambio acumulado: Σ `in` − Σ `out` de la partida técnica 'cambio'. */
+export function resultadoCambio(distributions) {
+  return detalleResultadoCambio(distributions).reduce((a, r) => a + r.monto, 0)
 }
 
 /**
@@ -620,20 +635,40 @@ export function resultadoCambio(distributions) {
  * invariante de `cuadreDivisas()`.
  */
 export function divisaFisica({ invoices, fxOperations, distributions }) {
-  const cobradoUsd = (invoices ?? []).reduce(
-    (a, inv) =>
-      a +
-      (inv.payments ?? [])
-        .filter((p) => p.currency === 'USD' || p.currency == null)
-        .reduce((b, p) => b + Number(p.amount ?? 0), 0),
+  return detalleDivisaFisica({ invoices, fxOperations, distributions }).reduce(
+    (a, r) => a + r.monto,
     0,
   )
-  const netoFx = (fxOperations ?? []).reduce(
-    (a, op) =>
-      a + (op.opType === 'compra' ? Number(op.amountUsd ?? 0) : -Number(op.amountUsd ?? 0)),
-    0,
+}
+
+/**
+ * Filas que componen la divisa física, cada una con `monto` firmado y un `grupo`
+ * ('cobro' | 'compra' | 'venta' | 'pago'). `divisaFisica()` es la suma de `monto`,
+ * así que el desglose de la card siempre cuadra con su total. Los cobros llevan
+ * el cliente y el concepto de la factura padre (el pago por sí solo no los tiene).
+ */
+export function detalleDivisaFisica({ invoices, fxOperations, distributions }) {
+  const cobros = (invoices ?? []).flatMap((inv) =>
+    (inv.payments ?? [])
+      .filter((p) => p.currency === 'USD' || p.currency == null)
+      .map((p) => ({
+        id: p.id ?? `${inv.id}-${p.paidOn}`,
+        grupo: 'cobro',
+        fecha: p.paidOn,
+        concepto: inv.concept,
+        contraparte: inv.clientName,
+        monto: Number(p.amount ?? 0),
+      })),
   )
-  const pagosUsd = (distributions ?? [])
+  const cambios = (fxOperations ?? []).map((op) => ({
+    id: op.id,
+    grupo: op.opType === 'compra' ? 'compra' : 'venta',
+    fecha: op.movedOn,
+    concepto: op.opType === 'compra' ? 'Compra de divisa' : 'Venta de divisa',
+    contraparte: op.counterparty ?? null,
+    monto: op.opType === 'compra' ? Number(op.amountUsd ?? 0) : -Number(op.amountUsd ?? 0),
+  }))
+  const pagos = (distributions ?? [])
     .filter(
       (d) =>
         d.kind === 'out' &&
@@ -641,8 +676,15 @@ export function divisaFisica({ invoices, fxOperations, distributions }) {
         d.note !== NOTA_TRASPASO_PARTIDA &&
         d.currency !== 'Bs',
     )
-    .reduce((a, d) => a + Number(d.amount ?? 0), 0)
-  return cobradoUsd + netoFx - pagosUsd
+    .map((d) => ({
+      id: d.id,
+      grupo: 'pago',
+      fecha: d.movedOn,
+      concepto: d.concept,
+      contraparte: d.beneficiary ?? null,
+      monto: -Number(d.amount ?? 0),
+    }))
+  return [...cobros, ...cambios, ...pagos]
 }
 
 /**

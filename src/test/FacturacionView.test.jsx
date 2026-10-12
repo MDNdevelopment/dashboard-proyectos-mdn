@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
+import { MemoryRouter } from 'react-router-dom'
 import FacturacionView from '../components/finanzas/FacturacionView'
 
 const mockLoadOrCreateMonth = vi.fn()
@@ -30,22 +31,24 @@ const BASE_INVOICE = {
   payments: [],
 }
 
-function renderView(invoices, overrides = {}) {
+function renderView(invoices, overrides = {}, search = '') {
   return render(
-    <FacturacionView
-      companyId="co-1"
-      year={2026}
-      month={7}
-      finMonth={{ id: 'm-1', closed: false }}
-      invoices={invoices}
-      clients={[]}
-      loading={false}
-      refetch={vi.fn()}
-      canManage={false}
-      canManageCobros={false}
-      userId="u-1"
-      {...overrides}
-    />,
+    <MemoryRouter initialEntries={[`/finanzas/facturacion${search}`]}>
+      <FacturacionView
+        companyId="co-1"
+        year={2026}
+        month={7}
+        finMonth={{ id: 'm-1', closed: false }}
+        invoices={invoices}
+        clients={[]}
+        loading={false}
+        refetch={vi.fn()}
+        canManage={false}
+        canManageCobros={false}
+        userId="u-1"
+        {...overrides}
+      />
+    </MemoryRouter>,
   )
 }
 
@@ -393,5 +396,50 @@ describe('FacturacionView — neto a cobrar con retenciones', () => {
     expect(screen.queryByText('Neto')).not.toBeInTheDocument()
     expect(screen.queryByText('Neto a cobrar')).not.toBeInTheDocument()
     expect(screen.getByText(/de \$1,000\.00 facturado/)).toBeInTheDocument()
+  })
+})
+
+describe('FacturacionView — cards clickeables y links del Dashboard', () => {
+  const PAGADA = {
+    ...BASE_INVOICE,
+    id: 'inv-2',
+    clientName: 'Pagada SA',
+    payments: [{ id: 'p1', amount: 2600 }],
+  }
+
+  it('?estado=pendiente llega con solo las facturas no saldadas y un chip para quitar el filtro', () => {
+    renderView([BASE_INVOICE, PAGADA], {}, '?estado=pendiente')
+    expect(screen.getByText('Turbopre')).toBeInTheDocument()
+    expect(screen.queryByText('Pagada SA')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Solo pendientes/ })).toBeInTheDocument()
+  })
+
+  it('quitar el chip vuelve a mostrar todas las facturas', async () => {
+    renderView([BASE_INVOICE, PAGADA], {}, '?estado=pendiente')
+    await userEvent.click(screen.getByRole('button', { name: /Solo pendientes/ }))
+    expect(screen.getByText('Pagada SA')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Solo pendientes/ })).not.toBeInTheDocument()
+  })
+
+  it('?vista=cobros abre directo en la vista Cobros', () => {
+    renderView([PAGADA], {}, '?vista=cobros')
+    expect(screen.getByText('Total cobrado')).toBeInTheDocument()
+  })
+
+  it('en Cobros, la card "Cobrado en Bs" filtra por esa moneda y otro click la quita', async () => {
+    const enUsd = { ...PAGADA, id: 'inv-usd', clientName: 'Paga USD' }
+    const enBs = {
+      ...BASE_INVOICE,
+      id: 'inv-bs',
+      clientName: 'Paga Bs',
+      payments: [{ id: 'p2', amount: 100, amountBs: 3600 }],
+    }
+    renderView([enUsd, enBs], {}, '?vista=cobros')
+    const card = screen.getByRole('button', { name: /Cobrado en Bs/ })
+    await userEvent.click(card)
+    expect(screen.queryByText('Paga USD')).not.toBeInTheDocument()
+    expect(screen.getByText('Paga Bs')).toBeInTheDocument()
+    await userEvent.click(card)
+    expect(screen.getByText('Paga USD')).toBeInTheDocument()
   })
 })

@@ -21,8 +21,20 @@ import { Link } from 'react-router-dom'
  * @param {string} [iconColor] - color de la marca de agua (hex), default `#FFB800` (amarillo de marca)
  * @param {string} [to]      - ruta destino; si se pasa, toda la card se vuelve un enlace
  * @param {string} [linkLabel] - texto de la pista, default "Ver más"
+ * @param {string} [bg]      - color de fondo (hex) para destacar la card; label, subtítulo y
+ *                             pista pasan a tonos oscuros para mantener el contraste
  */
-export default function KpiCard({ label, value, sub, accent = '#111', icon, iconColor = '#FFB800', to, linkLabel = 'Ver más' }) {
+export default function KpiCard({
+  label,
+  value,
+  sub,
+  accent = '#111',
+  icon,
+  iconColor = '#FFB800',
+  to,
+  linkLabel = 'Ver más',
+  bg,
+}) {
   const content = (
     <>
       {icon && (
@@ -35,15 +47,21 @@ export default function KpiCard({ label, value, sub, accent = '#111', icon, icon
         </span>
       )}
       <div className="relative">
-        <p className="text-[13px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] leading-snug mb-3">
+        <p
+          className={`text-[13px] font-mono font-bold tracking-[0.14em] uppercase leading-snug mb-3 ${bg ? 'text-[#111]/70' : 'text-[#888]'}`}
+        >
           {label}
         </p>
         <p className="text-[30px] font-bold leading-none tracking-tight" style={{ color: accent }}>
           {value}
         </p>
-        {sub && <p className="text-[13px] text-[#999] mt-1.5">{sub}</p>}
+        {sub && (
+          <p className={`text-[13px] mt-1.5 ${bg ? 'text-[#111]/70' : 'text-[#999]'}`}>{sub}</p>
+        )}
         {to && (
-          <span className="text-[13px] font-semibold text-[#555] mt-3 inline-flex items-center gap-1 w-fit">
+          <span
+            className={`text-[13px] font-semibold mt-3 inline-flex items-center gap-1 w-fit ${bg ? 'text-[#111]' : 'text-[#555]'}`}
+          >
             {linkLabel} <span aria-hidden="true">→</span>
           </span>
         )}
@@ -55,6 +73,7 @@ export default function KpiCard({ label, value, sub, accent = '#111', icon, icon
     return (
       <Link
         to={to}
+        style={bg ? { backgroundColor: bg, borderColor: bg } : undefined}
         className="relative overflow-hidden bg-white border border-[#e0ddd4] rounded-2xl p-4 flex flex-col transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_-8px_rgba(0,0,0,0.14)]"
       >
         {content}
@@ -63,7 +82,10 @@ export default function KpiCard({ label, value, sub, accent = '#111', icon, icon
   }
 
   return (
-    <div className="relative overflow-hidden bg-white border border-[#e0ddd4] rounded-2xl p-4 flex flex-col">
+    <div
+      style={bg ? { backgroundColor: bg, borderColor: bg } : undefined}
+      className="relative overflow-hidden bg-white border border-[#e0ddd4] rounded-2xl p-4 flex flex-col"
+    >
       {content}
     </div>
   )

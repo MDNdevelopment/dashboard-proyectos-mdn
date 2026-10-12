@@ -76,8 +76,8 @@ describe('cnpMatchesType', () => {
     expect([print, av, plain].every((c) => cnpMatchesType(c, 'all'))).toBe(true)
   })
 
-  it('"print" only keeps is_print', () => {
-    expect([print, av, plain].filter((c) => cnpMatchesType(c, 'print'))).toEqual([print])
+  it('"design" keeps everything that is not audiovisual, prints included', () => {
+    expect([print, av, plain].filter((c) => cnpMatchesType(c, 'design'))).toEqual([print, plain])
   })
 
   it('"audiovisual" only keeps is_audiovisual', () => {

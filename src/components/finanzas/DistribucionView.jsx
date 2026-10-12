@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { fmtUSD } from '../../utils/metricsFinance'
 import { fmtDate } from '../../utils/formatDate'
@@ -18,6 +18,7 @@ import DistribucionModal from './DistribucionModal'
 import PagoPartidaModal from './PagoPartidaModal'
 import CerrarMesButton from './CerrarMesButton'
 import PartidasPctEditor from './PartidasPctEditor'
+import FinStat from './FinStat'
 
 export default function DistribucionView({
   companyId,
@@ -38,6 +39,8 @@ export default function DistribucionView({
   const [pagoPartida, setPagoPartida] = useState(null)
   const [before, setBefore] = useState([])
   const [movPage, setMovPage] = useState(0)
+  const porDistribuirRef = useRef(null)
+  const movimientosRef = useRef(null)
 
   useEffect(() => {
     let cancelled = false
@@ -130,23 +133,30 @@ export default function DistribucionView({
 
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="grid grid-cols-3 gap-3 max-w-xl flex-1">
-          <div className="bg-white border border-[#e0ddd4] rounded-xl p-3">
-            <p className="text-[11px] uppercase text-[#999]">Base a distribuir</p>
-            <p className="font-bold text-[#111] text-[16px]">{fmtUSD(cobrado)}</p>
-          </div>
-          <div className="bg-white border border-[#e0ddd4] rounded-xl p-3">
-            <p className="text-[11px] uppercase text-[#999]">Distribuido</p>
-            <p className="font-bold text-[#111] text-[16px]">{fmtUSD(distribuidoTotal)}</p>
-          </div>
-          <div className="bg-white border border-[#e0ddd4] rounded-xl p-3">
-            <p className="text-[11px] uppercase text-[#999]">Sin distribuir</p>
-            <p
-              className="font-bold text-[16px]"
-              style={{ color: sinDistribuir > 0.5 ? '#D6453F' : '#111' }}
-            >
-              {fmtUSD(sinDistribuir)}
-            </p>
-          </div>
+          <FinStat
+            label="Base a distribuir"
+            value={fmtUSD(cobrado)}
+            onClick={() =>
+              navigate(
+                `/finanzas/facturacion?vista=cobros&mes=${year}-${String(month).padStart(2, '0')}`,
+              )
+            }
+          />
+          <FinStat
+            label="Distribuido"
+            value={fmtUSD(distribuidoTotal)}
+            onClick={() => movimientosRef.current?.scrollIntoView({ behavior: 'smooth' })}
+          />
+          <FinStat
+            label="Sin distribuir"
+            value={fmtUSD(sinDistribuir)}
+            accent={sinDistribuir > 0.5 ? '#D6453F' : '#111'}
+            onClick={
+              !closed && cobrosPorDistribuir.length > 0
+                ? () => porDistribuirRef.current?.scrollIntoView({ behavior: 'smooth' })
+                : undefined
+            }
+          />
         </div>
         <div className="flex items-center gap-2">
           <PartidasPctEditor
@@ -274,7 +284,7 @@ export default function DistribucionView({
       </div>
 
       {!closed && (
-        <div>
+        <div ref={porDistribuirRef}>
           <p className="text-[13px] font-mono font-bold uppercase tracking-wide text-[#888] mb-2">
             Cobros por distribuir
           </p>
@@ -324,7 +334,7 @@ export default function DistribucionView({
         </div>
       )}
 
-      <div>
+      <div ref={movimientosRef}>
         <p className="text-[13px] font-mono font-bold uppercase tracking-wide text-[#888] mb-2">
           Movimientos
         </p>

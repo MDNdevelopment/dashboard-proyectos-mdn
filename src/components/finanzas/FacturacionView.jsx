@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { fmtUSD } from '../../utils/metricsFinance'
 import {
   cobrosPorMonedaDe,
@@ -25,6 +26,7 @@ import {
 import InvoiceModal from './InvoiceModal'
 import CobroModal from './CobroModal'
 import ConfirmDeleteDialog from '../common/ConfirmDeleteDialog'
+import FinStat from './FinStat'
 
 const ESTADO_LABEL = {
   pendiente: { label: 'Pendiente', cls: 'bg-[#fbe9e8] text-[#c0392b]' },
@@ -63,8 +65,14 @@ export default function FacturacionView({
   const [cobroInvoice, setCobroInvoice] = useState(null)
   const [toDelete, setToDelete] = useState(null)
   const [sort, setSort] = useState({ key: '', dir: 1 })
-  const [vista, setVista] = useState('facturacion') // 'facturacion' | 'cobros'
+  // Las cards del Dashboard llegan aquí con ?vista=cobros / ?estado=pendiente. Solo
+  // se leen al montar: después el estado es local, como el resto de filtros.
+  const [searchParams] = useSearchParams()
+  const [vista, setVista] = useState(
+    searchParams.get('vista') === 'cobros' ? 'cobros' : 'facturacion',
+  ) // 'facturacion' | 'cobros'
   const [monedaFiltro, setMonedaFiltro] = useState('Todas')
+  const [soloPendientes, setSoloPendientes] = useState(searchParams.get('estado') === 'pendiente')
   const enCobros = vista === 'cobros'
 
   // El mes se prepara solo al entrar: se crea su fila en `fin_months` si no
@@ -171,6 +179,8 @@ export default function FacturacionView({
         return monedaFiltro === 'Todas' || monedas.includes(monedaFiltro)
       })
     : invoices.slice()
+  // Filtro de las cards "Por cobrar" / "Neto a cobrar": todo lo que no está saldado.
+  if (soloPendientes) rows = rows.filter((inv) => estadoFactura(inv) !== 'cobrado')
   if (sort.key) {
     rows.sort((a, b) => {
       let x, y
@@ -258,47 +268,57 @@ export default function FacturacionView({
       <div className={`grid gap-3 ${enCobros && canjeado > 0 ? 'grid-cols-4' : 'grid-cols-3'}`}>
         {enCobros ? (
           <>
-            <div className="bg-white border border-[#e0ddd4] rounded-xl p-3">
-              <p className="text-[11px] uppercase text-[#999]">Total cobrado</p>
-              <p className="font-bold text-[#111] text-[16px]">{fmtUSD(cobrado)}</p>
-            </div>
-            <div className="bg-white border border-[#e0ddd4] rounded-xl p-3">
-              <p className="text-[11px] uppercase text-[#999]">Cobrado en divisa</p>
-              <p className="font-bold text-[#111] text-[16px]">{fmtUSD(cobradoDivisa)}</p>
-            </div>
-            <div className="bg-white border border-[#e0ddd4] rounded-xl p-3">
-              <p className="text-[11px] uppercase text-[#999]">Cobrado en Bs</p>
-              <p className="font-bold text-[#111] text-[16px]">{fmtUSD(cobradoBs)}</p>
-            </div>
+            {/* Total cobrado solo es clickeable si hay un filtro de moneda que quitar. */}
+            <FinStat
+              label="Total cobrado"
+              value={fmtUSD(cobrado)}
+              onClick={monedaFiltro !== 'Todas' ? () => setMonedaFiltro('Todas') : undefined}
+            />
+            <FinStat
+              label="Cobrado en divisa"
+              value={fmtUSD(cobradoDivisa)}
+              active={monedaFiltro === 'USD'}
+              onClick={() => setMonedaFiltro((m) => (m === 'USD' ? 'Todas' : 'USD'))}
+            />
+            <FinStat
+              label="Cobrado en Bs"
+              value={fmtUSD(cobradoBs)}
+              active={monedaFiltro === 'Bs'}
+              onClick={() => setMonedaFiltro((m) => (m === 'Bs' ? 'Todas' : 'Bs'))}
+            />
             {canjeado > 0 && (
-              <div className="bg-white border border-[#e0ddd4] rounded-xl p-3">
-                <p className="text-[11px] uppercase text-[#999]">Recibido en intercambio</p>
-                <p className="font-bold text-[#9a6800] text-[16px]">{fmtUSD(canjeado)}</p>
-              </div>
+              <FinStat
+                label="Recibido en intercambio"
+                value={fmtUSD(canjeado)}
+                accent="#9a6800"
+                active={monedaFiltro === 'Intercambio'}
+                onClick={() =>
+                  setMonedaFiltro((m) => (m === 'Intercambio' ? 'Todas' : 'Intercambio'))
+                }
+              />
             )}
           </>
         ) : (
           <>
-            <div className="bg-white border border-[#e0ddd4] rounded-xl p-3">
-              <p className="text-[11px] uppercase text-[#999]">Total facturado</p>
-              <p className="font-bold text-[#111] text-[16px]">{fmtUSD(facturado)}</p>
-            </div>
-            <div className="bg-white border border-[#e0ddd4] rounded-xl p-3">
-              <p className="text-[11px] uppercase text-[#999]">Facturado en USD</p>
-              <p className="font-bold text-[#111] text-[16px]">{fmtUSD(facturadoUsd)}</p>
-            </div>
-            <div className="bg-white border border-[#e0ddd4] rounded-xl p-3">
-              <p className="text-[11px] uppercase text-[#999]">Facturado en Bs</p>
-              <p className="font-bold text-[#111] text-[16px]">{fmtUSD(facturadoBs)}</p>
-            </div>
+            <FinStat
+              label="Total facturado"
+              value={fmtUSD(facturado)}
+              onClick={soloPendientes ? () => setSoloPendientes(false) : undefined}
+            />
+            {/* El filtro de moneda no aplica en Facturación (ver comentario arriba de
+                `rows`): `invoice.currency` es configuración, no cómo pagó el cliente. */}
+            <FinStat label="Facturado en USD" value={fmtUSD(facturadoUsd)} />
+            <FinStat label="Facturado en Bs" value={fmtUSD(facturadoBs)} />
             {/* Solo aparece cuando de verdad hay retenciones: en una cartera sin
                 impuestos configurados la vista se ve igual que siempre. */}
             {retenido > 0 && (
-              <div className="bg-white border border-[#e0ddd4] rounded-xl p-3">
-                <p className="text-[11px] uppercase text-[#999]">Neto a cobrar</p>
-                <p className="font-bold text-[#111] text-[16px]">{fmtUSD(netoACobrar)}</p>
-                <p className="text-[11.5px] text-[#999]">{fmtUSD(retenido)} retenido</p>
-              </div>
+              <FinStat
+                label="Neto a cobrar"
+                value={fmtUSD(netoACobrar)}
+                sub={`${fmtUSD(retenido)} retenido`}
+                active={soloPendientes}
+                onClick={() => setSoloPendientes((v) => !v)}
+              />
             )}
           </>
         )}
@@ -368,13 +388,25 @@ export default function FacturacionView({
         )}
       </div>
 
+      {soloPendientes && (
+        <button
+          type="button"
+          onClick={() => setSoloPendientes(false)}
+          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12.5px] font-semibold bg-[#fff4d6] text-[#9a6800] border border-[#f0dfae] hover:bg-[#ffecb8]"
+        >
+          Solo pendientes <span aria-hidden="true">✕</span>
+        </button>
+      )}
+
       {rows.length === 0 ? (
         <div className="bg-white border border-[#e0ddd4] rounded-xl p-8 text-center text-[13.5px] text-[#999]">
-          {!enCobros
-            ? 'Sin facturación este mes. Usa "Agregar facturación".'
-            : monedaFiltro === 'Todas'
-              ? 'Aún no hay cobros registrados este mes.'
-              : `Ningún cobro en ${monedaFiltro} este mes.`}
+          {soloPendientes
+            ? 'No hay facturas pendientes este mes.'
+            : !enCobros
+              ? 'Sin facturación este mes. Usa "Agregar facturación".'
+              : monedaFiltro === 'Todas'
+                ? 'Aún no hay cobros registrados este mes.'
+                : `Ningún cobro en ${monedaFiltro} este mes.`}
         </div>
       ) : (
         <div className="bg-white border border-[#e0ddd4] rounded-xl overflow-x-auto">

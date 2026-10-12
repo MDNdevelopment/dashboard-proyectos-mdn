@@ -40,6 +40,8 @@ import {
   ledgerConSaldo,
   divisaFisica,
   resultadoCambio,
+  detalleDivisaFisica,
+  detalleResultadoCambio,
   pagosRealesUsd,
   cuadreDivisas,
   brechaPromedioPonderada,
@@ -733,6 +735,58 @@ describe('finanzas — divisas: aritmética básica', () => {
     ]
     const distributions = [{ partida: 'gastos', kind: 'out', amount: 100, currency: 'USD' }]
     expect(divisaFisica({ invoices, fxOperations, distributions })).toBe(1000 + 600 - 200 - 100)
+  })
+})
+
+describe('finanzas — detalle de las cards de divisas (desglose)', () => {
+  it('detalleDivisaFisica suma exactamente lo que dice divisaFisica y lleva cliente y concepto del cobro', () => {
+    const invoices = [
+      {
+        id: 'i1',
+        clientName: 'Nuvitt',
+        concept: 'Redes',
+        payments: [
+          { id: 'p1', amount: 1000, currency: 'USD', paidOn: '2026-09-02' },
+          { id: 'p2', amount: 300, currency: 'Bs', paidOn: '2026-09-03' },
+        ],
+      },
+    ]
+    const fxOperations = [
+      { id: 'f1', opType: 'compra', amountUsd: 600, movedOn: '2026-09-05' },
+      { id: 'f2', opType: 'venta', amountUsd: 200, movedOn: '2026-09-06' },
+    ]
+    const distributions = [
+      {
+        id: 'd1',
+        partida: 'gastos',
+        kind: 'out',
+        amount: 100,
+        currency: 'USD',
+        movedOn: '2026-09-07',
+      },
+      { id: 'd2', partida: 'cambio', kind: 'out', amount: 50, movedOn: '2026-09-07' },
+    ]
+    const filas = detalleDivisaFisica({ invoices, fxOperations, distributions })
+    expect(filas.map((f) => f.grupo).sort()).toEqual(['cobro', 'compra', 'pago', 'venta'])
+    expect(filas.find((f) => f.grupo === 'cobro')).toMatchObject({
+      contraparte: 'Nuvitt',
+      concepto: 'Redes',
+      monto: 1000,
+    })
+    expect(filas.reduce((a, f) => a + f.monto, 0)).toBe(
+      divisaFisica({ invoices, fxOperations, distributions }),
+    )
+  })
+
+  it('detalleResultadoCambio firma los montos y su suma es resultadoCambio', () => {
+    const dists = [
+      { id: 'a', partida: 'gastos', kind: 'in', amount: 500 },
+      { id: 'b', partida: 'cambio', kind: 'out', amount: 150, movedOn: '2026-09-01' },
+      { id: 'c', partida: 'cambio', kind: 'in', amount: 40, movedOn: '2026-09-02' },
+    ]
+    const filas = detalleResultadoCambio(dists)
+    expect(filas.map((f) => f.monto)).toEqual([-150, 40])
+    expect(filas.reduce((a, f) => a + f.monto, 0)).toBe(resultadoCambio(dists))
   })
 })
 

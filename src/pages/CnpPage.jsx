@@ -78,7 +78,7 @@ export default function CnpPage() {
   useEffect(() => {
     if (activeView === 'dashboard' && monthIdx == null) setMonthIdx(currentMonthIndex())
   }, [activeView, monthIdx])
-  // Tipo de CNP (Todos / Impresos / Audiovisual): recorta Dashboard y Base por igual.
+  // Tipo de CNP (Todos / Diseño / Audiovisual): recorta Dashboard y Base por igual.
   const [typeFilter, setTypeFilter] = useState('all')
   // null = closed, undefined = new, object = edit
   const [cnpModal, setCnpModal] = useState(null)

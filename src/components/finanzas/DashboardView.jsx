@@ -9,6 +9,8 @@ import {
   CartesianGrid,
 } from 'recharts'
 import KpiCard from '../common/KpiCard'
+import FinStat from './FinStat'
+import DesgloseDivisasModal from './DesgloseDivisasModal'
 import { fmtUSD } from '../../utils/metricsFinance'
 import { clientInMonth } from '../../utils/clientInMonth'
 import {
@@ -68,6 +70,7 @@ export default function DashboardView({
 }) {
   const [trend, setTrend] = useState(null)
   const [resumenOpen, setResumenOpen] = useState(false)
+  const [desglose, setDesglose] = useState(null) // null=cerrado, 'divisa'|'cajaBs'|'cambio'
 
   useEffect(() => {
     let cancelled = false
@@ -113,6 +116,12 @@ export default function DashboardView({
   )
 
   const isSummary = !!finMonth?.summaryOnly
+  // Las cards llevan a la lista que las respalda conservando el mes activo. En un mes
+  // resumen no hay facturas ni movimientos fila por fila: las cards de dinero no
+  // enlazan a una lista vacía (Clientes activos sí, viene de la cartera).
+  const mesQs = `mes=${year}-${String(month).padStart(2, '0')}`
+  const linkA = (ruta) =>
+    isSummary ? undefined : `${ruta}${ruta.includes('?') ? '&' : '?'}${mesQs}`
   const pcts = pctsDelMes(finMonth)
   const facturado = isSummary ? (monthTotals?.totalFacturado ?? 0) : totalFacturado(invoices)
   const cobrado = isSummary ? (monthTotals?.totalCobrado ?? 0) : totalCobrado(invoices)
@@ -239,7 +248,13 @@ export default function DashboardView({
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <KpiCard label="Facturado" value={fmtUSD(facturado)} sub="del mes en curso" />
+        <KpiCard
+          label="Facturado"
+          value={fmtUSD(facturado)}
+          sub="del mes en curso"
+          to={linkA('/finanzas/facturacion')}
+          linkLabel="Ver facturación"
+        />
         <KpiCard
           label="Cobrado"
           value={fmtUSD(cobrado)}
@@ -249,52 +264,59 @@ export default function DashboardView({
           // siempre.
           sub={`Bs ${fmtUSD(cobradoBs)} · Divisa ${fmtUSD(cobradoDivisa)}${canjeado > 0 ? ` · Canje ${fmtUSD(canjeado)}` : ''} · ${netoACobrar ? Math.round(((cobrado + canjeado) / netoACobrar) * 100) : 0}%`}
           accent="#1F9D57"
+          to={linkA('/finanzas/facturacion?vista=cobros')}
+          linkLabel="Ver cobros"
         />
         <KpiCard
           label="Por cobrar"
           value={fmtUSD(porCobrar)}
           sub={retenido > 0 ? `neto · ${fmtUSD(retenido)} retenido` : 'pendiente del mes'}
           accent="#D6453F"
+          to={linkA('/finanzas/facturacion?estado=pendiente')}
+          linkLabel="Ver pendientes"
         />
         <KpiCard
           label="Ganancia real"
           value={fmtUSD(gananciaReal)}
           sub={`${(margenPct * 100).toFixed(1)}% · meta ${Math.round(pcts.ganancia * 100)}%`}
-          accent={margenPct >= pcts.ganancia ? '#1F9D57' : '#D6453F'}
+          accent="#111"
+          bg="#FFB800"
+          to={linkA('/finanzas/distribucion/ganancia')}
+          linkLabel="Ver partida"
         />
-        <KpiCard label="Clientes activos" value={activeClients.length} sub="retainer mensual" />
+        <KpiCard
+          label="Clientes activos"
+          value={activeClients.length}
+          sub="retainer mensual"
+          to={`/finanzas/clientes?${mesQs}`}
+          linkLabel="Ver clientes"
+        />
       </div>
 
       {/* Composición en divisas (§8.1 de la spec): cuánto está en divisa física vs
           en bolívares, y si la brecha entre BCV y la tasa real está costando algo. */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="grid grid-cols-3 gap-3 max-w-2xl flex-1">
-          <div className="bg-white border border-[#e0ddd4] rounded-xl p-3">
-            <p className="text-[11px] uppercase text-[#999]">Divisa física</p>
-            <p className="font-bold text-[#111] text-[16px]">{fmtUSD(cuadre.divisaFisica)}</p>
-          </div>
-          <div className="bg-white border border-[#e0ddd4] rounded-xl p-3">
-            <p className="text-[11px] uppercase text-[#999]">Caja Bs</p>
-            <p className="font-bold text-[#111] text-[16px]">
-              {Number(cuadre.saldoBs ?? 0).toLocaleString('es-VE', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}{' '}
-              Bs
-            </p>
-            <p className="text-[11px] text-[#999]">
-              {cuadre.bcvFaltante ? 'sin tasa BCV cargada' : `≈ ${fmtUSD(cuadre.saldoBsUsdRef)}`}
-            </p>
-          </div>
-          <div className="bg-white border border-[#e0ddd4] rounded-xl p-3">
-            <p className="text-[11px] uppercase text-[#999]">Resultado por cambio</p>
-            <p
-              className="font-bold text-[16px]"
-              style={{ color: cuadre.cambio < 0 ? '#D6453F' : '#111' }}
-            >
-              {fmtUSD(cuadre.cambio)}
-            </p>
-          </div>
+          <FinStat
+            label="Divisa física"
+            value={fmtUSD(cuadre.divisaFisica)}
+            onClick={() => setDesglose('divisa')}
+          />
+          <FinStat
+            label="Caja Bs"
+            value={`${Number(cuadre.saldoBs ?? 0).toLocaleString('es-VE', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })} Bs`}
+            sub={cuadre.bcvFaltante ? 'sin tasa BCV cargada' : `≈ ${fmtUSD(cuadre.saldoBsUsdRef)}`}
+            onClick={() => setDesglose('cajaBs')}
+          />
+          <FinStat
+            label="Resultado por cambio"
+            value={fmtUSD(cuadre.cambio)}
+            accent={cuadre.cambio < 0 ? '#D6453F' : '#111'}
+            onClick={() => setDesglose('cambio')}
+          />
         </div>
       </div>
 
@@ -476,6 +498,18 @@ export default function DashboardView({
             setResumenOpen(false)
             refetch()
           }}
+        />
+      )}
+
+      {desglose && (
+        <DesgloseDivisasModal
+          tipo={desglose}
+          invoices={invoices}
+          distributions={distributions}
+          fxOperations={fxOperations}
+          bsLedger={bsLedger}
+          rateBcv={rateBcv?.rate}
+          onClose={() => setDesglose(null)}
         />
       )}
     </div>
