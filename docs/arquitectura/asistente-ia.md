@@ -10,7 +10,7 @@ Chat flotante en todas las pantallas para que un admin pregunte en lenguaje natu
 - `netlify/functions/_lib/aiChatData.js`: carga el dataset una vez por request, filtrado por `company_id`.
 - `netlify/functions/_lib/aiChatLog.js`: `logChatInteraction` → insert en `mappi_chat_logs` (service-role, nunca lanza).
 - `_lib/requireAdmin.js`: gate backend `requireAdmin`.
-- Front: `src/components/ai/AiChatWidget.jsx` (FAB + gate admin), `AiChatPanel.jsx`, `AiChatMessage.jsx`, `AiAvatar.jsx`, `TypingDots.jsx`; `src/hooks/useAiChat.js`; `src/lib/aiChatHistory.js`.
+- Front: `src/components/ai/AiChatWidget.jsx` (gate admin y panel; el FAB y la burbuja de CTA están ocultos con `mostrarBoton = false`, el panel se abre desde `RecomendacionesCard`), `AiChatPanel.jsx`, `AiChatMessage.jsx`, `AiAvatar.jsx`, `TypingDots.jsx`; `src/hooks/useAiChat.js`; `src/lib/aiChatHistory.js`.
 - Estado del chat en contexto: `src/context/AiChatContext.jsx` (`AiChatProvider`/`useAiChatContext`), montado en `AppLayout.jsx` por encima de `AiChatWidget` y del `<Outlet />`.
 - Panel de huecos: **Empresa → MAPPI** (`src/components/empresa/MappiLogsView.jsx`).
 

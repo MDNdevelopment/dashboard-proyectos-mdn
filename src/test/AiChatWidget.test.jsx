@@ -31,10 +31,30 @@ function mockAuth(admin) {
 function renderWidget() {
   return render(
     <AiChatProvider>
-      <AiChatWidget />
+      <AiChatWidget mostrarBoton />
     </AiChatProvider>,
   )
 }
+
+describe('AiChatWidget — botón oculto por defecto', () => {
+  it('sin mostrarBoton no hay botón flotante ni burbuja, pero el panel abre desde el contexto', () => {
+    mockAuth(true)
+    function Abrir() {
+      const { openWithContext } = useAiChatContext()
+      return <button onClick={() => openWithContext('Hola')}>abrir-desde-home</button>
+    }
+    render(
+      <AiChatProvider>
+        <Abrir />
+        <AiChatWidget />
+      </AiChatProvider>,
+    )
+    expect(screen.queryByRole('button', { name: /abrir asistente ia/i })).not.toBeInTheDocument()
+    expect(screen.queryByText(/en qué te puedo ayudar/i)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByText('abrir-desde-home'))
+    expect(screen.getByText('Hola')).toBeInTheDocument()
+  })
+})
 
 describe('AiChatWidget', () => {
   it('no renderiza nada si el usuario no es admin', () => {
