@@ -11,6 +11,7 @@ import PermisosRrhhView from '../components/empresa/PermisosRrhhView'
 import ScoreProfilesPanel from '../components/empresa/ScoreProfilesPanel'
 import CriteriaByPositionPanel from '../components/empresa/CriteriaByPositionPanel'
 import MappiLogsView from '../components/empresa/MappiLogsView'
+import SubscriptionsView from '../components/empresa/SubscriptionsView'
 
 // `capability` opcional: por defecto un tab se gatea con `empresa.<key>`, pero
 // "Perfiles de Desempeño" pertenece conceptualmente a Evaluaciones (mismo esquema de
@@ -35,6 +36,7 @@ const ALL_TABS = [
     capability: 'evaluaciones.perfiles.manage',
   },
   { key: 'permisos', label: 'Permisos', path: '/empresa/permisos' },
+  { key: 'suscripciones', label: 'Suscripciones', path: '/empresa/suscripciones' },
   { key: 'accesos', label: 'Accesos', path: '/empresa/accesos' },
   { key: 'mappi', label: 'MAPPI', path: '/empresa/mappi' },
 ]
@@ -52,6 +54,7 @@ function pathToKey(pathname) {
   if (pathname.startsWith('/empresa/lineas')) return 'lineas'
   if (pathname.startsWith('/empresa/accesos')) return 'accesos'
   if (pathname.startsWith('/empresa/permisos')) return 'permisos'
+  if (pathname.startsWith('/empresa/suscripciones')) return 'suscripciones'
   if (pathname.startsWith('/empresa/mappi')) return 'mappi'
   return 'general'
 }
@@ -156,6 +159,13 @@ export default function EmpresaPage() {
 
         {activeKey === 'permisos' && can('empresa.permisos') && (
           <PermisosRrhhView companyId={userProfile.company_id} />
+        )}
+
+        {activeKey === 'suscripciones' && can('empresa.suscripciones') && (
+          <SubscriptionsView
+            companyId={userProfile.company_id}
+            canManage={can('empresa.suscripciones.manage')}
+          />
         )}
 
         {activeKey === 'accesos' && can('empresa.accesos') && (

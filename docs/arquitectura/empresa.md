@@ -4,7 +4,7 @@
 Administración organizacional: departamentos, cargos, empleados, vacaciones, permisos/ausencias de RRHH, preguntas de evaluación, clientes, líneas operativas, recursos externos y accesos por módulo.
 
 ## Rutas y archivos
-**Rutas:** `/empresa` · `/empresa/departamentos` · `/empresa/empleados` · `/empresa/preguntas` · `/empresa/clientes` · `/empresa/lineas` · `/empresa/permisos` (RRHH, `PermisosRrhhView.jsx`) · `/empresa/accesos` (accesos por módulo, `PermisosView.jsx`) · `/empresa/mappi` (backlog de huecos de MAPPI, `MappiLogsView.jsx`, capability `empresa.mappi`, ver §2.14 "Registro de huecos").
+**Rutas:** `/empresa` · `/empresa/departamentos` · `/empresa/empleados` · `/empresa/preguntas` · `/empresa/clientes` · `/empresa/lineas` · `/empresa/permisos` (RRHH, `PermisosRrhhView.jsx`) · `/empresa/suscripciones` (`SubscriptionsView.jsx`, capability `empresa.suscripciones`) · `/empresa/accesos` (accesos por módulo, `PermisosView.jsx`) · `/empresa/mappi` (backlog de huecos de MAPPI, `MappiLogsView.jsx`, capability `empresa.mappi`, ver §2.14 "Registro de huecos").
 
 **Página:** `src/pages/EmpresaPage.jsx`.
 
@@ -15,6 +15,7 @@ Administración organizacional: departamentos, cargos, empleados, vacaciones, pe
 - Clientes: `ClientsView.jsx` · `ClientModal.jsx`
 - Líneas: `LinesView.jsx` · `LineModal.jsx` · `LineMetasModal.jsx` · `LineFichaModal.jsx`
 - Accesos/RRHH: `PermisosView.jsx` (pestaña "Accesos") · `PermisosRrhhView.jsx` / `PermissionFormDialog.jsx` (pestaña "Permisos")
+- Suscripciones: `SubscriptionsView.jsx` · `SubscriptionModal.jsx`
 - Otros: `src/components/common/ConfirmDeleteDialog.jsx` · `src/components/metricas/EmployeePermissionsBlock.jsx` (historial de permisos en la ficha del empleado)
 
 **Lib / utils:**
@@ -26,11 +27,12 @@ Administración organizacional: departamentos, cargos, empleados, vacaciones, pe
 - `src/utils/lineFilters.js` · `lineMembers.js` · `src/utils/clientInMonth.js` · `src/utils/clientsPerMonth.js` · `src/utils/employeeInMonth.js` (`employeeActiveInMonth`)
 - Export: `src/utils/exportClientsToPdf.js` (jsPDF; `buildClientColumns`, `computeClientSheetLayout`, `renderClientSheet`)
 - `src/lib/permissions.js` (`canViewEmployeeFicha`)
+- `src/lib/subscriptions.js` (CRUD de `company_subscriptions`) · `src/utils/subscriptions.js` (lógica pura: `nextBillingDate`, `daysUntil`, `monthlyEquivalent`, `totalsByCurrency`, `FREQUENCIES`, `STATUS_META`)
 
 **Netlify functions:** `netlify/functions/create-employee.js` (`/api/employees`, service role + invite Supabase Auth) · `netlify/functions/archive-employee.js` (`/api/employees/manage`, service role).
 
 ## Datos
-- `departments` · `positions` · `users` (empleados) · `vacations` · `metric_clients` · `metric_lines` · `metric_line_members` (N:M línea↔empleado) · `module_permissions` · `external_resources`.
+- `departments` · `positions` · `users` (empleados) · `vacations` · `metric_clients` · `metric_lines` · `metric_line_members` (N:M línea↔empleado) · `module_permissions` · `external_resources` · `company_subscriptions`.
 - `questions` + `question_positions` + `question_tags`: banco de preguntas del flujo manual de Evaluaciones, retirado en F6 → solo lectura (§2.7).
 - `users`: `deleted_at` (soft delete), `baja_incluye_mes` (default `true`), `on_probation` (bool, default false), `birth_date`, `hire_date`, `monthly_salary`, `access_level`, `admin`, `first_name`.
 - `metric_clients`: `deleted_at`, `contract_end`, `contract_end_reason`, `baja_incluye_mes`, `mdn_since`, `created_at`, `social_manager_id`.
@@ -50,6 +52,7 @@ Administración organizacional: departamentos, cargos, empleados, vacaciones, pe
   - `empresa.permisos`: ver reporte de permisos RRHH (`min_level 3`).
   - `empresa.permisos.manage`: registrar/editar/eliminar permisos (`min_level 4` o `user_id` de Sofía Lauretta).
 - Asignar `access_level`/`admin` a otro empleado: solo admin (toggle y selector ocultos en `EmployeeModal`/`NewEmployeeDialog`). `create-employee.js`/`archive-employee.js` usan `requireCapability(event, 'empresa.empleados.manage')` (no `requireAdmin`) con clamp server-side de `admin`/`access_level` si el caller no es admin.
+  - `empresa.suscripciones` / `empresa.suscripciones.manage`: ver / agregar, editar y eliminar suscripciones; mismas reglas que `finanzas` (nivel ≥ 4 o departamento Administración).
 - RLS `vacations`: SELECT/INSERT/UPDATE/DELETE exigen `user_can('empresa.vacaciones.manage')`.
 - `users` select de `loadAll` usa columnas explícitas (no `*`); `monthly_salary` solo se pide si `canSeeLevels`.
 - Ficha de empleado: nivel 1-2 solo la propia; nivel ≥3/admin todas (`canViewEmployeeFicha`). Si se monta igual `EmployeeFichaContent`, muestra aviso en vez de datos.
@@ -94,6 +97,13 @@ Administración organizacional: departamentos, cargos, empleados, vacaciones, pe
 - Solapamiento: solo advierte si es del mismo tipo; no bloquea entre tipos distintos.
 - Historial también en `EmployeePermissionsBlock.jsx` dentro de `EmployeeFichaContent.jsx`, gateado por `can('empresa.permisos')` (visible en `EmployeeInfoModal` y drill-down de `LineFichaModal`).
 
+### Suscripciones (`SubscriptionsView.jsx`)
+- Catálogo de servicios recurrentes de la agencia, solo registro: **no alimenta Finanzas** (aviso fijo arriba de la vista). Campos en `datos.md` (`company_subscriptions`); guarda solo los últimos 4 dígitos de la tarjeta, nunca contraseñas.
+- Próximo cobro derivado (`nextBillingDate`): mensual cobra en `billing_day`; trimestral/anual siguen la rejilla de 3/12 meses desde `billing_month`. Un día inexistente (31 en febrero) cae en el último día del mes. Pausada/cancelada → sin próximo cobro. `billing_day` es opcional (servicio cargado sin conocer la fecha): sin día no hay próximo cobro y la fila dice "Fecha por confirmar".
+- Datos pendientes (`missingInfo`): una suscripción no cancelada sin `card_last4` o sin `billing_day` se resalta (fondo ámbar + borde izquierdo `#FFB800`) con "Sin tarjeta" / "Fecha por confirmar".
+- Cards: total mensual estimado por moneda (anual/12, trimestral/3, solo activas, sin convertir entre monedas), activas y cobros en 7 días. Lista ordenada por próximo cobro, con `FilterBar` (búsqueda, estado, rubro, responsable).
+- Sin `empresa.suscripciones.manage` la vista es de solo lectura. Cancelar = estado `cancelada` (fija `cancelled_at`); eliminar es para registros cargados por error.
+
 ### Clientes (`ClientsView`)
 - Carga todos incl. archivados (`loadClients({ includeArchived: true })`). Modo Actual: activos (`deleted_at IS NULL`); "Ver archivados" → Restaurar (limpia `contract_end`/`contract_end_reason`).
 - Archivar = soft delete (`deleteClient(clientId, { incluyeMes, contractEnd, reason })`): pide fecha real de fin (default hoy → `contract_end`) y motivo opcional (`contract_end_reason`). Si la fecha cae en el mes actual, radio "Sí, facturó/trabajó" → `baja_incluye_mes=true` / "No, sacarlo también de este mes" → `false`; si es de un mes anterior, manda `contract_end` (texto informativo).
@@ -127,4 +137,5 @@ Administración organizacional: departamentos, cargos, empleados, vacaciones, pe
 - §2.7 Evaluaciones: banco de preguntas legacy de solo lectura.
 - §2.4ter Pautas/Audiovisual: consume `external_resources`; calendario calcado de `AvCalendar.jsx`.
 - §2.14 MAPPI: `/empresa/mappi`.
+- §2.15 Finanzas: Suscripciones comparte sus reglas de acceso y las keys de `CATEGORIAS_GASTO`, pero no alimenta `fin_*`.
 - §5: convención de soft delete.

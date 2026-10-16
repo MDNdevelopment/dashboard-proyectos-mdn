@@ -34,6 +34,8 @@ Gotcha: el seed `20260706000002` nunca se aplicó en prod; los defaults de prod 
 - `empresa.accesos` — tab "Accesos" de configuración (`/empresa/accesos`) — `min_level 4`.
 - `empresa.permisos` — reporte RRHH de permisos/ausencias/reposos, tab "Permisos" (`/empresa/permisos`) — `min_level 3`.
 - `empresa.permisos.manage` — registrar/editar/eliminar permisos, ausencias y reposos — `min_level 4` o `user_id` de Sofía Lauretta.
+- `empresa.suscripciones` — tab "Suscripciones" (`/empresa/suscripciones`), lectura de `company_subscriptions` — mismas reglas que `finanzas` (nivel ≥ 4 o departamento Administración; admin siempre).
+- `empresa.suscripciones.manage` — agregar/editar/eliminar suscripciones — mismas reglas que `finanzas`. Sembradas copiando la fila `finanzas` (fallback nivel ≥ 4); ajustables desde Accesos.
 - Gotcha: `empresa.permisos` antes gateaba la tab de configuración (hoy `empresa.accesos`); hoy gatea el reporte RRHH (`employee_permissions`, §2.6).
 
 **Tareas**

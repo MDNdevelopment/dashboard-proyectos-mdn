@@ -180,5 +180,6 @@ Módulo de **nivel empresa**: facturación real de la agencia, cobranza y repart
 - Reportes/Métricas/Tareas/Ads/Chequeo: comparten `clientInMonth()`; Reportes (`initMetricReport.js`) inspira el carry-forward.
 - Métricas §2.5: `finanzas` en `metric_reports.data` es otra cosa.
 - Empresa → Accesos: reglas de las capabilities (`module_permissions`).
+- Empresa → Suscripciones (`company_subscriptions`): registro de servicios recurrentes con las mismas reglas de acceso que `finanzas`. **No alimenta Finanzas**: sus cobros no aparecen en Distribución ni Movimientos y hay que registrarlos a mano como egreso. Su `category` usa las keys de `CATEGORIAS_GASTO`.
 - §5: `DescribedSelect`.
 - Futuro: un escenario de n8n podría escribir `fin_rates` a diario.

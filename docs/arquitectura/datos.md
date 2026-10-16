@@ -87,6 +87,11 @@ Catálogo del estado actual. Leyenda FK: `──→` FK declarada · `··→` r
 - Recursos externos (no empleados): `id, company_id, full_name, roles text[] ⊆{grabacion,edicion,ads}, deleted_at, created_at`. Sin FK a `users` (a propósito; no aparecen en Tareas, Líneas ni Evaluaciones).
 - RLS `for all to authenticated using(true) with check(true)`. Sin realtime. Usada en Pautas (`AudiovisualView.jsx`); gestión en Empresa → Empleados (`ExternalResourcesView.jsx`).
 
+### `company_subscriptions`
+- Servicios recurrentes que paga la agencia (Empresa → Suscripciones): `id, company_id, name, category (keys de CATEGORIAS_GASTO), amount, currency ('USD'|'Bs'|'EUR'), frequency ('mensual'|'trimestral'|'anual'), billing_day 1-31 (nullable: fecha por confirmar), billing_month (obligatorio solo si hay billing_day y no es mensual), card_last4 (^\d{4}$), owner_user_id→users, account_email, url, status ('activa'|'pausada'|'cancelada'), start_date, cancelled_at, comment, created_by, created_at, updated_at`. No guarda número completo de tarjeta ni contraseñas.
+- El próximo cobro NO se guarda: se deriva (`src/utils/subscriptions.js`). No alimenta `fin_*` (ver `finanzas.md`).
+- RLS: SELECT `user_can('empresa.suscripciones')`; INSERT/UPDATE/DELETE `user_can('empresa.suscripciones.manage')` (INSERT/UPDATE además exigen el `company_id` del usuario). Realtime (`empresa-suscripciones-changes`).
+
 ### `av_workload_insight`
 - Caché IA de carga de Audiovisual del Home (§2.14.1): `company_id text PRIMARY KEY`, `data jsonb` (respuesta OpenRouter o mensaje fijo "todo tranquilo"), `generated_at`, `generated_by`.
 - RLS activa **sin políticas** (deny-by-default); solo `service_role` desde `netlify/functions/av-workload-insight.js` (gated `requireAdmin`).

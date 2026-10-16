@@ -107,9 +107,11 @@ export const MODULES = [
       { key: 'clientes', label: 'Clientes' },
       { key: 'lineas', label: 'Líneas' },
       { key: 'permisos', label: 'Permisos' },
+      { key: 'suscripciones', label: 'Suscripciones' },
       { key: 'accesos', label: 'Accesos' },
     ],
     manageActions: [
+      { key: 'empresa.suscripciones.manage', label: 'Agregar / editar / eliminar suscripciones' },
       { key: 'empresa.clientes.manage', label: 'Modificar clientes' },
       { key: 'empresa.lineas.manage', label: 'Modificar líneas' },
       { key: 'empresa.empleados.manage', label: 'Crear / editar / archivar empleados' },
