@@ -335,7 +335,7 @@ export function externalUsersForRole(externalResources, role) {
 
 // ─── Disponibilidad de recursos (Agenda) ───────────────────────────────────
 
-/** A partir de cuántas pautas del mismo día se avisa que un recurso está sobrecargado. */
+/** A partir de cuántas SALIDAS del mismo día se avisa que un recurso está sobrecargado. */
 export const RESOURCE_DAILY_LIMIT = 3
 
 /**
@@ -345,6 +345,64 @@ export const RESOURCE_DAILY_LIMIT = 3
  * bloquea — solo avisa (ver `resourceConflicts`).
  */
 export const ASSUMED_DURATION_HOURS = 3
+
+/**
+ * Varias pautas pueden ser UNA MISMA SALIDA: una grabación que cubre varias cuentas de un
+ * grupo (p. ej. "Grupo San Lucas") se registra como una pauta por cuenta — `av_pautas` tiene
+ * un solo `client_id` — y todas comparten `sesion_id`. Para la disponibilidad de la persona
+ * eso es una sola salida, así que la carga se cuenta por sesión y no por fila.
+ *
+ * Clave de la salida de una pauta: su sesión, o la pauta misma si no está agrupada.
+ */
+export function sesionKey(p) {
+  return p?.sesion_id ?? `pauta:${p?.id}`
+}
+
+/** true si `a` y `b` son la misma salida (dos cuentas del mismo grupo, no dos pautas). */
+export function mismaSesion(a, b) {
+  return Boolean(a?.sesion_id) && a.sesion_id === b?.sesion_id
+}
+
+/** Salidas distintas en una lista de pautas (las de una misma sesión cuentan una vez). */
+export function contarSalidas(pautas) {
+  return new Set((pautas ?? []).map(sesionKey)).size
+}
+
+/** Las otras pautas de la misma salida (misma sesión), activas y sin incluir a `pauta`. */
+export function hermanasDeSalida(pauta, pautas) {
+  if (!pauta?.sesion_id) return []
+  return (pautas ?? []).filter(
+    (p) => p.id !== pauta.id && !p.deleted_at && p.sesion_id === pauta.sesion_id,
+  )
+}
+
+/**
+ * Salidas del mismo día a las que `candidate` se puede vincular como "la misma salida": otras
+ * pautas con la MISMA hora de salida que todavía no son de su sesión. Se agrupan por sesión,
+ * así que un grupo ya vinculado (3 cuentas de San Lucas) se ofrece como una sola opción.
+ *
+ * La coincidencia de hora es solo el indicio para ofrecerlo; vincular siempre lo afirma una
+ * persona (checkbox en AgendarDialog/PautaFormModal), nunca se deduce sola — dos clientes a la
+ * misma hora pueden ser una salida de grupo o un error de agenda, y solo quien coordina sabe.
+ * @param {object} candidate  { salida, sesion_id, ... }
+ * @param {Array} sameDayPautas  las demás pautas activas del mismo día (sin `candidate`)
+ * @returns {Array<{key:string, sesionId:string|null, pautas:Array, label:string}>}
+ */
+export function salidasVinculables(candidate, sameDayPautas) {
+  if (!candidate?.salida) return []
+  const grupos = new Map()
+  ;(sameDayPautas ?? []).forEach((p) => {
+    if (!p.salida || hhmm(p.salida) !== hhmm(candidate.salida)) return
+    if (mismaSesion(candidate, p)) return
+    const key = sesionKey(p)
+    if (!grupos.has(key)) grupos.set(key, { key, sesionId: p.sesion_id ?? null, pautas: [] })
+    grupos.get(key).pautas.push(p)
+  })
+  return [...grupos.values()].map((g) => ({
+    ...g,
+    label: g.pautas.map((p) => p.client_name || 'sin cliente').join(', '),
+  }))
+}
 
 /** Normaliza 'HH:MM:SS' (formato `time` de Postgres) a 'HH:MM' para comparar como string. */
 function hhmm(value) {
@@ -414,11 +472,17 @@ function assumedRangesOverlap(a, b) {
  * - `warnings` de tipo `probable_overlap`: los rangos NO chocan con las horas reales, pero
  *   sí al rellenar la `llegada` faltante con `ASSUMED_DURATION_HOURS`. Como el choque
  *   depende de una suposición, se pregunta en vez de bloquear.
- * - `warnings` de tipo `daily_limit`: el recurso alcanza `RESOURCE_DAILY_LIMIT` pautas ese
- *   día. Solo se avisa por recursos nuevos respecto a `previousRecursoIds`, para no repetir
- *   el aviso al tocar otro campo de una pauta que ya tenía 3+ y no cambió sus recursos.
- *   `probable_overlap` NO se filtra por `previousRecursoIds`: mover la hora de una pauta con
- *   recursos ya asignados es justamente cuando puede nacer un choque nuevo.
+ * - `warnings` de tipo `daily_limit`: el recurso alcanza `RESOURCE_DAILY_LIMIT` SALIDAS ese
+ *   día (`contarSalidas`, no filas). Solo se avisa por recursos nuevos respecto a
+ *   `previousRecursoIds`, para no repetir el aviso al tocar otro campo de una pauta que ya
+ *   tenía 3+ y no cambió sus recursos. `probable_overlap` NO se filtra por
+ *   `previousRecursoIds`: mover la hora de una pauta con recursos ya asignados es justamente
+ *   cuando puede nacer un choque nuevo.
+ *
+ * Las pautas de la MISMA SESIÓN que `candidate` (`mismaSesion`) se descartan antes de todo lo
+ * anterior: son las otras cuentas de la misma salida, así que no son un choque de horario
+ * (sus horas son idénticas a propósito) ni carga adicional. Es el equivalente a la exención
+ * por mismo cliente de `estudioConflicts` y de la constraint `av_pautas_estudio_sin_solape`.
  * @param {object} candidate  { recurso_ids, pauta_date, salida, llegada, ... }
  * @param {Array} sameDayPautas
  * @param {Map<string,object>} usersById
@@ -437,7 +501,9 @@ export function resourceConflicts(candidate, sameDayPautas, usersById, previousR
   const warnings = []
 
   recursos.forEach((resourceId) => {
-    const pautasDelRecurso = sameDayPautas.filter((p) => (p.recurso_ids ?? []).includes(resourceId))
+    const pautasDelRecurso = sameDayPautas.filter(
+      (p) => (p.recurso_ids ?? []).includes(resourceId) && !mismaSesion(candidate, p),
+    )
     const name = nameOf(resourceId)
 
     const clash = pautasDelRecurso.find((p) =>
@@ -454,7 +520,7 @@ export function resourceConflicts(candidate, sameDayPautas, usersById, previousR
     }
 
     if (!prevSet.has(resourceId)) {
-      const count = pautasDelRecurso.length + 1 // + la propia `candidate`
+      const count = contarSalidas(pautasDelRecurso) + 1 // + la propia `candidate`
       if (count >= RESOURCE_DAILY_LIMIT) {
         warnings.push({ kind: 'daily_limit', resourceId, name, count })
       }
@@ -1809,23 +1875,36 @@ export function ocupacionEstudioMes(pautas, year, month) {
   return total ? Math.round((ocupados / total) * 100) : 0
 }
 
-/** Pautas confirmadas por recurso en la semana, marcando si algún día llega al límite. */
+/**
+ * Salidas confirmadas por recurso en la semana, marcando si algún día llega al límite. Las
+ * pautas de una misma sesión (varias cuentas de un grupo en una sola grabación) cuentan como
+ * una, así que `count` y `porDia` son salidas distintas, no filas — ver `sesionKey`.
+ */
 export function cargaRecursos(pautas, range, usersById) {
   const semana = pautasInWeek(pautas, range).filter((p) => CONFIRMADAS.includes(p.status))
   const acc = new Map()
   semana.forEach((p) => {
     ;(p.recurso_ids ?? []).forEach((id) => {
-      if (!acc.has(id)) acc.set(id, { id, name: editorLabel(id, usersById), count: 0, porDia: {} })
+      if (!acc.has(id))
+        acc.set(id, { id, name: editorLabel(id, usersById), salidas: new Set(), porDiaSet: {} })
       const e = acc.get(id)
-      e.count++
-      e.porDia[p.pauta_date] = (e.porDia[p.pauta_date] ?? 0) + 1
+      e.salidas.add(sesionKey(p))
+      e.porDiaSet[p.pauta_date] = e.porDiaSet[p.pauta_date] ?? new Set()
+      e.porDiaSet[p.pauta_date].add(sesionKey(p))
     })
   })
   return [...acc.values()]
-    .map((e) => ({
-      ...e,
-      sobrecargado: Object.values(e.porDia).some((n) => n >= RESOURCE_DAILY_LIMIT),
-    }))
+    .map(({ salidas, porDiaSet, ...e }) => {
+      const porDia = Object.fromEntries(
+        Object.entries(porDiaSet).map(([date, set]) => [date, set.size]),
+      )
+      return {
+        ...e,
+        count: salidas.size,
+        porDia,
+        sobrecargado: Object.values(porDia).some((n) => n >= RESOURCE_DAILY_LIMIT),
+      }
+    })
     .sort((a, b) => b.count - a.count)
 }
 
@@ -1847,7 +1926,8 @@ export function diasHabiles(from = new Date(), n = 10) {
  *  - estudio: 'ocupado' si choca con una confirmada de otro cliente; 'aviso' si choca con
  *    una solicitud pendiente o con una confirmada sin hora; 'libre' si no.
  *  - locación: 'aviso' si todos los recursos de audiovisual ya tienen RESOURCE_DAILY_LIMIT
- *    pautas ese día; 'libre' si no (no se reserva nada).
+ *    salidas ese día (`contarSalidas`: un grupo de cuentas en una grabación es una sola
+ *    salida); 'libre' si no (no se reserva nada).
  */
 export function sugerirHuecos(
   pautas,
@@ -1865,7 +1945,8 @@ export function sugerirHuecos(
     recursoIds.length > 0 &&
     recursoIds.every(
       (id) =>
-        delDia.filter((p) => (p.recurso_ids ?? []).includes(id)).length >= RESOURCE_DAILY_LIMIT,
+        contarSalidas(delDia.filter((p) => (p.recurso_ids ?? []).includes(id))) >=
+        RESOURCE_DAILY_LIMIT,
     )
   return horas.map((hora) => {
     if (lugarTipo === 'estudio') {
@@ -2060,9 +2141,11 @@ function isoMonth(iso) {
 
 /**
  * Pautas por semana de una persona en un mes: semanas lunes–sábado que tocan el mes, con
- * pautas DISTINTAS confirmadas (programada/realizada) según `pauta_date`. `capturo`: está en
- * `recurso_ids` o en el reparto de grabación; `edito`: tiene un lote no cancelado. No hay
- * fecha de edición, así que la semana es la de la pauta. `total` = pautas donde participó.
+ * SALIDAS distintas confirmadas (programada/realizada) según `pauta_date` — las cuentas de un
+ * grupo grabadas en una sola salida comparten `sesion_id` y cuentan una vez (`sesionKey`).
+ * `capturo`: está en `recurso_ids` o en el reparto de grabación; `edito`: tiene un lote no
+ * cancelado. No hay fecha de edición, así que la semana es la de la pauta. `total` = salidas
+ * donde participó.
  * @returns {Array<{start:string,end:string,total:number,capturo:number,edito:number}>}
  */
 export function pautasPorSemanaPersona(pautas, piezasByPauta, personId, { year, month }) {
@@ -2074,7 +2157,13 @@ export function pautasPorSemanaPersona(pautas, piezasByPauta, personId, { year, 
     const r = weekRange(`${prefix}-${pad(d)}`)
     if (!seen.has(r.start)) {
       seen.add(r.start)
-      semanas.push({ start: r.start, end: r.end, total: 0, capturo: 0, edito: 0 })
+      semanas.push({
+        start: r.start,
+        end: r.end,
+        totalSet: new Set(),
+        capturoSet: new Set(),
+        editoSet: new Set(),
+      })
     }
   }
   ;(pautas ?? []).forEach((p) => {
@@ -2088,11 +2177,17 @@ export function pautasPorSemanaPersona(pautas, piezasByPauta, personId, { year, 
     const edito = (piezasByPauta?.get(p.id) ?? []).some(
       (pz) => pz.status !== 'cancelado' && pz.editor_user_id === personId,
     )
-    if (capturo) sem.capturo += 1
-    if (edito) sem.edito += 1
-    if (capturo || edito) sem.total += 1
+    const key = sesionKey(p)
+    if (capturo) sem.capturoSet.add(key)
+    if (edito) sem.editoSet.add(key)
+    if (capturo || edito) sem.totalSet.add(key)
   })
-  return semanas
+  return semanas.map(({ totalSet, capturoSet, editoSet, ...s }) => ({
+    ...s,
+    total: totalSet.size,
+    capturo: capturoSet.size,
+    edito: editoSet.size,
+  }))
 }
 
 // ─── Generador de agenda para WhatsApp ─────────────────────────────────────

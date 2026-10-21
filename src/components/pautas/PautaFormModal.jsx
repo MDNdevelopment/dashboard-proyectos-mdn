@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import AttendeePicker from '../reuniones/AttendeePicker'
 import PautaCuandoDondeFields from './PautaCuandoDondeFields'
-import { updatePauta } from './avPautasApi'
+import MismaSalidaPicker from './MismaSalidaPicker'
+import { updatePauta, setSesionId } from './avPautasApi'
 import {
   FORMAT_KEYS,
   FORMAT_LABELS,
@@ -10,6 +11,7 @@ import {
   estudioConflicts,
   pautaErrorMessage,
   resourceConflicts,
+  salidasVinculables,
 } from '../../utils/audiovisual'
 
 const FIELDS = [
@@ -56,6 +58,9 @@ function sameValue(a, b) {
  * Edición del brief de una pauta existente. Crear una pauta nueva es cosa de
  * `SolicitarWizard` (tres pasos con huecos sugeridos). En una pauta ya programada/realizada
  * la fecha, hora y lugar no se tocan desde aquí — para eso está "Reagendar" en el detalle.
+ *
+ * `onSaved(pauta)` cierra el modal con la pauta guardada; `onChanged(pauta)` refresca en
+ * memoria las pautas HERMANAS al declarar una misma salida (MismaSalidaPicker) y no cierra.
  */
 export default function PautaFormModal({
   pauta,
@@ -66,10 +71,14 @@ export default function PautaFormModal({
   pautas,
   onClose,
   onSaved,
+  onChanged,
 }) {
   const [values, setValues] = useState(() => initialValues(pauta))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+  // `key` de la salida con la que comparte grabación (MismaSalidaPicker), o null.
+  const [salidaCompartida, setSalidaCompartida] = useState(null)
+  const [nuevaSesion] = useState(() => crypto.randomUUID())
   const lockSchedule = pauta.status !== 'solicitada'
 
   const set = (field, v) => setValues((prev) => ({ ...prev, [field]: v }))
@@ -86,21 +95,28 @@ export default function PautaFormModal({
   // Mientras sigue solicitada, los recursos se eligen al "Aprobar y agendar"; en una pauta ya
   // agendada este es el único lugar para asignarlos o cambiarlos sin reagendar.
   const editaRecursos = lockSchedule
+  const sameDay = (pautas ?? []).filter(
+    (p) =>
+      p.id !== pauta.id &&
+      !p.deleted_at &&
+      ['programada', 'realizada'].includes(p.status) &&
+      p.pauta_date === pauta.pauta_date,
+  )
+  const candidate = { ...pauta, recurso_ids: values.recurso_ids }
+  const vinculables = editaRecursos ? salidasVinculables(candidate, sameDay) : []
+  const compartida = vinculables.find((o) => o.key === salidaCompartida) ?? null
+  // Las hermanas de la misma salida son la misma grabación: ni choque de horario ni carga.
+  const hermanasIds = (compartida?.pautas ?? []).map((p) => p.id)
   const recursosConflicts =
     editaRecursos && pauta.pauta_date && values.recurso_ids.length
       ? resourceConflicts(
-          { ...pauta, recurso_ids: values.recurso_ids },
-          (pautas ?? []).filter(
-            (p) =>
-              p.id !== pauta.id &&
-              !p.deleted_at &&
-              ['programada', 'realizada'].includes(p.status) &&
-              p.pauta_date === pauta.pauta_date,
-          ),
+          candidate,
+          sameDay.filter((p) => !hermanasIds.includes(p.id)),
           usersById,
           pauta.recurso_ids ?? [],
         )
       : { blocking: [], warnings: [] }
+  const sesionId = compartida ? (compartida.sesionId ?? nuevaSesion) : null
   const missingStudioTime = esEstudio && !lockSchedule && (!values.pauta_date || !values.salida)
   const complete = briefComplete(values)
   const canSave =
@@ -131,10 +147,21 @@ export default function PautaFormModal({
       if (f === 'recurso_ids' && !editaRecursos) return
       if (!sameValue(values[f], initialValues(pauta)[f])) changed[f] = values[f]
     })
+    if (sesionId) changed.sesion_id = sesionId
     if (Object.keys(changed).length === 0) {
       setSaving(false)
       onClose()
       return
+    }
+    // Las hermanas primero: si el grupo estrena sesión, hay que escribírsela también a ellas.
+    if (sesionId && !compartida.sesionId) {
+      const { data: hermanas, error: errSesion } = await setSesionId(hermanasIds, sesionId)
+      if (errSesion) {
+        setSaving(false)
+        setError(pautaErrorMessage(errSesion))
+        return
+      }
+      ;(hermanas ?? []).forEach((h) => onChanged?.(h))
     }
     const result = await updatePauta(pauta.id, changed)
     setSaving(false)
@@ -292,9 +319,18 @@ export default function PautaFormModal({
               {recursosConflicts.blocking.map((b) => (
                 <p key={b.resourceId} className="text-[12.5px] text-[#c0392b] mt-1" role="alert">
                   {b.name} ya está en la pauta de {b.pauta.client_name || 'otro cliente'} ese día.
-                  Ajusta el horario o elige otro recurso.
+                  Ajusta el horario, elige otro recurso o marca que es la misma salida.
                 </p>
               ))}
+              {vinculables.length > 0 && (
+                <div className="mt-2">
+                  <MismaSalidaPicker
+                    opciones={vinculables}
+                    value={salidaCompartida}
+                    onChange={setSalidaCompartida}
+                  />
+                </div>
+              )}
             </Section>
           )}
 

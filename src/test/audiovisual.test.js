@@ -41,6 +41,8 @@ import {
   timeRangesOverlap,
   assumedEnd,
   resourceConflicts,
+  salidasVinculables,
+  hermanasDeSalida,
   RESOURCE_DAILY_LIMIT,
 } from '../utils/audiovisual'
 
@@ -1679,6 +1681,117 @@ describe('resourceConflicts', () => {
     }
     const result = resourceConflicts(candidate, [clashing], usersById)
     expect(result.blocking[0].name).toBe('Alan Puentes')
+  })
+
+  // Pauta de grupo: una grabación que cubre varias cuentas se registra como una pauta por
+  // cuenta, todas a la misma hora. Marcadas como la misma salida (`sesion_id`) no son choque
+  // ni carga; sin ese dato siguen bloqueando, que es lo correcto para dos pautas de verdad.
+  it('no bloquea ni cuenta las pautas de la MISMA salida (grupo de cuentas)', () => {
+    const candidate = {
+      recurso_ids: ['r1'],
+      salida: '09:00',
+      llegada: '11:00',
+      sesion_id: 's1',
+    }
+    const sameDay = [
+      {
+        id: 'p2',
+        recurso_ids: ['r1'],
+        salida: '09:00',
+        llegada: '11:00',
+        client_name: 'San Lucas Riñones',
+        sesion_id: 's1',
+      },
+      {
+        id: 'p3',
+        recurso_ids: ['r1'],
+        salida: '09:00',
+        llegada: '11:00',
+        client_name: 'San Lucas Cardio',
+        sesion_id: 's1',
+      },
+    ]
+    const result = resourceConflicts(candidate, sameDay, usersById)
+    expect(result.blocking).toEqual([])
+    expect(result.warnings).toEqual([])
+  })
+
+  it('sin sesión compartida, dos pautas a la misma hora siguen bloqueando', () => {
+    const candidate = { recurso_ids: ['r1'], salida: '09:00', llegada: '11:00' }
+    const sameDay = [
+      {
+        id: 'p2',
+        recurso_ids: ['r1'],
+        salida: '09:00',
+        llegada: '11:00',
+        client_name: 'Otra marca',
+      },
+    ]
+    expect(resourceConflicts(candidate, sameDay, usersById).blocking).toHaveLength(1)
+  })
+
+  it('el límite diario cuenta SALIDAS: un grupo de 3 cuentas + 1 pauta aparte no avisa', () => {
+    const candidate = { recurso_ids: ['r1'], salida: null, llegada: null }
+    const grupo = (id, client_name) => ({
+      id,
+      recurso_ids: ['r1'],
+      salida: '09:00',
+      llegada: '11:00',
+      client_name,
+      sesion_id: 'grupo',
+    })
+    const sameDay = [
+      grupo('p2', 'San Lucas A'),
+      grupo('p3', 'San Lucas B'),
+      grupo('p4', 'San Lucas C'),
+    ]
+    // 3 filas pero una sola salida + la candidate = 2 salidas, por debajo del límite de 3.
+    const result = resourceConflicts(candidate, sameDay, usersById)
+    expect(result.warnings).toEqual([])
+  })
+})
+
+describe('salidasVinculables / hermanasDeSalida', () => {
+  const candidate = { id: 'p1', salida: '09:00', client_name: 'Clínica San Lucas' }
+
+  it('agrupa por sesión las pautas del mismo día a la misma hora', () => {
+    const sameDay = [
+      { id: 'p2', salida: '09:00', client_name: 'San Lucas Riñones', sesion_id: 's1' },
+      { id: 'p3', salida: '09:00', client_name: 'San Lucas Cardio', sesion_id: 's1' },
+      { id: 'p4', salida: '14:00', client_name: 'Otra a otra hora' },
+    ]
+    const opciones = salidasVinculables(candidate, sameDay)
+    expect(opciones).toHaveLength(1)
+    expect(opciones[0].sesionId).toBe('s1')
+    expect(opciones[0].label).toBe('San Lucas Riñones, San Lucas Cardio')
+  })
+
+  it('una pauta sin sesión se ofrece como su propia opción, con sesionId null', () => {
+    const sameDay = [{ id: 'p2', salida: '09:00:00', client_name: 'Bellezza' }]
+    const [opcion] = salidasVinculables(candidate, sameDay)
+    expect(opcion.sesionId).toBe(null)
+    expect(opcion.pautas.map((p) => p.id)).toEqual(['p2'])
+  })
+
+  it('no ofrece las pautas que ya son de su misma sesión, ni sin hora de salida', () => {
+    const conSesion = { ...candidate, sesion_id: 's1' }
+    const sameDay = [
+      { id: 'p2', salida: '09:00', sesion_id: 's1' },
+      { id: 'p3', salida: null, client_name: 'Sin hora' },
+    ]
+    expect(salidasVinculables(conSesion, sameDay)).toEqual([])
+    expect(salidasVinculables({ ...candidate, salida: null }, sameDay)).toEqual([])
+  })
+
+  it('hermanasDeSalida devuelve las otras cuentas activas de la salida', () => {
+    const pautas = [
+      { id: 'p1', sesion_id: 's1' },
+      { id: 'p2', sesion_id: 's1', client_name: 'B' },
+      { id: 'p3', sesion_id: 's1', deleted_at: '2026-10-01', client_name: 'Borrada' },
+      { id: 'p4', sesion_id: 's2', client_name: 'Otra salida' },
+    ]
+    expect(hermanasDeSalida({ id: 'p1', sesion_id: 's1' }, pautas).map((p) => p.id)).toEqual(['p2'])
+    expect(hermanasDeSalida({ id: 'p1', sesion_id: null }, pautas)).toEqual([])
   })
 })
 

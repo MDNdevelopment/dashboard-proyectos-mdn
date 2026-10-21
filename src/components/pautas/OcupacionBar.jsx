@@ -114,7 +114,11 @@ export default function OcupacionBar({ pautas, range, usersById }) {
                     ? 'border-[#f5c6c6] bg-[#fdecec] text-[#c0392b]'
                     : 'border-[#e8e4d8] bg-[#faf9f5] text-[#333]'
                 }`}
-                title={r.sobrecargado ? 'Tiene 3 o más pautas en un mismo día' : undefined}
+                title={
+                  r.sobrecargado
+                    ? 'Tiene 3 o más salidas en un mismo día (las cuentas de un grupo grabadas juntas cuentan como una)'
+                    : undefined
+                }
               >
                 {r.name}
                 <span className="font-mono font-bold">{r.count}</span>

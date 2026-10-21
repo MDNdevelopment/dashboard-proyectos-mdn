@@ -151,6 +151,35 @@ describe('buildAvWorkloadSnapshot', () => {
     expect(snap.ventana).toEqual({ desde: '2026-08-30', hasta: '2026-09-05' })
   })
 
+  // Grabación de grupo: una pauta por cuenta, todas con el mismo `sesion_id`. Para la carga
+  // de la persona es UNA salida; antes el Home reportaba "5 pautas el martes" por una.
+  it('las pautas de una misma salida cuentan como una sola', () => {
+    const pautas = [
+      pauta({ id: 'p1', client_name: 'Clínica San Lucas', sesion_id: 's1' }),
+      pauta({ id: 'p2', client_name: 'San Lucas Riñones', sesion_id: 's1' }),
+      pauta({ id: 'p3', client_name: 'San Lucas Cardio', sesion_id: 's1' }),
+    ]
+    const snap = buildAvWorkloadSnapshot({ pautas, employees: AUDIOVISUAL_EMPLOYEES, today: TODAY })
+    expect(snap.sobrecargas).toEqual([])
+  })
+
+  it('una salida de grupo + 2 pautas aparte dan 3 salidas, y el grupo se nombra junto', () => {
+    const pautas = [
+      pauta({ id: 'p1', client_name: 'Clínica San Lucas', sesion_id: 's1' }),
+      pauta({ id: 'p2', client_name: 'San Lucas Riñones', sesion_id: 's1' }),
+      pauta({ id: 'p3', client_name: 'Bellezza', salida: '12:00' }),
+      pauta({ id: 'p4', client_name: 'Udimed', salida: '15:00' }),
+    ]
+    const snap = buildAvWorkloadSnapshot({ pautas, employees: AUDIOVISUAL_EMPLOYEES, today: TODAY })
+    expect(snap.sobrecargas).toHaveLength(1)
+    expect(snap.sobrecargas[0].cantidad).toBe(3)
+    expect(snap.sobrecargas[0].pautas.map((p) => p.cliente)).toEqual([
+      'Clínica San Lucas + 1 cuenta',
+      'Bellezza',
+      'Udimed',
+    ])
+  })
+
   it('el umbral es configurable', () => {
     const pautas = [
       pauta({ id: 'p1', recurso_ids: ['a1'] }),

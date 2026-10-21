@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import ExtraBadge from './ExtraBadge'
 import StatusBadge from './StatusBadge'
+import MismaSalidaBadge from './MismaSalidaBadge'
 import PautaDatos from './PautaDatos'
 import PautaAcciones from './PautaAcciones'
 import AgendarDialog from './AgendarDialog'
@@ -89,6 +90,7 @@ export default function PautaDetail({
               </h2>
               <ExtraBadge pauta={pauta} />
               <StatusBadge pauta={pauta} />
+              <MismaSalidaBadge pauta={pauta} pautas={pautas} />
             </div>
             <p className="text-[12.5px] text-[#888] mt-0.5">
               {line?.name ?? 'Independientes'}
@@ -154,7 +156,7 @@ export default function PautaDetail({
           usersById={usersById}
           recursoUsers={recursoUsers}
           allEmployees={allEmployees}
-          onConfirm={(fields) => onFields(pauta, fields)}
+          onConfirm={(fields, vincularIds) => onFields(pauta, fields, vincularIds)}
           onClose={() => setDialog(null)}
         />
       )}

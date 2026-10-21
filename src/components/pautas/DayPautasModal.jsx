@@ -9,6 +9,7 @@ import {
   grillaStatus,
 } from '../../utils/audiovisual'
 import ExtraBadge from './ExtraBadge'
+import MismaSalidaBadge from './MismaSalidaBadge'
 import WhatsAppTextPanel from './WhatsAppTextPanel'
 
 const DOT_COLOR = {
@@ -80,6 +81,7 @@ export default function DayPautasModal({ date, pautas, usersById, onPautaClick, 
                 <PautaRow
                   key={p.id}
                   pauta={p}
+                  dayPautas={dayPautas}
                   usersById={usersById}
                   onClick={() => onPautaClick(p)}
                 />
@@ -118,7 +120,7 @@ export default function DayPautasModal({ date, pautas, usersById, onPautaClick, 
   )
 }
 
-function PautaRow({ pauta, usersById, onClick }) {
+function PautaRow({ pauta, dayPautas, usersById, onClick }) {
   const codes = formatCodes(pauta) || '—'
   const recs = resourceNames(pauta, usersById)
   const rec = recs.length ? recs.join(', ') : 'sin asignar'
@@ -139,6 +141,7 @@ function PautaRow({ pauta, usersById, onClick }) {
           <p className="flex items-center gap-1.5 text-[13.5px] font-semibold text-[#222] truncate">
             {pauta.client_name ?? 'Sin cliente'}
             <ExtraBadge pauta={pauta} />
+            <MismaSalidaBadge pauta={pauta} pautas={dayPautas} />
           </p>
           <p className="text-[12px] text-[#777] truncate">
             ({codes}: {rec}){pauta.salida ? ` · ${formatTime12(pauta.salida)}` : ''}

@@ -2,8 +2,10 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { vi } from 'vitest'
 
 const updatePauta = vi.fn()
+const setSesionId = vi.fn()
 vi.mock('../components/pautas/avPautasApi', () => ({
   updatePauta: (...a) => updatePauta(...a),
+  setSesionId: (...a) => setSesionId(...a),
 }))
 
 import PautaFormModal from '../components/pautas/PautaFormModal'
@@ -70,6 +72,7 @@ const typeSalida = (v) =>
 
 beforeEach(() => {
   updatePauta.mockReset().mockResolvedValue({ data: { id: 'p1' }, error: null })
+  setSesionId.mockReset().mockResolvedValue({ data: [], error: null })
 })
 
 // Crear una pauta ya no pasa por aquí: ver SolicitarWizard.test.jsx.
@@ -141,5 +144,37 @@ describe('PautaFormModal — recursos de una pauta ya agendada', () => {
     fireEvent.click(submit())
     await waitFor(() => expect(onSaved).toHaveBeenCalled())
     expect(updatePauta).toHaveBeenCalledWith('p1', { recurso_ids: [] })
+  })
+
+  // Grabación de grupo: otra cuenta a la misma hora del mismo día. Declararla como la misma
+  // salida comparte `sesion_id` y saca ese choque del cálculo de carga.
+  it('declara la misma salida: guarda sesion_id y se lo escribe a la pauta hermana', async () => {
+    const hermana = {
+      id: 'h1',
+      client_id: 'c2',
+      client_name: 'San Lucas Riñones',
+      status: 'programada',
+      lugar_tipo: 'locacion',
+      pauta_date: agendada.pauta_date,
+      salida: agendada.salida,
+      llegada: null,
+      recurso_ids: ['u1'],
+      deleted_at: null,
+    }
+    const onChanged = vi.fn()
+    const { onSaved } = setup({
+      pauta: agendada,
+      pautas: [hermana],
+      recursoUsers: employees,
+      usersById,
+      onChanged,
+    })
+    fireEvent.click(screen.getByRole('checkbox', { name: /Se graba junto con San Lucas Riñones/ }))
+    fireEvent.click(submit())
+    await waitFor(() => expect(onSaved).toHaveBeenCalled())
+
+    const sesion = updatePauta.mock.calls[0][1].sesion_id
+    expect(sesion).toBeTruthy()
+    expect(setSesionId).toHaveBeenCalledWith(['h1'], sesion)
   })
 })

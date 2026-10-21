@@ -86,6 +86,38 @@ describe('AgendarDialog — agendar', () => {
     expect(onConfirm).not.toHaveBeenCalled()
   })
 
+  // El caso de una grabación de grupo: la segunda cuenta choca con la primera porque la hora
+  // es idéntica a propósito. Declararlo como la misma salida desbloquea y las vincula.
+  it('marcar "es la misma salida" desbloquea el choque y vincula las pautas', async () => {
+    const { onConfirm } = setup()
+    addRecurso('Rafa')
+    expect(submit()).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /Se graba junto con Alpitech/ }))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(submit()).toBeEnabled()
+
+    fireEvent.click(submit())
+    await waitFor(() => expect(onConfirm).toHaveBeenCalled())
+    const [fields, vincularIds] = onConfirm.mock.calls[0]
+    expect(fields.sesion_id).toBeTruthy()
+    expect(fields.recurso_ids).toEqual(['r1'])
+    // `otra` todavía no tenía sesión, así que hay que escribírsela también a ella.
+    expect(vincularIds).toEqual(['x'])
+  })
+
+  it('si el grupo ya tiene sesión, reusa su sesion_id y no vincula de nuevo', async () => {
+    const conSesion = { ...otra, sesion_id: 'grupo-1' }
+    const { onConfirm } = setup({ pautas: [base, conSesion] })
+    addRecurso('Rafa')
+    fireEvent.click(screen.getByRole('checkbox', { name: /Se graba junto con Alpitech/ }))
+    fireEvent.click(submit())
+    await waitFor(() => expect(onConfirm).toHaveBeenCalled())
+    const [fields, vincularIds] = onConfirm.mock.calls[0]
+    expect(fields.sesion_id).toBe('grupo-1')
+    expect(vincularIds).toEqual([])
+  })
+
   it('un choque probable pregunta y "Asignar igual" guarda', async () => {
     // La otra pauta sin llegada: solo choca asumiendo 3h → aviso, no bloqueo.
     const { onConfirm } = setup({ pautas: [base, { ...otra, llegada: null, salida: '08:00:00' }] })

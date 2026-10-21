@@ -153,7 +153,7 @@ export const handler = async (event) => {
   const [pautasRes, employeesRes] = await Promise.all([
     supabase
       .from('av_pautas')
-      .select('id, client_name, tema, pauta_date, salida, llegada, status, recurso_ids')
+      .select('id, client_name, tema, pauta_date, salida, llegada, status, recurso_ids, sesion_id')
       .eq('company_id', companyId)
       .is('deleted_at', null)
       .gte('pauta_date', dateKey(desde))
@@ -202,17 +202,15 @@ export const handler = async (event) => {
 
   // 3. Persistir en caché.
   const generatedAt = new Date().toISOString()
-  const { error: upsertErr } = await supabase
-    .from('av_workload_insight')
-    .upsert(
-      {
-        company_id: companyId,
-        data: parsed,
-        generated_at: generatedAt,
-        generated_by: caller.user_id,
-      },
-      { onConflict: 'company_id' },
-    )
+  const { error: upsertErr } = await supabase.from('av_workload_insight').upsert(
+    {
+      company_id: companyId,
+      data: parsed,
+      generated_at: generatedAt,
+      generated_by: caller.user_id,
+    },
+    { onConflict: 'company_id' },
+  )
   if (upsertErr) console.error('Error guardando caché de av_workload_insight:', upsertErr)
 
   return json(200, { ...parsed, generated_at: generatedAt, cached: false })

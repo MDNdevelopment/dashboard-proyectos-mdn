@@ -153,7 +153,7 @@ export default function ColaAprobacion({
           usersById={usersById}
           recursoUsers={recursoUsers}
           allEmployees={allEmployees}
-          onConfirm={(fields) => onFields(agendando, fields)}
+          onConfirm={(fields, vincularIds) => onFields(agendando, fields, vincularIds)}
           onClose={() => setAgendando(null)}
         />
       )}

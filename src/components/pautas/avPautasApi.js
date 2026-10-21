@@ -163,6 +163,21 @@ export async function updatePauta(pautaId, fields) {
 }
 
 /**
+ * Vincula varias pautas a la misma salida escribiéndoles el mismo `sesion_id` — lo que afirma
+ * la casilla "es la misma salida" (MismaSalidaPicker.jsx). Se usa para las pautas HERMANAS: la
+ * que se está guardando lleva su `sesion_id` en el propio `updatePauta`. Devuelve las filas
+ * actualizadas para refrescarlas en memoria.
+ */
+export async function setSesionId(pautaIds, sesionId) {
+  if (!pautaIds?.length) return { data: [], error: null }
+  return supabase
+    .from('av_pautas')
+    .update({ sesion_id: sesionId, updated_at: new Date().toISOString() })
+    .in('id', pautaIds)
+    .select()
+}
+
+/**
  * Soft delete (papelera): marca `deleted_at` en vez de borrar físicamente, para poder
  * restaurar la pauta después desde cualquiera de las 3 fases (solicitada/programada/
  * realizada) — mismo patrón que `deleteClient`/`restoreClient` en `metricsApi.js`. Devuelve
@@ -292,6 +307,7 @@ function sanitizeFields(fields) {
     'piezas_editadas',
     'piezas_por_formato',
     'grabacion_por_formato',
+    'sesion_id',
   ]
   const out = {}
   for (const key of allowed) {

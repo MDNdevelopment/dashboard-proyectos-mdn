@@ -233,6 +233,29 @@ describe('AvSemanaView — ocupación', () => {
     expect(within(carga).getByText('Rafa Cam').parentElement).toHaveTextContent('Rafa Cam2')
     expect(within(carga).queryByText('Sol Luz')).not.toBeInTheDocument()
   })
+
+  // La disponibilidad de un recurso es de toda la agencia, no de la línea en scope: si Rafa
+  // también graba una pauta de otra línea, la carga debe contarla aunque la grilla no la vea.
+  it('cuenta las pautas de otras líneas, que la grilla de la semana no muestra', () => {
+    const otraLinea = pauta({
+      id: 'z',
+      client_name: 'Cuenta de otra línea',
+      line_id: 'l9',
+      pauta_date: '2026-10-08',
+      recurso_ids: ['r1'],
+    })
+    setup({ todasLasPautas: [...PAUTAS, otraLinea] })
+    const carga = screen.getByLabelText('Carga de recursos')
+    expect(within(carga).getByText('Rafa Cam').parentElement).toHaveTextContent('Rafa Cam3')
+    // Sigue fuera de la grilla: lo que se VE respeta el alcance por línea.
+    expect(screen.queryByText('Cuenta de otra línea')).not.toBeInTheDocument()
+  })
+
+  it('sin todasLasPautas cae en las pautas en scope', () => {
+    setup()
+    const carga = screen.getByLabelText('Carga de recursos')
+    expect(within(carga).getByText('Rafa Cam').parentElement).toHaveTextContent('Rafa Cam2')
+  })
 })
 
 describe('AvSemanaView — ocupación legible', () => {

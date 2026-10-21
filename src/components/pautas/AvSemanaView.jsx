@@ -37,9 +37,15 @@ const MESES = [
 /**
  * Pantalla inicial para coordinación y jefas: qué pasa esta semana, qué necesita acción y
  * cómo va el mes. Las alertas abren un panel lateral con su cola.
+ *
+ * `pautas` viene acotada a la línea en scope (es lo que la jefa debe VER). `todasLasPautas` no:
+ * la disponibilidad de un recurso y la ocupación del estudio son de toda la agencia, así que
+ * `OcupacionBar` y el `AgendarDialog` de la cola las necesitan completas — si no, el mismo
+ * diálogo daba veredictos distintos según de dónde se abriera.
  */
 export default function AvSemanaView({
   pautas,
+  todasLasPautas,
   piezasByPauta,
   cnps = [],
   clientsById,
@@ -58,6 +64,7 @@ export default function AvSemanaView({
   children,
 }) {
   const hoy = isoDateKey(today)
+  const pautasAgencia = todasLasPautas ?? pautas
   const [anchor, setAnchor] = useState(hoy)
   const [drawer, setDrawer] = useState(null)
   const range = weekRange(anchor)
@@ -179,7 +186,7 @@ export default function AvSemanaView({
             onPautaClick={onPautaClick}
           />
 
-          <OcupacionBar pautas={pautas} range={range} usersById={usersById} />
+          <OcupacionBar pautas={pautasAgencia} range={range} usersById={usersById} />
         </>
       )}
 
@@ -192,7 +199,7 @@ export default function AvSemanaView({
           {drawer === 'porAprobar' ? (
             <ColaAprobacion
               solicitudes={alertas.porAprobar}
-              pautas={pautas}
+              pautas={pautasAgencia}
               usersById={usersById}
               recursoUsers={recursoUsers}
               allEmployees={allEmployees}

@@ -22,15 +22,34 @@ function fullName(user) {
 }
 
 /**
+ * Clave de la SALIDA de una pauta — espejo de `sesionKey` en src/utils/audiovisual.js. Varias
+ * cuentas de un grupo grabadas en una sola salida comparten `sesion_id`: son una fila de
+ * av_pautas cada una (la tabla tiene un solo client_id) pero una sola salida de la persona, y
+ * contarlas por separado le reportaba a dirección "5 pautas el martes" cuando hubo una.
+ */
+function sesionKey(p) {
+  return p.sesion_id ?? `pauta:${p.id}`
+}
+
+/** 'Clínica San Lucas + 4 cuentas' para una salida que cubre varias marcas. */
+function clienteDeSalida(clientes) {
+  const unicos = [...new Set(clientes)]
+  if (unicos.length <= 1) return unicos[0] ?? '(sin cliente)'
+  const resto = unicos.length - 1
+  return `${unicos[0]} + ${resto} ${resto === 1 ? 'cuenta' : 'cuentas'}`
+}
+
+/**
  * @param {object} params
  * @param {Array} params.pautas - filas de av_pautas (id, client_name, tema, pauta_date,
- *   salida, llegada, status, recurso_ids), ya filtradas por company_id y deleted_at is null.
+ *   salida, llegada, status, recurso_ids, sesion_id), ya filtradas por company_id y
+ *   deleted_at is null.
  * @param {Array} params.employees - filas de users (user_id, first_name, last_name,
  *   department_id, deleted_at) de la empresa.
  * @param {Date} params.today - fecha de referencia (medianoche local).
  * @param {number} [params.dias] - días hacia atrás/adelante de la ventana (default 3).
- * @param {number} [params.umbral] - mínimo de pautas en un día para contar como sobrecarga
- *   (default 3).
+ * @param {number} [params.umbral] - mínimo de SALIDAS en un día para contar como sobrecarga
+ *   (default 3; las pautas de una misma sesión cuentan como una).
  */
 export function buildAvWorkloadSnapshot({ pautas, employees, today, dias = 3, umbral = 3 }) {
   const hoyKey = dateKey(today)
@@ -56,7 +75,7 @@ export function buildAvWorkloadSnapshot({ pautas, employees, today, dias = 3, um
 
   // (fecha) -> { fecha, pautas: [{ cliente, tema, hora, estado, recursos }] }
   const byDate = new Map()
-  // (persona, fecha) -> { persona, fecha, items: [{ cliente, tema, estado }] }
+  // (persona, fecha) -> { persona, fecha, salidas: Map<sesionKey, { cliente, tema, estado }> }
   const byPersonDate = new Map()
 
   for (const p of inWindow) {
@@ -76,21 +95,31 @@ export function buildAvWorkloadSnapshot({ pautas, employees, today, dias = 3, um
 
     for (const persona of recursos) {
       const key = `${persona}__${p.pauta_date}`
-      if (!byPersonDate.has(key)) byPersonDate.set(key, { persona, fecha: p.pauta_date, items: [] })
-      // `estado` viaja con cada pauta hasta el modelo a propósito: 'realizada' (ya pasó) y
+      if (!byPersonDate.has(key))
+        byPersonDate.set(key, { persona, fecha: p.pauta_date, salidas: new Map() })
+      // `estado` viaja con cada salida hasta el modelo a propósito: 'realizada' (ya pasó) y
       // 'programada' (todavía no) requieren un tiempo verbal distinto en la redacción —
       // sin esto el modelo no puede distinguir "fue a" de "tiene programada".
-      byPersonDate.get(key).items.push({
-        cliente: p.client_name ?? '(sin cliente)',
-        tema: p.tema ?? null,
-        estado: p.status,
-      })
+      const salidas = byPersonDate.get(key).salidas
+      const sKey = sesionKey(p)
+      if (!salidas.has(sKey))
+        salidas.set(sKey, { clientes: [], tema: p.tema ?? null, estado: p.status })
+      salidas.get(sKey).clientes.push(p.client_name ?? '(sin cliente)')
     }
   }
 
   const sobrecargas = [...byPersonDate.values()]
-    .filter((g) => g.items.length >= umbral)
-    .map((g) => ({ persona: g.persona, fecha: g.fecha, cantidad: g.items.length, pautas: g.items }))
+    .map((g) => ({
+      persona: g.persona,
+      fecha: g.fecha,
+      cantidad: g.salidas.size,
+      pautas: [...g.salidas.values()].map(({ clientes, tema, estado }) => ({
+        cliente: clienteDeSalida(clientes),
+        tema,
+        estado,
+      })),
+    }))
+    .filter((g) => g.cantidad >= umbral)
     .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.persona.localeCompare(b.persona))
 
   const dias_ = [...byDate.values()].sort((a, b) => a.fecha.localeCompare(b.fecha))

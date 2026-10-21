@@ -70,6 +70,7 @@ Catálogo del estado actual. Leyenda FK: `──→` FK declarada · `··→` r
 ### `av_pautas`
 - Pautas audiovisuales (§2.4ter), flujo `solicitada→programada→realizada/declinada`. FK `client_id→metric_clients SET NULL`, `line_id→metric_lines SET NULL` (snapshot).
 - `recurso_ids text[]`: lista autoritativa de quién grabó ("Recursos"; patrón `attendee_ids`). La UI solo la amplía (`syncRecursoIds`), nunca la reduce.
+- `sesion_id uuid` (índice parcial `av_pautas_sesion_id_idx`): varias pautas con el mismo valor son una misma salida física — una grabación de grupo se registra como una pauta por cuenta y la disponibilidad del recurso las cuenta una vez (ver `audiovisual.md` → Disponibilidad de recursos). `null` = pauta suelta.
 - `grabacion_por_formato jsonb default '{}'`: `{"V": {"<user_id>": 3}}` — reparto por formato y persona (`GrabacionSection` en `PautaDetailModal.jsx`). `'{}'` en pautas viejas → `AvAnalytics` las marca `≈` (atribución legacy estimada).
 - `piezas_editadas` (lo mantiene el trigger de `av_pauta_piezas`), `piezas_totales` (manual).
 - Legacy sin uso en UI: `graba_user_id`/`graba_other`, `edita_user_id`/`edita_other` (`→users SET NULL`).

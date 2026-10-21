@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import PautaCuandoDondeFields from './PautaCuandoDondeFields'
 import ResourceWarningDialog from './ResourceWarningDialog'
+import MismaSalidaPicker from './MismaSalidaPicker'
 import AttendeePicker from '../reuniones/AttendeePicker'
 import {
   estudioConflicts,
   resourceConflicts,
+  salidasVinculables,
   formatDayShort,
   formatTime12,
   pautaErrorMessage,
@@ -18,7 +20,10 @@ import {
  *                 el trigger `av_pautas_track_reagendamiento` al cambiar fecha u hora.
  * Validación en vivo sobre las pautas en memoria: choque de estudio (bloquea) y de recursos
  * (`resourceConflicts`: bloquea si es seguro, pregunta vía ResourceWarningDialog si es
- * probable). `onConfirm(fields)` debe devolver `{ error }`.
+ * probable). Si la pauta es una cuenta más de una grabación de grupo, `MismaSalidaPicker`
+ * deja declararlo: las hermanas salen del cálculo y comparten `sesion_id`.
+ * `onConfirm(fields, vincularIds)` debe devolver `{ error }`; `vincularIds` son las pautas
+ * hermanas a las que hay que escribirles el mismo `sesion_id`.
  */
 export default function AgendarDialog({
   mode = 'agendar',
@@ -43,6 +48,11 @@ export default function AgendarDialog({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [pendingWarnings, setPendingWarnings] = useState(null)
+  // `key` de la salida con la que se comparte grabación (MismaSalidaPicker), o null.
+  const [salidaCompartida, setSalidaCompartida] = useState(null)
+  // Sesión a estrenar si el grupo elegido todavía no tiene una. Se fija al abrir el diálogo
+  // para que no cambie entre el render y el guardado.
+  const [nuevaSesion] = useState(() => crypto.randomUUID())
   const set = (field, v) => setValues((prev) => ({ ...prev, [field]: v }))
 
   const esEstudio = values.lugar_tipo === 'estudio'
@@ -63,9 +73,16 @@ export default function AgendarDialog({
       p.pauta_date &&
       p.pauta_date === values.pauta_date,
   )
+  const candidate = { ...pauta, ...values }
+  const vinculables = salidasVinculables(candidate, sameDay)
+  const compartida = vinculables.find((o) => o.key === salidaCompartida) ?? null
+  // Las hermanas de la misma salida se sacan del cálculo: son la misma grabación, así que no
+  // son choque de horario (sus horas son idénticas a propósito) ni carga adicional.
+  const hermanasIds = new Set((compartida?.pautas ?? []).map((p) => p.id))
+  const sameDayEfectivo = sameDay.filter((p) => !hermanasIds.has(p.id))
   const recursos =
     values.pauta_date && values.recurso_ids.length
-      ? resourceConflicts({ ...pauta, ...values }, sameDay, usersById, pauta.recurso_ids ?? [])
+      ? resourceConflicts(candidate, sameDayEfectivo, usersById, pauta.recurso_ids ?? [])
       : { blocking: [], warnings: [] }
 
   const missingDate = !values.pauta_date
@@ -89,8 +106,14 @@ export default function AgendarDialog({
     (values.salida ?? null) === (pauta.salida ?? null) &&
     (values.llegada ?? null) === (pauta.llegada ?? null) &&
     values.lugar_tipo === (pauta.lugar_tipo ?? 'locacion') &&
-    (values.place ?? '') === (pauta.place ?? '')
+    (values.place ?? '') === (pauta.place ?? '') &&
+    !compartida
   const canSave = blockers.length === 0 && !unchanged && !saving
+
+  // Sesión a guardar: la del grupo si ya tenía una, o una nueva que hay que escribir también
+  // en las hermanas (`vincularIds`).
+  const sesionId = compartida ? (compartida.sesionId ?? nuevaSesion) : null
+  const vincularIds = compartida && !compartida.sesionId ? [...hermanasIds] : []
 
   function fieldsToSave() {
     const base = {
@@ -100,9 +123,10 @@ export default function AgendarDialog({
       lugar_tipo: values.lugar_tipo,
       place: esEstudio ? null : values.place,
     }
-    if (reagendar) return base
+    const conSesion = sesionId ? { ...base, sesion_id: sesionId } : base
+    if (reagendar) return conSesion
     return {
-      ...base,
+      ...conSesion,
       recurso_ids: values.recurso_ids,
       attendee_ids: values.attendee_ids,
       status: 'programada',
@@ -113,7 +137,7 @@ export default function AgendarDialog({
   async function commit() {
     setSaving(true)
     setError(null)
-    const { error: err } = (await onConfirm(fieldsToSave())) ?? {}
+    const { error: err } = (await onConfirm(fieldsToSave(), vincularIds, sesionId)) ?? {}
     setSaving(false)
     if (err) setError(pautaErrorMessage(err))
     else onClose()
@@ -192,9 +216,18 @@ export default function AgendarDialog({
                 {recursos.blocking.map((b) => (
                   <p key={b.resourceId} className="text-[12.5px] text-[#c0392b] mt-1" role="alert">
                     {b.name} ya está en la pauta de {b.pauta.client_name || 'otro cliente'} ese día.
-                    Ajusta el horario o elige otro recurso.
+                    Ajusta el horario, elige otro recurso o marca que es la misma salida.
                   </p>
                 ))}
+                {vinculables.length > 0 && (
+                  <div className="mt-2">
+                    <MismaSalidaPicker
+                      opciones={vinculables}
+                      value={salidaCompartida}
+                      onChange={setSalidaCompartida}
+                    />
+                  </div>
+                )}
               </section>
               <section>
                 <h3 className="text-[11.5px] font-mono font-bold uppercase tracking-[0.1em] text-[#aaa] mb-2">

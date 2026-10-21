@@ -270,6 +270,31 @@ describe('ocupación del estudio y carga de recursos', () => {
       { id: 'u2', name: 'Sol Luz', count: 1, porDia: { '2026-10-05': 1 }, sobrecargado: false },
     ])
   })
+
+  // Una grabación de grupo son varias pautas (una por cuenta) que comparten `sesion_id`: para
+  // la carga de la persona es UNA salida, así que no debe pintarse como sobrecarga.
+  it('las pautas de una misma salida cuentan como una (grupo de cuentas)', () => {
+    const range = weekRange('2026-10-07')
+    const grupo = (id) =>
+      pauta({ id, pauta_date: '2026-10-05', recurso_ids: ['u1'], sesion_id: 'grupo-san-lucas' })
+    const list = [
+      grupo('a'),
+      grupo('b'),
+      grupo('c'),
+      grupo('d'),
+      grupo('e'),
+      pauta({ id: 'f', pauta_date: '2026-10-06', recurso_ids: ['u1'] }),
+    ]
+    expect(cargaRecursos(list, range, users)).toEqual([
+      {
+        id: 'u1',
+        name: 'Rafa Cam',
+        count: 2,
+        porDia: { '2026-10-05': 1, '2026-10-06': 1 },
+        sobrecargado: false,
+      },
+    ])
+  })
 })
 
 describe('huecos sugeridos', () => {

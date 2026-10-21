@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../supabase'
 import { loadCompanyEmployees } from '../metricas/metricsApi'
-import { loadPautas, loadPiezas, updatePauta } from './avPautasApi'
+import { loadPautas, loadPiezas, updatePauta, setSesionId } from './avPautasApi'
 import { loadExternalResources } from './externalResourcesApi'
 import { loadCnp } from '../cnp/cnpApi'
 import { cnpInMonth } from '../cnp/constants'
@@ -234,8 +234,15 @@ export default function AudiovisualView({
     setPiezas((prev) => prev.filter((p) => p.id !== id))
   }
 
-  // Único camino de escritura de `av_pautas` desde el detalle y sus diálogos.
-  async function handlePautaFields(pauta, fields) {
+  // Único camino de escritura de `av_pautas` desde el detalle y sus diálogos. `vincularIds`
+  // son las pautas hermanas de una misma salida (grabación de grupo) a las que hay que
+  // escribirles el `sesion_id` que viene en `fields` — ver MismaSalidaPicker.jsx.
+  async function handlePautaFields(pauta, fields, vincularIds = []) {
+    if (vincularIds.length && fields.sesion_id) {
+      const { data: hermanas, error: errSesion } = await setSesionId(vincularIds, fields.sesion_id)
+      if (errSesion) return { error: errSesion }
+      ;(hermanas ?? []).forEach(handleChanged)
+    }
     const { data, error: err } = await updatePauta(pauta.id, fields)
     if (err) return { error: err }
     handleChanged(data)
@@ -409,6 +416,7 @@ export default function AudiovisualView({
       {view === 'semana' && (
         <AvSemanaView
           pautas={visibleScopedPautas}
+          todasLasPautas={pautas}
           piezasByPauta={piezasByPautaMap}
           cnps={cnpAvAbiertos}
           clientsById={clientsById}
@@ -575,6 +583,7 @@ export default function AudiovisualView({
           usersById={usersById}
           pautas={pautas}
           onClose={() => setForm(null)}
+          onChanged={handleChanged}
           onSaved={(p) => {
             handleChanged(p)
             setForm(null)
