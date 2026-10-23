@@ -2,6 +2,7 @@ import {
   nextBillingDate,
   missingInfo,
   daysUntil,
+  dueWithin,
   monthlyEquivalent,
   totalsByCurrency,
   formatAmount,
@@ -110,5 +111,19 @@ describe('formatAmount', () => {
     expect(formatAmount(5, 'USD').startsWith('$')).toBe(true)
     expect(formatAmount(5, 'EUR').startsWith('€')).toBe(true)
     expect(formatAmount(5, 'Bs').startsWith('Bs ')).toBe(true)
+  })
+})
+
+describe('dueWithin', () => {
+  it('activa que cobra en 3 días → true; en 10 → false', () => {
+    expect(dueWithin(sub({ billing_day: 18 }), '2026-10-15')).toBe(true)
+    expect(dueWithin(sub({ billing_day: 25 }), '2026-10-15')).toBe(false)
+  })
+  it('hoy cuenta', () => {
+    expect(dueWithin(sub({ billing_day: 15 }), '2026-10-15')).toBe(true)
+  })
+  it('pausada o sin día de cobro → false', () => {
+    expect(dueWithin(sub({ status: 'pausada', billing_day: 16 }), '2026-10-15')).toBe(false)
+    expect(dueWithin(sub({ billing_day: null }), '2026-10-15')).toBe(false)
   })
 })

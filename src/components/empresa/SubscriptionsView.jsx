@@ -14,6 +14,7 @@ import {
   SERVICE_TYPES,
   nextBillingDate,
   daysUntil,
+  dueWithin,
   totalsByCurrency,
   formatAmount,
   missingInfo,
@@ -55,6 +56,7 @@ export default function SubscriptionsView({ companyId, canManage = false }) {
   const [statusFilter, setStatusFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
   const [ownerFilter, setOwnerFilter] = useState('')
+  const [dueFilter, setDueFilter] = useState('') // '' | '7d'
 
   const load = useCallback(async () => {
     if (!companyId) return
@@ -109,6 +111,7 @@ export default function SubscriptionsView({ companyId, canManage = false }) {
       .filter((s) => !statusFilter || s.status === statusFilter)
       .filter((s) => !typeFilter || s.service_type === typeFilter)
       .filter((s) => !ownerFilter || s.owner_user_id === ownerFilter)
+      .filter((s) => dueFilter !== '7d' || dueWithin(s, today))
       .map((s) => ({ sub: s, next: nextBillingDate(s, today) }))
       .sort((a, b) => {
         if (a.next && b.next) return a.next.localeCompare(b.next)
@@ -116,15 +119,17 @@ export default function SubscriptionsView({ companyId, canManage = false }) {
         if (b.next) return 1
         return a.sub.name.localeCompare(b.sub.name)
       })
-  }, [subs, search, statusFilter, typeFilter, ownerFilter, today])
+  }, [subs, search, statusFilter, typeFilter, ownerFilter, dueFilter, today])
 
   const totals = totalsByCurrency(subs)
   const activeCount = subs.filter((s) => s.status === 'activa').length
-  const dueSoon = subs.filter((s) => {
-    const next = nextBillingDate(s, today)
-    return next && daysUntil(next, today) <= 7
-  }).length
-  const hasFilters = search || statusFilter || typeFilter || ownerFilter
+  const dueSoon = subs.filter((s) => dueWithin(s, today)).length
+  const hasFilters = search || statusFilter || typeFilter || ownerFilter || dueFilter
+
+  const cardClass = (on) =>
+    `text-left bg-white rounded-xl border p-4 transition-colors ${
+      on ? 'border-[#FFB800]' : 'border-[#e0ddd4] hover:border-[#ccc]'
+    }`
 
   function handleSaved(saved) {
     setSubs((prev) =>
@@ -184,24 +189,34 @@ export default function SubscriptionsView({ companyId, canManage = false }) {
             </div>
           )}
         </div>
-        <div className="bg-white rounded-xl border border-[#e0ddd4] p-4">
+        <button
+          type="button"
+          aria-pressed={statusFilter === 'activa'}
+          onClick={() => setStatusFilter(statusFilter === 'activa' ? '' : 'activa')}
+          className={cardClass(statusFilter === 'activa')}
+        >
           <p className="text-[11px] font-mono font-bold tracking-[0.08em] uppercase text-[#999]">
             Activas
           </p>
           <p className="text-[20px] font-bold text-[#111] font-mono mt-1">{activeCount}</p>
-        </div>
-        <div className="bg-white rounded-xl border border-[#e0ddd4] p-4">
+        </button>
+        <button
+          type="button"
+          aria-pressed={dueFilter === '7d'}
+          onClick={() => setDueFilter(dueFilter === '7d' ? '' : '7d')}
+          className={cardClass(dueFilter === '7d')}
+        >
           <p className="text-[11px] font-mono font-bold tracking-[0.08em] uppercase text-[#999]">
             Cobran en 7 días
           </p>
           <p className="text-[20px] font-bold text-[#111] font-mono mt-1">{dueSoon}</p>
-        </div>
+        </button>
       </div>
 
       <div className="flex items-end justify-between gap-4">
         <div className="flex-1">
           <FilterBar
-            cols={4}
+            cols={5}
             onClear={
               hasFilters
                 ? () => {
@@ -209,6 +224,7 @@ export default function SubscriptionsView({ companyId, canManage = false }) {
                     setStatusFilter('')
                     setTypeFilter('')
                     setOwnerFilter('')
+                    setDueFilter('')
                   }
                 : undefined
             }
@@ -263,6 +279,16 @@ export default function SubscriptionsView({ companyId, canManage = false }) {
                 ))}
               </select>
             </FilterField>
+            <FilterField label="Próximo cobro">
+              <select
+                className="input-base text-[14px] py-1.5 w-full"
+                value={dueFilter}
+                onChange={(e) => setDueFilter(e.target.value)}
+              >
+                <option value="">Cualquiera</option>
+                <option value="7d">En 7 días</option>
+              </select>
+            </FilterField>
           </FilterBar>
         </div>
         {canManage && (
@@ -307,6 +333,9 @@ export default function SubscriptionsView({ companyId, canManage = false }) {
                       ? ` · ${employeeName[sub.owner_user_id]}`
                       : ''}
                   </p>
+                  {sub.account_email && (
+                    <p className="text-[12.5px] text-[#888] truncate">{sub.account_email}</p>
+                  )}
                   {sub.comment && <p className="text-[13px] text-[#555] mt-0.5">{sub.comment}</p>}
                 </div>
                 <div className="text-right min-w-[120px]">
