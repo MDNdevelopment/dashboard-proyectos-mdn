@@ -1,7 +1,7 @@
 import { supabase } from '../supabase'
 
 const COLUMNS =
-  'id, company_id, name, category, amount, currency, frequency, billing_day, billing_month, card_last4, owner_user_id, account_email, url, status, start_date, cancelled_at, comment, created_by, created_at, updated_at'
+  'id, company_id, name, category, service_type, amount, currency, frequency, billing_day, billing_month, card_last4, owner_user_id, account_email, url, status, start_date, cancelled_at, comment, created_by, created_at, updated_at'
 
 /** Todas las suscripciones de la empresa. La RLS exige `empresa.suscripciones`. */
 export async function fetchSubscriptions(companyId) {

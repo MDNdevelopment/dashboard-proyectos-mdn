@@ -101,7 +101,8 @@ Administración organizacional: departamentos, cargos, empleados, vacaciones, pe
 - Catálogo de servicios recurrentes de la agencia, solo registro: **no alimenta Finanzas** (aviso fijo arriba de la vista). Campos en `datos.md` (`company_subscriptions`); guarda solo los últimos 4 dígitos de la tarjeta, nunca contraseñas.
 - Próximo cobro derivado (`nextBillingDate`): mensual cobra en `billing_day`; trimestral/anual siguen la rejilla de 3/12 meses desde `billing_month`. Un día inexistente (31 en febrero) cae en el último día del mes. Pausada/cancelada → sin próximo cobro. `billing_day` es opcional (servicio cargado sin conocer la fecha): sin día no hay próximo cobro y la fila dice "Fecha por confirmar".
 - Datos pendientes (`missingInfo`): una suscripción no cancelada sin `card_last4` o sin `billing_day` se resalta (fondo ámbar + borde izquierdo `#FFB800`) con "Sin tarjeta" / "Fecha por confirmar".
-- Cards: total mensual estimado por moneda (anual/12, trimestral/3, solo activas, sin convertir entre monedas), activas y cobros en 7 días. Lista ordenada por próximo cobro, con `FilterBar` (búsqueda, estado, rubro, responsable).
+- Tipo de servicio (`service_type`, `SERVICE_TYPES` en `utils/subscriptions.js`): IA, Imagen, Video, Diseño, Almacenamiento, Otro. Reemplaza al rubro de gasto en la UI.
+- Cards: total mensual estimado por moneda (anual/12, trimestral/3, solo activas, sin convertir entre monedas), activas y cobros en 7 días. Lista ordenada por próximo cobro, con `FilterBar` (búsqueda, estado, tipo de servicio, responsable).
 - Sin `empresa.suscripciones.manage` la vista es de solo lectura. Cancelar = estado `cancelada` (fija `cancelled_at`); eliminar es para registros cargados por error.
 
 ### Clientes (`ClientsView`)
