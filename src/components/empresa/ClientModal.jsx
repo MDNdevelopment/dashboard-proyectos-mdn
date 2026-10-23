@@ -11,7 +11,8 @@ import { SOCIAL_NETWORKS, MONTHS } from '../metricas/constants'
 import AvatarUpload from './AvatarUpload'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import { useAuth } from '../../context/AuthContext'
-import { isFinancePrivileged } from '../../lib/permissions'
+import { isFinancePrivileged, canViewClientFee } from '../../lib/permissions'
+import { fmtUSD } from '../../utils/metricsFinance'
 import UserPickerSingle from '../tareas/UserPickerSingle'
 import UserPickerMulti from '../tareas/UserPickerMulti'
 import { assignableUsers, flattenAssignable } from '../../utils/lineFilters'
@@ -62,6 +63,9 @@ export default function ClientModal({
   // decide tanto qué se muestra como qué se envía.
   const privileged = isFinancePrivileged(userProfile)
   const canEditEconomico = can('finanzas.clientes.manage')
+  // Solo lectura de mensualidad y día de pago (empresa.clientes.mensualidad):
+  // ver no implica editar; editar sigue exigiendo finanzas.clientes.manage.
+  const canSeeFee = canViewClientFee(userProfile, can('empresa.clientes.mensualidad'))
 
   const [form, setForm] = useState(() => ({
     name: client?.name ?? '',
@@ -536,6 +540,26 @@ export default function ClientModal({
           {/* Día de pago + Mensualidad — solo quien entra a Finanzas (o admin).
               El resto de lo económico (intercambio e impuestos) se edita
               únicamente desde Finanzas → Clientes. */}
+          {!canEditEconomico && isEdit && canSeeFee && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <p className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+                  Día de pago
+                </p>
+                <p className="text-[15px] font-bold text-[#111]">
+                  {client?.payment_day ? `día ${client.payment_day}` : '—'}
+                </p>
+              </div>
+              <div>
+                <p className="block text-[13px] font-mono font-bold tracking-[0.12em] uppercase text-[#888] mb-1.5">
+                  Mensualidad (USD)
+                </p>
+                <p className="text-[15px] font-bold text-[#111]">
+                  {client?.monthly_fee != null ? fmtUSD(client.monthly_fee) : '—'}
+                </p>
+              </div>
+            </div>
+          )}
           {!canEditEconomico && isEdit && (
             <p className="text-[12.5px] text-[#999] bg-[#faf9f5] border border-[#ece9df] rounded-xl px-3 py-2">
               La mensualidad, el día de pago y los impuestos de esta marca se editan desde{' '}

@@ -13,6 +13,9 @@ import { MONTHS } from '../metricas/constants'
 import { clientInMonth } from '../../utils/clientInMonth'
 import { exportClientsToPdf } from '../../utils/exportClientsToPdf'
 import { fetchUserIdsOnVacationToday } from '../../lib/vacations'
+import { useAuth } from '../../context/AuthContext'
+import { canViewClientFee } from '../../lib/permissions'
+import { fmtUSD } from '../../utils/metricsFinance'
 import ClientModal from './ClientModal'
 import ConfirmDeleteDialog from '../common/ConfirmDeleteDialog'
 import DateInput from '../common/DateInput'
@@ -25,6 +28,8 @@ const TODAY_ISO = new Date().toISOString().slice(0, 10)
 export default function ClientsView({ companyId, canManage = true }) {
   // Deep-link desde Inicio ("Clientes de mi línea"): ?line=<lineId> preselecciona el filtro.
   const [searchParams] = useSearchParams()
+  const { userProfile, can = () => false } = useAuth() ?? {}
+  const showFee = canViewClientFee(userProfile, can('empresa.clientes.mensualidad'))
   const [lines, setLines] = useState([])
   const [clients, setClients] = useState([])
   const [employees, setEmployees] = useState([])
@@ -487,6 +492,16 @@ export default function ClientsView({ companyId, canManage = true }) {
                   {isHistory && archived && (
                     <span className="px-2.5 py-0.5 rounded-full text-[11.5px] font-semibold flex-shrink-0 bg-[#f5f0e0] text-[#999]">
                       archivado
+                    </span>
+                  )}
+
+                  {/* Mensualidad — nivel ≥ 3 / admin / empresa.clientes.mensualidad */}
+                  {showFee && client.monthly_fee != null && (
+                    <span
+                      className="hidden sm:inline text-[12px] font-mono font-bold text-[#555] flex-shrink-0"
+                      title="Mensualidad"
+                    >
+                      {fmtUSD(client.monthly_fee)}
                     </span>
                   )}
 

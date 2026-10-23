@@ -63,6 +63,20 @@ export function isFinancePrivileged(userProfile, hasCapability = false) {
 }
 
 /**
+ * ¿Puede este usuario ver la mensualidad y el día de pago de los clientes?
+ * Quien es finance-privileged (admin / nivel ≥ 3) o tiene la capacidad
+ * 'empresa.clientes.mensualidad' (solo lectura; editar sigue siendo de
+ * 'finanzas.clientes.manage').
+ *
+ * @param {object|null} userProfile — objeto del contexto Auth
+ * @param {boolean} [hasCapability] — resultado de can('empresa.clientes.mensualidad')
+ * @returns {boolean}
+ */
+export function canViewClientFee(userProfile, hasCapability = false) {
+  return isFinancePrivileged(userProfile) || hasCapability === true
+}
+
+/**
  * ¿Puede este usuario ver la ficha de un empleado (correo, teléfono, fecha de
  * ingreso, cumpleaños, nivel de acceso)?
  * Nivel de acceso ≥ 3, admin, o capacidad granular 'empresa.empleados.sensible'

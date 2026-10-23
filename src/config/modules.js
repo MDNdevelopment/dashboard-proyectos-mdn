@@ -113,6 +113,10 @@ export const MODULES = [
     manageActions: [
       { key: 'empresa.suscripciones.manage', label: 'Agregar / editar / eliminar suscripciones' },
       { key: 'empresa.clientes.manage', label: 'Modificar clientes' },
+      {
+        key: 'empresa.clientes.mensualidad',
+        label: 'Ver mensualidad y día de pago de clientes',
+      },
       { key: 'empresa.lineas.manage', label: 'Modificar líneas' },
       { key: 'empresa.empleados.manage', label: 'Crear / editar / archivar empleados' },
       { key: 'empresa.vacaciones.manage', label: 'Asignar / confirmar / eliminar vacaciones' },
