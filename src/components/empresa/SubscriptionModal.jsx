@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { createSubscription, updateSubscription } from '../../lib/subscriptions'
-import { CATEGORIAS_GASTO } from '../finanzas/constants'
 import DescribedSelect from '../common/DescribedSelect'
-import { CURRENCIES, FREQUENCIES, STATUS_META } from '../../utils/subscriptions'
+import { CURRENCIES, FREQUENCIES, SERVICE_TYPES, STATUS_META } from '../../utils/subscriptions'
 
 const MONTHS = [
   'Enero',
@@ -42,7 +41,7 @@ export default function SubscriptionModal({
   const isEdit = subscription != null
   const [form, setForm] = useState({
     name: subscription?.name ?? '',
-    category: subscription?.category ?? 'conectividad',
+    service_type: subscription?.service_type ?? 'otro',
     amount: subscription?.amount ?? '',
     currency: subscription?.currency ?? 'USD',
     frequency: subscription?.frequency ?? 'mensual',
@@ -78,7 +77,7 @@ export default function SubscriptionModal({
     const wasCancelled = subscription?.status === 'cancelada'
     const fields = {
       name: form.name.trim(),
-      category: form.category,
+      service_type: form.service_type,
       amount: Number(form.amount || 0),
       currency: form.currency,
       frequency: form.frequency,
@@ -148,12 +147,12 @@ export default function SubscriptionModal({
           </div>
 
           <div>
-            <span className={LABEL}>Rubro</span>
+            <span className={LABEL}>Tipo de servicio</span>
             <DescribedSelect
-              ariaLabel="Rubro"
-              value={form.category}
-              options={CATEGORIAS_GASTO}
-              onChange={(key) => setForm((f) => ({ ...f, category: key }))}
+              ariaLabel="Tipo de servicio"
+              value={form.service_type}
+              options={SERVICE_TYPES}
+              onChange={(key) => setForm((f) => ({ ...f, service_type: key }))}
             />
           </div>
 

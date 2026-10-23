@@ -4,7 +4,6 @@ import { useAuth } from '../../context/AuthContext'
 import { fetchSubscriptions, deleteSubscription } from '../../lib/subscriptions'
 import { loadCompanyEmployees } from '../metricas/metricsApi'
 import { activeEmployees } from '../../lib/employees'
-import { CATEGORIAS_GASTO } from '../finanzas/constants'
 import FilterBar, { FilterField } from '../common/FilterBar'
 import StatusPill from '../common/StatusPill'
 import ConfirmDeleteDialog from '../common/ConfirmDeleteDialog'
@@ -12,6 +11,7 @@ import SubscriptionModal from './SubscriptionModal'
 import {
   FREQUENCIES,
   STATUS_META,
+  SERVICE_TYPES,
   nextBillingDate,
   daysUntil,
   totalsByCurrency,
@@ -19,7 +19,7 @@ import {
   missingInfo,
 } from '../../utils/subscriptions'
 
-const CATEGORY_LABELS = Object.fromEntries(CATEGORIAS_GASTO.map((c) => [c.key, c.label]))
+const SERVICE_TYPE_LABELS = Object.fromEntries(SERVICE_TYPES.map((t) => [t.key, t.label]))
 
 function todayKey() {
   const d = new Date()
@@ -53,7 +53,7 @@ export default function SubscriptionsView({ companyId, canManage = false }) {
   const [deleting, setDeleting] = useState(false)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [categoryFilter, setCategoryFilter] = useState('')
+  const [typeFilter, setTypeFilter] = useState('')
   const [ownerFilter, setOwnerFilter] = useState('')
 
   const load = useCallback(async () => {
@@ -107,7 +107,7 @@ export default function SubscriptionsView({ companyId, canManage = false }) {
     return subs
       .filter((s) => !q || s.name.toLowerCase().includes(q))
       .filter((s) => !statusFilter || s.status === statusFilter)
-      .filter((s) => !categoryFilter || s.category === categoryFilter)
+      .filter((s) => !typeFilter || s.service_type === typeFilter)
       .filter((s) => !ownerFilter || s.owner_user_id === ownerFilter)
       .map((s) => ({ sub: s, next: nextBillingDate(s, today) }))
       .sort((a, b) => {
@@ -116,7 +116,7 @@ export default function SubscriptionsView({ companyId, canManage = false }) {
         if (b.next) return 1
         return a.sub.name.localeCompare(b.sub.name)
       })
-  }, [subs, search, statusFilter, categoryFilter, ownerFilter, today])
+  }, [subs, search, statusFilter, typeFilter, ownerFilter, today])
 
   const totals = totalsByCurrency(subs)
   const activeCount = subs.filter((s) => s.status === 'activa').length
@@ -124,7 +124,7 @@ export default function SubscriptionsView({ companyId, canManage = false }) {
     const next = nextBillingDate(s, today)
     return next && daysUntil(next, today) <= 7
   }).length
-  const hasFilters = search || statusFilter || categoryFilter || ownerFilter
+  const hasFilters = search || statusFilter || typeFilter || ownerFilter
 
   function handleSaved(saved) {
     setSubs((prev) =>
@@ -207,7 +207,7 @@ export default function SubscriptionsView({ companyId, canManage = false }) {
                 ? () => {
                     setSearch('')
                     setStatusFilter('')
-                    setCategoryFilter('')
+                    setTypeFilter('')
                     setOwnerFilter('')
                   }
                 : undefined
@@ -235,14 +235,14 @@ export default function SubscriptionsView({ companyId, canManage = false }) {
                 ))}
               </select>
             </FilterField>
-            <FilterField label="Rubro">
+            <FilterField label="Tipo de servicio">
               <select
                 className="input-base text-[14px] py-1.5 w-full"
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
               >
                 <option value="">Todos</option>
-                {CATEGORIAS_GASTO.map((c) => (
+                {SERVICE_TYPES.map((c) => (
                   <option key={c.key} value={c.key}>
                     {c.label}
                   </option>
@@ -302,7 +302,7 @@ export default function SubscriptionsView({ companyId, canManage = false }) {
                     <StatusPill value={sub.status} meta={STATUS_META} size="sm" />
                   </div>
                   <p className="text-[12.5px] text-[#888]">
-                    {CATEGORY_LABELS[sub.category] ?? sub.category}
+                    {SERVICE_TYPE_LABELS[sub.service_type] ?? sub.service_type}
                     {sub.owner_user_id && employeeName[sub.owner_user_id]
                       ? ` · ${employeeName[sub.owner_user_id]}`
                       : ''}

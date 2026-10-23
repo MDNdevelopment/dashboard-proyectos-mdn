@@ -13,6 +13,17 @@ export const FREQUENCIES = {
   anual: { label: 'Anual', months: 12 },
 }
 
+// Tipo de herramienta (filtro y etiqueta de la lista). Mismas keys que el CHECK
+// `company_subscriptions_service_type_check`.
+export const SERVICE_TYPES = [
+  { key: 'ia', label: 'IA', description: 'Asistentes y modelos: Claude, ChatGPT, Gemini' },
+  { key: 'imagen', label: 'Imagen', description: 'Generación, mejora y edición de imágenes' },
+  { key: 'video', label: 'Video', description: 'Edición y generación de video: CapCut, TikTok' },
+  { key: 'diseno', label: 'Diseño', description: 'Herramientas de diseño gráfico y creativo' },
+  { key: 'almacenamiento', label: 'Almacenamiento', description: 'Nube y espacio de archivos' },
+  { key: 'otro', label: 'Otro', description: 'Cualquier otro software' },
+]
+
 export const CURRENCIES = ['USD', 'Bs', 'EUR']
 
 export const STATUS_META = {

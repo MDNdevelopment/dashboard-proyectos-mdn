@@ -12,6 +12,7 @@ const MOCK_SUBS = [
     id: 's-1',
     name: 'Adobe Creative Cloud',
     category: 'conectividad',
+    service_type: 'imagen',
     amount: 60,
     currency: 'USD',
     frequency: 'mensual',
@@ -26,6 +27,7 @@ const MOCK_SUBS = [
     id: 's-2',
     name: 'Hosting antiguo',
     category: 'conectividad',
+    service_type: 'otro',
     amount: 10,
     currency: 'USD',
     frequency: 'mensual',
@@ -40,6 +42,7 @@ const MOCK_SUBS = [
     id: 's-3',
     name: 'Dominio sin datos',
     category: 'conectividad',
+    service_type: 'ia',
     amount: 0,
     currency: 'USD',
     frequency: 'mensual',
@@ -127,6 +130,18 @@ describe('SubscriptionsView', () => {
       expect(screen.queryByText('Adobe Creative Cloud')).not.toBeInTheDocument()
     })
     expect(screen.getByText('Hosting antiguo')).toBeInTheDocument()
+  })
+
+  it('el filtro de tipo de servicio muestra solo ese tipo', async () => {
+    const user = userEvent.setup()
+    render(<SubscriptionsView companyId="co-1" canManage={false} />)
+    await screen.findByText('Adobe Creative Cloud')
+    const typeSelect = screen.getByRole('combobox', { name: /tipo de servicio/i })
+    await user.selectOptions(typeSelect, 'ia')
+    await waitFor(() => {
+      expect(screen.queryByText('Adobe Creative Cloud')).not.toBeInTheDocument()
+    })
+    expect(screen.getByText('Dominio sin datos')).toBeInTheDocument()
   })
 
   it('el total mensual solo suma las activas', async () => {
