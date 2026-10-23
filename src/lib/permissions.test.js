@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { canAccessModule, can, isFinancePrivileged } from './permissions'
+import { canAccessModule, can, isFinancePrivileged, canViewClientFee } from './permissions'
 
 const BASE_USER = {
   user_id: 'user-1',
@@ -603,5 +603,28 @@ describe('isFinancePrivileged', () => {
 
   it('nivel 1 con la capacidad (empresa.empleados.sensible) sí es privilegiado', () => {
     expect(isFinancePrivileged(BASE_USER, true)).toBe(true)
+  })
+})
+
+// ──────────────────────────────────────────────
+// canViewClientFee — mensualidad/día de pago de clientes (solo lectura)
+// ──────────────────────────────────────────────
+describe('canViewClientFee', () => {
+  it('admin y nivel 3+ la ven sin la capacidad', () => {
+    expect(canViewClientFee(ADMIN_USER)).toBe(true)
+    expect(canViewClientFee(LEVEL3_USER)).toBe(true)
+  })
+
+  it('nivel bajo sin la capacidad no la ve', () => {
+    expect(canViewClientFee(BASE_USER)).toBe(false)
+    expect(canViewClientFee(BASE_USER, false)).toBe(false)
+  })
+
+  it('nivel bajo con empresa.clientes.mensualidad sí la ve', () => {
+    expect(canViewClientFee(BASE_USER, true)).toBe(true)
+  })
+
+  it('sin perfil y sin capacidad no la ve', () => {
+    expect(canViewClientFee(null)).toBe(false)
   })
 })

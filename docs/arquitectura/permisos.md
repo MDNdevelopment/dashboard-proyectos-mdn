@@ -25,7 +25,8 @@ Gotcha: el seed `20260706000002` nunca se aplicó en prod; los defaults de prod 
 **Empresa**
 - `empresa` — módulo Empresa — abierto.
 - `empresa.clientes` — tab Clientes — `min_level 2`.
-- `empresa.clientes.manage` — crear/editar/eliminar clientes (y `metric_clients.audiovisual_ids`, bloque "Audiovisual" de `ClientModal.jsx`) — prod: dos grupos OR: `min_level ≥ 3`, o usuarios Nairim + Lizdania (nivel 2) (`20260928170000_empresa_clientes_manage_or_lizdania.sql`). A Lizdania mensualidad/día de pago le siguen ocultos (`isFinancePrivileged`).
+- `empresa.clientes.manage` — crear/editar/eliminar clientes (y `metric_clients.audiovisual_ids`, bloque "Audiovisual" de `ClientModal.jsx`) — prod: dos grupos OR: `min_level ≥ 3`, o usuarios Nairim + Lizdania (nivel 2) (`20260928170000_empresa_clientes_manage_or_lizdania.sql`). Mensualidad/día de pago se ven con `empresa.clientes.mensualidad`, no con esta.
+- `empresa.clientes.mensualidad` — **solo lectura** de mensualidad y día de pago de clientes (chip en Empresa → Clientes, bloque en `ClientModal`, `ClientFichaContent`/`LineFichaModal`). Nivel ≥ 3 y admin ya la ven vía `canViewClientFee()`; la capability extiende a otros. Editar sigue siendo `finanzas.clientes.manage` — prod: dos grupos OR: `min_level ≥ 3`, o usuario Lizdania (nivel 2) (`20261023120000_empresa_clientes_mensualidad.sql`). Sin fila en `module_permissions` quedaría abierta a todos. Es de presentación: `monthly_fee` sigue legible por SELECT de `metric_clients` (`using(true)`).
 - `empresa.lineas` — tab Líneas — `min_level 2`.
 - `empresa.lineas.manage` — crear/editar/eliminar Líneas y miembros — `min_level 4`.
 - `empresa.departamentos`, `empresa.empleados`, `empresa.preguntas` — tabs — `admin=true`.
@@ -112,7 +113,7 @@ Gotcha: el seed `20260706000002` nunca se aplicó en prod; los defaults de prod 
 - **Solo lectura, impuesta en el cliente** (ninguna policy distingue el modo y `created_by`/`author_id` salen de `userProfile`): `src/lib/viewOnlyClient.js` envuelve `supabase.from()` y `supabase.rpc()` (todas las escrituras del frontend); RPC de lectura en allowlist `READONLY_RPCS`. Netlify functions con service-role (`/api/employees*`, `/api/self-god-mode`) se guardan con `blockedByViewOnly()`.
 
 #### Archivos clave
-- `src/lib/permissions.js` — evaluador; `isFinancePrivileged(userProfile, hasCapability)` (nivel ≥3, admin o `empresa.empleados.sensible`: ver `monthly_fee`/`payment_day` de clientes y `monthly_salary`); `canViewEmployeeFicha(userProfile, targetUserId, hasCapability)` (nivel ≥3/admin/`empresa.empleados.sensible` ven cualquier ficha; nivel 1-2 solo la propia; usado con `can('empresa.empleados.sensible')` en `EmployeeFichaContent.jsx` y `LineFichaModal.jsx`).
+- `src/lib/permissions.js` — evaluador; `canViewClientFee(userProfile, can('empresa.clientes.mensualidad'))` (= `isFinancePrivileged` o la capability; solo gatea la mensualidad/día de pago de clientes); `isFinancePrivileged(userProfile, hasCapability)` (nivel ≥3, admin o `empresa.empleados.sensible`: ver `monthly_fee`/`payment_day` de clientes y `monthly_salary`); `canViewEmployeeFicha(userProfile, targetUserId, hasCapability)` (nivel ≥3/admin/`empresa.empleados.sensible` ven cualquier ficha; nivel 1-2 solo la propia; usado con `can('empresa.empleados.sensible')` en `EmployeeFichaContent.jsx` y `LineFichaModal.jsx`).
 - `src/config/modules.js` — `MODULES`, `capabilitiesForModule()`.
 - `src/context/AuthContext.jsx` — carga `module_permissions`, `can()`, perfil efectivo.
 - `src/lib/viewAs.js` — gate, flag solo lectura, persistencia en `sessionStorage`, allowlist RPC.

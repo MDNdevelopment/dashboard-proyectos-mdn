@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
-import { isFinancePrivileged } from '../../lib/permissions'
+import { canViewClientFee } from '../../lib/permissions'
 import { fmtUSD } from '../../utils/metricsFinance'
 import { MONTHS } from './constants'
 import { EmployeeChip, EmployeeChipList } from '../common/EmployeeChip'
@@ -9,7 +9,7 @@ import { EmployeeChip, EmployeeChipList } from '../common/EmployeeChip'
  * Cuerpo embebible de la ficha técnica de un cliente (metric_clients).
  * Sin overlay, botón X ni listener de Escape — eso vive en el contenedor
  * (ClientFichaModal standalone, o LineFichaModal en drill-down).
- * El gating financiero (isFinancePrivileged) vive aquí, así todo contenedor lo hereda.
+ * El gating de mensualidad (canViewClientFee) vive aquí, así todo contenedor lo hereda.
  * Props:
  *   client  — objeto completo de metric_clients (todos los campos)
  *   line    — objeto de metric_lines (id, name, color) — la línea del cliente
@@ -18,7 +18,7 @@ import { EmployeeChip, EmployeeChipList } from '../common/EmployeeChip'
 export default function ClientFichaContent({ client, line, onClose, employees = [] }) {
   const navigate = useNavigate()
   const { can = () => true, userProfile } = useAuth()
-  const privileged = isFinancePrivileged(userProfile)
+  const privileged = canViewClientFee(userProfile, can('empresa.clientes.mensualidad'))
 
   const contacts = client.contacts ?? []
   const socialLinks = client.social_links ?? []
@@ -80,7 +80,7 @@ export default function ClientFichaContent({ client, line, onClose, employees = 
 
       {/* Cuerpo */}
       <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
-        {/* Datos financieros — solo nivel 4 / admin */}
+        {/* Datos financieros — nivel ≥ 3 / admin / empresa.clientes.mensualidad */}
         {privileged && (
           <div className="grid grid-cols-2 gap-3">
             <InfoItem label="Mensualidad">

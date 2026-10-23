@@ -384,7 +384,8 @@ describe('ClientFichaModal — gating para usuarios sin privilegio (nivel < 4, n
     // Sobreescribir el mock de useAuth para este bloque
     useAuthImport.mockReturnValue({
       userProfile: { user_id: 'u-3', company_id: 'co-1', access_level: 2, admin: false },
-      can: () => true,
+      // Sin la capacidad de solo lectura de mensualidad (el resto, abierto)
+      can: (k) => k !== 'empresa.clientes.mensualidad',
       signOut: vi.fn(),
     })
   })

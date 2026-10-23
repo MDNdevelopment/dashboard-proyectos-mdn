@@ -595,7 +595,7 @@ describe('ClientsView (sección Clientes en Empresa) — lista plana', () => {
     const user = userEvent.setup()
     useAuth.mockReturnValue({
       userProfile: { user_id: 'u-mgr', company_id: 'co-1', access_level: 2, admin: false },
-      can: (key) => key !== 'finanzas.clientes.manage',
+      can: (key) => key !== 'finanzas.clientes.manage' && key !== 'empresa.clientes.mensualidad',
     })
     render(
       <MemoryRouter initialEntries={['/empresa/clientes']}>
@@ -608,6 +608,30 @@ describe('ClientsView (sección Clientes en Empresa) — lista plana', () => {
     await user.click(screen.getAllByRole('button', { name: 'Editar' })[0])
     expect(screen.queryByText('Mensualidad (USD)')).not.toBeInTheDocument()
     expect(screen.queryByText('Día de pago')).not.toBeInTheDocument()
+    expect(screen.getByText(/se editan desde/i)).toBeInTheDocument()
+  })
+
+  it('con empresa.clientes.mensualidad (sin finanzas.clientes.manage) ve la mensualidad solo en lectura', async () => {
+    const user = userEvent.setup()
+    useAuth.mockReturnValue({
+      userProfile: { user_id: 'u-mgr', company_id: 'co-1', access_level: 2, admin: false },
+      can: (key) => key !== 'finanzas.clientes.manage',
+    })
+    render(
+      <MemoryRouter initialEntries={['/empresa/clientes']}>
+        <EmpresaPage />
+      </MemoryRouter>,
+    )
+    await waitFor(() => {
+      expect(screen.getByText('ALSA')).toBeInTheDocument()
+    })
+    await user.click(screen.getAllByRole('button', { name: 'Editar' })[0])
+    expect(screen.getByText('Mensualidad (USD)')).toBeInTheDocument()
+    expect(screen.getByText('Día de pago')).toBeInTheDocument()
+    // Solo lectura: sin input de día de pago ni de mensualidad. El único '0.00'
+    // que queda es el del presupuesto de campañas.
+    expect(screen.queryByPlaceholderText('1–31')).not.toBeInTheDocument()
+    expect(screen.getAllByPlaceholderText('0.00')).toHaveLength(1)
     expect(screen.getByText(/se editan desde/i)).toBeInTheDocument()
   })
 
