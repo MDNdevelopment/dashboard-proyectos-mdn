@@ -28,6 +28,22 @@ const NARRATIVE_EXCLUDED_KEYS = new Set(['reuniones'])
  * cnp, etc.) y así una narrativa de un mes cerrado se puede reconstruir idéntica
  * solo con lo que ya viaja en el snapshot. Si el detalle no calza, no hay cifra. */
 const DETAIL_FORMATTERS = {
+  tareas: (d) => (d?.total > 0 ? `${d.cumplidas} de ${d.total} tareas cerradas a tiempo` : null),
+  cnp: (d) => (d?.total > 0 ? `${d.cumplidas} de ${d.total} solicitudes CNP a tiempo` : null),
+  grilla: (d) => (d?.meta > 0 ? `grilla cumplida ${d.si} de ${d.meta} semanas` : null),
+  calendario: (d) => (d?.meta > 0 ? `calendario cumplido ${d.si} de ${d.meta} veces` : null),
+  metricas: (d) => (d?.meta > 0 ? `métricas cargadas ${d.si} de ${d.meta} cuentas` : null),
+  artes: (d) => (d?.meta > 0 ? `artes fijos entregados ${d.si} de ${d.meta} semanas` : null),
+  plataformas: (d) => (d?.meta > 0 ? `${d.realizado} de ${d.meta} registros de plataformas` : null),
+  pautas: (d) => (d?.unidades > 0 ? `${d.realizadas} de ${d.unidades} pautas asistidas` : null),
+  piezas_grabadas: (d) =>
+    d?.grabadas > 0 ? `${d.editadas} de ${d.grabadas} piezas grabadas ya editadas` : null,
+  fotos: (d) => (d?.grabadas > 0 ? `${d.editadas} de ${d.grabadas} fotos ya editadas` : null),
+  videos: (d) => (d?.grabadas > 0 ? `${d.editadas} de ${d.grabadas} videos ya editados` : null),
+  edicion_cnp: (d) =>
+    d?.solicitadas > 0 ? `${d.entregadas} de ${d.solicitadas} piezas de CNP entregadas` : null,
+  edicion: (d) => (d?.unidades > 0 ? `${d.listas} de ${d.unidades} ediciones listas` : null),
+  // Indicadores anteriores (snapshots ya congelados).
   entregas: (d) => {
     if (!d) return null
     const partes = []
@@ -55,7 +71,9 @@ const DETAIL_FORMATTERS = {
 }
 
 function formatScore(score) {
-  return Number.isInteger(score) ? String(score) : score.toFixed(1).replace('.', ',')
+  // El score se guarda en 0-100 pero se comunica sobre 10 (82 → 8,2), igual que la ficha.
+  const sobre10 = Math.round(score) / 10
+  return Number.isInteger(sobre10) ? String(sobre10) : sobre10.toFixed(1).replace('.', ',')
 }
 
 /**

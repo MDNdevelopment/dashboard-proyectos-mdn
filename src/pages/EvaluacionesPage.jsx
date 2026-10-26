@@ -8,16 +8,18 @@ import HistorialLegacyView from '../components/evaluaciones/HistorialLegacyView'
 
 // Evaluación automática de desempeño (ver ARQUITECTURA.md §2.7). El flujo manual
 // (Empleados/Resumen/Mi Perfil/Mi Perfil v2 + EvaluationModal) se retiró en la fase
-// F6 — su historial sigue disponible en modo solo lectura en el tab "Historial".
+// F6 — su historial sigue disponible en modo solo lectura en el tab "Rendimientos".
+// Las claves (`desempeno`, `historial`) son las de las capabilities `evaluaciones.<key>` y
+// no cambian con las etiquetas: renombrarlas obligaría a migrar los permisos ya asignados.
 const ALL_TABS = [
   { key: 'mi-desempeno', label: 'Mi Desempeño', path: '/evaluaciones/mi-desempeno' },
-  { key: 'desempeno', label: 'Desempeño', path: '/evaluaciones' },
-  { key: 'historial', label: 'Historial', path: '/evaluaciones/historial' },
+  { key: 'desempeno', label: 'Evaluar', path: '/evaluaciones' },
+  { key: 'historial', label: 'Rendimientos', path: '/evaluaciones/rendimientos' },
 ]
 
 function pathToKey(pathname) {
   if (pathname.startsWith('/evaluaciones/mi-desempeno')) return 'mi-desempeno'
-  if (pathname.startsWith('/evaluaciones/historial')) return 'historial'
+  if (pathname.startsWith('/evaluaciones/rendimientos')) return 'historial'
   return 'desempeno'
 }
 
@@ -30,7 +32,7 @@ export default function EvaluacionesPage() {
   const activeKey = pathToKey(location.pathname)
   const isProfileView = location.pathname.startsWith('/evaluaciones/empleado/')
   const isMiDesempenoView = location.pathname.startsWith('/evaluaciones/mi-desempeno')
-  const isHistorialView = location.pathname.startsWith('/evaluaciones/historial')
+  const isHistorialView = location.pathname.startsWith('/evaluaciones/rendimientos')
 
   // Visibilidad config-driven de tabs
   const visibleTabs = ALL_TABS.filter((t) => can(`evaluaciones.${t.key}`))
@@ -73,7 +75,7 @@ export default function EvaluacionesPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-[26px] font-bold text-[#111] leading-tight">Evaluaciones</h1>
-            <p className="text-[15px] text-[#888] mt-0.5">Desempeño · Historial</p>
+            <p className="text-[15px] text-[#888] mt-0.5">Evaluar · Rendimientos</p>
           </div>
         </div>
 

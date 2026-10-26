@@ -70,7 +70,7 @@ export function useManagerRatings({ year, month, companyId }) {
    * @param {object} params
    * @param {number|null} params.positionId
    * @param {Array<{id, icon, name}>} params.criteria    criterios del cargo, en orden
-   * @param {Record<string, number>} params.scoresById   {criterion_id: score 1-5}
+   * @param {Record<string, number>} params.scoresById   {criterion_id: score 1-10}
    * @param {string} params.comment
    * @param {string} params.ratedBy
    */

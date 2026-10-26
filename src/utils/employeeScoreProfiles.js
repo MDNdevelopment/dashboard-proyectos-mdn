@@ -7,18 +7,75 @@
  * nivel, nunca por usuario individual (deliberadamente fuera de la UI, ver plan).
  */
 
-/** Los 9 indicadores del score, en el orden en que se muestran. */
+/** Los indicadores del score, en el orden en que se muestran (primero los básicos
+ * que usan los perfiles por cargo, al final los anteriores con peso 0). */
 export const INDICATOR_KEYS = [
+  'tareas',
+  'cnp',
+  'grilla',
+  'calendario',
+  'metricas',
+  'plataformas',
+  'artes',
+  'pautas',
+  'piezas_grabadas',
+  'fotos',
+  'videos',
+  'edicion_cnp',
+  'edicion',
+  'campanas',
+  'tickets',
   'entregas',
   'puntualidad',
   'arrastre',
   'tareas_fijas',
   'piezas_av',
   'reuniones',
-  'campanas',
   'chequeo',
-  'tickets',
 ]
+
+/** Qué evalúa cada indicador, en lenguaje llano — lo muestra el botón "i" de la ficha. */
+export const INDICATOR_DESCRIPTIONS = {
+  tareas:
+    'Tareas asignadas a ti que vencían este mes y que cerraste en o antes de su fecha de entrega. Una tarea que dura varios meses solo cuenta el mes en que vence.',
+  cnp: 'Solicitudes CNP asignadas a ti que vencían este mes y que entregaste a tiempo.',
+  grilla:
+    'Semanas en las que entregaste la grilla de tus cuentas (cada miércoles), sobre las semanas que tocaban.',
+  calendario:
+    'Veces que entregaste el calendario del mes de tus cuentas, a más tardar el último día hábil.',
+  metricas:
+    'Métricas de tus cuentas cargadas a más tardar el quinto día hábil del mes, sobre las cuentas que tenías.',
+  plataformas:
+    'De todas las casillas del Chequeo de tus cuentas (cuenta, red y tipo de contenido) que debían tener fecha este mes, cuántas la tienen. La meta son 4 registros al mes por casilla (1 en YouTube y Mailchimp); una casilla sin registrar cuenta como pendiente.',
+  artes:
+    'Semanas en las que entregaste los artes fijos de tus cuentas (cada lunes), sobre las semanas que tocaban.',
+  pautas:
+    'De las pautas del mes en las que fuiste asignado como recurso y que ya pasaron su fecha, a cuántas asististe (las realizadas). Las declinadas no cuentan.',
+  piezas_grabadas:
+    'De las piezas que grabaste este mes (video, reel y foto), cuántas ya quedaron editadas. Se calcula con lo que registraste en cada pauta realizada.',
+  fotos: 'De las fotos que capturaste este mes, cuántas ya quedaron editadas.',
+  videos: 'De los videos y reels que capturaste este mes, cuántos ya quedaron editados.',
+  edicion_cnp: 'Piezas de CNP audiovisual que te pidieron este mes y que ya están entregadas.',
+  edicion:
+    'Piezas que te pidieron editar este mes (las asignadas en pautas y las de CNP audiovisual) y que ya están listas.',
+  campanas:
+    'Campañas pagadas finalizadas con sus resultados cargados, más el avance del checklist de las campañas orgánicas.',
+  tickets:
+    'Tickets de soporte que resolviste dentro del tiempo de respuesta que corresponde a su prioridad.',
+  entregas: 'Tareas cerradas y piezas de CNP entregadas, sobre las que tenías asignadas en el mes.',
+  puntualidad:
+    'Entregas (tareas y CNP) cerradas en o antes de la fecha pactada, sobre las cerradas.',
+  arrastre:
+    'Tareas abiertas que vienen de meses anteriores y ya debían estar cerradas, paralizadas o vencidas. Mientras menos, mejor.',
+  tareas_fijas:
+    'Cumplimiento del checklist semanal de tareas fijas (60% cumplirlo, 40% hacerlo a tiempo).',
+  piezas_av:
+    'Piezas audiovisuales asignadas a ti como editor, sobre las que ya están en estado Listo.',
+  reuniones:
+    'Asistencia a las reuniones a las que te convocaron otras personas (las que convocas tú no cuentan).',
+  chequeo:
+    'Celdas de chequeo de plataformas de tus cuentas que tienen fecha de publicación registrada.',
+}
 
 /**
  * Especificidad de un perfil, mayor gana: position_ids > department_ids > min_level >

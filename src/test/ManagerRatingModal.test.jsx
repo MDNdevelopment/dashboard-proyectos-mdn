@@ -46,6 +46,24 @@ describe('ManagerRatingModal', () => {
     expect(screen.getByText('Puntúa todos los criterios antes de guardar.')).toBeInTheDocument()
   })
 
+  it('cada criterio se puntúa del 1 al 10 y guarda un 10', async () => {
+    const onSave = vi.fn().mockResolvedValue()
+    render(
+      <ManagerRatingModal
+        employee={EMPLOYEE}
+        criteria={CRITERIA_SMM}
+        onClose={vi.fn()}
+        onSave={onSave}
+      />,
+    )
+    const rows = screen.getAllByRole('radiogroup')
+    expect(within(rows[0]).getAllByRole('radio')).toHaveLength(10)
+    await userEvent.click(within(rows[0]).getByText('10'))
+    await userEvent.click(within(rows[1]).getByText('7'))
+    await userEvent.click(screen.getByText('Guardar evaluación'))
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ scoresById: { c1: 10, c2: 7 } }))
+  })
+
   it('guarda con el payload correcto cuando todos los criterios están puntuados', async () => {
     const onSave = vi.fn().mockResolvedValue()
     const onClose = vi.fn()
