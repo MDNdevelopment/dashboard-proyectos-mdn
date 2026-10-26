@@ -1,6 +1,10 @@
 /**
  * Evaluación automática de desempeño por empleado (ver ARQUITECTURA.md §2.7).
- * Núcleo de scoring: 9 indicadores puros + orquestador. Ningún indicador conoce su
+ * Núcleo de scoring: indicadores puros + orquestador. Los indicadores "básicos" (tareas,
+ * cnp, grilla, calendario, metricas, artes, pautas, piezas_grabadas, fotos, edicion,
+ * campanas, tickets) son los que usan los perfiles por cargo; los viejos (entregas,
+ * puntualidad, arrastre, tareas_fijas, piezas_av, reuniones, chequeo) siguen disponibles
+ * con peso 0 para leer snapshots ya congelados y para que un admin los vuelva a sumar. Ningún indicador conoce su
  * peso — devuelve qué tan bien lo hizo el empleado (`pct`, 0–1) y si tuvo volumen
  * suficiente para significar algo (`aplica`). El peso lo decide el perfil de cargo
  * (ver `employeeScoreProfiles.js`), que también redistribuye el peso de los
@@ -13,10 +17,12 @@
 import {
   isClosed,
   isLate,
-  isDragged,
   isBlocked,
   parseD,
+  today,
   daysBetween,
+  monthIndex,
+  taskStartMonth,
   taskInMonth,
 } from '../components/tareas/constants'
 import { cnpInMonth, cnpPieceCount, cnpPiecesDelivered } from '../components/cnp/constants'
@@ -24,14 +30,52 @@ import { buildFixedWeeks, aggregateEmployeeFixedTasksByRole } from './fixedTasks
 import { computeAvailability, isInExcludedRange } from './employeeAvailability'
 import { INDICATOR_KEYS, resolveProfile, effectiveWeights } from './employeeScoreProfiles'
 import { getSlaThresholdHours } from '../components/tickets/slaUtils'
-import { piezaUnidades, piezaListas } from './audiovisual'
+import {
+  piezaUnidades,
+  piezaListas,
+  grabacionPorFormato,
+  piezasPorFormato,
+  FORMAT_GROUPS,
+  FORMAT_KEYS,
+} from './audiovisual'
+import { computePlataformasProductividad } from './chequeo'
+import { CHEQUEO_PRODUCTIVIDAD_START } from '../components/metricas/constants'
 
 export { INDICATOR_KEYS }
 
 /** Unidades mínimas de datos, por debajo de las cuales un score no es confiable. */
-const MIN_UNITS_GLOBAL = 8
-const MIN_APLICABLES = 2
+const MIN_UNITS_GLOBAL = 2
+const MIN_APLICABLES = 1
 const MIN_WEIGHT_BASE = 50
+
+/**
+ * Unidades mínimas para que cada indicador "aplique" en un mes. Exportado para que los
+ * textos de la ficha ("se necesitan al menos 2 tareas") lean el mismo umbral que el cálculo.
+ */
+export const MIN_UNITS = {
+  tareas: 2,
+  cnp: 1,
+  grilla: 2,
+  calendario: 2,
+  metricas: 2,
+  artes: 2,
+  pautas: 1,
+  piezas_grabadas: 1,
+  fotos: 1,
+  edicion: 1,
+  videos: 1,
+  edicion_cnp: 1,
+  plataformas: 1,
+  campanas: 1,
+  tickets: 3,
+  entregas: 3,
+  puntualidad: 3,
+  arrastre: 3,
+  tareas_fijas: 4,
+  piezas_av: 3,
+  reuniones: 2,
+  chequeo: 2,
+}
 
 // ─── Helpers compartidos ────────────────────────────────────────────────────
 
@@ -43,6 +87,12 @@ function dueKey(dateStr) {
  * rango de indisponibilidad del empleado — vacaciones confirmadas o pre-ingreso). */
 function isExcluded(dateStr, rangosExcluidos) {
   return isInExcludedRange(dueKey(dateStr), rangosExcluidos)
+}
+
+/** Índice de mes (año*12+mes0) de una fecha 'YYYY-MM-DD…', o null. */
+function monthOf(dateStr) {
+  const d = parseD((dateStr ?? '').slice(0, 10))
+  return d ? monthIndex(d) : null
 }
 
 function result(key, { aplica, pct, unidades, detalle }) {
@@ -94,7 +144,7 @@ export function calcEntregas(ctx) {
   const cScore = cHas ? (cEntregadas / cSolicitadas) * cFinal : 0
 
   return result('entregas', {
-    aplica: unidades >= 3,
+    aplica: unidades >= MIN_UNITS.entregas,
     pct: tScore + cScore,
     unidades,
     detalle: { tUniverso, tCerradas, cSolicitadas, cEntregadas },
@@ -133,7 +183,7 @@ export function calcPuntualidad(ctx) {
   ).length
 
   return result('puntualidad', {
-    aplica: total >= 3,
+    aplica: total >= MIN_UNITS.puntualidad,
     pct: aTiempo / total,
     unidades: total,
     detalle: { total, aTiempo },
@@ -142,9 +192,22 @@ export function calcPuntualidad(ctx) {
 
 // ─── 3. Arrastre / bloqueo ───────────────────────────────────────────────────
 
+/**
+ * Tarea abierta que viene de un mes anterior al evaluado Y que ya debería haber cerrado:
+ * una tarea larga que aún está en plazo (su due_date cae en un mes posterior) no es
+ * arrastre, es trabajo en curso.
+ */
+function isDraggedAt(task, monthIdx) {
+  if (isClosed(task)) return false
+  const start = taskStartMonth(task)
+  if (start === null || start >= monthIdx) return false
+  const due = monthOf(task.due_date)
+  return due === null || due <= monthIdx
+}
+
 /** Penaliza tareas arrastradas de meses anteriores o paralizadas. 0% → 1.0, ≥50% → 0. */
 export function calcArrastre(ctx) {
-  const { userId, tasks } = ctx
+  const { userId, monthIdx, tasks } = ctx
   const abiertas = (tasks ?? []).filter(
     (t) => (t.assignee_ids ?? []).includes(userId) && !isClosed(t),
   )
@@ -152,12 +215,14 @@ export function calcArrastre(ctx) {
   if (unidades === 0)
     return result('arrastre', { aplica: false, pct: null, unidades: 0, detalle: {} })
 
-  const problematicas = abiertas.filter((t) => isDragged(t) || isBlocked(t) || isLate(t)).length
+  const problematicas = abiertas.filter(
+    (t) => isDraggedAt(t, monthIdx) || isBlocked(t) || isLate(t),
+  ).length
   const ratio = problematicas / unidades
   const pct = Math.max(0, 1 - ratio / 0.5)
 
   return result('arrastre', {
-    aplica: unidades >= 3,
+    aplica: unidades >= MIN_UNITS.arrastre,
     pct,
     unidades,
     detalle: { unidades, problematicas },
@@ -189,13 +254,18 @@ export function calcTareasFijas(ctx) {
   const puntual = agg.puntualPct ?? 0
   const pct = 0.6 * cumplimiento + 0.4 * puntual
 
-  return result('tareas_fijas', { aplica: agg.meta >= 4, pct, unidades: agg.meta, detalle: agg })
+  return result('tareas_fijas', {
+    aplica: agg.meta >= MIN_UNITS.tareas_fijas,
+    pct,
+    unidades: agg.meta,
+    detalle: agg,
+  })
 }
 
 // ─── 5. Piezas audiovisuales ─────────────────────────────────────────────────
 
-/** Piezas asignadas (editor_user_id) vs entregadas ('listo'), del mes. */
-export function calcPiezasAv(ctx) {
+/** Unidades de piezas asignadas (editor_user_id) y las que están en 'listo', del mes. */
+function piezasEditorStats(ctx) {
   const { userId, monthIdx, piezas } = ctx
   const misPiezas = (piezas ?? []).filter((p) => {
     if (p.editor_user_id !== userId) return false
@@ -205,18 +275,25 @@ export function calcPiezasAv(ctx) {
   // Una fila puede ser un lote de N unidades (es_lote/cantidad/listas): se suman unidades,
   // no filas. Las canceladas no son trabajo pendiente ni hecho.
   const activas = misPiezas.filter((p) => p.status !== 'cancelado')
-  const unidades = activas.reduce((sum, p) => sum + piezaUnidades(p), 0)
-  if (unidades === 0)
-    return result('piezas_av', { aplica: false, pct: null, unidades: 0, detalle: {} })
+  return {
+    unidades: activas.reduce((sum, p) => sum + piezaUnidades(p), 0),
+    listas: activas.reduce((sum, p) => sum + piezaListas(p), 0),
+  }
+}
 
-  const listas = activas.reduce((sum, p) => sum + piezaListas(p), 0)
-  return result('piezas_av', {
-    aplica: unidades >= 3,
+/** Piezas asignadas (editor_user_id) vs entregadas ('listo'), del mes. */
+function calcPiezasEditor(key, minUnits, ctx) {
+  const { unidades, listas } = piezasEditorStats(ctx)
+  if (unidades === 0) return result(key, { aplica: false, pct: null, unidades: 0, detalle: {} })
+  return result(key, {
+    aplica: unidades >= minUnits,
     pct: listas / unidades,
     unidades,
     detalle: { unidades, listas },
   })
 }
+
+export const calcPiezasAv = (ctx) => calcPiezasEditor('piezas_av', MIN_UNITS.piezas_av, ctx)
 
 // ─── 6. Reuniones ────────────────────────────────────────────────────────────
 
@@ -236,7 +313,7 @@ export function calcReuniones(ctx) {
 
   const realizadas = convocadas.filter((m) => m.status === 'realizada').length
   return result('reuniones', {
-    aplica: unidades >= 2,
+    aplica: unidades >= MIN_UNITS.reuniones,
     pct: realizadas / unidades,
     unidades,
     detalle: { unidades, realizadas },
@@ -282,7 +359,7 @@ export function calcCampanas(ctx) {
     : 0
 
   return result('campanas', {
-    aplica: unidades >= 1,
+    aplica: unidades >= MIN_UNITS.campanas,
     pct: pPct * pFinal + oPct * oFinal,
     unidades,
     detalle: { misPagadas: misPagadas.length, misOrganicas: misOrganicas.length },
@@ -312,7 +389,7 @@ export function calcChequeo(ctx) {
 
   const conFecha = misChecks.filter((ch) => ch.last_published_at).length
   return result('chequeo', {
-    aplica: unidades >= 2,
+    aplica: unidades >= MIN_UNITS.chequeo,
     pct: conFecha / unidades,
     unidades,
     detalle: { unidades, conFecha },
@@ -344,25 +421,282 @@ export function calcTickets(ctx) {
   }).length
 
   return result('tickets', {
-    aplica: unidades >= 3,
+    aplica: unidades >= MIN_UNITS.tickets,
     pct: enSla / unidades,
     unidades,
     detalle: { unidades, enSla },
   })
 }
 
+// ─── Indicadores básicos por cargo ──────────────────────────────────────────
+
+/**
+ * Cumplimiento por fecha de vencimiento: solo cuentan los ítems cuyo `due_date` cae en el
+ * mes evaluado, así una tarea de varios meses se evalúa una sola vez (el mes en que vence)
+ * y no se penaliza en los intermedios. Un ítem abierto que aún no vence es trabajo
+ * pendiente, no incumplimiento: queda fuera hasta que pase su fecha.
+ * @param {Array<{due:string, closed:boolean, closedDate:string|null}>} items
+ */
+function calcPorVencimiento(key, items, { minUnits, rangos, hoy, monthIdx }) {
+  const universo = items.filter((it) => {
+    if (!it.due || monthOf(it.due) !== monthIdx || isExcluded(it.due, rangos)) return false
+    return it.closed || parseD(it.due) < hoy
+  })
+  const unidades = universo.length
+  if (unidades === 0) return result(key, { aplica: false, pct: null, unidades: 0, detalle: {} })
+
+  const aTiempo = universo.filter(
+    (it) =>
+      it.closed && (!it.closedDate || daysBetween(parseD(it.due), parseD(it.closedDate)) <= 0),
+  ).length
+  return result(key, {
+    aplica: unidades >= minUnits,
+    pct: aTiempo / unidades,
+    unidades,
+    detalle: { total: unidades, cumplidas: aTiempo },
+  })
+}
+
+/** Tareas que vencen en el mes y se cerraron a tiempo. */
+export function calcTareas(ctx) {
+  const { userId, monthIdx, tasks, disponibilidad } = ctx
+  const items = (tasks ?? [])
+    .filter((t) => (t.assignee_ids ?? []).includes(userId))
+    .map((t) => ({ due: t.due_date, closed: isClosed(t), closedDate: t.closed_date }))
+  return calcPorVencimiento('tareas', items, {
+    minUnits: MIN_UNITS.tareas,
+    rangos: disponibilidad?.rangosExcluidos ?? [],
+    hoy: ctx.today ?? today(),
+    monthIdx,
+  })
+}
+
+/** Solicitudes CNP que vencen en el mes y se cerraron a tiempo. */
+export function calcCnp(ctx) {
+  const { userId, monthIdx, cnp, disponibilidad } = ctx
+  const items = (cnp ?? [])
+    .filter((c) => c.assignee_id === userId && !c.deleted_at)
+    .map((c) => ({ due: c.due_date, closed: isClosed(c), closedDate: c.closed_date }))
+  return calcPorVencimiento('cnp', items, {
+    minUnits: MIN_UNITS.cnp,
+    rangos: disponibilidad?.rangosExcluidos ?? [],
+    hoy: ctx.today ?? today(),
+    monthIdx,
+  })
+}
+
+/** Una tarea fija (grilla, calendario, métricas, artes): semanas cumplidas / meta. */
+function calcFija(indicatorKey, taskKey, ctx) {
+  const { userId, year, month, marks, clients } = ctx
+  const weeks = buildFixedWeeks(year, month)
+  // Mismo filtrado defensivo por período que calcTareasFijas.
+  const periodMarks = (marks ?? []).filter(
+    (m) => m.period_year === year && m.period_month === month,
+  )
+  const agg = aggregateEmployeeFixedTasksByRole(periodMarks, clients ?? [], weeks, userId, {
+    year,
+    month,
+  })
+  const { meta, si } = agg.byTaskKey[taskKey] ?? { meta: 0, si: 0 }
+  if (meta === 0)
+    return result(indicatorKey, { aplica: false, pct: null, unidades: 0, detalle: {} })
+  return result(indicatorKey, {
+    aplica: meta >= MIN_UNITS[indicatorKey],
+    pct: si / meta,
+    unidades: meta,
+    detalle: { meta, si },
+  })
+}
+
+export const calcGrilla = (ctx) => calcFija('grilla', 'grilla', ctx)
+export const calcCalendario = (ctx) => calcFija('calendario', 'calendario', ctx)
+export const calcMetricas = (ctx) => calcFija('metricas', 'metricas', ctx)
+export const calcArtes = (ctx) => calcFija('artes', 'artes', ctx)
+
+/**
+ * Asistencia a pautas: de las pautas del mes donde el empleado es recurso, las que se
+ * realizaron sobre las que ya pasaron su fecha (realizadas + programadas vencidas).
+ * Declinadas y solicitadas (sin agendar) no cuentan.
+ */
+export function calcPautas(ctx) {
+  const { userId, monthIdx, pautas, disponibilidad } = ctx
+  const rangos = disponibilidad?.rangosExcluidos ?? []
+  const hoy = ctx.today ?? today()
+  const universo = (pautas ?? []).filter((p) => {
+    if (p.deleted_at || !(p.recurso_ids ?? []).includes(userId)) return false
+    if (monthOf(p.pauta_date) !== monthIdx || isExcluded(p.pauta_date, rangos)) return false
+    if (p.status === 'realizada') return true
+    return p.status === 'programada' && parseD(p.pauta_date) < hoy
+  })
+  const unidades = universo.length
+  if (unidades === 0)
+    return result('pautas', { aplica: false, pct: null, unidades: 0, detalle: {} })
+
+  const realizadas = universo.filter((p) => p.status === 'realizada').length
+  return result('pautas', {
+    aplica: unidades >= MIN_UNITS.pautas,
+    pct: realizadas / unidades,
+    unidades,
+    detalle: { unidades, realizadas },
+  })
+}
+
+/**
+ * Grabadas vs editadas de la persona: de las pautas `realizada` del mes donde es recurso,
+ * cuántas piezas grabó ella (su cantidad en `grabacion_por_formato`) y cuántas de esas
+ * quedaron editadas. La edición solo se registra por pauta y formato
+ * (`piezas_por_formato.editadas / salieron`), así que a cada persona se le atribuye la
+ * misma proporción sobre lo que ella grabó — repartir "todas las editadas de la pauta" a
+ * cada recurso inflaría a quien grabó poco cuando varios van a la misma pauta. Una pauta
+ * sin reparto o sin `salieron` cargado no se puede proporcionar y se omite.
+ * @param {string[]} codes  formatos que cuenta el indicador (V, R, F)
+ */
+function calcGrabadasVsEditadas(key, codes, ctx) {
+  const { userId, monthIdx, pautas, disponibilidad } = ctx
+  const rangos = disponibilidad?.rangosExcluidos ?? []
+  let grabadas = 0
+  let editadas = 0
+  let nPautas = 0
+  for (const p of pautas ?? []) {
+    if (p.deleted_at || p.status !== 'realizada') continue
+    if (!(p.recurso_ids ?? []).includes(userId)) continue
+    if (monthOf(p.pauta_date) !== monthIdx || isExcluded(p.pauta_date, rangos)) continue
+    const reparto = grabacionPorFormato(p)
+    const porFormato = piezasPorFormato(p)
+    let cuenta = false
+    for (const code of codes) {
+      const mias = reparto[code]?.[userId] ?? 0
+      const { salieron = 0, editadas: ed = 0 } = porFormato[code] ?? {}
+      if (mias <= 0 || salieron <= 0) continue
+      grabadas += mias
+      editadas += mias * Math.min(1, ed / salieron)
+      cuenta = true
+    }
+    if (cuenta) nPautas += 1
+  }
+  if (grabadas === 0) return result(key, { aplica: false, pct: null, unidades: 0, detalle: {} })
+  return result(key, {
+    aplica: grabadas >= MIN_UNITS[key],
+    pct: editadas / grabadas,
+    unidades: grabadas,
+    detalle: { grabadas, editadas: Math.round(editadas), pautas: nPautas },
+  })
+}
+
+export const calcPiezasGrabadas = (ctx) =>
+  calcGrabadasVsEditadas('piezas_grabadas', FORMAT_KEYS, ctx)
+export const calcFotos = (ctx) => calcGrabadasVsEditadas('fotos', FORMAT_GROUPS.foto, ctx)
+export const calcVideos = (ctx) => calcGrabadasVsEditadas('videos', FORMAT_GROUPS.av, ctx)
+
+/** Piezas pedidas por CNP audiovisual al empleado en el mes, y las ya entregadas. */
+function cnpAudiovisualStats(ctx) {
+  const { userId, monthIdx, cnp, disponibilidad } = ctx
+  const rangos = disponibilidad?.rangosExcluidos ?? []
+  const mios = (cnp ?? []).filter(
+    (c) =>
+      c.assignee_id === userId &&
+      !c.deleted_at &&
+      c.is_audiovisual &&
+      cnpInMonth(c, monthIdx) &&
+      !isExcluded(c.due_date, rangos),
+  )
+  return {
+    solicitadas: mios.reduce((sum, c) => sum + cnpPieceCount(c), 0),
+    entregadas: mios.reduce((sum, c) => sum + cnpPiecesDelivered(c), 0),
+  }
+}
+
+/** Piezas de CNP audiovisual: entregadas / solicitadas (Creador de Contenido). */
+export function calcEdicionCnp(ctx) {
+  const { solicitadas, entregadas } = cnpAudiovisualStats(ctx)
+  if (solicitadas === 0)
+    return result('edicion_cnp', { aplica: false, pct: null, unidades: 0, detalle: {} })
+  return result('edicion_cnp', {
+    aplica: solicitadas >= MIN_UNITS.edicion_cnp,
+    pct: entregadas / solicitadas,
+    unidades: solicitadas,
+    detalle: { solicitadas, entregadas },
+  })
+}
+
+/**
+ * Ediciones solicitadas vs editadas (quien edita, sin importar el cargo): piezas asignadas
+ * como editor en pautas + piezas de CNP audiovisual asignadas, en el mismo cociente. Sin
+ * medir puntualidad.
+ */
+export function calcEdicion(ctx) {
+  const piezas = piezasEditorStats(ctx)
+  const cnp = cnpAudiovisualStats(ctx)
+  const unidades = piezas.unidades + cnp.solicitadas
+  if (unidades === 0)
+    return result('edicion', { aplica: false, pct: null, unidades: 0, detalle: {} })
+  const listas = piezas.listas + cnp.entregadas
+  return result('edicion', {
+    aplica: unidades >= MIN_UNITS.edicion,
+    pct: listas / unidades,
+    unidades,
+    detalle: { unidades, listas, piezas: piezas.unidades, cnp: cnp.solicitadas },
+  })
+}
+
+/**
+ * Actualización de plataformas (Social Media): cobertura de las celdas de Chequeo del mes
+ * (cuenta × red × tipo) de las cuentas que lleva, sobre la meta mensual — misma fórmula que
+ * la fila "Actualización de Plataformas" del reporte (`computePlataformasProductividad`),
+ * aplicada solo a sus cuentas. Una celda nunca registrada cuenta en la meta pero no en lo
+ * realizado. Desde 2026-09, cuando el reporte adoptó este modelo.
+ */
+export function calcPlataformas(ctx) {
+  const { userId, year, month, checks, clients } = ctx
+  const noAplica = result('plataformas', { aplica: false, pct: null, unidades: 0, detalle: {} })
+  const { year: y0, month: m0 } = CHEQUEO_PRODUCTIVIDAD_START
+  if (year < y0 || (year === y0 && month < m0)) return noAplica
+
+  const mias = (clients ?? []).filter((c) => c.social_manager_id === userId && !c.deleted_at)
+  const ids = new Set(mias.map((c) => c.id))
+  const delMes = (checks ?? []).filter(
+    (ch) => ids.has(ch.client_id) && ch.period_year === year && ch.period_month === month,
+  )
+  const { realizado, meta } = computePlataformasProductividad(
+    delMes,
+    mias,
+    buildFixedWeeks(year, month),
+  )
+  if (meta === 0) return noAplica
+  return result('plataformas', {
+    aplica: meta >= MIN_UNITS.plataformas,
+    pct: realizado / meta,
+    unidades: meta,
+    detalle: { realizado, meta },
+  })
+}
+
 // ─── Orquestador ─────────────────────────────────────────────────────────────
 
 export const INDICATORS = [
+  { key: 'tareas', label: 'Tareas', calc: calcTareas },
+  { key: 'cnp', label: 'CNP', calc: calcCnp },
+  { key: 'grilla', label: 'Grilla', calc: calcGrilla },
+  { key: 'calendario', label: 'Calendario', calc: calcCalendario },
+  { key: 'metricas', label: 'Métricas', calc: calcMetricas },
+  { key: 'plataformas', label: 'Actualización de plataformas', calc: calcPlataformas },
+  { key: 'artes', label: 'Artes fijos', calc: calcArtes },
+  { key: 'pautas', label: 'Pautas asistidas', calc: calcPautas },
+  { key: 'piezas_grabadas', label: 'Piezas grabadas vs editadas', calc: calcPiezasGrabadas },
+  { key: 'fotos', label: 'Fotos capturadas vs editadas', calc: calcFotos },
+  { key: 'videos', label: 'Videos capturados vs editados', calc: calcVideos },
+  { key: 'edicion_cnp', label: 'Piezas solicitadas vs editadas (CNP)', calc: calcEdicionCnp },
+  { key: 'edicion', label: 'Ediciones solicitadas vs editadas', calc: calcEdicion },
+  { key: 'campanas', label: 'Campañas con resultados', calc: calcCampanas },
+  { key: 'tickets', label: 'Tickets IT en SLA', calc: calcTickets },
+  // Indicadores anteriores: peso 0 en los perfiles actuales, siguen para snapshots viejos.
   { key: 'entregas', label: 'Cumplimiento de entregas', calc: calcEntregas },
   { key: 'puntualidad', label: 'Entrega a tiempo', calc: calcPuntualidad },
   { key: 'arrastre', label: 'No arrastre / no bloqueo', calc: calcArrastre },
   { key: 'tareas_fijas', label: 'Tareas fijas', calc: calcTareasFijas },
   { key: 'piezas_av', label: 'Piezas audiovisuales', calc: calcPiezasAv },
   { key: 'reuniones', label: 'Asistencia a reuniones', calc: calcReuniones },
-  { key: 'campanas', label: 'Campañas con resultados', calc: calcCampanas },
   { key: 'chequeo', label: 'Chequeo de plataformas', calc: calcChequeo },
-  { key: 'tickets', label: 'Tickets IT en SLA', calc: calcTickets },
 ]
 
 /**
@@ -463,7 +797,7 @@ export function computeEmployeeScore(ctx, weights) {
  * @param {Array} users   empleados activos a evaluar, con {user_id, position_id,
  *                        department_id, access_level, hire_date, on_probation}
  * @param {object} inputs colecciones crudas: {tasks, cnp, marks, clients, piezas,
- *                        meetings, campaigns, paidCampaigns, checks, tickets, vacations}
+ *                        pautas, meetings, campaigns, paidCampaigns, checks, tickets, vacations}
  * @param {Array} profiles  employee_score_profiles de la empresa
  * @param {{year:number, month:number, monthIdx:number}} period
  * @returns {Map<string, ReturnType<typeof computeEmployeeScore>>}

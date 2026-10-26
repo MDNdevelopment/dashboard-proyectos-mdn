@@ -137,8 +137,8 @@ export const MODULES = [
     description: 'Evaluaciones de desempeño del equipo',
     tabs: [
       { key: 'mi-desempeno', label: 'Mi Desempeño' },
-      { key: 'desempeno', label: 'Desempeño' },
-      { key: 'historial', label: 'Historial (evaluaciones manuales, solo lectura)' },
+      { key: 'desempeno', label: 'Evaluar' },
+      { key: 'historial', label: 'Rendimientos (evaluaciones manuales anteriores, solo lectura)' },
     ],
     manageActions: [
       { key: 'evaluaciones.ver_todo', label: 'Ver el desempeño de todos los empleados + ranking' },

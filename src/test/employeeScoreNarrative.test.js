@@ -218,6 +218,6 @@ describe('buildScoreNarrative', () => {
     const result = { estado: 'ok', breakdown: breakdown(), score: 69.4 }
     const history = [{ breakdown: breakdown(), score: 62 }]
     const text = buildScoreNarrative(result, history)
-    expect(text).toMatch(/tu puntaje pasó de 62 a 69,4/i)
+    expect(text).toMatch(/tu puntaje pasó de 6,2 a 6,9/i)
   })
 })

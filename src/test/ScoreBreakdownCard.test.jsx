@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import ScoreBreakdownCard from '../components/evaluaciones/ScoreBreakdownCard'
 
 function result(overrides = {}) {
@@ -16,7 +16,7 @@ const CRITERIA = [{ id: 'c1', icon: '⭐', name: 'Calidad', description: 'Qué t
 
 function rating(overrides = {}) {
   return {
-    items: [{ criterion_id: 'c1', icon: '⭐', name: 'Calidad', score: 4.6 }],
+    items: [{ criterion_id: 'c1', icon: '⭐', name: 'Calidad', score: 9.2 }],
     comment: 'Buen mes',
     rated_at: '2026-08-30T00:00:00Z',
     ...overrides,
@@ -24,11 +24,11 @@ function rating(overrides = {}) {
 }
 
 describe('ScoreBreakdownCard', () => {
-  it('sin criterios del jefe: la nota es el score automático convertido a /5', () => {
+  it('sin criterios del jefe: la nota es el score automático convertido a /10', () => {
     render(<ScoreBreakdownCard result={result({ score: 87 })} />)
-    // 87/100 → 4.35/5 (4.3 por redondeo binario de punto flotante, no 4.4)
-    expect(screen.getByText('4.3')).toBeInTheDocument()
-    expect(screen.getByText('sobre 5')).toBeInTheDocument()
+    // 87/100 → 8.7/10
+    expect(screen.getByText('8.7')).toBeInTheDocument()
+    expect(screen.getByText('sobre 10')).toBeInTheDocument()
     expect(screen.queryByText(/Lo evalúa el jefe/)).not.toBeInTheDocument()
   })
 
@@ -42,13 +42,15 @@ describe('ScoreBreakdownCard', () => {
       <ScoreBreakdownCard
         result={result({ score: 87 })}
         criteria={CRITERIA}
-        managerRating={rating()}
+        managerRating={rating({
+          items: [{ criterion_id: 'c1', icon: '⭐', name: 'Calidad', score: 9 }],
+        })}
       />,
     )
-    // auto 4.35/5 (70%) + jefe 4.6/5 (30%) = 4.42/5
-    expect(screen.getByText('4.4')).toBeInTheDocument()
-    // "4.6" aparece también en la casilla del criterio
-    expect(screen.getAllByText('4.6').length).toBeGreaterThanOrEqual(1)
+    // auto 8.7/10 (70%) + jefe 9/10 (30%) = 8.79/10
+    expect(screen.getByText('8.8')).toBeInTheDocument()
+    // el criterio del jefe aparece en su casilla
+    expect(screen.getByText('9.0')).toBeInTheDocument()
   })
 
   it('cargo sin indicadores automáticos usa solo la evaluación del jefe como nota', () => {
@@ -59,8 +61,8 @@ describe('ScoreBreakdownCard', () => {
         managerRating={rating()}
       />,
     )
-    // "4.6" aparece tanto en la nota general como en la casilla del criterio.
-    expect(screen.getAllByText('4.6').length).toBeGreaterThanOrEqual(2)
+    // "9.2" aparece tanto en la nota general como en la casilla del criterio.
+    expect(screen.getAllByText('9.2').length).toBeGreaterThanOrEqual(2)
   })
 
   it('sin evaluación del jefe todavía muestra el aviso de pendiente', () => {
@@ -100,6 +102,79 @@ describe('ScoreBreakdownCard', () => {
     render(<ScoreBreakdownCard result={result()} criteria={CRITERIA} managerRating={rating()} />)
     expect(screen.getByText('Calidad')).toBeInTheDocument()
     expect(screen.getByText((text) => text.includes('Buen mes'))).toBeInTheDocument()
+  })
+
+  it('cada indicador trae su botón "i" que explica qué evalúa', () => {
+    render(
+      <ScoreBreakdownCard
+        result={result({
+          breakdown: [
+            {
+              key: 'tareas',
+              label: 'Tareas',
+              aplica: true,
+              pct: 0.5,
+              pesoBase: 100,
+              pesoEfectivo: 100,
+              unidades: 4,
+            },
+          ],
+        })}
+      />,
+    )
+    const btn = screen.getByRole('button', { name: 'Qué evalúa: Tareas' })
+    fireEvent.mouseEnter(btn)
+    expect(screen.getByRole('tooltip')).toHaveTextContent(/vencían este mes/)
+  })
+
+  it('muestra las cifras reales de cada categoría y su peso en el total', () => {
+    render(
+      <ScoreBreakdownCard
+        result={result({
+          breakdown: [
+            {
+              key: 'tareas',
+              label: 'Tareas',
+              aplica: true,
+              pct: 4 / 7,
+              pesoBase: 18,
+              pesoEfectivo: 18,
+              puntos: 10.3,
+              unidades: 7,
+              detalle: { total: 7, cumplidas: 4 },
+            },
+          ],
+        })}
+      />,
+    )
+    expect(screen.getByText('4 de 7 tareas cerradas a tiempo')).toBeInTheDocument()
+    expect(screen.getByText('18% del total')).toBeInTheDocument()
+  })
+
+  it('un indicador que no aplica explica el motivo y que su peso se reparte', () => {
+    render(
+      <ScoreBreakdownCard
+        result={result({
+          breakdown: [
+            {
+              key: 'tareas',
+              label: 'Tareas',
+              aplica: false,
+              pct: null,
+              pesoBase: 18,
+              pesoEfectivo: 0,
+              puntos: 0,
+              unidades: 1,
+              detalle: {},
+            },
+          ],
+        })}
+      />,
+    )
+    expect(
+      screen.getByText('Hubo 1 tarea con vencimiento; se necesitan al menos 2'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Su 18% se reparte entre los demás ítems')).toBeInTheDocument()
   })
 
   it('oculta los indicadores que no aplican al cargo (peso 0) pero muestra los que aplican sin datos', () => {

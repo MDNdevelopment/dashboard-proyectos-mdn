@@ -77,8 +77,8 @@ describe('MiDesempenoView', () => {
   it('muestra el score y el desglose del empleado', () => {
     mockHook()
     renderView()
-    // score 87.5/100 → 4.4/5 (sin criterios de jefe, se muestra tal cual)
-    expect(screen.getByText('4.4')).toBeInTheDocument()
+    // score 87.5/100 → 8.8/10 (sin criterios de jefe, se muestra tal cual)
+    expect(screen.getByText('8.8')).toBeInTheDocument()
     expect(screen.getByText('Cumplimiento de entregas')).toBeInTheDocument()
   })
 

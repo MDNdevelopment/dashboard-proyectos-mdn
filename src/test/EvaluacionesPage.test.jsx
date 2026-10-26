@@ -46,16 +46,16 @@ describe('EvaluacionesPage', () => {
     expect(screen.getByText('Evaluaciones')).toBeInTheDocument()
   })
 
-  it('muestra los tabs Mi Desempeño, Desempeño e Historial', () => {
+  it('muestra los tabs Mi Desempeño, Evaluar y Rendimientos', () => {
     renderWithAuth(PROFILE)
     expect(screen.getByRole('button', { name: 'Mi Desempeño' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Desempeño' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Historial' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Evaluar' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Rendimientos' })).toBeInTheDocument()
   })
 
-  it('el tab activo inicial (/evaluaciones) es Desempeño', () => {
+  it('el tab activo inicial (/evaluaciones) es Evaluar', () => {
     renderWithAuth(PROFILE)
-    const tab = screen.getByRole('button', { name: 'Desempeño' })
+    const tab = screen.getByRole('button', { name: 'Evaluar' })
     expect(tab.className).toContain('bg-[#111]')
   })
 
@@ -65,17 +65,17 @@ describe('EvaluacionesPage', () => {
     expect(tab.className).toContain('bg-[#111]')
   })
 
-  it('el tab Historial está activo al navegar a /evaluaciones/historial', () => {
-    renderWithAuth(PROFILE, { path: '/evaluaciones/historial' })
-    const tab = screen.getByRole('button', { name: 'Historial' })
+  it('el tab Rendimientos está activo al navegar a /evaluaciones/rendimientos', () => {
+    renderWithAuth(PROFILE, { path: '/evaluaciones/rendimientos' })
+    const tab = screen.getByRole('button', { name: 'Rendimientos' })
     expect(tab.className).toContain('bg-[#111]')
   })
 
   it('solo muestra los tabs habilitados por capability', () => {
     renderWithAuth(PROFILE, { can: (key) => key === 'evaluaciones.mi-desempeno' })
     expect(screen.getByRole('button', { name: 'Mi Desempeño' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Desempeño' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Historial' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Evaluar' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Rendimientos' })).not.toBeInTheDocument()
   })
 
   it('oculta el tab switcher en el perfil de un empleado ajeno', () => {

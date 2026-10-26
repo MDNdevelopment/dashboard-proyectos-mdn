@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 
 /**
  * Formulario de la evaluación subjetiva mensual del jefe (ver ARQUITECTURA.md §2.7).
- * Una fila por criterio del cargo del empleado (1-5, mismo lenguaje visual que el
+ * Una fila por criterio del cargo del empleado (1-10, mismo lenguaje visual que el
  * historial legacy en EmployeeProfileView.jsx) + un comentario libre.
  *
  * Props:
@@ -108,15 +108,15 @@ export default function ManagerRatingModal({ employee, criteria, existing, onClo
                   <label className="text-[14.5px] font-semibold text-[#111]">{c.name}</label>
                 </div>
                 {c.description && <p className="text-[13px] text-[#999] mb-2">{c.description}</p>}
-                <div className="flex gap-1.5" role="radiogroup" aria-label={c.name}>
-                  {[1, 2, 3, 4, 5].map((n) => (
+                <div className="grid grid-cols-10 gap-1" role="radiogroup" aria-label={c.name}>
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
                     <button
                       key={n}
                       type="button"
                       role="radio"
                       aria-checked={scores[c.id] === n}
                       onClick={() => setScores((s) => ({ ...s, [c.id]: n }))}
-                      className={`w-9 h-9 rounded-lg text-[14px] font-bold border transition-colors ${
+                      className={`h-9 rounded-lg text-[13.5px] font-bold border transition-colors ${
                         scores[c.id] === n
                           ? 'bg-[#FFB800] border-[#FFB800] text-[#111]'
                           : 'border-[#e0ddd4] text-[#999] hover:bg-[#f5f3eb]'

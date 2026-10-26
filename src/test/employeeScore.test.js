@@ -616,8 +616,8 @@ describe('computeEmployeeScore — guardas de volumen mínimo', () => {
 })
 
 describe('INDICATORS', () => {
-  it('define los 9 indicadores con label', () => {
-    expect(INDICATORS).toHaveLength(9)
+  it('define los 22 indicadores (15 básicos + 7 anteriores) con label', () => {
+    expect(INDICATORS).toHaveLength(22)
     INDICATORS.forEach((i) => {
       expect(i.key).toBeTruthy()
       expect(i.label).toBeTruthy()
