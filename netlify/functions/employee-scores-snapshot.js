@@ -24,6 +24,7 @@ import {
   priorPeriods,
 } from '../../src/utils/employeeScoreSnapshot.js'
 import { monthIndex } from '../../src/components/tareas/constants.js'
+import { selectAllPages } from '../../src/lib/supabasePaginate.js'
 
 const json = (statusCode, body) => ({
   statusCode,
@@ -35,6 +36,20 @@ const JOB_NAME = 'employee-scores-snapshot'
 
 /** Exportada para `evaluation-analysis.js` (F5): mismo alcance de datos que el
  * snapshot mensual, reusado para armar el payload del análisis IA de un empleado. */
+/**
+ * Trae TODAS las filas de una tabla (con filtro opcional) paginando: PostgREST corta en
+ * 1000 filas en silencio y `publication_checks` (3000+) y `fixed_task_marks` (1100+) ya lo
+ * superan — sin paginar, el snapshot congelaba el score con casillas faltantes. Ver
+ * `src/lib/supabasePaginate.js` y la nota de loaders "trae todo" en convenciones.md.
+ */
+function selectAll(table, filter = (q) => q) {
+  return selectAllPages((from, to) =>
+    filter(supabase.from(table).select('*', { count: 'exact' }))
+      .order('id', { ascending: true })
+      .range(from, to),
+  )
+}
+
 export async function loadCompanyInputs(companyId) {
   const [
     usersRes,
@@ -43,6 +58,7 @@ export async function loadCompanyInputs(companyId) {
     cnpRes,
     marksRes,
     piezasRes,
+    pautasRes,
     meetingsRes,
     paidRes,
     checksRes,
@@ -58,19 +74,20 @@ export async function loadCompanyInputs(companyId) {
       )
       .eq('company_id', companyId),
     supabase.from('metric_clients').select('*').eq('company_id', companyId).is('deleted_at', null),
-    supabase.from('tasks').select('*').eq('company_id', companyId),
-    supabase.from('cnp_requests').select('*').eq('company_id', companyId),
-    supabase.from('fixed_task_marks').select('*').eq('company_id', companyId),
-    supabase.from('av_pauta_piezas').select('*').eq('company_id', companyId),
-    supabase.from('meetings').select('*').eq('company_id', companyId),
-    supabase.from('paid_campaigns').select('*').eq('company_id', companyId),
-    supabase.from('publication_checks').select('*').eq('company_id', companyId),
-    supabase.from('support_tickets').select('*').eq('company_id', companyId),
-    supabase.from('vacations').select('*').eq('company_id', companyId),
+    selectAll('tasks', (q) => q.eq('company_id', companyId)),
+    selectAll('cnp_requests', (q) => q.eq('company_id', companyId)),
+    selectAll('fixed_task_marks', (q) => q.eq('company_id', companyId)),
+    selectAll('av_pauta_piezas', (q) => q.eq('company_id', companyId)),
+    selectAll('av_pautas', (q) => q.eq('company_id', companyId).is('deleted_at', null)),
+    selectAll('meetings', (q) => q.eq('company_id', companyId)),
+    selectAll('paid_campaigns', (q) => q.eq('company_id', companyId)),
+    selectAll('publication_checks', (q) => q.eq('company_id', companyId)),
+    selectAll('support_tickets', (q) => q.eq('company_id', companyId)),
+    selectAll('vacations', (q) => q.eq('company_id', companyId)),
     supabase.from('employee_score_profiles').select('*').eq('company_id', companyId),
     // `campaigns` no tiene company_id (a diferencia de paid_campaigns) — se filtra
     // abajo por `assignee` perteneciente a la empresa, igual que hace la RPC.
-    supabase.from('campaigns').select('*'),
+    selectAll('campaigns'),
   ])
 
   for (const [name, res] of Object.entries({
@@ -80,6 +97,7 @@ export async function loadCompanyInputs(companyId) {
     cnp: cnpRes,
     marks: marksRes,
     piezas: piezasRes,
+    pautas: pautasRes,
     meetings: meetingsRes,
     paidCampaigns: paidRes,
     checks: checksRes,
@@ -102,6 +120,7 @@ export async function loadCompanyInputs(companyId) {
     cnp: cnpRes.data ?? [],
     marks: marksRes.data ?? [],
     piezas: piezasRes.data ?? [],
+    pautas: pautasRes.data ?? [],
     meetings: meetingsRes.data ?? [],
     campaigns,
     paidCampaigns: paidRes.data ?? [],

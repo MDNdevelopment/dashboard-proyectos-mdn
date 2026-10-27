@@ -253,12 +253,16 @@ createRoot(document.getElementById('root')).render(
               }
             />
             <Route
-              path="/evaluaciones/historial"
+              path="/evaluaciones/rendimientos"
               element={
                 <RequireModule moduleKey="evaluaciones">
                   <EvaluacionesPage />
                 </RequireModule>
               }
+            />
+            <Route
+              path="/evaluaciones/historial"
+              element={<Navigate to="/evaluaciones/rendimientos" replace />}
             />
             <Route
               path="/evaluaciones/empleado/:id"

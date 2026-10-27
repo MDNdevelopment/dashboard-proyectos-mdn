@@ -312,7 +312,7 @@ function Sidebar() {
   const isEvalRoute = location.pathname.startsWith('/evaluaciones')
   const evalDesempenoActive = location.pathname === '/evaluaciones'
   const evalMiDesempenoActive = location.pathname === '/evaluaciones/mi-desempeno'
-  const evalHistorialActive = location.pathname === '/evaluaciones/historial'
+  const evalHistorialActive = location.pathname === '/evaluaciones/rendimientos'
   const [evalOpen, setEvalOpen] = useState(isEvalRoute)
 
   return (
@@ -670,7 +670,7 @@ function Sidebar() {
                     </Link>
                   )}
 
-                  {/* Desempeño — score automático del equipo (lista + ranking), nivel 2+ */}
+                  {/* Evaluar — score automático del equipo (lista + ranking) y evaluación del jefe, nivel 2+ */}
                   {canR('evaluaciones.desempeno') && (
                     <Link
                       to="/evaluaciones"
@@ -685,14 +685,14 @@ function Sidebar() {
                       >
                         {EVAL_ICON}
                       </span>
-                      <span className="flex-1">Desempeño</span>
+                      <span className="flex-1">Evaluar</span>
                     </Link>
                   )}
 
-                  {/* Historial — evaluaciones manuales retiradas, solo lectura */}
+                  {/* Rendimientos — evaluaciones manuales anteriores, solo lectura */}
                   {canR('evaluaciones.historial') && (
                     <Link
-                      to="/evaluaciones/historial"
+                      to="/evaluaciones/rendimientos"
                       className={`flex items-center gap-2.5 w-full px-3 py-1.5 rounded-lg text-[14.5px] font-medium transition-all text-left ${
                         evalHistorialActive
                           ? 'bg-[#FFB800] text-[#111]'
@@ -704,7 +704,7 @@ function Sidebar() {
                       >
                         {CHART_ICON}
                       </span>
-                      <span className="flex-1">Historial</span>
+                      <span className="flex-1">Rendimientos</span>
                     </Link>
                   )}
                 </div>

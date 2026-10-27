@@ -11,21 +11,23 @@ import { format, parseISO } from 'date-fns'
  *   criteria   — criterios activos del cargo (para el estado "pendiente")
  *   canEvaluar — true si el usuario actual puede evaluar (capability) y no es él mismo
  *   onEvaluar  — callback para abrir el modal de evaluación
- *   caption    — texto del encabezado (por defecto "🗓️ Evaluación del jefe")
+ *   caption    — texto del encabezado (por defecto "Evaluación del jefe")
  */
 export default function ManagerRatingCard({
   rating,
   criteria,
   canEvaluar,
   onEvaluar,
-  caption = '🗓️ Evaluación del jefe',
+  caption = 'Evaluación del jefe',
 }) {
   if (!criteria?.length) return null
 
   return (
-    <div className="mt-4">
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-[9.5px] font-bold uppercase tracking-[0.13em] text-[#999]">{caption}</p>
+    <div className="mt-5 pt-4 border-t border-[#ece9df]">
+      <div className="flex items-center justify-between mb-2.5">
+        <p className="text-[11.5px] font-mono font-bold uppercase tracking-[0.12em] text-[#aaa]">
+          {caption}
+        </p>
         {canEvaluar && (
           <button
             type="button"
@@ -41,17 +43,17 @@ export default function ManagerRatingCard({
         <p className="text-[13.5px] text-[#bbb]">Pendiente de evaluación este mes.</p>
       ) : (
         <>
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(58px,1fr))] gap-1.5">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(72px,1fr))] gap-2">
             {(rating.items ?? []).map((item) => (
               <div
                 key={item.criterion_id}
-                className="bg-[#fafaf7] rounded-lg px-2 py-2.5 text-center"
+                className="bg-[#faf9f5] border border-[#ece9df] rounded-xl px-2 py-2.5 text-center"
               >
                 {item.icon && <div className="text-[15px]">{item.icon}</div>}
                 <div className="font-mono font-bold text-[14px] text-[#111] mt-0.5">
                   {item.score != null ? item.score.toFixed(1) : '—'}
                 </div>
-                <div className="text-[8.5px] font-bold uppercase tracking-[0.03em] text-[#999] mt-0.5 truncate">
+                <div className="text-[10.5px] font-mono font-bold uppercase tracking-[0.04em] text-[#999] mt-0.5 truncate">
                   {item.name}
                 </div>
               </div>

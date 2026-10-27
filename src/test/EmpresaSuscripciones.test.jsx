@@ -20,6 +20,7 @@ const MOCK_SUBS = [
     billing_month: null,
     card_last4: '4242',
     owner_user_id: 'u-1',
+    account_email: 'disenio@mdn.com',
     status: 'activa',
     comment: 'Licencias de diseño',
   },
@@ -150,5 +151,40 @@ describe('SubscriptionsView', () => {
     // $60 sale en la card de total y en la fila de Adobe; los $10 de la cancelada no suman.
     expect(screen.getAllByText(/\$60[.,]00/)).toHaveLength(2)
     expect(screen.queryByText(/\$70[.,]00/)).not.toBeInTheDocument()
+  })
+
+  it('muestra el correo de la cuenta debajo del tipo y responsable', async () => {
+    render(<SubscriptionsView companyId="co-1" canManage={false} />)
+    expect(await screen.findByText('disenio@mdn.com')).toBeInTheDocument()
+  })
+
+  it('la card Activas filtra por estado activa y un segundo click lo quita', async () => {
+    const user = userEvent.setup()
+    render(<SubscriptionsView companyId="co-1" canManage={false} />)
+    await screen.findByText('Hosting antiguo')
+    const card = screen.getByRole('button', { name: /activas/i })
+    await user.click(card)
+    await waitFor(() => {
+      expect(screen.queryByText('Hosting antiguo')).not.toBeInTheDocument()
+    })
+    expect(screen.getByText('Adobe Creative Cloud')).toBeInTheDocument()
+    expect(card).toHaveAttribute('aria-pressed', 'true')
+    await user.click(card)
+    expect(await screen.findByText('Hosting antiguo')).toBeInTheDocument()
+  })
+
+  it('la card Cobran en 7 días deja solo las que cobran pronto', async () => {
+    const user = userEvent.setup()
+    mockFetch.mockResolvedValueOnce(
+      MOCK_SUBS.map((s) => (s.id === 's-1' ? { ...s, billing_day: new Date().getDate() } : s)),
+    )
+    render(<SubscriptionsView companyId="co-1" canManage={false} />)
+    await screen.findByText('Hosting antiguo')
+    await user.click(screen.getByRole('button', { name: /cobran en 7 días/i }))
+    await waitFor(() => {
+      expect(screen.queryByText('Hosting antiguo')).not.toBeInTheDocument()
+    })
+    expect(screen.queryByText('Dominio sin datos')).not.toBeInTheDocument()
+    expect(screen.getByText('Adobe Creative Cloud')).toBeInTheDocument()
   })
 })

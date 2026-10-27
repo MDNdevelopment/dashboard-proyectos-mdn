@@ -135,9 +135,10 @@ describe('effectiveWeights — redistribución', () => {
     expect(eff.entregas).toBeCloseTo(100)
   })
 
-  it('los 9 indicadores conocidos están en INDICATOR_KEYS', () => {
-    expect(INDICATOR_KEYS).toHaveLength(9)
+  it('los 22 indicadores conocidos (básicos + anteriores) están en INDICATOR_KEYS', () => {
+    expect(INDICATOR_KEYS).toHaveLength(22)
     expect(INDICATOR_KEYS).toContain('entregas')
+    expect(INDICATOR_KEYS).toContain('tareas')
     expect(INDICATOR_KEYS).toContain('tickets')
   })
 })
