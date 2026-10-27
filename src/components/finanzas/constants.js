@@ -240,3 +240,11 @@ export const CONCEPTO_RECURRENTE = 'Gestión de redes'
  * 100% del cobrado (ver pctsEnterosPorPartida() en utils/finanzas.js).
  */
 export const NOTA_TRASPASO_PARTIDA = 'traspaso_entre_partidas'
+
+/**
+ * Centinela de la parte del TERCERO de un ingreso extra (ver `splitRecomendado()`
+ * en utils/finanzas.js). Entra a la partida Gastos —de ahí se le paga al tercero—
+ * pero no es ganancia ni dinero propio de MDN: el Dashboard la excluye de metas y
+ * márgenes, igual que el traspaso. Tampoco es texto para mostrar.
+ */
+export const NOTA_PASE_TERCERO = 'pase_tercero'

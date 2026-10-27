@@ -2,7 +2,12 @@ import { useState, useEffect, useRef } from 'react'
 import { fmtUSD } from '../../utils/metricsFinance'
 import { fmtDate } from '../../utils/formatDate'
 import { cobradoDe, canjeadoDe, esIntercambio, hoyISO } from '../../utils/finanzas'
-import { hayRetenciones, normalizarRetenciones, retencionesDe } from '../../utils/retenciones'
+import {
+  esFacturaConIva,
+  hayRetenciones,
+  normalizarRetenciones,
+  retencionesDe,
+} from '../../utils/retenciones'
 import {
   FORMAS_PAGO,
   FORMA_LABELS,
@@ -83,7 +88,8 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
     ret.islRate !== guardadas.islRate ||
     ret.iva !== guardadas.iva ||
     ret.ivaRate !== guardadas.ivaRate ||
-    ret.municipal !== guardadas.municipal
+    ret.municipal !== guardadas.municipal ||
+    ret.facturaConIva !== guardadas.facturaConIva
   const { asignado, falta, hayBs: bsActivo } = totalesDePagos(pagos, pendiente)
   const effectiveRate = customRate ? Number(manualRate) || null : (rateInfo?.rate ?? null)
   const totalBs =
@@ -99,7 +105,9 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
     let cancelled = false
     loadUltimasRetenciones(invoice.clientId).then(({ data }) => {
       if (cancelled || !data) return
-      setRet(data)
+      // Si la marca retuvo la última vez, esta también es factura fiscal: el IVA
+      // se suma sobre la mensualidad (las retenciones viejas no traen el campo).
+      setRet({ ...data, facturaConIva: true })
     })
     return () => {
       cancelled = true
@@ -110,7 +118,20 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
 
   /** Cambia una retención; el monto sugerido del último pago la sigue solo (es derivado). */
   function cambiarRet(patch) {
-    setRet((prev) => ({ ...prev, ...patch }))
+    setRet((prev) => {
+      const next = { ...prev, ...patch }
+      // Quitar "Factura con IVA" deja la factura sin retenciones: la base lo exige
+      // con un CHECK y no tiene sentido retener sin facturar con IVA.
+      if (patch.facturaConIva === false) {
+        return { ...next, isl: false, islRate: null, iva: false, ivaRate: null, municipal: false }
+      }
+      // Marcar la primera retención de una factura sin IVA sumado la vuelve fiscal.
+      // Una factura vieja que ya traía retenciones no se toca sola.
+      if (!hayRetenciones(prev) && hayRetenciones(next) && next.facturaConIva !== true) {
+        return { ...next, facturaConIva: true }
+      }
+      return next
+    })
   }
 
   // Resuelve la BCV vigente para la fecha elegida en cuanto algún pago es en Bs.
@@ -216,10 +237,10 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
             {saldado > 0.5 ? 'Cobro y abonos' : 'Registrar cobro'}
           </h2>
           <p className="text-[13px] text-[#888] mt-0.5">
-            {invoice.clientName} · {invoice.concept} · facturado {fmtUSD(invoice.amount)}
-            {/* Con retenciones, lo que se espera cobrar es el neto: decirlo aquí
-                evita que parezca que la factura quedó corta de pago. */}
-            {hayRetenciones(ret) && <> · neto {fmtUSD(desglose.neto)}</>}
+            {invoice.clientName} · {invoice.concept} · facturado {fmtUSD(desglose.total)}
+            {/* Con retenciones o IVA sumado, lo que se espera cobrar es el neto:
+                decirlo aquí evita que parezca que la factura quedó corta de pago. */}
+            {(hayRetenciones(ret) || esFacturaConIva(ret)) && <> · neto {fmtUSD(desglose.neto)}</>}
           </p>
         </div>
 
@@ -300,10 +321,13 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
               disabled={!canManage}
               idPrefix="cobro"
             />
-            {hayRetenciones(ret) && (
+            {(hayRetenciones(ret) || esFacturaConIva(ret)) && (
               <div className="pt-2 border-t border-[#f0ede3] space-y-0.5">
                 <Fila label="Base imponible" valor={fmtUSD(desglose.base)} tenue />
                 <Fila label="IVA 16%" valor={fmtUSD(desglose.iva)} tenue />
+                {esFacturaConIva(ret) && (
+                  <Fila label="Total factura" valor={fmtUSD(desglose.total)} tenue />
+                )}
                 {ret.iva && (
                   <Fila
                     label={`Retención IVA ${Math.round(ret.ivaRate * 100)}%`}
@@ -332,6 +356,11 @@ export default function CobroModal({ invoice, companyId, canManage, onClose, onS
                   </span>
                 </div>
               </div>
+            )}
+            {ret.facturaConIva == null && hayRetenciones(ret) && (
+              <p className="text-[11.5px] text-[#999]">
+                Calculada con el IVA incluido en el monto (registro anterior).
+              </p>
             )}
             {invoice?.clientId && (
               <p className="text-[11.5px] text-[#999]">

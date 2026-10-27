@@ -253,3 +253,69 @@ describe('InvoiceModal — marcas en intercambio', () => {
     expect(screen.getByLabelText(/Cargo recurrente/)).not.toBeChecked()
   })
 })
+
+describe('InvoiceModal — ingreso extra (margen MDN)', () => {
+  function renderModal() {
+    render(
+      <InvoiceModal
+        invoice={null}
+        monthId="m-1"
+        companyId="co-1"
+        clients={CLIENTS}
+        onClose={() => {}}
+        onSaved={() => {}}
+      />,
+    )
+    fireEvent.change(screen.getByPlaceholderText('Ej. Café del Lago (página web)'), {
+      target: { value: 'Proveedor X' },
+    })
+    fireEvent.change(screen.getByPlaceholderText('Gestión de redes, Página web, Branding…'), {
+      target: { value: 'Reventa' },
+    })
+    fireEvent.change(screen.getByPlaceholderText('0'), { target: { value: '1000' } })
+  }
+
+  it('marcarlo pide el margen, lo vuelve cargo puntual y muestra el reparto', () => {
+    renderModal()
+    expect(screen.queryByLabelText('Margen MDN')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByLabelText(/Ingreso extra/))
+    expect(screen.getByLabelText(/Cargo recurrente/)).not.toBeChecked()
+    fireEvent.change(screen.getByLabelText('Margen MDN'), { target: { value: '100' } })
+    expect(screen.getByText(/Para MDN/).textContent).toMatch(/\$100\.00/)
+    expect(screen.getByText(/Para MDN/).textContent).toMatch(/\$900\.00/)
+  })
+
+  it('el margen en % se guarda siempre en dólares', async () => {
+    renderModal()
+    fireEvent.click(screen.getByLabelText(/Ingreso extra/))
+    fireEvent.click(screen.getByRole('button', { name: '%' }))
+    fireEvent.change(screen.getByLabelText('Margen MDN'), { target: { value: '10' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Agregar' }))
+    await waitFor(() => expect(mockCreateInvoice).toHaveBeenCalled())
+    expect(mockCreateInvoice).toHaveBeenCalledWith(
+      'm-1',
+      expect.objectContaining({ esIngresoExtra: true, margenMdn: 100 }),
+    )
+  })
+
+  it('rechaza un margen mayor al monto o vacío', async () => {
+    renderModal()
+    fireEvent.click(screen.getByLabelText(/Ingreso extra/))
+    fireEvent.click(screen.getByRole('button', { name: 'Agregar' }))
+    expect(await screen.findByText('Indica el margen de MDN')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Margen MDN'), { target: { value: '2000' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Agregar' }))
+    expect(await screen.findByText(/no puede ser mayor al monto/)).toBeInTheDocument()
+    expect(mockCreateInvoice).not.toHaveBeenCalled()
+  })
+
+  it('una factura normal no manda margen', async () => {
+    renderModal()
+    fireEvent.click(screen.getByRole('button', { name: 'Agregar' }))
+    await waitFor(() => expect(mockCreateInvoice).toHaveBeenCalled())
+    expect(mockCreateInvoice.mock.calls[0][1]).toMatchObject({
+      esIngresoExtra: false,
+      margenMdn: null,
+    })
+  })
+})

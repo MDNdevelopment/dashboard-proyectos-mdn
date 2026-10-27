@@ -15,6 +15,7 @@ import {
   ultimoDiaDelMesISO,
 } from '../../utils/finanzas'
 import { normalizarRetenciones } from '../../utils/retenciones'
+import { NOTA_PASE_TERCERO } from './constants'
 
 /**
  * Config de retenciones → las 5 columnas de `fin_invoices`. `null` escribe los
@@ -29,6 +30,7 @@ function columnasRetencion(retenciones) {
     ret_iva: r.iva,
     ret_iva_rate: r.ivaRate,
     ret_municipal: r.municipal,
+    factura_con_iva: r.facturaConIva,
   }
 }
 
@@ -53,8 +55,13 @@ function normalizeInvoice(row) {
       iva: !!row.ret_iva,
       ivaRate: row.ret_iva_rate == null ? null : Number(row.ret_iva_rate),
       municipal: !!row.ret_municipal,
+      // null = factura anterior al campo (IVA incluido en `amount`).
+      facturaConIva: row.factura_con_iva ?? null,
     },
     recurring: row.recurring,
+    // Ingreso extra: MDN solo se queda con `margenMdn` (USD); el resto es de un tercero.
+    esIngresoExtra: !!row.es_ingreso_extra,
+    margenMdn: row.margen_mdn == null ? null : Number(row.margen_mdn),
     createdBy: row.created_by,
     createdAt: row.created_at,
     payments: (row.payments ?? []).map(normalizePayment),
@@ -383,6 +390,8 @@ export async function createInvoice(monthId, fields) {
     amountBs = null,
     rate = null,
     recurring = true,
+    esIngresoExtra = false,
+    margenMdn = null,
     createdBy = null,
   } = fields
   const { data, error } = await supabase
@@ -397,6 +406,8 @@ export async function createInvoice(monthId, fields) {
       amount_bs: amountBs,
       rate,
       recurring,
+      es_ingreso_extra: esIngresoExtra,
+      margen_mdn: esIngresoExtra ? margenMdn : null,
       created_by: createdBy,
     })
     .select()
@@ -415,6 +426,10 @@ export async function updateInvoice(invoiceId, updates) {
   if ('rate' in updates) patch.rate = updates.rate
   if ('retenciones' in updates) Object.assign(patch, columnasRetencion(updates.retenciones))
   if ('recurring' in updates) patch.recurring = updates.recurring
+  if ('esIngresoExtra' in updates) {
+    patch.es_ingreso_extra = updates.esIngresoExtra
+    patch.margen_mdn = updates.esIngresoExtra ? (updates.margenMdn ?? null) : null
+  }
   const { data, error } = await supabase
     .from('fin_invoices')
     .update(patch)
@@ -599,7 +614,7 @@ export async function createDistributionsBatch(monthId, rows) {
 /** Registra el split de un cobro en hasta 3 movimientos (uno por partida con monto > 0). */
 export async function createDistributionSplit(
   monthId,
-  { invoiceId, movedOn, amounts, note, createdBy },
+  { invoiceId, movedOn, amounts, note, createdBy, tercero = 0 },
 ) {
   const rows = Object.entries(amounts)
     .filter(([, amount]) => Number(amount) > 0)
@@ -614,6 +629,21 @@ export async function createDistributionSplit(
       note,
       created_by: createdBy,
     }))
+  // Parte de un tercero (ingreso extra): fila aparte en Gastos, con su centinela,
+  // para que el Dashboard la excluya de metas y márgenes.
+  if (Number(tercero) > 0) {
+    rows.push({
+      month_id: monthId,
+      partida: 'gastos',
+      kind: 'in',
+      moved_on: movedOn,
+      concept: 'Parte del tercero (se paga desde Gastos)',
+      amount: Number(tercero),
+      invoice_id: invoiceId,
+      note: NOTA_PASE_TERCERO,
+      created_by: createdBy,
+    })
+  }
   if (!rows.length) return { data: [], error: null }
   const { data, error } = await supabase.from('fin_distributions').insert(rows).select()
   return { data: (data ?? []).map(normalizeDistribution), error }

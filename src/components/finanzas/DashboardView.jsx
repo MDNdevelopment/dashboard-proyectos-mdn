@@ -16,6 +16,7 @@ import { clientInMonth } from '../../utils/clientInMonth'
 import {
   totalFacturado,
   totalCobrado,
+  totalCobradoPropio,
   totalCanjeado,
   saldadoDe,
   totalPorCobrar,
@@ -31,7 +32,7 @@ import {
   cuadreDivisas,
 } from '../../utils/finanzas'
 import { loadAllInvoices, loadAllMonthTotals } from './finanzasApi'
-import { PARTIDAS, PARTIDA_KEYS, NOTA_TRASPASO_PARTIDA } from './constants'
+import { PARTIDAS, PARTIDA_KEYS, NOTA_TRASPASO_PARTIDA, NOTA_PASE_TERCERO } from './constants'
 import { MONTHS } from '../metricas/constants'
 import CerrarMesButton from './CerrarMesButton'
 import ResumenMesModal from './ResumenMesModal'
@@ -125,6 +126,10 @@ export default function DashboardView({
   const pcts = pctsDelMes(finMonth)
   const facturado = isSummary ? (monthTotals?.totalFacturado ?? 0) : totalFacturado(invoices)
   const cobrado = isSummary ? (monthTotals?.totalCobrado ?? 0) : totalCobrado(invoices)
+  // Base de metas y margen: lo cobrado SIN la parte de terceros de los ingresos
+  // extra, que entra a caja pero no es de MDN. En un mes resumen no hay facturas.
+  const cobradoPropio = isSummary ? cobrado : totalCobradoPropio(invoices)
+  const deTerceros = cobrado - cobradoPropio
   // Intercambio recibido: salda facturas (baja "Por cobrar") pero no es caja, así
   // que no entra en `cobrado` ni en lo que se reparte en partidas.
   const canjeado = isSummary ? 0 : totalCanjeado(invoices)
@@ -141,13 +146,14 @@ export default function DashboardView({
   // compara contra "lo cobrado del mes" en este Dashboard. El ledger real —
   // incluido el traspaso — sigue completo en Distribución → Acumulado por partida.
   const distributionsParaMeta = useMemo(
-    () => distributions.filter((d) => d.note !== NOTA_TRASPASO_PARTIDA),
+    () =>
+      distributions.filter((d) => d.note !== NOTA_TRASPASO_PARTIDA && d.note !== NOTA_PASE_TERCERO),
     [distributions],
   )
   const gananciaReal = isSummary
     ? (monthTotals?.totalGanancia ?? 0)
     : asignadoPorPartida(distributionsParaMeta, 'ganancia')
-  const margenPct = cobrado ? gananciaReal / cobrado : 0
+  const margenPct = cobradoPropio ? gananciaReal / cobradoPropio : 0
   const realesPorPartida = useMemo(
     () =>
       Object.fromEntries(
@@ -163,8 +169,8 @@ export default function DashboardView({
   // Método del resto mayor: redondear cada partida por separado (Math.round) podía
   // dar una suma como 101% en vez de 100% — ver pctsEnterosPorPartida().
   const pctsPorPartida = useMemo(
-    () => pctsEnterosPorPartida(realesPorPartida, cobrado),
-    [realesPorPartida, cobrado],
+    () => pctsEnterosPorPartida(realesPorPartida, cobradoPropio),
+    [realesPorPartida, cobradoPropio],
   )
   const cartera = useMemo(() => movimientoCartera(clients, year, month), [clients, year, month])
   const carteraEntraronFee = cartera.entraron.reduce((a, c) => a + Number(c.monthly_fee ?? 0), 0)
@@ -262,7 +268,7 @@ export default function DashboardView({
           // retenciones no entran a caja, así que medirlas como cobranza
           // pendiente dejaría el indicador tope por debajo del 100% para
           // siempre.
-          sub={`Bs ${fmtUSD(cobradoBs)} · Divisa ${fmtUSD(cobradoDivisa)}${canjeado > 0 ? ` · Canje ${fmtUSD(canjeado)}` : ''} · ${netoACobrar ? Math.round(((cobrado + canjeado) / netoACobrar) * 100) : 0}%`}
+          sub={`Bs ${fmtUSD(cobradoBs)} · Divisa ${fmtUSD(cobradoDivisa)}${canjeado > 0 ? ` · Canje ${fmtUSD(canjeado)}` : ''}${deTerceros > 0.5 ? ` · ${fmtUSD(deTerceros)} de terceros` : ''} · ${netoACobrar ? Math.round(((cobrado + canjeado) / netoACobrar) * 100) : 0}%`}
           accent="#1F9D57"
           to={linkA('/finanzas/facturacion?vista=cobros')}
           linkLabel="Ver cobros"
@@ -418,7 +424,7 @@ export default function DashboardView({
               // meta de esta partida; lo que llena hasta ahí es sólido, y si `real`
               // se pasa de la meta, el excedente se pinta distinto (outline +
               // rayado) para que se note de un vistazo que ya superó su objetivo.
-              const pctReal = Math.min(100, (real / (cobrado || 1)) * 100)
+              const pctReal = Math.min(100, (real / (cobradoPropio || 1)) * 100)
               const metaPct = Math.min(100, (pcts[p] || 0) * 100)
               return (
                 <div key={p}>
@@ -428,7 +434,7 @@ export default function DashboardView({
                       {PARTIDAS[p].name} · {pctDelCobrado}%
                     </span>
                     <span className="text-[#888]">
-                      {fmtUSD(real)} / meta {fmtUSD(metaPartida(cobrado, p, pcts))}
+                      {fmtUSD(real)} / meta {fmtUSD(metaPartida(cobradoPropio, p, pcts))}
                     </span>
                   </div>
                   {/* py-1.5 le da aire arriba/abajo para que la línea de meta pueda

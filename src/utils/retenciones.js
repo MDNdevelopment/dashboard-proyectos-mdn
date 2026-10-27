@@ -17,10 +17,16 @@
  *   - IVA         75% o 100% del IVA contenido en el monto
  *   - Municipal   1% sobre la base imponible
  *
- * CONVENCIÓN CLAVE: `amount` es el monto facturado y YA INCLUYE el IVA. Las
- * retenciones se RESTAN de él — nunca se le suma nada. El resultado es el
- * "neto a cobrar", que es contra lo que se salda la factura (ver pendienteDe()
- * y estadoFactura() en utils/finanzas.js).
+ * CONVENCIÓN CLAVE: depende de `facturaConIva` (`fin_invoices.factura_con_iva`):
+ *
+ *   - true  → factura fiscal NUEVA. `amount` es la BASE IMPONIBLE (la mensualidad,
+ *             p. ej. $625) y el IVA 16% se SUMA encima ($100 → total $725). Las
+ *             retenciones se restan de ese total y el resultado es el "neto a
+ *             cobrar" (ver pendienteDe() y estadoFactura() en utils/finanzas.js).
+ *   - null  → factura anterior a este campo: `amount` YA INCLUYE el IVA y la base
+ *             se saca dividiendo entre 1,16. Se conserva así para que los meses ya
+ *             cuadrados no cambien.
+ *   - false → sin factura fiscal: se cobra `amount` tal cual, sin retenciones.
  *
  * Lo que NO toca este módulo: la distribución en partidas, Movimientos y el
  * cuadre de Divisas se alimentan de `fin_payments` reales, que ya entraron
@@ -63,6 +69,7 @@ export const RETENCIONES_VACIAS = Object.freeze({
   iva: false,
   ivaRate: null,
   municipal: false,
+  facturaConIva: null,
 })
 
 /**
@@ -74,7 +81,10 @@ export const RETENCIONES_VACIAS = Object.freeze({
  * CHECK, pero el formulario puede pasar por ese estado intermedio mientras se
  * edita y no queremos que muestre un desglose a medias.
  *
- * @returns {{isl: boolean, islRate: number|null, iva: boolean, ivaRate: number|null, municipal: boolean}}
+ * `facturaConIva` conserva el null (factura anterior al campo): null y false NO
+ * son lo mismo — ver "CONVENCIÓN CLAVE" arriba.
+ *
+ * @returns {{isl: boolean, islRate: number|null, iva: boolean, ivaRate: number|null, municipal: boolean, facturaConIva: boolean|null}}
  */
 export function normalizarRetenciones(raw) {
   if (!raw || typeof raw !== 'object') return { ...RETENCIONES_VACIAS }
@@ -83,6 +93,7 @@ export function normalizarRetenciones(raw) {
   const ivaRate = num(raw.ivaRate ?? raw.ret_iva_rate)
   const isl = !!(raw.isl ?? raw.ret_isl) && islRate != null
   const iva = !!(raw.iva ?? raw.ret_iva) && ivaRate != null
+  const conIva = raw.facturaConIva ?? raw.factura_con_iva
 
   return {
     isl,
@@ -90,7 +101,13 @@ export function normalizarRetenciones(raw) {
     iva,
     ivaRate: iva ? ivaRate : null,
     municipal: !!(raw.municipal ?? raw.ret_municipal),
+    facturaConIva: conIva == null ? null : !!conIva,
   }
+}
+
+/** ¿Es una factura fiscal nueva, con el IVA sumado sobre la base? */
+export function esFacturaConIva(raw) {
+  return normalizarRetenciones(raw).facturaConIva === true
 }
 
 /** ¿Hay al menos una retención activa? Sirve para no mostrar desgloses vacíos. */
@@ -100,7 +117,8 @@ export function hayRetenciones(raw) {
 }
 
 /**
- * Desglose completo de un monto facturado que ya incluye IVA.
+ * Desglose completo de un monto facturado. Con `facturaConIva` el monto es la
+ * base y el IVA se suma; sin él, el monto ya incluye el IVA (facturas viejas).
  *
  * CADA CIFRA SE REDONDEA A CÉNTIMOS EN SU PROPIO PASO (base, IVA y cada
  * retención), porque todas son líneas impresas del comprobante de retención
@@ -110,22 +128,34 @@ export function hayRetenciones(raw) {
  * difiere en un céntimo, y un desglose cuyas partes no suman el total mostrado.
  * Con $1.000 (ISL 5%, IVA 75%, municipal) el neto es 844,83.
  *
- * @param {number} amount  monto facturado, IVA incluido
+ * @param {number} amount  monto facturado (base imponible si `facturaConIva`, IVA
+ *   incluido en caso contrario)
  * @param {object|null} raw  config de retenciones (cualquier formato aceptado
  *   por normalizarRetenciones)
- * @returns {{base: number, iva: number, retIva: number, retIsl: number,
- *   retMunicipal: number, totalRetenido: number, neto: number}}
+ * @returns {{base: number, iva: number, total: number, retIva: number,
+ *   retIsl: number, retMunicipal: number, totalRetenido: number, neto: number}}
  */
 export function retencionesDe(amount, raw) {
   const monto = num(amount)
   if (monto == null || monto <= EPS) {
     const n = monto == null ? 0 : monto
-    return { base: 0, iva: 0, retIva: 0, retIsl: 0, retMunicipal: 0, totalRetenido: 0, neto: n }
+    return {
+      base: 0,
+      iva: 0,
+      total: n,
+      retIva: 0,
+      retIsl: 0,
+      retMunicipal: 0,
+      totalRetenido: 0,
+      neto: n,
+    }
   }
 
   const c = normalizarRetenciones(raw)
-  const base = round2(monto / (1 + IVA_RATE))
-  const iva = round2(monto - base)
+  const ivaSumado = c.facturaConIva === true
+  const base = ivaSumado ? round2(monto) : round2(monto / (1 + IVA_RATE))
+  const iva = ivaSumado ? round2(base * IVA_RATE) : round2(monto - base)
+  const total = ivaSumado ? round2(base + iva) : monto
 
   const retIva = c.iva ? round2(iva * c.ivaRate) : 0
   const retIsl = c.isl ? round2(base * c.islRate) : 0
@@ -135,23 +165,34 @@ export function retencionesDe(amount, raw) {
   return {
     base,
     iva,
+    total,
     retIva,
     retIsl,
     retMunicipal,
     totalRetenido,
-    neto: round2(monto - totalRetenido),
+    neto: round2(total - totalRetenido),
   }
 }
 
 /**
  * Neto a cobrar de una factura ya normalizada por finanzasApi (usa su snapshot
- * `invoice.retenciones`). Una factura sin snapshot — toda la facturación
- * anterior a esta feature — devuelve su `amount` tal cual.
+ * `invoice.retenciones`). Una factura sin retenciones ni IVA sumado — toda la
+ * facturación anterior a esta feature — devuelve su `amount` tal cual.
  */
 export function netoDe(invoice) {
   const monto = num(invoice?.amount) ?? 0
-  if (!hayRetenciones(invoice?.retenciones)) return monto
+  if (!hayRetenciones(invoice?.retenciones) && !esFacturaConIva(invoice?.retenciones)) return monto
   return retencionesDe(monto, invoice.retenciones).neto
+}
+
+/**
+ * Total facturado de una factura: base + IVA en una factura fiscal nueva, el
+ * `amount` tal cual en cualquier otra. Es lo que va en "Facturado".
+ */
+export function totalFacturaDe(invoice) {
+  const monto = num(invoice?.amount) ?? 0
+  if (!esFacturaConIva(invoice?.retenciones)) return monto
+  return retencionesDe(monto, invoice.retenciones).total
 }
 
 /** Σ de lo retenido en un conjunto de facturas (KPI "Retenido del mes"). */

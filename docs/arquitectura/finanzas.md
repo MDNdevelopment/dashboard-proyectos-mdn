@@ -30,7 +30,7 @@ Módulo de **nivel empresa**: facturación real de la agencia, cobranza y repart
 ## Datos
 
 - `fin_months`: `company_id, year, month, closed, closed_at, closed_by, pct_gastos, pct_socios, pct_ganancia, summary_only`; `unique(company_id,year,month)`. Padre de `fin_invoices`/`fin_distributions`/`fin_fx_operations`/`fin_bs_ledger`/`fin_month_totals`; guarda el reparto del periodo y el `closed`.
-- `fin_invoices`: `month_id→fin_months`, `client_id→metric_clients` (nullable = cliente externo), `client_name` (snapshot), `concept, amount, currency, recurring`, `amount_bs, rate` (solo referencia), `ret_*` (retenciones). `check (amount >= 0)` (0 = "Sin monto").
+- `fin_invoices`: `month_id→fin_months`, `client_id→metric_clients` (nullable = cliente externo), `client_name` (snapshot), `concept, amount, currency, recurring`, `amount_bs, rate` (solo referencia), `ret_*` (retenciones), `es_ingreso_extra` + `margen_mdn` (ver "Ingresos extra"), `factura_con_iva` (boolean nullable: `true` = `amount` es la base y el IVA se suma, `null` = factura anterior con IVA incluido, `false` = sin factura fiscal). `check (amount >= 0)` (0 = "Sin monto").
 - `fin_payments`: `invoice_id→fin_invoices, paid_on, amount, amount_bs, rate, method, note, currency, rate_source` (`'bcv'`|`'manual'`). `currency` ∈ `'USD'|'Bs'|'Intercambio'`; un abono en intercambio (canje) no lleva `amount_bs`/`rate`/`rate_source` (CHECK `fin_payments_intercambio_sin_bs`). Sin policy de UPDATE: inmutables (solo alta/baja).
 - `fin_distributions`: `month_id, partida` (`gastos|socios|ganancia` + técnica `'cambio'`), `kind` (`in|out`), `moved_on, concept, beneficiary, amount, note, invoice_id→fin_invoices` (nullable), `currency, amount_bs, rate, fx_operation_id`.
 - `fin_month_totals`: `month_id→fin_months` (PK), `total_facturado, total_cobrado, total_gastos, total_socios, total_ganancia, note`, + snapshot de divisas `total_divisa_fisica, saldo_bs, saldo_bs_usd_ref, resultado_cambio`.
@@ -83,10 +83,19 @@ Módulo de **nivel empresa**: facturación real de la agencia, cobranza y repart
 - ISL 5%|2%, IVA 75%|100%, municipal 1%, opcionales; se marcan al registrar el cobro (`CobroModal.jsx`) y se guardan en la factura (`fin_invoices.ret_*`). No son configuración de la marca.
 - Precarga con lo que la marca retuvo la última vez (`loadUltimasRetenciones()`, lee historial de `fin_invoices`); es sugerencia.
 - Son de la FACTURA: un segundo abono hereda las de su factura.
+- "Factura con IVA" (`factura_con_iva`) va junto a ellas en el modal: marcar la primera retención (o precargar las del historial) la activa sola; quitarla limpia las retenciones (CHECK `fin_invoices_retenciones_requieren_iva`). Una factura vieja con retenciones queda en `null` y no se recalcula sola.
 - Orden de guardado: primero la factura, después el pago (al revés, un fallo deja deuda fantasma).
-- Fórmulas (`src/utils/retenciones.js`): `amount` ya incluye IVA; `base = amount/1.16`, `retIVA = (amount−base)×tasa`, `retISL = base×tasa`, `retMun = base×0.01`, `neto = amount − Σ`, cada línea redondeada a céntimos. Ej.: $1.000 con 5%/75%/1% → base 862,07 · IVA 137,93 · 103,45 + 43,10 + 8,62 → neto 844,83.
-- Sin retenciones el neto = `amount` (no hay backfill).
-- Contra el neto: `pendienteDe`, `estadoFactura`, `totalPorCobrar`, `tasaCobranza`. NO cambian (usan `fin_payments`, que ya entraron netos): distribución en partidas, Movimientos, `cuadreDivisas()`. `totalFacturado` sigue siendo el bruto.
+- Fórmulas (`src/utils/retenciones.js`), cada línea redondeada a céntimos:
+  - `factura_con_iva = true`: `amount` es la base imponible (la mensualidad). `iva = base×0.16`, `total = base + iva`, `retIVA = iva×tasa`, `retISL = base×tasa`, `retMun = base×0.01`, `neto = total − Σ`. Ej.: $625 con ISL 5% + IVA 75% → IVA 100 · total 725 · 31,25 + 75 → neto 618,75.
+  - `factura_con_iva` null (facturas anteriores): `amount` ya incluye IVA; `base = amount/1.16`, `iva = amount−base`, `neto = amount − Σ`. Ej.: $1.000 con 5%/75%/1% → neto 844,83.
+- Sin retenciones ni IVA sumado el neto = `amount` (no hay backfill).
+- Contra el neto: `pendienteDe`, `estadoFactura`, `totalPorCobrar`, `tasaCobranza`. NO cambian (usan `fin_payments`, que ya entraron netos): distribución en partidas, Movimientos, `cuadreDivisas()`. `totalFacturado` suma el total de la factura (`totalFacturaDe`: base + IVA en una factura fiscal nueva, `amount` en las demás), nunca el neto.
+
+### Ingresos extra (MDN solo gana un margen)
+- Reventas o servicios de un tercero: se facturan completos (`es_ingreso_extra = true`) pero solo `margen_mdn` (USD; en el modal se escribe en $ o %, siempre se guarda en $) es de MDN. CHECK: margen entre 0 y `amount`, y null si no es ingreso extra.
+- Reparto (`splitRecomendado()` en `utils/finanzas.js`, proporcional a lo cobrado): la parte del TERCERO va completa a Gastos como una fila `kind='in'` aparte con `note = NOTA_PASE_TERCERO` (así se le paga desde Gastos y el saldo no queda negativo); solo el margen se reparte con los % del mes. Ej.: $1.000 con margen $100 → Gastos 900 + 72, Socios 18, Ganancia 10.
+- La fila del tercero cuenta en `distribuidoDe`, así que "Sin distribuir" funciona igual. Se oculta su nota en Distribución, Partida y Movimientos.
+- Dashboard: `totalCobradoPropio()` (cobrado − parte de terceros) es la base de `metaPartida`, `margenPct` y `pctsEnterosPorPartida`, y `distributionsParaMeta` excluye `NOTA_PASE_TERCERO` (igual que el traspaso). La card Cobrado y "Base a distribuir" indican cuánto es de terceros. `cuadreDivisas()` y Movimientos no cambian: el dinero sí entró a caja.
 
 ### Moneda y cobros
 - Toda la aritmética en USD (`fin_invoices.amount`). En `InvoiceModal.jsx` y `CobroModal.jsx` el monto se escribe SIEMPRE en USD; si la moneda es Bs solo se pide/confirma la tasa.

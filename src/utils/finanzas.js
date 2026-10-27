@@ -18,11 +18,12 @@ import {
   CONCEPTO_RECURRENTE,
   PARTIDA_CAMBIO,
   NOTA_TRASPASO_PARTIDA,
+  NOTA_PASE_TERCERO,
   MOVIMIENTO_TIPOS,
   FX_OP_TYPES,
 } from '../components/finanzas/constants'
 import { clientInMonth } from './clientInMonth'
-import { netoDe, totalRetenido } from './retenciones'
+import { netoDe, totalFacturaDe, totalRetenido } from './retenciones'
 
 /** Tolerancia usada en todo el módulo para tratar redondeos como iguales. */
 const EPS = 0.5
@@ -134,7 +135,7 @@ export function cobrosPorMonedaDe(invoice) {
 }
 
 export function totalFacturado(invoices) {
-  return (invoices ?? []).reduce((a, i) => a + Number(i.amount ?? 0), 0)
+  return (invoices ?? []).reduce((a, i) => a + totalFacturaDe(i), 0)
 }
 
 /** Dinero cobrado del mes (sin intercambio — ver `cobradoDe`). */
@@ -210,6 +211,48 @@ export function facturadoPorMoneda(invoices) {
 }
 
 // ─── Distribución en partidas ───────────────────────────────────────────────────
+
+// ─── Ingresos extra (MDN solo gana un margen) ───────────────────────────────────
+
+/**
+ * Fracción de una factura que es de un TERCERO. Un ingreso extra (reventa o
+ * servicio de un proveedor) solo deja a MDN su margen; el resto se le paga al
+ * tercero desde Gastos operativos. 0 para toda factura normal.
+ */
+export function fraccionTercero(invoice) {
+  if (!invoice?.esIngresoExtra) return 0
+  const amount = Number(invoice.amount ?? 0)
+  if (amount <= 0) return 0
+  const margen = Math.min(Math.max(Number(invoice.margenMdn ?? 0), 0), amount)
+  return 1 - margen / amount
+}
+
+/** Parte de lo cobrado de esta factura que es de un tercero (proporcional a lo cobrado). */
+export function parteTerceroCobrada(invoice) {
+  return cobradoDe(invoice) * fraccionTercero(invoice)
+}
+
+/** Cobrado del mes que es dinero propio de MDN: sin la parte de terceros. Base de metas y margen. */
+export function totalCobradoPropio(invoices) {
+  return (invoices ?? []).reduce((a, i) => a + cobradoDe(i) - parteTerceroCobrada(i), 0)
+}
+
+/**
+ * Reparto recomendado de lo que queda por distribuir de un cobro. La parte del
+ * tercero va completa a Gastos; solo el margen de MDN se reparte con los % del
+ * mes. Es proporcional a `disponible`, así que un abono parcial reparte igual.
+ * Con una factura normal `tercero` es 0 y el reparto es el de siempre.
+ */
+export function splitRecomendado(invoice, disponible, pcts) {
+  const tercero = Math.round(disponible * fraccionTercero(invoice) * 100) / 100
+  const margen = disponible - tercero
+  return {
+    tercero,
+    gastos: margen * (pcts?.gastos ?? 0),
+    socios: margen * (pcts?.socios ?? 0),
+    ganancia: margen * (pcts?.ganancia ?? 0),
+  }
+}
 
 /** Cuánto de lo cobrado en esta factura ya fue distribuido a alguna partida. */
 export function distribuidoDe(invoice, distsDelMes) {
@@ -882,7 +925,10 @@ export function movimientosDelMes({
         createdAt: d.createdAt ?? null,
         concepto: d.concept ?? '',
         contraparte: d.beneficiary ?? null,
-        nota: d.note === NOTA_TRASPASO_PARTIDA ? null : (d.note ?? null),
+        nota:
+          d.note === NOTA_TRASPASO_PARTIDA || d.note === NOTA_PASE_TERCERO
+            ? null
+            : (d.note ?? null),
         partida: d.partida,
         moneda: enBs ? 'Bs' : 'USD',
         montoUsd: firmado(d.amount, d.kind),
