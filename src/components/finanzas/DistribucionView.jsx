@@ -6,6 +6,7 @@ import {
   cobradoDe,
   distribuidoDe,
   totalCobrado,
+  totalCobradoPropio,
   asignadoPorPartida,
   pagadoPorPartida,
   saldoPartida,
@@ -13,7 +14,13 @@ import {
   resultadoCambio,
 } from '../../utils/finanzas'
 import { loadDistributionsBefore, updateMonthPcts } from './finanzasApi'
-import { PARTIDA_KEYS, PARTIDA_CAMBIO, NOTA_TRASPASO_PARTIDA, partidaMeta } from './constants'
+import {
+  PARTIDA_KEYS,
+  PARTIDA_CAMBIO,
+  NOTA_TRASPASO_PARTIDA,
+  NOTA_PASE_TERCERO,
+  partidaMeta,
+} from './constants'
 import DistribucionModal from './DistribucionModal'
 import PagoPartidaModal from './PagoPartidaModal'
 import CerrarMesButton from './CerrarMesButton'
@@ -63,6 +70,7 @@ export default function DistribucionView({
   const closed = !!finMonth?.closed
   const pcts = pctsDelMes(finMonth)
   const cobrado = totalCobrado(invoices)
+  const deTerceros = cobrado - totalCobradoPropio(invoices)
   const distribuidoTotal = PARTIDA_KEYS.reduce(
     (a, p) => a + asignadoPorPartida(distributions, p),
     0,
@@ -136,6 +144,7 @@ export default function DistribucionView({
           <FinStat
             label="Base a distribuir"
             value={fmtUSD(cobrado)}
+            sub={deTerceros > 0.5 ? `${fmtUSD(deTerceros)} de terceros` : undefined}
             onClick={() =>
               navigate(
                 `/finanzas/facturacion?vista=cobros&mes=${year}-${String(month).padStart(2, '0')}`,
@@ -377,9 +386,11 @@ export default function DistribucionView({
                           )}
                           {/* `note` también aloja el centinela de traspaso, que no es
                               texto para mostrar. */}
-                          {d.note && d.note !== NOTA_TRASPASO_PARTIDA && (
-                            <div className="text-[12px] text-[#999]">{d.note}</div>
-                          )}
+                          {d.note &&
+                            d.note !== NOTA_TRASPASO_PARTIDA &&
+                            d.note !== NOTA_PASE_TERCERO && (
+                              <div className="text-[12px] text-[#999]">{d.note}</div>
+                            )}
                         </td>
                         <td className="text-right px-4 py-2.5 font-mono">
                           {d.kind === 'out' ? '− ' : ''}

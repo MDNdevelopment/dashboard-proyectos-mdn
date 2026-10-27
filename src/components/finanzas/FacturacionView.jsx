@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { fmtUSD } from '../../utils/metricsFinance'
+import { totalFacturaDe } from '../../utils/retenciones'
 import {
   cobrosPorMonedaDe,
   pendienteDe,
@@ -466,6 +467,7 @@ export default function FacturacionView({
                       <div className="text-[12px] text-[#999]">
                         {inv.concept}
                         {inv.recurring && ' · Recurrente'}
+                        {inv.esIngresoExtra && ' · Ingreso extra'}
                         {!inv.clientId && ' · externo'}
                       </div>
                     </td>
@@ -475,7 +477,7 @@ export default function FacturacionView({
                           Sin monto
                         </span>
                       ) : (
-                        fmtUSD(inv.amount)
+                        fmtUSD(totalFacturaDe(inv))
                       )}
                     </td>
                     {!enCobros && retenido > 0 && (

@@ -10,7 +10,13 @@ import {
   pctsDelMes,
 } from '../../utils/finanzas'
 import { loadDistributionsBefore, deleteDistribution, deleteFxOperation } from './finanzasApi'
-import { PARTIDA_KEYS, PARTIDA_CAMBIO, NOTA_TRASPASO_PARTIDA, partidaMeta } from './constants'
+import {
+  PARTIDA_KEYS,
+  PARTIDA_CAMBIO,
+  NOTA_TRASPASO_PARTIDA,
+  NOTA_PASE_TERCERO,
+  partidaMeta,
+} from './constants'
 import PagoPartidaModal from './PagoPartidaModal'
 import ConfirmDeleteDialog from '../common/ConfirmDeleteDialog'
 
@@ -155,7 +161,7 @@ export default function PartidaView({
                 <td className="px-4 py-2.5">
                   {d.concept}
                   {d.beneficiary && <div className="text-[12px] text-[#999]">{d.beneficiary}</div>}
-                  {d.note && d.note !== NOTA_TRASPASO_PARTIDA && (
+                  {d.note && d.note !== NOTA_TRASPASO_PARTIDA && d.note !== NOTA_PASE_TERCERO && (
                     <div className="text-[12px] text-[#999]">{d.note}</div>
                   )}
                 </td>

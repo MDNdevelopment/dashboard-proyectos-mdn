@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { fmtUSD } from '../../utils/metricsFinance'
-import { cobradoDe, distribuidoDe, pctsDelMes } from '../../utils/finanzas'
+import { cobradoDe, distribuidoDe, pctsDelMes, splitRecomendado } from '../../utils/finanzas'
 import { createDistributionSplit, createDistribution } from './finanzasApi'
 import { PARTIDAS, PARTIDA_KEYS } from './constants'
 
@@ -35,15 +35,20 @@ export default function DistribucionModal({
   // Si el modal se abre con un cobro ya preseleccionado (botón "Distribuir" de una
   // fila), hay que precargar los montos recomendados aquí mismo: pick() solo corre
   // al cambiar el <select>, así que sin esto los inputs quedaban vacíos de entrada.
-  const [amounts, setAmounts] = useState(() =>
-    selected
-      ? {
-          gastos: (disponible * pcts.gastos).toFixed(2),
-          socios: (disponible * pcts.socios).toFixed(2),
-          ganancia: (disponible * pcts.ganancia).toFixed(2),
-        }
-      : { gastos: '', socios: '', ganancia: '' },
+  // En un ingreso extra, `tercero` es la parte que no es de MDN: va completa a
+  // Gastos (de ahí se le paga) y solo el margen se reparte con los % del mes.
+  const [tercero, setTercero] = useState(() =>
+    selected ? splitRecomendado(selected, disponible, pcts).tercero : 0,
   )
+  const [amounts, setAmounts] = useState(() => {
+    if (!selected) return { gastos: '', socios: '', ganancia: '' }
+    const r = splitRecomendado(selected, disponible, pcts)
+    return {
+      gastos: r.gastos.toFixed(2),
+      socios: r.socios.toFixed(2),
+      ganancia: r.ganancia.toFixed(2),
+    }
+  })
 
   const [manualPartida, setManualPartida] = useState('gastos')
   const [manualAmount, setManualAmount] = useState('')
@@ -58,15 +63,18 @@ export default function DistribucionModal({
     if (id && id !== MANUAL) {
       const inv = paid.find((i) => i.id === id)
       const rem = inv ? cobradoDe(inv) - distribuidoDe(inv, distributions) : 0
+      const r = splitRecomendado(inv, rem, pcts)
+      setTercero(r.tercero)
       setAmounts({
-        gastos: (rem * pcts.gastos).toFixed(2),
-        socios: (rem * pcts.socios).toFixed(2),
-        ganancia: (rem * pcts.ganancia).toFixed(2),
+        gastos: r.gastos.toFixed(2),
+        socios: r.socios.toFixed(2),
+        ganancia: r.ganancia.toFixed(2),
       })
     }
   }
 
-  const sumaSplit = PARTIDA_KEYS.reduce((a, p) => a + (Number(amounts[p]) || 0), 0)
+  const sumaSplit =
+    PARTIDA_KEYS.reduce((a, p) => a + (Number(amounts[p]) || 0), 0) + (Number(tercero) || 0)
   const restoSplit = disponible - sumaSplit
 
   async function handleSaveSplit() {
@@ -89,6 +97,7 @@ export default function DistribucionModal({
         ganancia: Number(amounts.ganancia) || 0,
       },
       note: null,
+      tercero: Number(tercero) || 0,
       createdBy: userProfile?.user_id,
     })
     setSaving(false)
@@ -170,6 +179,15 @@ export default function DistribucionModal({
 
           {selected && (
             <div className="space-y-3">
+              {Number(tercero) > 0 && (
+                <div className="rounded-lg bg-[#f5f3eb] px-3 py-2 text-[12.5px] text-[#555]">
+                  <span className="font-semibold">
+                    Parte del tercero: {fmtUSD(Number(tercero))}
+                  </span>{' '}
+                  — va completa a Gastos operativos para pagarla. Abajo se reparte solo el margen de
+                  MDN.
+                </div>
+              )}
               {PARTIDA_KEYS.map((p) => {
                 const realPct = disponible > 0.5 ? (Number(amounts[p]) || 0) / disponible : 0
                 return (

@@ -3,6 +3,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import { fmtDate } from '../../utils/formatDate'
 import { createInvoice, updateInvoice, resolveRateBcv, clearInvoiceExclusions } from './finanzasApi'
+import { fmtUSD } from '../../utils/metricsFinance'
 import { CONCEPTOS_SUGERIDOS, CONCEPTO_RECURRENTE } from './constants'
 
 const OTHER = '__other__'
@@ -40,6 +41,11 @@ export default function InvoiceModal({
     amount: invoice?.amount ?? '',
     currency: invoice?.currency ?? 'USD',
     recurring: invoice ? invoice.recurring : true,
+    // Ingreso extra: MDN solo gana un margen; el resto es de un tercero. El
+    // margen se puede escribir en $ o en %, pero siempre se guarda en $.
+    esIngresoExtra: invoice?.esIngresoExtra ?? false,
+    margenModo: 'usd',
+    margen: invoice?.margenMdn ?? '',
   }))
   const initialForm = useRef(form)
   const { requestClose } = useUnsavedChanges({
@@ -96,6 +102,21 @@ export default function InvoiceModal({
     })
   }
 
+  const amountNum = Number(form.amount) || 0
+  const margenUsd =
+    form.margenModo === 'pct'
+      ? Math.round(amountNum * (Number(form.margen) || 0)) / 100
+      : Number(form.margen) || 0
+
+  function toggleIngresoExtra(on) {
+    setForm((f) => ({
+      ...f,
+      esIngresoExtra: on,
+      // Un ingreso extra es un cargo puntual: no debe arrastrarse al mes siguiente.
+      recurring: on ? false : f.recurring,
+    }))
+  }
+
   function onClientPick(id) {
     if (id === OTHER) {
       set('clientId', OTHER)
@@ -137,6 +158,16 @@ export default function InvoiceModal({
       setError('Ingresa o confirma la tasa BCV')
       return
     }
+    if (form.esIngresoExtra) {
+      if (form.margen === '' || margenUsd < 0) {
+        setError('Indica el margen de MDN')
+        return
+      }
+      if (margenUsd > amount) {
+        setError('El margen de MDN no puede ser mayor al monto')
+        return
+      }
+    }
 
     setSaving(true)
     setError(null)
@@ -151,6 +182,8 @@ export default function InvoiceModal({
       amountBs: isBs ? Math.round(amount * effectiveRate * 100) / 100 : null,
       rate: isBs ? effectiveRate : null,
       recurring: form.recurring,
+      esIngresoExtra: form.esIngresoExtra,
+      margenMdn: form.esIngresoExtra ? margenUsd : null,
       createdBy: userProfile?.user_id,
     }
     const { error: err } = isEdit
@@ -339,6 +372,65 @@ export default function InvoiceModal({
               </div>
             </div>
           )}
+
+          <div className="rounded-xl border border-[#e0ddd4] p-3 space-y-2.5">
+            <label
+              htmlFor="inv-ingreso-extra"
+              className="flex items-center gap-2 text-[13px] text-[#555]"
+            >
+              <input
+                id="inv-ingreso-extra"
+                type="checkbox"
+                checked={form.esIngresoExtra}
+                onChange={(e) => toggleIngresoExtra(e.target.checked)}
+              />
+              Ingreso extra <span className="text-[#999]">(MDN solo gana un margen)</span>
+            </label>
+            {form.esIngresoExtra && (
+              <>
+                <div className="flex items-center gap-2">
+                  <label
+                    htmlFor="inv-margen"
+                    className="text-[12px] font-mono font-bold uppercase tracking-wide text-[#888]"
+                  >
+                    Margen MDN
+                  </label>
+                  <input
+                    id="inv-margen"
+                    type="number"
+                    className="input-base flex-1"
+                    value={form.margen}
+                    onChange={(e) => set('margen', e.target.value)}
+                    placeholder="0"
+                  />
+                  <div className="flex rounded-lg border border-[#e0ddd4] overflow-hidden">
+                    {[
+                      ['usd', '$'],
+                      ['pct', '%'],
+                    ].map(([modo, label]) => (
+                      <button
+                        key={modo}
+                        type="button"
+                        onClick={() => set('margenModo', modo)}
+                        className={`px-3 py-2 text-[13px] font-semibold ${
+                          form.margenModo === modo
+                            ? 'bg-[#111] text-white'
+                            : 'text-[#666] hover:bg-[#f5f3eb]'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-[12px] text-[#666]">
+                  Para MDN: <span className="font-mono">{fmtUSD(margenUsd)}</span> · Para el
+                  tercero:{' '}
+                  <span className="font-mono">{fmtUSD(Math.max(amountNum - margenUsd, 0))}</span>
+                </p>
+              </>
+            )}
+          </div>
 
           <label className="flex items-center gap-2 text-[13px] text-[#555]">
             <input

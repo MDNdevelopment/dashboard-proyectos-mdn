@@ -10,7 +10,8 @@ import { ISL_OPCIONES, IVA_RET_OPCIONES } from '../../utils/retenciones'
  * aplicando la tasa equivocada "porque ya venía puesta".
  *
  * Props:
- *   value      — config normalizada { isl, islRate, iva, ivaRate, municipal }
+ *   value      — config normalizada { isl, islRate, iva, ivaRate, municipal,
+ *                facturaConIva }
  *   onChange   — (patch) => void, parche parcial sobre la config
  *   disabled   — solo lectura (mes cerrado, o consultar un cobro ya hecho)
  *   idPrefix   — para no colisionar si hubiera dos instancias en la página
@@ -18,6 +19,21 @@ import { ISL_OPCIONES, IVA_RET_OPCIONES } from '../../utils/retenciones'
 export default function RetencionesFields({ value, onChange, disabled = false, idPrefix = 'ret' }) {
   return (
     <div className="space-y-2.5">
+      {/* La base imponible es la mensualidad y el IVA se suma encima. Sin este
+          check la factura se cobra limpia, sin IVA ni retenciones. */}
+      <label
+        htmlFor={`${idPrefix}-conIva`}
+        className="flex items-center gap-2 text-[13px] text-[#555]"
+      >
+        <input
+          id={`${idPrefix}-conIva`}
+          type="checkbox"
+          checked={value.facturaConIva === true}
+          onChange={(e) => onChange({ facturaConIva: e.target.checked })}
+          disabled={disabled}
+        />
+        Factura con IVA <span className="text-[#999]">16% sobre la mensualidad</span>
+      </label>
       <RetencionCheck
         id={`${idPrefix}-isl`}
         label="ISL"
