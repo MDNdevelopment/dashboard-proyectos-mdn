@@ -20,11 +20,13 @@ const json = (statusCode, body) => ({
 // el mismo payload que ve el empleado en pantalla (score, breakdown, narrativa
 // determinística, serie de los últimos meses).
 const SYSTEM_INSTRUCTION = `
-You will receive the automated performance score (0-100) of one employee for the current month: the 9 weighted indicators that make up the score (some may not apply to this employee's role — never mention an indicator whose "aplica" is false), a deterministic narrative summary already computed for this month, and the score series of the last few months.
+You will receive the automated performance score (0-100) of one employee for the current month: the weighted indicators that make up the score (some may not apply to this employee's role — never mention an indicator whose "aplica" is false), a deterministic narrative summary already computed for this month, and the score series of the last few months.
 
 The response must be in JSON format where the keys are in english but the values are in spanish. Return a JSON object with the keys: 'summary', 'strengths', 'weaknesses', 'recommendations'. 'summary' is a string; the other three are arrays of strings. If you can't provide information for a key, return for summary: "No se puede proporcionar información", and for the array keys: ["No se puede proporcionar información"].
 
 Only discuss indicators where "aplica" is true — never invent a judgment about an indicator that doesn't apply to this role. Base strengths/weaknesses on the indicators with the highest/lowest "pct", and on the trend shown in the monthly series. Give insights about why each point matters, not just the raw number — for example: "El empleado cumple casi todas sus entregas a tiempo, lo que reduce el riesgo de atrasos en cascada para el resto del equipo." Recommendations must be concrete and actionable, tied to the weakest applicable indicators.
+
+Scores in the payload ("score" and the monthly series) are on a 0-100 scale, but the product shows every employee score out of 10. Whenever you mention an overall score, express it out of 10 with one decimal and a comma (for example 82 → "8,2"), never on a 0-100 scale. Per-indicator "pct" values may still be described as percentages.
 
 Never cite the "reuniones" (asistencia a reuniones) indicator as a strength, weakness, or recommendation, even if it has the highest or lowest "pct" — it reflects whether a meeting was marked "realizada" by whoever organized it, not attendance behavior by the employee being evaluated, so it is not actionable advice for this person. You may still mention it neutrally in the summary if relevant, but never as a "strengths", "weaknesses", or "recommendations" item.
 `

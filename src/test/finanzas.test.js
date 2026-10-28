@@ -47,6 +47,10 @@ import {
   brechaPromedioPonderada,
   movimientosDelMes,
   totalesMovimientos,
+  fraccionTercero,
+  parteTerceroCobrada,
+  totalCobradoPropio,
+  splitRecomendado,
 } from '../utils/finanzas'
 import {
   PARTIDA_KEYS,
@@ -268,6 +272,59 @@ describe('finanzas — distribución en partidas', () => {
       { partida: 'ganancia', kind: 'in', amount: 200 },
     ]
     expect(desviacionEnPuntos(dists, 'socios', PCTS_66_20_14).favorable).toBe(true)
+  })
+})
+
+describe('finanzas — ingresos extra (MDN solo gana un margen)', () => {
+  const PCTS = { gastos: 0.72, socios: 0.18, ganancia: 0.1 }
+  // $1.000 facturados, $100 son de MDN y $900 de un tercero.
+  const extra = (payments = [{ amount: 1000 }]) =>
+    invoice({ amount: 1000, esIngresoExtra: true, margenMdn: 100, payments })
+
+  it('una factura normal no tiene parte de tercero y el reparto es el de siempre', () => {
+    expect(fraccionTercero(invoice())).toBe(0)
+    expect(splitRecomendado(invoice(), 1000, PCTS)).toEqual({
+      tercero: 0,
+      gastos: 720,
+      socios: 180,
+      ganancia: 100,
+    })
+  })
+
+  it('el tercero va completo a Gastos y solo el margen se reparte 72/18/10', () => {
+    const r = splitRecomendado(extra(), 1000, PCTS)
+    expect(r.tercero).toBe(900)
+    expect(r.gastos).toBeCloseTo(72)
+    expect(r.socios).toBeCloseTo(18)
+    expect(r.ganancia).toBeCloseTo(10)
+    expect(r.tercero + r.gastos + r.socios + r.ganancia).toBeCloseTo(1000)
+  })
+
+  it('un abono parcial reparte en la misma proporción', () => {
+    const r = splitRecomendado(extra([{ amount: 500 }]), 500, PCTS)
+    expect(r.tercero).toBe(450)
+    expect(r.ganancia).toBeCloseTo(5)
+  })
+
+  it('parteTerceroCobrada y totalCobradoPropio excluyen lo que no es de MDN', () => {
+    expect(parteTerceroCobrada(extra())).toBeCloseTo(900)
+    const normal = invoice({ id: 'i2', amount: 500, payments: [{ amount: 500 }] })
+    expect(totalCobradoPropio([extra(), normal])).toBeCloseTo(600)
+    expect(totalCobradoPropio([normal])).toBe(500)
+  })
+
+  it('un margen mayor al monto se acota: nunca fracción negativa', () => {
+    expect(fraccionTercero(invoice({ esIngresoExtra: true, margenMdn: 5000 }))).toBe(0)
+  })
+
+  it('la fila del tercero cuenta como distribuida: no queda "sin distribuir"', () => {
+    const dists = [
+      { partida: 'gastos', kind: 'in', amount: 900, invoiceId: 'i1', note: 'pase_tercero' },
+      { partida: 'gastos', kind: 'in', amount: 72, invoiceId: 'i1' },
+      { partida: 'socios', kind: 'in', amount: 18, invoiceId: 'i1' },
+      { partida: 'ganancia', kind: 'in', amount: 10, invoiceId: 'i1' },
+    ]
+    expect(sinDistribuir([extra()], dists)).toBe(0)
   })
 })
 

@@ -391,6 +391,14 @@ describe('FacturacionView — neto a cobrar con retenciones', () => {
     expect(screen.getByText('Cobrado')).toBeInTheDocument()
   })
 
+  it('con IVA sumado y sin retenciones: facturado 725 y sin columna Neto (neto = facturado)', () => {
+    renderView([{ ...BASE_INVOICE, amount: 625, retenciones: { facturaConIva: true } }])
+    // La mensualidad de 625 se factura como 725 (base + IVA 16%).
+    expect(screen.getAllByText('$725.00').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Neto')).not.toBeInTheDocument()
+    expect(screen.getByText(/de \$725\.00 facturado/)).toBeInTheDocument()
+  })
+
   it('sin retenciones la vista queda exactamente como antes (sin columna Neto)', () => {
     renderView([{ ...BASE_INVOICE, amount: 1000 }])
     expect(screen.queryByText('Neto')).not.toBeInTheDocument()

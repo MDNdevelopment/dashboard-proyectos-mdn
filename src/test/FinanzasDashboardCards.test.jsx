@@ -94,4 +94,40 @@ describe('Finanzas Dashboard — cards clickeables', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Cerrar' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
+
+  it('las metas se miden contra lo cobrado propio, sin la parte de terceros del ingreso extra', async () => {
+    renderDashboard({
+      // $1.000 cobrados, $900 de un tercero: la base de MDN es $100.
+      invoices: [
+        {
+          id: 'i1',
+          clientName: 'Proveedor X',
+          concept: 'Reventa',
+          amount: 1000,
+          currency: 'USD',
+          esIngresoExtra: true,
+          margenMdn: 100,
+          payments: [{ id: 'p1', amount: 1000 }],
+        },
+      ],
+      distributions: [
+        {
+          id: 'd0',
+          partida: 'gastos',
+          kind: 'in',
+          amount: 900,
+          invoiceId: 'i1',
+          note: 'pase_tercero',
+        },
+        { id: 'd1', partida: 'gastos', kind: 'in', amount: 40, invoiceId: 'i1' },
+        { id: 'd2', partida: 'socios', kind: 'in', amount: 30, invoiceId: 'i1' },
+        { id: 'd3', partida: 'ganancia', kind: 'in', amount: 30, invoiceId: 'i1' },
+      ],
+    })
+    await screen.findByText('Facturado')
+    // Metas = 40/30/30% de $100 (no de $1.000): Gastos $40, Socios y Ganancia $30.
+    expect(screen.getByText(/\/ meta \$40\.00/)).toBeInTheDocument()
+    expect(screen.getAllByText(/\/ meta \$30\.00/)).toHaveLength(2)
+    expect(screen.getByText(/\$900\.00 de terceros/)).toBeInTheDocument()
+  })
 })

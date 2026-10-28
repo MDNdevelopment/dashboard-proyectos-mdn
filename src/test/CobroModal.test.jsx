@@ -329,8 +329,39 @@ describe('CobroModal — retenciones de impuestos', () => {
     renderCobro()
     expect(screen.getAllByRole('spinbutton')[0]).toHaveValue(1000)
     fireEvent.click(screen.getByLabelText('ISL'))
-    // ISL 5% sobre la base de 1.000 → 43,10 retenido.
-    expect(screen.getAllByRole('spinbutton')[0]).toHaveValue(956.9)
+    // Primera retención → factura fiscal: base 1.000 + IVA 160 = 1.160, menos
+    // ISL 5% sobre la base (50) = 1.110.
+    expect(screen.getAllByRole('spinbutton')[0]).toHaveValue(1110)
+    expect(screen.getByLabelText(/Factura con IVA/)).toBeChecked()
+  })
+
+  it('"Factura con IVA" sola suma el IVA sobre la mensualidad ($625 → $725)', () => {
+    renderCobro({ ...invoice, clientId: 'c-1', amount: 625 })
+    fireEvent.click(screen.getByLabelText(/Factura con IVA/))
+    expect(screen.getAllByRole('spinbutton')[0]).toHaveValue(725)
+    expect(screen.getByText('Total factura')).toBeInTheDocument()
+  })
+
+  it('ISLR 5% + IVA 75% sobre $625 dejan un neto de 618,75', () => {
+    renderCobro({ ...invoice, clientId: 'c-1', amount: 625 })
+    fireEvent.click(screen.getByLabelText('ISL'))
+    fireEvent.click(screen.getByLabelText('IVA'))
+    expect(screen.getAllByRole('spinbutton')[0]).toHaveValue(618.75)
+  })
+
+  it('quitar "Factura con IVA" limpia las retenciones', () => {
+    renderCobro({ ...invoice, clientId: 'c-1', amount: 625 })
+    fireEvent.click(screen.getByLabelText('ISL'))
+    fireEvent.click(screen.getByLabelText(/Factura con IVA/))
+    expect(screen.getByLabelText('ISL')).not.toBeChecked()
+    expect(screen.getAllByRole('spinbutton')[0]).toHaveValue(625)
+  })
+
+  it('una factura vieja con retenciones no se recalcula sola', () => {
+    renderCobro({ ...CON_CLIENTE, retenciones: TODAS })
+    expect(screen.getByLabelText(/Factura con IVA/)).not.toBeChecked()
+    expect(screen.getByText(/IVA incluido en el monto/)).toBeInTheDocument()
+    expect(screen.getAllByRole('spinbutton')[0]).toHaveValue(844.83)
   })
 
   it('no pisa el monto si el usuario ya lo escribió a mano', () => {
@@ -344,7 +375,8 @@ describe('CobroModal — retenciones de impuestos', () => {
     mockLoadUltimasRetenciones.mockResolvedValueOnce({ data: TODAS, error: null })
     renderCobro()
     await waitFor(() => expect(screen.getByLabelText('ISL')).toBeChecked())
-    expect(screen.getAllByRole('spinbutton')[0]).toHaveValue(844.83)
+    // Precargar retenciones vuelve la factura fiscal: 1.000 + 160 − 180 = 980.
+    expect(screen.getAllByRole('spinbutton')[0]).toHaveValue(980)
   })
 
   it('un cargo externo (sin cliente) no consulta el historial', () => {

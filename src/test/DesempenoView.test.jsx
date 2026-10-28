@@ -111,19 +111,19 @@ describe('DesempenoView', () => {
     expect(screen.getByText('Al día')).toBeInTheDocument()
   })
 
-  it('la nota de la fila coincide con la que muestra el detalle (mismo /5, sin divergencia)', async () => {
+  it('la nota de la fila coincide con la que muestra el detalle (mismo /10, sin divergencia)', async () => {
     mockHook()
     render(<DesempenoView />)
-    // score 90/100 → 4.5/5, sin criterios de jefe para el cargo. La celda Nota
+    // score 90/100 → 9.0/10, sin criterios de jefe para el cargo. La celda Nota
     // (font-bold) es la que se compara contra el detalle — la de Automático
     // muestra el mismo valor por coincidencia (sin jefe), así que se distingue por clase.
-    const notaCell = within(rowFor('Ana Pérez')).getByText('4.5', {
+    const notaCell = within(rowFor('Ana Pérez')).getByText('9.0', {
       selector: '.font-bold',
     })
     expect(notaCell).toBeInTheDocument()
     await userEvent.click(screen.getByText('Ana Pérez'))
     // el modal reusa ScoreBreakdownCard con la misma nota
-    expect(screen.getAllByText('4.5').length).toBeGreaterThan(1)
+    expect(screen.getAllByText('9.0').length).toBeGreaterThan(1)
   })
 
   it('abre el modal de detalle al hacer clic en un empleado', async () => {
@@ -224,7 +224,7 @@ describe('DesempenoView', () => {
   it('muestra la flecha de variación cuando hay score del mes anterior', () => {
     mockHook({ prevScores: new Map([['u1', 80]]) })
     render(<DesempenoView />)
-    // 90/100=4.5 actual vs 80/100=4.0 anterior → subió, flecha ▲
+    // 90/100=9.0 actual vs 80/100=8.0 anterior → subió, flecha ▲
     expect(within(rowFor('Ana Pérez')).getByText(/▲/)).toBeInTheDocument()
   })
 })

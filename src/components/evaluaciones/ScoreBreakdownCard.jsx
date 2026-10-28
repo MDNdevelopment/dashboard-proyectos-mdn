@@ -1,78 +1,78 @@
 import Avatar from '../Avatar'
 import ManagerRatingCard from './ManagerRatingCard'
-import { resolveEmployeeNota } from '../../utils/employeeCombinedScore'
+import InfoTip from '../common/InfoTip'
+import { resolveEmployeeNota, notaColor } from '../../utils/employeeCombinedScore'
+import { INDICATOR_DESCRIPTIONS } from '../../utils/employeeScoreProfiles'
+import { formatIndicatorDetail, explainNoData } from '../../utils/employeeScoreDetail'
 
-// Mismos 3 estados y colores que la ficha técnica de referencia (Mappi): verde =
-// medible y al día, ámbar = medición parcial, rojo = no medible / sin datos.
+// Etiqueta del estado de la medición (solo se muestra cuando no es 'ok', como texto plano).
 const ESTADO_META = {
-  ok: { label: 'Se puede medir', color: '#0E9A69', bg: '#E6F5EF', dark: '#0B6B4A' },
-  parcial: { label: 'Medición parcial', color: '#C0820B', bg: '#FDF3DC', dark: '#6E4B03' },
-  sin_datos: { label: 'No medible aún', color: '#CF3A2E', bg: '#FBEAE8', dark: '#8A2A21' },
+  ok: { label: 'Se puede medir' },
+  parcial: { label: 'Medición parcial' },
+  sin_datos: { label: 'No medible aún' },
 }
 
-// Un ícono fijo por indicador automático — igual criterio que la ficha de referencia
-// (un emoji por fila), aplicado a los 9 indicadores de src/utils/employeeScore.js.
-const INDICATOR_ICON = {
-  entregas: '📋',
-  puntualidad: '⏱️',
-  arrastre: '🚧',
-  tareas_fijas: '📌',
-  piezas_av: '🎬',
-  reuniones: '👥',
-  campanas: '📢',
-  chequeo: '🔍',
-  tickets: '🎫',
+// Mismos umbrales y colores de barra que IndicatorRow.
+function barColor(pct) {
+  return pct >= 0.8 ? '#16A34A' : pct >= 0.6 ? '#FFB800' : '#E14848'
 }
 
-function pctColor(pct) {
-  if (pct == null) return '#9B958A'
-  if (pct >= 0.85) return '#0E9A69'
-  if (pct >= 0.6) return '#C0820B'
-  return '#CF3A2E'
-}
-
-function AutoIndicatorRow({ icon, label, detalle, pct, pesoEfectivo }) {
+/** Encabezado de bloque: mismo estilo que los encabezados de tabla/info del módulo. */
+function BlockCaption({ children }) {
   return (
-    <div className="flex items-center gap-2.5 bg-[#fafaf7] rounded-lg px-2.5 py-2">
-      <div className="w-7 h-7 rounded-md bg-[#eeebe3] flex items-center justify-center text-[13px] flex-shrink-0">
-        {icon}
+    <p className="text-[11.5px] font-mono font-bold uppercase tracking-[0.12em] text-[#aaa] mb-2.5">
+      {children}
+    </p>
+  )
+}
+
+function AutoIndicatorRow({ item }) {
+  const { key, label, aplica, pct, pesoBase, pesoEfectivo, unidades, detalle } = item
+  const cifras = aplica
+    ? formatIndicatorDetail(key, detalle)
+    : explainNoData(key, { unidades, detalle })
+  const peso = Math.round(pesoEfectivo)
+  const pesoLinea = aplica
+    ? pesoEfectivo > 0
+      ? `${peso}% del total`
+      : null
+    : pesoBase > 0
+      ? `Su ${Math.round(pesoBase)}% se reparte entre los demás ítems`
+      : null
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex items-center gap-2 min-w-0">
+          <span className="text-[14px] font-semibold text-[#111] truncate">{label}</span>
+          <InfoTip text={INDICATOR_DESCRIPTIONS[key]} label={`Qué evalúa: ${label}`} />
+        </span>
+        <span className="text-[14px] font-mono font-bold text-[#111] flex-shrink-0">
+          {aplica && pct != null ? `${Math.round(pct * 100)}%` : '—'}
+        </span>
       </div>
-      <div className="flex-1 min-w-0">
-        <div className="text-[13px] font-semibold text-[#111] truncate">{label}</div>
-        {detalle && <div className="text-[11px] text-[#999] truncate">{detalle}</div>}
-      </div>
-      <div className="text-right flex-shrink-0">
-        {pct == null ? (
-          <span className="text-[11px] font-mono text-[#999]">sin dato</span>
-        ) : (
-          <span className="text-[14px] font-mono font-bold" style={{ color: pctColor(pct) }}>
-            {Math.round(pct * 100)}%
-          </span>
-        )}
-        {pesoEfectivo > 0 && (
-          <div className="text-[8.5px] font-bold text-[#999] mt-0.5">
-            {Math.round(pesoEfectivo)}% del total
-          </div>
-        )}
-        {pct != null && (
-          <div className="w-11 h-1 bg-[#eeebe3] rounded-full mt-1 overflow-hidden ml-auto">
-            <div
-              className="h-full rounded-full"
-              style={{ width: `${Math.min(100, pct * 100)}%`, background: pctColor(pct) }}
-            />
-          </div>
+      <div className="h-1.5 bg-[#f0ede3] rounded-full overflow-hidden mt-1.5">
+        {aplica && pct != null && (
+          <div
+            className="h-full rounded-full transition-all"
+            style={{
+              width: `${Math.min(100, Math.max(0, pct * 100))}%`,
+              background: barColor(pct),
+            }}
+          />
         )}
       </div>
+      {cifras && <p className="text-[13px] text-[#555] mt-1.5">{cifras}</p>}
+      {pesoLinea && <p className="text-[12px] font-mono text-[#999] mt-0.5">{pesoLinea}</p>}
     </div>
   )
 }
 
 /**
- * Ficha de desempeño de un empleado en un mes, con el mismo lenguaje visual que la
- * ficha técnica de referencia (Mappi): avatar con anillo de color según estado,
- * nota /5 en grande, badge de estado, bloque "🤖 Lo mide Mappi solo" (indicadores
- * automáticos que aplican al cargo) y bloque "🗓️ Lo evalúa el jefe" (criterios
- * subjetivos, ver ARQUITECTURA.md §2.7), cerrando con una nota de color según estado.
+ * Ficha de desempeño de un empleado en un mes: avatar, nombre/cargo, nota /5 en
+ * grande, estado de la medición, bloque "Lo mide Mappi solo" (indicadores automáticos que
+ * aplican al cargo) y bloque "Lo evalúa el jefe" (criterios subjetivos, ver
+ * ARQUITECTURA.md §2.7), cerrando con la lectura del mes. Tarjeta neutra con el lenguaje
+ * visual del resto de MAPPI; el color queda solo en el estado y en las barras.
  *
  * @param {object} result          salida de computeEmployeeScore / fila de employee_score_snapshots
  * @param {object} [employee]      {first_name, last_name, avatar_url, user_id} para el avatar
@@ -117,106 +117,74 @@ export default function ScoreBreakdownCard({
             : 'Sin datos automáticos suficientes este mes.'))
 
   return (
-    <div className="bg-white rounded-2xl border border-[#e0ddd4] overflow-hidden">
-      <div className="h-[5px]" style={{ background: meta.color }} />
-
-      <div className="p-5 sm:p-6">
-        {/* Cabecera: avatar + nombre/cargo + nota */}
-        <div className="flex items-center gap-3.5">
+    <div className="bg-white rounded-2xl border border-[#e0ddd4] p-5 sm:p-6">
+      {/* Cabecera: avatar + nombre/cargo + nota */}
+      <div className="flex items-center gap-3.5">
+        {employee ? (
+          <Avatar user={employee} size={48} />
+        ) : (
           <div
-            className="rounded-full flex-shrink-0"
-            style={{ boxShadow: `0 0 0 3px #fff, 0 0 0 5px ${meta.color}` }}
+            className="rounded-full flex items-center justify-center font-bold text-white bg-[#111] flex-shrink-0"
+            style={{ width: 48, height: 48, fontSize: 18 }}
           >
-            {employee ? (
-              <Avatar user={employee} size={52} />
-            ) : (
-              <div
-                className="rounded-full flex items-center justify-center font-bold text-white"
-                style={{ width: 52, height: 52, background: meta.color, fontSize: 19 }}
-              >
-                {name?.[0]?.toUpperCase() ?? '—'}
-              </div>
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            {name && <p className="text-[15.5px] font-bold text-[#111] truncate">{name}</p>}
-            {cargoLabel && <p className="text-[13px] text-[#888] mt-0.5 truncate">{cargoLabel}</p>}
-          </div>
-          <div className="text-center flex-shrink-0">
-            <div
-              className="font-bold leading-none font-mono"
-              style={{ fontSize: 26, color: nota == null ? '#bbb' : meta.color }}
-            >
-              {nota == null ? '—' : nota.toFixed(1)}
-            </div>
-            <div className="text-[9px] font-bold uppercase tracking-[0.06em] text-[#bbb] mt-1">
-              {nota == null ? 'sin datos' : 'sobre 5'}
-            </div>
-          </div>
-        </div>
-
-        {/* Badge de estado */}
-        <div className="flex items-center gap-1.5 mt-3.5">
-          <span
-            className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-            style={{ background: meta.color }}
-          />
-          <span
-            className="text-[10.5px] font-bold uppercase tracking-[0.06em]"
-            style={{ color: meta.color }}
-          >
-            {meta.label}
-          </span>
-        </div>
-
-        {/* 🤖 Lo mide Mappi solo */}
-        {applicableBreakdown.length > 0 && (
-          <div className="mt-4">
-            <p className="text-[9.5px] font-bold uppercase tracking-[0.13em] text-[#999] mb-2">
-              🤖 Lo mide Mappi solo
-            </p>
-            <div className="space-y-1.5">
-              {applicableBreakdown.map((b) => (
-                <AutoIndicatorRow
-                  key={b.key}
-                  icon={INDICATOR_ICON[b.key] ?? '•'}
-                  label={b.label}
-                  detalle={b.aplica ? null : 'Sin datos suficientes este mes'}
-                  pct={b.aplica ? b.pct : null}
-                  pesoEfectivo={b.pesoEfectivo}
-                />
-              ))}
-            </div>
+            {name?.[0]?.toUpperCase() ?? '—'}
           </div>
         )}
-
-        {/* 🗓️ Lo evalúa el jefe */}
-        <ManagerRatingCard
-          rating={managerRating}
-          criteria={criteria}
-          canEvaluar={canEvaluar}
-          onEvaluar={onEvaluar}
-          caption={
-            applicableBreakdown.length > 0
-              ? '🗓️ Lo evalúa el jefe, una vez al mes'
-              : '🗓️ Lo evalúa el jefe — único criterio hoy'
-          }
-        />
-
-        {/* Nota de estado */}
-        <div
-          className="rounded-lg px-3 py-2.5 text-[12.5px] leading-relaxed mt-4"
-          style={{ background: meta.bg, color: meta.dark }}
-        >
-          <b>
-            {estado === 'ok'
-              ? 'Al día.'
-              : estado === 'parcial'
-                ? 'Nota provisional.'
-                : 'Sin datos automáticos.'}
-          </b>{' '}
-          {noteText}
+        <div className="flex-1 min-w-0">
+          {name && <p className="text-[15.5px] font-bold text-[#111] truncate">{name}</p>}
+          {cargoLabel && <p className="text-[13px] text-[#888] mt-0.5 truncate">{cargoLabel}</p>}
+          {estado !== 'ok' && (
+            <p className="text-[12px] font-mono text-[#999] mt-0.5">{meta.label}</p>
+          )}
         </div>
+        <div className="text-right flex-shrink-0">
+          <div
+            className="font-bold leading-none font-mono"
+            style={{ fontSize: 28, color: notaColor(nota) }}
+          >
+            {nota == null ? '—' : nota.toFixed(1)}
+          </div>
+          <div className="text-[11px] font-mono font-bold uppercase tracking-[0.08em] text-[#bbb] mt-1">
+            {nota == null ? 'sin datos' : 'sobre 10'}
+          </div>
+        </div>
+      </div>
+
+      {/* Lo mide Mappi solo */}
+      {applicableBreakdown.length > 0 && (
+        <div className="mt-5 pt-4 border-t border-[#ece9df]">
+          <BlockCaption>Lo mide Mappi solo</BlockCaption>
+          <div className="space-y-3.5">
+            {applicableBreakdown.map((b) => (
+              <AutoIndicatorRow key={b.key} item={b} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Lo evalúa el jefe */}
+      <ManagerRatingCard
+        rating={managerRating}
+        criteria={criteria}
+        canEvaluar={canEvaluar}
+        onEvaluar={onEvaluar}
+        caption={
+          applicableBreakdown.length > 0
+            ? 'Lo evalúa el jefe, una vez al mes'
+            : 'Lo evalúa el jefe — único criterio hoy'
+        }
+      />
+
+      {/* Lectura del mes */}
+      <div className="mt-5 p-3 rounded-xl bg-[#faf9f5] border border-[#ece9df]">
+        <p className="text-[11.5px] font-mono font-bold uppercase tracking-[0.12em] text-[#aaa] mb-1.5">
+          {estado === 'ok'
+            ? 'Al día'
+            : estado === 'parcial'
+              ? 'Nota provisional'
+              : 'Sin datos automáticos'}
+        </p>
+        <p className="text-[14px] text-[#444] leading-relaxed">{noteText}</p>
       </div>
     </div>
   )

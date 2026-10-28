@@ -5,7 +5,7 @@
  */
 
 /**
- * Promedio 1-5 de los items puntuados (ignora los que no tienen `score` aún).
+ * Promedio 1-10 de los items puntuados (ignora los que no tienen `score` aún).
  * @param {Array<{score: number|null}>} items
  * @returns {number|null} null si ningún item tiene score
  */
@@ -22,7 +22,7 @@ export function ratingAverage(items) {
  * renombra o desactiva después, las evaluaciones pasadas no cambian).
  *
  * @param {Array<{id, icon, name}>} criteria      criterios activos del cargo, en orden
- * @param {Record<string, number>} scoresById     {criterion_id: score 1-5}
+ * @param {Record<string, number>} scoresById     {criterion_id: score 1-10}
  * @returns {Array<{criterion_id, icon, name, score}>}
  */
 export function buildRatingItems(criteria, scoresById) {

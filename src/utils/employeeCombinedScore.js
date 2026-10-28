@@ -1,5 +1,5 @@
 /**
- * Nota general (sobre 5) que combina el score automático de desempeño con la
+ * Nota general (sobre 10) que combina el score automático de desempeño con la
  * evaluación subjetiva del jefe — ver ARQUITECTURA.md §2.7. Puro: no toca Supabase.
  *
  * Se calcula al leer, no se persiste: el score automático se congela el día 5
@@ -17,35 +17,35 @@ export const PESO_JEFE = 0.3
 /**
  * @param {object} params
  * @param {number|null} params.score       score automático 0-100 (o null si `sin_datos`)
- * @param {number|null} params.managerAvg  promedio 1-5 de la evaluación del jefe (o null)
+ * @param {number|null} params.managerAvg  promedio 1-10 de la evaluación del jefe (o null)
  * @returns {{
  *   nota: number|null,
  *   fuente: 'ambos'|'solo_auto'|'solo_jefe'|'sin_datos',
- *   autoSobre5: number|null,
+ *   autoSobre10: number|null,
  *   aporteAuto: number,
  *   aporteJefe: number,
  * }}
  */
 export function combineScores({ score, managerAvg }) {
-  const autoSobre5 = score != null ? Math.round((score / 20) * 100) / 100 : null
+  const autoSobre10 = score != null ? Math.round((score / 10) * 100) / 100 : null
 
-  if (autoSobre5 != null && managerAvg != null) {
-    const nota = Math.round((PESO_AUTO * autoSobre5 + PESO_JEFE * managerAvg) * 100) / 100
+  if (autoSobre10 != null && managerAvg != null) {
+    const nota = Math.round((PESO_AUTO * autoSobre10 + PESO_JEFE * managerAvg) * 100) / 100
     return {
       nota,
       fuente: 'ambos',
-      autoSobre5,
-      aporteAuto: Math.round(PESO_AUTO * autoSobre5 * 100) / 100,
+      autoSobre10,
+      aporteAuto: Math.round(PESO_AUTO * autoSobre10 * 100) / 100,
       aporteJefe: Math.round(PESO_JEFE * managerAvg * 100) / 100,
     }
   }
 
-  if (autoSobre5 != null) {
+  if (autoSobre10 != null) {
     return {
-      nota: autoSobre5,
+      nota: autoSobre10,
       fuente: 'solo_auto',
-      autoSobre5,
-      aporteAuto: autoSobre5,
+      autoSobre10,
+      aporteAuto: autoSobre10,
       aporteJefe: 0,
     }
   }
@@ -54,26 +54,26 @@ export function combineScores({ score, managerAvg }) {
     return {
       nota: managerAvg,
       fuente: 'solo_jefe',
-      autoSobre5: null,
+      autoSobre10: null,
       aporteAuto: 0,
       aporteJefe: managerAvg,
     }
   }
 
-  return { nota: null, fuente: 'sin_datos', autoSobre5: null, aporteAuto: 0, aporteJefe: 0 }
+  return { nota: null, fuente: 'sin_datos', autoSobre10: null, aporteAuto: 0, aporteJefe: 0 }
 }
 
 /**
- * Nota /5 que se muestra al usuario para un empleado en un mes, y sus dos insumos.
+ * Nota /10 que se muestra al usuario para un empleado en un mes, y sus dos insumos.
  * Única fuente de verdad: la usan por igual la tabla de Desempeño, el modal de
  * detalle (ScoreBreakdownCard) y Mi Desempeño — antes cada vista recalculaba la
- * nota por su cuenta y terminaban divergiendo de escala (0-100 vs sobre 5).
+ * nota por su cuenta y terminaban divergiendo de escala (0-100 vs sobre 10).
  *
  * @param {object} params
  * @param {object|null} params.result          fila de useEmployeeScores (con `.score` 0-100)
  * @param {object|null} params.managerRating   fila de manager_ratings del mes, si existe
  * @param {Array} [params.criteria]             criterios activos del cargo del empleado
- * @returns {{nota:number|null, autoSobre5:number|null, managerAvg:number|null, fuente:string, hasCriteria:boolean}}
+ * @returns {{nota:number|null, autoSobre10:number|null, managerAvg:number|null, fuente:string, hasCriteria:boolean}}
  */
 export function resolveEmployeeNota({ result, managerRating, criteria }) {
   const score = result?.score ?? null
@@ -82,17 +82,17 @@ export function resolveEmployeeNota({ result, managerRating, criteria }) {
   const combined = combineScores({ score, managerAvg })
   // Sin criterios definidos para el cargo no hay evaluación del jefe posible: se usa
   // solo el automático aunque exista una fila vieja en manager_ratings.
-  const nota = hasCriteria ? combined.nota : combined.autoSobre5
+  const nota = hasCriteria ? combined.nota : combined.autoSobre10
   return {
     nota,
-    autoSobre5: combined.autoSobre5,
+    autoSobre10: combined.autoSobre10,
     managerAvg,
     fuente: combined.fuente,
     hasCriteria,
   }
 }
 
-/** Color único de la nota /5, mismos umbrales que scoreDialColor (0-100). */
+/** Color único de la nota /10, mismos umbrales que scoreDialColor (0-100). */
 export function notaColor(nota) {
-  return nota == null ? '#bbb' : scoreDialColor(nota * 20)
+  return nota == null ? '#bbb' : scoreDialColor(nota * 10)
 }

@@ -9,7 +9,7 @@ import { useAuth } from '../../context/AuthContext'
 import { resolveEmployeeNota, notaColor } from '../../utils/employeeCombinedScore'
 
 const ESTADO_BADGE = {
-  ok: { label: 'Al día', cls: 'bg-[#E6F5EF] text-[#0B6B4A] border-[#c7e8db]' },
+  ok: { label: 'Al día', cls: 'bg-[#ECFDF5] text-[#047857] border-[#c7e8db]' },
   parcial: { label: 'Parcial', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
   sin_datos: { label: 'Sin datos', cls: 'bg-[#f0ede3] text-[#888] border-[#e0ddd4]' },
 }
@@ -32,7 +32,7 @@ function DeltaArrow({ delta }) {
   const up = delta > 0
   return (
     <span
-      className={`text-[10.5px] font-bold font-mono ml-1 ${up ? 'text-[#0E9A69]' : 'text-[#CF3A2E]'}`}
+      className={`text-[10.5px] font-bold font-mono ml-1 ${up ? 'text-[#10B981]' : 'text-[#EF4444]'}`}
       title={`${up ? 'Subió' : 'Bajó'} ${Math.abs(delta).toFixed(1)} vs. mes anterior`}
     >
       {up ? '▲' : '▼'}
@@ -66,7 +66,7 @@ function SortIcon({ col, sortKey, sortAsc }) {
  * a quienes cada nivel puede ver: su línea para nivel 2-3, todos para nivel 4/admin).
  * Reemplaza al tab "Empleados" del flujo manual (ver ARQUITECTURA.md §2.7).
  *
- * Todas las columnas numéricas están sobre 5 — la misma escala que ScoreBreakdownCard
+ * Todas las columnas numéricas están sobre 10 — la misma escala que ScoreBreakdownCard
  * (vía resolveEmployeeNota), para que la nota de la tabla nunca contradiga la del
  * modal de detalle. El orden por defecto es por Nota descendente; la evaluación del
  * jefe es informativa pero sí entra en la Nota combinada que se ordena aquí — a
@@ -141,8 +141,8 @@ export default function DesempenoView() {
         vb = b.user.position?.position_name ?? ''
         break
       case 'auto':
-        va = a.nota.autoSobre5 ?? -1
-        vb = b.nota.autoSobre5 ?? -1
+        va = a.nota.autoSobre10 ?? -1
+        vb = b.nota.autoSobre10 ?? -1
         break
       case 'jefe':
         va = a.nota.managerAvg ?? -1
@@ -286,7 +286,7 @@ export default function DesempenoView() {
                           {user.position?.position_name ?? '—'}
                         </td>
                         <td className="px-3 py-2.5 text-[14px] font-mono text-[#555]">
-                          {nota.autoSobre5 != null ? nota.autoSobre5.toFixed(1) : '—'}
+                          {nota.autoSobre10 != null ? nota.autoSobre10.toFixed(1) : '—'}
                         </td>
                         <td className="px-3 py-2.5">
                           {nota.managerAvg != null ? (

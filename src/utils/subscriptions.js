@@ -72,6 +72,12 @@ export function nextBillingDate(sub, todayKey) {
   return null
 }
 
+/** ¿Cobra dentro de los próximos `days` días (incluye hoy)? Pausadas/canceladas o sin día → false. */
+export function dueWithin(sub, todayKey, days = 7) {
+  const next = nextBillingDate(sub, todayKey)
+  return !!next && daysUntil(next, todayKey) <= days
+}
+
 /** Datos que faltan por completar de una suscripción no cancelada (para resaltarla). */
 export function missingInfo(sub) {
   if (!sub || sub.status === 'cancelada') return []

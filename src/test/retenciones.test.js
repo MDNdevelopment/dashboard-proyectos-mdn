@@ -5,6 +5,7 @@ import {
   hayRetenciones,
   retencionesDe,
   netoDe,
+  totalFacturaDe,
   totalRetenido,
 } from '../utils/retenciones'
 
@@ -93,6 +94,62 @@ describe('retencionesDe — bordes y retrocompatibilidad', () => {
   })
 })
 
+describe('retencionesDe — factura con IVA sumado sobre la mensualidad', () => {
+  const CON_IVA = { facturaConIva: true }
+
+  it('la base es la mensualidad y el IVA se suma encima ($625 → $725)', () => {
+    const r = retencionesDe(625, CON_IVA)
+    expect(r.base).toBe(625)
+    expect(r.iva).toBe(100)
+    expect(r.total).toBe(725)
+    expect(r.neto).toBe(725)
+  })
+
+  it('ISLR 5% e IVA 75% se restan del total: 725 − 31,25 − 75 = 618,75', () => {
+    const r = retencionesDe(625, {
+      ...CON_IVA,
+      isl: true,
+      islRate: 0.05,
+      iva: true,
+      ivaRate: 0.75,
+    })
+    expect(r.retIsl).toBe(31.25)
+    expect(r.retIva).toBe(75)
+    expect(r.totalRetenido).toBe(106.25)
+    expect(r.neto).toBe(618.75)
+  })
+
+  it('una factura anterior (facturaConIva null) conserva el IVA incluido', () => {
+    const r = retencionesDe(1000, {
+      isl: true,
+      islRate: 0.05,
+      iva: true,
+      ivaRate: 0.75,
+      municipal: true,
+    })
+    expect(r.total).toBe(1000)
+    expect(r.neto).toBe(844.83)
+  })
+
+  it('facturaConIva false no suma IVA', () => {
+    expect(retencionesDe(625, { facturaConIva: false }).neto).toBe(625)
+  })
+
+  it('netoDe y totalFacturaDe leen el snapshot de la factura', () => {
+    const inv = { amount: 625, retenciones: { facturaConIva: true } }
+    expect(netoDe(inv)).toBe(725)
+    expect(totalFacturaDe(inv)).toBe(725)
+    expect(netoDe({ amount: 625, retenciones: { facturaConIva: null } })).toBe(625)
+    expect(totalFacturaDe({ amount: 625, retenciones: { facturaConIva: null } })).toBe(625)
+  })
+
+  it('normalizarRetenciones distingue null de false y acepta factura_con_iva', () => {
+    expect(normalizarRetenciones({}).facturaConIva).toBeNull()
+    expect(normalizarRetenciones({ facturaConIva: false }).facturaConIva).toBe(false)
+    expect(normalizarRetenciones({ factura_con_iva: true }).facturaConIva).toBe(true)
+  })
+})
+
 describe('normalizarRetenciones', () => {
   it('acepta las columnas snake_case de la base de datos', () => {
     const c = normalizarRetenciones({
@@ -102,7 +159,14 @@ describe('normalizarRetenciones', () => {
       ret_iva_rate: 1,
       ret_municipal: true,
     })
-    expect(c).toEqual({ isl: true, islRate: 0.02, iva: true, ivaRate: 1, municipal: true })
+    expect(c).toEqual({
+      isl: true,
+      islRate: 0.02,
+      iva: true,
+      ivaRate: 1,
+      municipal: true,
+      facturaConIva: null,
+    })
   })
 
   it('trata como inactiva una retención marcada sin tasa (estado intermedio del form)', () => {
