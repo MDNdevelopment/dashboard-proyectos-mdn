@@ -23,6 +23,7 @@
 
 import { DEFAULT_SUBTAREAS } from '../components/metricas/constants'
 import { computeReunionesMeta } from './reunionesMeta'
+import { isSubscriptionRow } from './syncSubscriptionCosts'
 
 /**
  * @param {object|null} prevReport   - Reporte del mes anterior, o null.
@@ -91,7 +92,10 @@ export function initMetricReport(
       finanzas: prevReport.finanzas
         ? {
             ingresos: (prevReport.finanzas.ingresos ?? []).map((it) => ({ ...it })),
-            gastosOperativos: (prevReport.finanzas.gastosOperativos ?? []).map((it) => ({ ...it })),
+            // Las filas de suscripción no se heredan: las vuelve a sembrar syncSubscriptionCosts.
+            gastosOperativos: (prevReport.finanzas.gastosOperativos ?? [])
+              .filter((it) => !isSubscriptionRow(it))
+              .map((it) => ({ ...it })),
             sueldos: (prevReport.finanzas.sueldos ?? []).map((it) => ({ ...it })),
             otrosGastos: (prevReport.finanzas.otrosGastos ?? []).map((it) => ({ ...it })),
           }

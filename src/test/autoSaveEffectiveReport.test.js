@@ -62,6 +62,9 @@ vi.mock('../supabase', () => ({
   },
 }))
 
+const { mockLoadCosts } = vi.hoisted(() => ({ mockLoadCosts: vi.fn() }))
+vi.mock('../lib/subscriptions', () => ({ loadLineSubscriptionCosts: mockLoadCosts }))
+
 const { loadReportSources } = vi.hoisted(() => ({ loadReportSources: vi.fn() }))
 vi.mock('../components/metricas/reportSourcesApi', () => ({ loadReportSources }))
 
@@ -96,6 +99,7 @@ function hotRow(lineId, overrides = {}) {
 }
 
 beforeEach(() => {
+  mockLoadCosts.mockReset().mockResolvedValue(null)
   mockReportsSelect.mockReset().mockReturnValue({ data: [], error: null })
   mockUpsert.mockReset()
   mockUpsertResult.mockReset().mockReturnValue({ data: { id: 'r-1' }, error: null })
@@ -203,5 +207,34 @@ describe('loadYearReportsEffective', () => {
 
     expect(data[0].data).toEqual(row.data)
     expect(mockUpsert).not.toHaveBeenCalled()
+  })
+})
+
+describe('loadYearReportsEffective — gasto por suscripciones', () => {
+  const COSTS = [
+    {
+      line_id: 'l-sub',
+      subscription_id: 's1',
+      name: 'CapCut Team',
+      frequency: 'mensual',
+      amount: 10,
+      allocations: [{ line_id: 'l-sub', department_id: null, share_pct: null }],
+    },
+  ]
+
+  it('persiste solo las filas de suscripción de finanzas, sin tocar ingresos', async () => {
+    mockLoadCosts.mockResolvedValue(COSTS)
+    const row = hotRow('l-sub')
+    mockReportsSelect.mockReturnValue({ data: [row], error: null })
+
+    const { data } = await loadYearReportsEffective('co1', 2026, { autoSave: true, now: NOW })
+
+    expect(data[0].data.finanzas.gastosOperativos).toHaveLength(1)
+    expect(mockUpsert).toHaveBeenCalledTimes(1)
+    const saved = mockUpsert.mock.calls[0][0].data
+    expect(saved.finanzas.gastosOperativos).toEqual([
+      expect.objectContaining({ fuente: 'suscripcion', monto: 10 }),
+    ])
+    expect(saved.finanzas.ingresos).toEqual(row.data.finanzas.ingresos)
   })
 })

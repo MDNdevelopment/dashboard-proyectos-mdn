@@ -348,3 +348,71 @@ describe('buildEffectiveReport — inmutabilidad', () => {
     expect(stored).toEqual(snapshot)
   })
 })
+
+describe('buildEffectiveReport — gasto por suscripciones', () => {
+  const COSTS = [
+    {
+      line_id: 'l1',
+      subscription_id: 's1',
+      name: 'CapCut Team',
+      frequency: 'mensual',
+      amount: 10,
+      allocations: [
+        { line_id: 'l1', department_id: null, share_pct: null },
+        { line_id: 'l2', department_id: null, share_pct: null },
+      ],
+    },
+  ]
+
+  it('mes abierto: siembra la parte de la línea en gastosOperativos', () => {
+    const out = buildEffectiveReport(
+      baseStored(),
+      {},
+      {
+        ...HOT_CTX,
+        lineId: 'l1',
+        subscriptionCosts: COSTS,
+      },
+    )
+    expect(out.finanzas.gastosOperativos).toEqual([
+      expect.objectContaining({ fuente: 'suscripcion', suscripcionId: 's1', monto: 5 }),
+    ])
+  })
+
+  it('mes cerrado o pasado: no toca el reporte guardado', () => {
+    const stored = baseStored()
+    const closed = buildEffectiveReport(
+      stored,
+      {},
+      {
+        ...HOT_CTX,
+        closed: true,
+        lineId: 'l1',
+        subscriptionCosts: COSTS,
+      },
+    )
+    const past = buildEffectiveReport(
+      stored,
+      {},
+      {
+        ...HOT_CTX,
+        month: 8,
+        lineId: 'l1',
+        subscriptionCosts: COSTS,
+      },
+    )
+    expect(closed.finanzas.gastosOperativos).toEqual([])
+    expect(past.finanzas.gastosOperativos).toEqual([])
+  })
+
+  it('sin costos cargados (null) deja las filas guardadas como están', () => {
+    const stored = baseStored()
+    stored.finanzas.gastosOperativos = [{ id: 'sub-s1', fuente: 'suscripcion', monto: 5 }]
+    const out = buildEffectiveReport(
+      stored,
+      {},
+      { ...HOT_CTX, lineId: 'l1', subscriptionCosts: null },
+    )
+    expect(out.finanzas.gastosOperativos).toHaveLength(1)
+  })
+})

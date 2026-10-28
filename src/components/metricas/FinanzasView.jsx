@@ -21,6 +21,8 @@ import {
   updateEmployeeSalaries,
   loadRecentReports,
 } from './metricsApi'
+import { loadLineSubscriptionCosts } from '../../lib/subscriptions'
+import { syncSubscriptionCosts, isSubscriptionRow } from '../../utils/syncSubscriptionCosts'
 import { initMetricReport } from '../../utils/initMetricReport'
 import { syncReportClients } from '../../utils/syncReportClients'
 import { clientInMonth } from '../../utils/clientInMonth'
@@ -101,13 +103,21 @@ export default function FinanzasView({ line, companyId, year, month, closed = fa
     if (!line?.id || !companyId) return
     setLoading(true)
     setError(null)
-    const [reportRes, prevRes, clientsRes, employeesRes, recentRes] = await Promise.all([
+    const [reportRes, prevRes, clientsRes, employeesRes, recentRes, subCosts] = await Promise.all([
       loadReport(line.id, year, month),
       loadPrevReport(line.id, year, month),
       loadClients(companyId, line.id, { includeArchived: true }),
       loadCompanyEmployees(companyId),
       loadRecentReports(line.id, year, month),
+      // Mes congelado: se muestra tal cual se guardó, no hace falta pedir las suscripciones.
+      isReportFrozen(year, month, closed)
+        ? Promise.resolve(null)
+        : loadLineSubscriptionCosts(companyId),
     ])
+    // Gasto por suscripciones asignadas a la línea (solo meses no congelados; null = no se
+    // pudo cargar → se dejan las filas guardadas como están).
+    const withSubs = (d) =>
+      Array.isArray(subCosts) ? syncSubscriptionCosts(d, line.id, subCosts) : d
     setRecentReports(recentRes.data ?? [])
     // Todos (incl. archivados) para resolver nombres en reportes guardados;
     // solo activos EN ESE MES para syncReportClients (no re-agregar archivados
@@ -138,7 +148,7 @@ export default function FinanzasView({ line, companyId, year, month, closed = fa
     if (reportRes.data) {
       const d = reportRes.data.data
       ensureFinanzas(d)
-      const synced = frozen ? d : syncReportClients(d, activeClients, employees)
+      const synced = frozen ? d : withSubs(syncReportClients(d, activeClients, employees))
       setReport(synced)
       baselineRef.current = synced
     } else {
@@ -148,7 +158,7 @@ export default function FinanzasView({ line, companyId, year, month, closed = fa
       const carried = initMetricReport(prevRes.data?.data ?? null, activeClients, {}, employees)
       const fresh = pruneCarryForward(carried, { allEmployees, allClients, year, month })
       ensureFinanzas(fresh)
-      const synced = frozen ? fresh : syncReportClients(fresh, activeClients, employees)
+      const synced = frozen ? fresh : withSubs(syncReportClients(fresh, activeClients, employees))
       setReport(synced)
       baselineRef.current = synced
     }
@@ -232,6 +242,8 @@ export default function FinanzasView({ line, companyId, year, month, closed = fa
   }
 
   function removeItem(seccion, idx) {
+    // Las filas de suscripción son de solo lectura: se editan en Empresa → Suscripciones.
+    if (isSubscriptionRow(report?.finanzas?.[seccion]?.[idx])) return
     setReport((prev) => {
       const next = structuredClone(prev)
       next.finanzas[seccion].splice(idx, 1)
@@ -243,6 +255,7 @@ export default function FinanzasView({ line, companyId, year, month, closed = fa
   }
 
   function updateItem(seccion, idx, field, value) {
+    if (isSubscriptionRow(report?.finanzas?.[seccion]?.[idx])) return
     setReport((prev) => {
       const next = structuredClone(prev)
       next.finanzas[seccion][idx][field] =
@@ -588,6 +601,7 @@ export default function FinanzasView({ line, companyId, year, month, closed = fa
                 {items.map((item, idx) => {
                   const isClientRow = isIngresos && item.clienteId != null
                   const isEmployeeRow = isSueldos && item.empleadoId != null
+                  const isSubRow = isSubscriptionRow(item)
                   const clientObj = isClientRow
                     ? lineClients.find((c) => c.id === item.clienteId)
                     : null
@@ -596,7 +610,18 @@ export default function FinanzasView({ line, companyId, year, month, closed = fa
                     : null
                   return (
                     <div key={item.id ?? idx} className="flex items-center gap-2">
-                      {isClientRow ? (
+                      {isSubRow ? (
+                        /* Fila derivada de Empresa → Suscripciones: solo lectura */
+                        <span
+                          className="flex-1 min-w-0 flex items-center gap-2 text-[14px] text-[#333] px-2.5 py-2 bg-[#faf9f5] border border-[#e8e5db] rounded-lg"
+                          title="Se edita en Empresa → Suscripciones"
+                        >
+                          <span className="truncate">{item.descripcion}</span>
+                          <span className="ml-auto flex-none font-mono text-[10px] uppercase tracking-wide text-[#9a7400] bg-[#FFF4D1] rounded px-1.5 py-0.5">
+                            Suscripción
+                          </span>
+                        </span>
+                      ) : isClientRow ? (
                         /* Fila ligada a cliente: avatar + nombre; clickeable hacia ficha técnica */
                         clientObj ? (
                           <button
@@ -673,12 +698,13 @@ export default function FinanzasView({ line, companyId, year, month, closed = fa
                         className="input-base !w-28 flex-none text-[14px]"
                         placeholder="0.00"
                         value={item.monto ?? ''}
+                        disabled={isSubRow}
                         onChange={(e) => updateItem(sec.key, idx, 'monto', e.target.value)}
                       />
                       {/* Las filas de cliente (Ingresos) NO se borran a mano: se reconcilian
-                          solas contra la cartera. Las de empleado sí — ver comentario en la
-                          vista de tarjetas. */}
-                      {!isClientRow && (
+                          solas contra la cartera; las de suscripción tampoco (se asignan en
+                          Empresa). Las de empleado sí — ver comentario en la vista de tarjetas. */}
+                      {!isClientRow && !isSubRow && (
                         <button
                           onClick={() => removeItem(sec.key, idx)}
                           className="text-[#ccc] hover:text-red-400 transition-colors flex-shrink-0"
