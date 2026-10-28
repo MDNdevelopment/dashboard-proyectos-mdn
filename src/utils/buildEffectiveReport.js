@@ -14,6 +14,7 @@
  */
 import { syncReportClients } from './syncReportClients'
 import { isReportFrozen } from './reportPeriod'
+import { syncSubscriptionCosts } from './syncSubscriptionCosts'
 import { buildFixedWeeks, computeProductividad } from './fixedTasks'
 import { computePlataformasProductividad } from './chequeo'
 import { computeReunionesMeta } from './reunionesMeta'
@@ -120,11 +121,22 @@ export function needsSourcesFor(year, month, closed, now = new Date()) {
  * @param {{
  *   year:number, month:number, closed:boolean,
  *   activeLineClients:Array, lineEmployees:Array, now?:Date,
+ *   lineId?:string, subscriptionCosts?:Array|null,   - filas de la RPC line_subscription_costs;
+ *     si faltan (null/undefined) no se tocan las filas de suscripción ya guardadas.
  * }} ctx
  * @returns {object} nueva copia de `storedData` con los indicadores derivados aplicados
  */
 export function buildEffectiveReport(storedData, sources, ctx) {
-  const { year, month, closed, activeLineClients, lineEmployees, now = new Date() } = ctx
+  const {
+    year,
+    month,
+    closed,
+    activeLineClients,
+    lineEmployees,
+    now = new Date(),
+    lineId,
+    subscriptionCosts,
+  } = ctx
   const gates = effectiveReportGates(year, month, closed, now)
   const {
     frozen,
@@ -142,6 +154,12 @@ export function buildEffectiveReport(storedData, sources, ctx) {
   let synced = frozen
     ? structuredClone(storedData)
     : syncReportClients(storedData, activeLineClients, lineEmployees)
+
+  // Gastos por suscripciones asignadas a la línea (Empresa → Suscripciones). Solo meses no
+  // congelados: un mes pasado o cerrado conserva lo que tenía.
+  if (!frozen && lineId && Array.isArray(subscriptionCosts)) {
+    synced = syncSubscriptionCosts(synced, lineId, subscriptionCosts)
+  }
 
   // Poda las marcas que ya quedaron cubiertas (tienen reunión realizada) del mapa de
   // justificativos, para no arrastrar justificativos obsoletos en el jsonb del reporte.

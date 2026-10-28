@@ -243,3 +243,21 @@ describe('initMetricReport — lineMetas tiene prioridad sobre carry-forward', (
     expect(r.productividad.tareas[0].nombre).toBe('Métricas')
   })
 })
+
+describe('initMetricReport — filas de suscripción', () => {
+  it('no hereda del mes anterior las filas de gasto por suscripción', () => {
+    const prev = {
+      finanzas: {
+        ingresos: [],
+        sueldos: [],
+        otrosGastos: [],
+        gastosOperativos: [
+          { id: 'm1', descripcion: 'manual', monto: 3 },
+          { id: 'sub-1', fuente: 'suscripcion', descripcion: 'CapCut (suscripción)', monto: 5 },
+        ],
+      },
+    }
+    const out = initMetricReport(prev, [], {}, [])
+    expect(out.finanzas.gastosOperativos.map((i) => i.id)).toEqual(['m1'])
+  })
+})

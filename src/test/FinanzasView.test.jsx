@@ -27,6 +27,11 @@ vi.mock('../components/metricas/metricsApi', () => ({
   loadRecentReports: (...a) => mockLoadRecentReports(...a),
 }))
 
+const mockLoadSubCosts = vi.fn()
+vi.mock('../lib/subscriptions', () => ({
+  loadLineSubscriptionCosts: (...a) => mockLoadSubCosts(...a),
+}))
+
 vi.mock('../context/AuthContext', () => ({
   useAuth: () => ({ can: () => true, userProfile: { admin: true } }),
 }))
@@ -253,5 +258,48 @@ describe('FinanzasView — eliminar una fila de sueldo ligada a empleado', () =>
     await waitFor(() => {
       expect(screen.queryByRole('status')).not.toBeInTheDocument()
     })
+  })
+})
+
+describe('FinanzasView — gasto por suscripciones asignadas a la línea', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date('2026-07-17T12:00:00'))
+    vi.clearAllMocks()
+    mockLoadPrevReport.mockResolvedValue({ data: null, error: null })
+    mockLoadClients.mockResolvedValue({ data: [], error: null })
+    mockLoadCompanyEmployees.mockResolvedValue({ data: [], error: null })
+    mockLoadRecentReports.mockResolvedValue({ data: [], error: null })
+    mockLoadReport.mockResolvedValue({ data: { data: makeReportData([]) }, error: null })
+    mockLoadSubCosts.mockResolvedValue([
+      {
+        line_id: 'line-1',
+        subscription_id: 's1',
+        name: 'CapCut Team',
+        frequency: 'mensual',
+        amount: 10,
+        allocations: [
+          { line_id: 'line-1', department_id: null, share_pct: null },
+          { line_id: 'line-2', department_id: null, share_pct: null },
+        ],
+      },
+    ])
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('mes en curso: muestra la parte de la línea como fila de solo lectura', async () => {
+    renderView({ month: 7 })
+    expect(await screen.findByText('CapCut Team (suscripción)')).toBeInTheDocument()
+    expect(screen.getByText('Suscripción')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('5')).toBeDisabled()
+  })
+
+  it('mes pasado: no agrega la fila ni pide las suscripciones', async () => {
+    renderView({ month: 6 })
+    await waitFor(() => expect(screen.getByText(/Ingresos brutos/)).toBeInTheDocument())
+    expect(screen.queryByText('CapCut Team (suscripción)')).not.toBeInTheDocument()
+    expect(mockLoadSubCosts).not.toHaveBeenCalled()
   })
 })

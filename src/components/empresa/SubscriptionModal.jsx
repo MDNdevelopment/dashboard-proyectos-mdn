@@ -1,7 +1,16 @@
 import { useState } from 'react'
-import { createSubscription, updateSubscription } from '../../lib/subscriptions'
+import { createSubscription, updateSubscription, saveAllocations } from '../../lib/subscriptions'
 import DescribedSelect from '../common/DescribedSelect'
-import { CURRENCIES, FREQUENCIES, SERVICE_TYPES, STATUS_META } from '../../utils/subscriptions'
+import {
+  CURRENCIES,
+  FREQUENCIES,
+  SERVICE_TYPES,
+  STATUS_META,
+  allocationKey,
+  allocatedMonthly,
+  validateAllocations,
+  formatAmount,
+} from '../../utils/subscriptions'
 
 const MONTHS = [
   'Enero',
@@ -34,6 +43,9 @@ export default function SubscriptionModal({
   companyId,
   userId,
   employees = [],
+  lines = [],
+  departments = [],
+  allocations = [],
   subscription,
   onClose,
   onSaved,
@@ -55,8 +67,55 @@ export default function SubscriptionModal({
     start_date: subscription?.start_date ?? '',
     comment: subscription?.comment ?? '',
   })
+  // Asignación a líneas / departamentos: [{ line_id | department_id, share_pct }]
+  const [alloc, setAlloc] = useState(() =>
+    allocations.map((a) => ({
+      line_id: a.line_id ?? null,
+      department_id: a.department_id ?? null,
+      share_pct: a.share_pct ?? '',
+    })),
+  )
+  const [manualPct, setManualPct] = useState(() => allocations.some((a) => a.share_pct != null))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+
+  const isUsd = form.currency === 'USD'
+  const effectiveAlloc = alloc.map((a) => ({
+    ...a,
+    share_pct: manualPct && a.share_pct !== '' ? Number(a.share_pct) : null,
+  }))
+  const allocErrors = validateAllocations(effectiveAlloc)
+  const allocPreview = allocatedMonthly(
+    { amount: Number(form.amount || 0), frequency: form.frequency },
+    effectiveAlloc,
+  )
+  const targetOptions = [
+    ...lines
+      .filter((l) => !alloc.some((a) => a.line_id === l.id))
+      .map((l) => ({ key: `line:${l.id}`, label: l.name, description: 'Línea' })),
+    ...departments
+      .filter((d) => !alloc.some((a) => a.department_id === d.department_id))
+      .map((d) => ({
+        key: `dept:${d.department_id}`,
+        label: d.department_name,
+        description: 'Departamento',
+      })),
+  ]
+  const targetName = (a) =>
+    a.line_id
+      ? (lines.find((l) => l.id === a.line_id)?.name ?? 'Línea')
+      : (departments.find((d) => d.department_id === a.department_id)?.department_name ??
+        'Departamento')
+
+  function addTarget(key) {
+    const [kind, id] = key.split(':')
+    setAlloc((prev) => [
+      ...prev,
+      kind === 'line'
+        ? { line_id: id, department_id: null, share_pct: '' }
+        : { line_id: null, department_id: Number(id), share_pct: '' },
+    ])
+  }
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
 
@@ -73,6 +132,7 @@ export default function SubscriptionModal({
       return setError('Los últimos dígitos de la tarjeta deben ser exactamente 4 números.')
     if (form.amount !== '' && Number(form.amount) < 0)
       return setError('El monto no puede ser negativo.')
+    if (isUsd && allocErrors.length > 0) return setError(allocErrors[0])
 
     const wasCancelled = subscription?.status === 'cancelada'
     const fields = {
@@ -105,6 +165,8 @@ export default function SubscriptionModal({
       const saved = isEdit
         ? await updateSubscription(subscription.id, fields)
         : await createSubscription(companyId, fields, userId)
+      // En otra moneda la sección está bloqueada: las asignaciones existentes no se tocan.
+      if (isUsd) await saveAllocations(saved.id, companyId, effectiveAlloc)
       onSaved(saved)
       onClose()
     } catch (err) {
@@ -344,6 +406,98 @@ export default function SubscriptionModal({
             Puedes dejar vacíos el día de cobro y la tarjeta si aún no los sabes y completarlos
             después. Nunca guardes contraseñas ni el número completo de la tarjeta aquí.
           </p>
+
+          <div className="rounded-xl border border-[#e8e5db] bg-[#faf9f5] p-3 space-y-2.5">
+            <span className={LABEL}>Asignada a</span>
+            {!isUsd ? (
+              <p className="text-[12.5px] text-[#8a6600]">
+                Solo las suscripciones en USD se pueden asignar a líneas o departamentos.
+              </p>
+            ) : (
+              <>
+                <p className="text-[12px] text-[#999]">
+                  Cada línea asignada ve su parte como gasto en su reporte mensual. Con varias
+                  asignaciones el costo mensual se reparte.
+                </p>
+                {alloc.length > 0 && (
+                  <ul className="space-y-1.5">
+                    {alloc.map((a) => {
+                      const key = allocationKey(a)
+                      const preview = allocPreview.find((p) => allocationKey(p) === key)
+                      return (
+                        <li
+                          key={key}
+                          className="flex items-center gap-2 bg-white border border-[#e8e5db] rounded-lg px-2.5 py-1.5"
+                        >
+                          <span className="flex-1 min-w-0 truncate text-[14px] text-[#111]">
+                            {targetName(a)}
+                            <span className="ml-2 text-[11px] font-mono uppercase text-[#999]">
+                              {a.line_id ? 'Línea' : 'Depto.'}
+                            </span>
+                          </span>
+                          {manualPct && (
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.01"
+                              aria-label={`Porcentaje de ${targetName(a)}`}
+                              className="input-base !w-20 text-[13px]"
+                              value={a.share_pct}
+                              onChange={(e) =>
+                                setAlloc((prev) =>
+                                  prev.map((x) =>
+                                    allocationKey(x) === key
+                                      ? { ...x, share_pct: e.target.value }
+                                      : x,
+                                  ),
+                                )
+                              }
+                              placeholder="%"
+                            />
+                          )}
+                          <span className="font-mono text-[12.5px] text-[#555] w-24 text-right">
+                            {preview ? `${formatAmount(preview.monthly, 'USD')}/mes` : ''}
+                          </span>
+                          <button
+                            type="button"
+                            aria-label={`Quitar ${targetName(a)}`}
+                            onClick={() =>
+                              setAlloc((prev) => prev.filter((x) => allocationKey(x) !== key))
+                            }
+                            className="text-[#ccc] hover:text-red-400"
+                          >
+                            ✕
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+                <DescribedSelect
+                  ariaLabel="Agregar línea o departamento"
+                  value=""
+                  placeholder="+ Agregar línea o departamento…"
+                  options={targetOptions}
+                  onChange={addTarget}
+                  disabled={targetOptions.length === 0}
+                />
+                {alloc.length > 1 && (
+                  <label className="flex items-center gap-2 text-[13px] text-[#555]">
+                    <input
+                      type="checkbox"
+                      checked={!manualPct}
+                      onChange={(e) => setManualPct(!e.target.checked)}
+                    />
+                    Repartir en partes iguales
+                  </label>
+                )}
+                {allocErrors.length > 0 && (
+                  <p className="text-[12.5px] text-red-600">{allocErrors[0]}</p>
+                )}
+              </>
+            )}
+          </div>
 
           <div>
             <label htmlFor="sub-comment" className={LABEL}>

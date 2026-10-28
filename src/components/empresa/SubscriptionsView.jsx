@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../../supabase'
 import { useAuth } from '../../context/AuthContext'
-import { fetchSubscriptions, deleteSubscription } from '../../lib/subscriptions'
-import { loadCompanyEmployees } from '../metricas/metricsApi'
+import { fetchSubscriptions, deleteSubscription, fetchAllocations } from '../../lib/subscriptions'
+import { loadCompanyEmployees, loadLines } from '../metricas/metricsApi'
 import { activeEmployees } from '../../lib/employees'
 import FilterBar, { FilterField } from '../common/FilterBar'
 import StatusPill from '../common/StatusPill'
@@ -17,6 +17,7 @@ import {
   totalsByCurrency,
   formatAmount,
   missingInfo,
+  costsByTarget,
 } from '../../utils/subscriptions'
 
 const SERVICE_TYPE_LABELS = Object.fromEntries(SERVICE_TYPES.map((t) => [t.key, t.label]))
@@ -46,6 +47,9 @@ export default function SubscriptionsView({ companyId, canManage = false }) {
   const { userProfile } = useAuth()
   const [subs, setSubs] = useState([])
   const [employees, setEmployees] = useState([])
+  const [allocations, setAllocations] = useState([])
+  const [lines, setLines] = useState([])
+  const [departments, setDepartments] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [editModal, setEditModal] = useState(undefined) // undefined=cerrado, null=crear, obj=editar
@@ -55,15 +59,27 @@ export default function SubscriptionsView({ companyId, canManage = false }) {
   const [statusFilter, setStatusFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
   const [ownerFilter, setOwnerFilter] = useState('')
+  const [targetFilter, setTargetFilter] = useState('') // 'line:<id>' | 'dept:<id>'
 
   const load = useCallback(async () => {
     if (!companyId) return
     try {
-      const [list, { data: emps }] = await Promise.all([
-        fetchSubscriptions(companyId),
-        loadCompanyEmployees(companyId),
-      ])
+      const [list, { data: emps }, allocs, { data: lineList }, { data: deptList }] =
+        await Promise.all([
+          fetchSubscriptions(companyId),
+          loadCompanyEmployees(companyId),
+          fetchAllocations(companyId),
+          loadLines(companyId),
+          supabase
+            .from('departments')
+            .select('department_id, department_name')
+            .eq('company_id', companyId)
+            .order('department_name'),
+        ])
       setSubs(list)
+      setAllocations(allocs)
+      setLines(lineList ?? [])
+      setDepartments(deptList ?? [])
       setEmployees(activeEmployees(emps ?? []))
       setError(null)
     } catch (err) {
@@ -87,6 +103,13 @@ export default function SubscriptionsView({ companyId, canManage = false }) {
           load()
         },
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'company_subscription_allocations' },
+        () => {
+          load()
+        },
+      )
       .subscribe()
     return () => {
       supabase.removeChannel(channel)
@@ -102,6 +125,36 @@ export default function SubscriptionsView({ companyId, canManage = false }) {
     [employees],
   )
 
+  const allocsBySub = useMemo(() => {
+    const map = {}
+    allocations.forEach((a) => (map[a.subscription_id] ??= []).push(a))
+    return map
+  }, [allocations])
+  const lineName = useMemo(() => Object.fromEntries(lines.map((l) => [l.id, l.name])), [lines])
+  const deptName = useMemo(
+    () => Object.fromEntries(departments.map((d) => [d.department_id, d.department_name])),
+    [departments],
+  )
+  const costs = useMemo(() => costsByTarget(subs, allocations), [subs, allocations])
+  const costRows = [
+    ...lines
+      .filter((l) => costs.lines[l.id] > 0)
+      .map((l) => ({
+        key: `line:${l.id}`,
+        label: l.name,
+        kind: 'Línea',
+        total: costs.lines[l.id],
+      })),
+    ...departments
+      .filter((d) => costs.departments[d.department_id] > 0)
+      .map((d) => ({
+        key: `dept:${d.department_id}`,
+        label: d.department_name,
+        kind: 'Depto.',
+        total: costs.departments[d.department_id],
+      })),
+  ]
+
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
     return subs
@@ -109,6 +162,13 @@ export default function SubscriptionsView({ companyId, canManage = false }) {
       .filter((s) => !statusFilter || s.status === statusFilter)
       .filter((s) => !typeFilter || s.service_type === typeFilter)
       .filter((s) => !ownerFilter || s.owner_user_id === ownerFilter)
+      .filter(
+        (s) =>
+          !targetFilter ||
+          (allocsBySub[s.id] ?? []).some(
+            (a) => (a.line_id ? `line:${a.line_id}` : `dept:${a.department_id}`) === targetFilter,
+          ),
+      )
       .map((s) => ({ sub: s, next: nextBillingDate(s, today) }))
       .sort((a, b) => {
         if (a.next && b.next) return a.next.localeCompare(b.next)
@@ -116,7 +176,7 @@ export default function SubscriptionsView({ companyId, canManage = false }) {
         if (b.next) return 1
         return a.sub.name.localeCompare(b.sub.name)
       })
-  }, [subs, search, statusFilter, typeFilter, ownerFilter, today])
+  }, [subs, search, statusFilter, typeFilter, ownerFilter, targetFilter, allocsBySub, today])
 
   const totals = totalsByCurrency(subs)
   const activeCount = subs.filter((s) => s.status === 'activa').length
@@ -124,9 +184,12 @@ export default function SubscriptionsView({ companyId, canManage = false }) {
     const next = nextBillingDate(s, today)
     return next && daysUntil(next, today) <= 7
   }).length
-  const hasFilters = search || statusFilter || typeFilter || ownerFilter
+  const hasFilters = search || statusFilter || typeFilter || ownerFilter || targetFilter
 
   function handleSaved(saved) {
+    fetchAllocations(companyId)
+      .then(setAllocations)
+      .catch(() => {})
     setSubs((prev) =>
       prev.some((s) => s.id === saved.id)
         ? prev.map((s) => (s.id === saved.id ? saved : s))
@@ -159,8 +222,9 @@ export default function SubscriptionsView({ companyId, canManage = false }) {
   return (
     <div className="space-y-5">
       <div className="px-4 py-3 rounded-xl bg-[#fff8e6] border border-[#f0dfae] text-[13.5px] text-[#8a6600]">
-        <strong>Solo registro:</strong> estos cobros aún no se reflejan en Finanzas. Si un pago
-        corresponde a un gasto del mes, regístralo allá por separado.
+        <strong>Finanzas:</strong> estos cobros aún no se reflejan en Finanzas; si un pago es un
+        gasto del mes, regístralo allá por separado. Las suscripciones activas asignadas a una línea
+        sí salen como gasto en el reporte mensual de esa línea.
       </div>
 
       {error && (
@@ -198,10 +262,48 @@ export default function SubscriptionsView({ companyId, canManage = false }) {
         </div>
       </div>
 
+      {(costRows.length > 0 || costs.unassigned > 0) && (
+        <div className="bg-white rounded-xl border border-[#e0ddd4] p-4">
+          <p className="text-[11px] font-mono font-bold tracking-[0.08em] uppercase text-[#999]">
+            Costo mensual por línea / departamento (USD)
+          </p>
+          <div className="flex flex-wrap gap-2 mt-2">
+            {costRows.map((r) => (
+              <button
+                key={r.key}
+                type="button"
+                onClick={() => setTargetFilter((cur) => (cur === r.key ? '' : r.key))}
+                className={`px-3 py-1.5 rounded-lg border text-left ${
+                  targetFilter === r.key
+                    ? 'border-[#FFB800] bg-[#fff8e6]'
+                    : 'border-[#e8e5db] bg-[#faf9f5]'
+                }`}
+              >
+                <span className="block text-[12.5px] text-[#555]">
+                  {r.label}{' '}
+                  <span className="font-mono text-[10px] uppercase text-[#999]">{r.kind}</span>
+                </span>
+                <span className="block text-[15px] font-bold font-mono text-[#111]">
+                  {formatAmount(r.total, 'USD')}
+                </span>
+              </button>
+            ))}
+            {costs.unassigned > 0 && (
+              <div className="px-3 py-1.5 rounded-lg border border-dashed border-[#e0ddd4]">
+                <span className="block text-[12.5px] text-[#888]">Sin asignar</span>
+                <span className="block text-[15px] font-bold font-mono text-[#888]">
+                  {formatAmount(costs.unassigned, 'USD')}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="flex items-end justify-between gap-4">
         <div className="flex-1">
           <FilterBar
-            cols={4}
+            cols={5}
             onClear={
               hasFilters
                 ? () => {
@@ -209,6 +311,7 @@ export default function SubscriptionsView({ companyId, canManage = false }) {
                     setStatusFilter('')
                     setTypeFilter('')
                     setOwnerFilter('')
+                    setTargetFilter('')
                   }
                 : undefined
             }
@@ -263,6 +366,25 @@ export default function SubscriptionsView({ companyId, canManage = false }) {
                 ))}
               </select>
             </FilterField>
+            <FilterField label="Asignada a">
+              <select
+                className="input-base text-[14px] py-1.5 w-full"
+                value={targetFilter}
+                onChange={(e) => setTargetFilter(e.target.value)}
+              >
+                <option value="">Todas</option>
+                {lines.map((l) => (
+                  <option key={l.id} value={`line:${l.id}`}>
+                    {l.name}
+                  </option>
+                ))}
+                {departments.map((d) => (
+                  <option key={d.department_id} value={`dept:${d.department_id}`}>
+                    {d.department_name}
+                  </option>
+                ))}
+              </select>
+            </FilterField>
           </FilterBar>
         </div>
         {canManage && (
@@ -307,6 +429,19 @@ export default function SubscriptionsView({ companyId, canManage = false }) {
                       ? ` · ${employeeName[sub.owner_user_id]}`
                       : ''}
                   </p>
+                  {(allocsBySub[sub.id] ?? []).length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {allocsBySub[sub.id].map((a) => (
+                        <span
+                          key={a.id}
+                          className="text-[11.5px] font-mono px-1.5 py-0.5 rounded bg-[#f2f0e8] text-[#555]"
+                        >
+                          {a.line_id ? lineName[a.line_id] : deptName[a.department_id]}
+                          {a.share_pct != null ? ` ${Number(a.share_pct)}%` : ''}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   {sub.comment && <p className="text-[13px] text-[#555] mt-0.5">{sub.comment}</p>}
                 </div>
                 <div className="text-right min-w-[120px]">
@@ -369,6 +504,9 @@ export default function SubscriptionsView({ companyId, canManage = false }) {
           companyId={companyId}
           userId={userProfile?.user_id}
           employees={employees}
+          lines={lines}
+          departments={departments}
+          allocations={editModal ? (allocsBySub[editModal.id] ?? []) : []}
           subscription={editModal}
           onClose={() => setEditModal(undefined)}
           onSaved={handleSaved}

@@ -57,7 +57,14 @@ const MOCK_SUBS = [
 
 const mockFetch = vi.fn().mockResolvedValue(MOCK_SUBS)
 const mockDelete = vi.fn().mockResolvedValue(undefined)
+const MOCK_ALLOCS = [
+  { id: 'a-1', subscription_id: 's-1', line_id: 'l-1', department_id: null, share_pct: null },
+  { id: 'a-2', subscription_id: 's-1', line_id: null, department_id: 7, share_pct: null },
+]
+const mockFetchAllocs = vi.fn().mockResolvedValue(MOCK_ALLOCS)
 vi.mock('../lib/subscriptions', () => ({
+  fetchAllocations: (...a) => mockFetchAllocs(...a),
+  saveAllocations: vi.fn(),
   fetchSubscriptions: (...a) => mockFetch(...a),
   deleteSubscription: (...a) => mockDelete(...a),
   createSubscription: vi.fn(),
@@ -67,11 +74,24 @@ vi.mock('../lib/subscriptions', () => ({
 const mockLoadCompanyEmployees = vi.fn().mockResolvedValue({ data: MOCK_EMPLOYEES, error: null })
 vi.mock('../components/metricas/metricsApi', () => ({
   loadCompanyEmployees: (...a) => mockLoadCompanyEmployees(...a),
+  loadLines: vi
+    .fn()
+    .mockResolvedValue({ data: [{ id: 'l-1', name: 'Team Sabrina' }], error: null }),
 }))
 
 vi.mock('../supabase', () => {
   const channel = { on: vi.fn().mockReturnThis(), subscribe: vi.fn().mockReturnThis() }
-  return { supabase: { channel: vi.fn(() => channel), removeChannel: vi.fn() } }
+  const query = {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    order: vi.fn().mockResolvedValue({
+      data: [{ department_id: 7, department_name: 'Tecnología' }],
+      error: null,
+    }),
+  }
+  return {
+    supabase: { channel: vi.fn(() => channel), removeChannel: vi.fn(), from: vi.fn(() => query) },
+  }
 })
 
 vi.mock('../context/AuthContext', () => ({
@@ -150,5 +170,19 @@ describe('SubscriptionsView', () => {
     // $60 sale en la card de total y en la fila de Adobe; los $10 de la cancelada no suman.
     expect(screen.getAllByText(/\$60[.,]00/)).toHaveLength(2)
     expect(screen.queryByText(/\$70[.,]00/)).not.toBeInTheDocument()
+  })
+
+  it('muestra a qué línea y departamento está asignada cada suscripción', async () => {
+    render(<SubscriptionsView companyId="co-1" canManage={false} />)
+    await screen.findByText('Adobe Creative Cloud')
+    expect((await screen.findAllByText('Team Sabrina')).length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Tecnología').length).toBeGreaterThan(0)
+  })
+
+  it('el resumen reparte el costo mensual entre las asignaciones (60 / 2 = 30)', async () => {
+    render(<SubscriptionsView companyId="co-1" canManage={false} />)
+    await screen.findByText('Adobe Creative Cloud')
+    expect(await screen.findByText(/Costo mensual por línea/i)).toBeInTheDocument()
+    expect(screen.getAllByText('$30,00').length).toBe(2)
   })
 })

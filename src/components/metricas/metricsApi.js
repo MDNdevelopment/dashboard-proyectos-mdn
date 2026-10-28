@@ -10,6 +10,8 @@ import { stripClientFromReport, reportHasClient } from '../../utils/stripClientF
 import { firstOfNextMonthISO } from '../../utils/prorateMonthlyFee'
 import { buildEffectiveReport, needsSourcesFor } from '../../utils/buildEffectiveReport'
 import { loadReportSources } from './reportSourcesApi'
+import { loadLineSubscriptionCosts } from '../../lib/subscriptions'
+import { subscriptionRowsOf, withSubscriptionRowsFrom } from '../../utils/syncSubscriptionCosts'
 import { clientInMonth } from '../../utils/clientInMonth'
 import { employeeActiveInMonth } from '../../utils/employeeInMonth'
 import { selectAllPages } from '../../lib/supabasePaginate'
@@ -352,10 +354,17 @@ function pickOperationalKeys(data) {
   return out
 }
 
+/** Lo único que el auto-guardado persiste: las claves operativas + las filas de gasto por
+ * suscripción (derivadas, de solo lectura). Sin esto un mes que nadie guarda a mano se
+ * congelaría sin su gasto de suscripciones. */
+function pickPersistable(data) {
+  return { ...pickOperationalKeys(data), __subs: subscriptionRowsOf(data) }
+}
+
 function hasOperationalDiff(stored, effective) {
   return (
-    stableStringify(pickOperationalKeys(stored ?? {})) !==
-    stableStringify(pickOperationalKeys(effective ?? {}))
+    stableStringify(pickPersistable(stored ?? {})) !==
+    stableStringify(pickPersistable(effective ?? {}))
   )
 }
 
@@ -406,11 +415,14 @@ export async function loadYearReportsEffective(
 
   const rows = reportsRes.data ?? []
   const hotRows = rows.filter((r) => needsSourcesFor(r.year, r.month, !!r.closed_at, now))
-  const { data: sourcesByKey } = await loadReportSources(companyId, {
-    year,
-    months: [...new Set(hotRows.map((r) => r.month))],
-    lineIds: [...new Set(hotRows.map((r) => r.line_id))],
-  })
+  const [{ data: sourcesByKey }, subscriptionCosts] = await Promise.all([
+    loadReportSources(companyId, {
+      year,
+      months: [...new Set(hotRows.map((r) => r.month))],
+      lineIds: [...new Set(hotRows.map((r) => r.line_id))],
+    }),
+    hotRows.length > 0 ? loadLineSubscriptionCosts(companyId) : Promise.resolve(null),
+  ])
 
   const toPersist = []
   const effectiveRows = rows.map((row) => {
@@ -433,6 +445,8 @@ export async function loadYearReportsEffective(
       activeLineClients,
       lineEmployees,
       now,
+      lineId: row.line_id,
+      subscriptionCosts,
     })
 
     if (autoSave) {
@@ -476,11 +490,14 @@ export async function maybeAutoPersistEffectiveReport(
 ) {
   if (closed || !hasOperationalDiff(stored, effectiveData)) return
   const dedupeKey = `${lineId}__${year}__${month}`
-  const payloadHash = stableStringify(pickOperationalKeys(effectiveData))
+  const payloadHash = stableStringify(pickPersistable(effectiveData))
   if (_autoSaveDone.get(dedupeKey) === payloadHash) return
-  // Merge: solo las claves operativas — `finanzas` y cualquier clave desconocida quedan
-  // exactamente como estaban guardadas.
-  const payload = { ...stored, ...pickOperationalKeys(effectiveData) }
+  // Merge: las claves operativas + las filas de suscripción de `finanzas.gastosOperativos`;
+  // el resto de `finanzas` y cualquier clave desconocida quedan exactamente como estaban.
+  const payload = {
+    ...withSubscriptionRowsFrom(stored, effectiveData),
+    ...pickOperationalKeys(effectiveData),
+  }
   const { error } = await upsertReport(companyId, lineId, year, month, payload)
   if (error) {
     console.warn('[metricas] auto-persistencia del reporte efectivo falló', error)
