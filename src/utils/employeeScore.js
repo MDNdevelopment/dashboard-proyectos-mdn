@@ -26,7 +26,7 @@ import {
   taskInMonth,
 } from '../components/tareas/constants'
 import { cnpInMonth, cnpPieceCount, cnpPiecesDelivered } from '../components/cnp/constants'
-import { buildFixedWeeks, aggregateEmployeeFixedTasksByRole } from './fixedTasks'
+import { buildFixedWeeks, buildChequeoWeeks, aggregateEmployeeFixedTasksByRole } from './fixedTasks'
 import { computeAvailability, isInExcludedRange } from './employeeAvailability'
 import { INDICATOR_KEYS, resolveProfile, effectiveWeights } from './employeeScoreProfiles'
 import { getSlaThresholdHours } from '../components/tickets/slaUtils'
@@ -660,7 +660,7 @@ export function calcPlataformas(ctx) {
   const { realizado, meta } = computePlataformasProductividad(
     delMes,
     mias,
-    buildFixedWeeks(year, month),
+    buildChequeoWeeks(year, month),
   )
   if (meta === 0) return noAplica
   return result('plataformas', {

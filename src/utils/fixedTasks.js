@@ -43,19 +43,42 @@ function lastDayOfMonth(year, month) {
 }
 
 /**
- * Construye las semanas del mes ancladas al miércoles. Cada semana trae sus
- * fechas de referencia (miércoles, viernes, lunes siguiente, rango lun-dom) y
- * un flag isFirst/isLast para saber qué tareas extra aplican (ver `tasksForWeek`).
+ * Primer mes en que `buildFixedWeeks` usa por defecto la regla 'mayoria'. Antes de este mes
+ * Tareas Fijas se marcó con la regla 'miercoles' y no se migra (ver docs tareas-fijas.md).
+ */
+export const WEEK_RULE_START = { year: 2026, month: 11 }
+
+/**
+ * Construye las semanas (lun-dom) del mes. Cada semana trae sus fechas de referencia
+ * (miércoles, viernes, lunes siguiente, rango lun-dom) y un flag isFirst/isLast para saber
+ * qué tareas extra aplican (ver `tasksForWeek`).
+ *
+ * `rule` decide a qué mes pertenece cada semana:
+ * - 'mayoria': gana el mes con más días de la semana (4 o más de 7), o sea el mes donde cae
+ *   su jueves. Es el criterio de la agencia.
+ * - 'miercoles': el mes donde cae su miércoles (criterio anterior).
+ * Sin `rule`: 'mayoria' desde `WEEK_RULE_START`, 'miercoles' antes.
  * @param {number} year
  * @param {number} month  1-indexado (enero = 1)
+ * @param {{rule?: 'mayoria'|'miercoles'}} [options]
  * @returns {Array<{n:number, wed:Date, fri:Date, mon:Date, monIni:Date, dom:Date, isFirst:boolean, isLast:boolean}>}
  */
-export function buildFixedWeeks(year, month) {
+export function buildFixedWeeks(year, month, { rule } = {}) {
+  const effectiveRule =
+    rule ??
+    (year * 12 + month >= WEEK_RULE_START.year * 12 + WEEK_RULE_START.month
+      ? 'mayoria'
+      : 'miercoles')
+  const anchorDay = effectiveRule === 'mayoria' ? 4 : 3
   const last = lastDayOfMonth(year, month)
   const weds = []
   for (let day = 1; day <= last; day++) {
     const dt = new Date(year, month - 1, day)
-    if (dt.getDay() === 3) weds.push(dt)
+    if (dt.getDay() === anchorDay) {
+      const wed = new Date(dt)
+      wed.setDate(dt.getDate() - (anchorDay - 3)) // miércoles de esa misma semana lun-dom
+      weds.push(wed)
+    }
   }
   return weds.map((wed, i) => {
     const fri = new Date(wed)
@@ -68,6 +91,14 @@ export function buildFixedWeeks(year, month) {
     dom.setDate(wed.getDate() + 4) // domingo de la semana
     return { n: i + 1, wed, fri, mon, monIni, dom, isFirst: i === 0, isLast: i === weds.length - 1 }
   })
+}
+
+/**
+ * Semanas de Chequeo: siempre la regla 'mayoria' (también hacia atrás), porque los
+ * registros de Chequeo de sep/oct 2026 ya se cargaron con el criterio de la agencia.
+ */
+export function buildChequeoWeeks(year, month) {
+  return buildFixedWeeks(year, month, { rule: 'mayoria' })
 }
 
 /**
