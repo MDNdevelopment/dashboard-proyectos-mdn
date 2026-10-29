@@ -22,6 +22,7 @@ export default function FixedTasksReportPreview({
   clients,
   marks,
   weeks,
+  chequeoWeeks = weeks,
   checks,
   showMatrix,
   lineLabel,
@@ -42,7 +43,7 @@ export default function FixedTasksReportPreview({
     const lineChecks = (checks ?? []).filter((c) => lineClientIds.has(c.client_id))
     return [
       ...computeProductividad(lineMarks, lineClients, weeks),
-      computePlataformasProductividad(lineChecks, lineClients, weeks),
+      computePlataformasProductividad(lineChecks, lineClients, chequeoWeeks),
     ]
   }
 

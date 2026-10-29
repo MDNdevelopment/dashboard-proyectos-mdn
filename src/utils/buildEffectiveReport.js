@@ -15,7 +15,7 @@
 import { syncReportClients } from './syncReportClients'
 import { isReportFrozen } from './reportPeriod'
 import { syncSubscriptionCosts } from './syncSubscriptionCosts'
-import { buildFixedWeeks, computeProductividad } from './fixedTasks'
+import { buildFixedWeeks, buildChequeoWeeks, computeProductividad } from './fixedTasks'
 import { computePlataformasProductividad } from './chequeo'
 import { computeReunionesMeta } from './reunionesMeta'
 import {
@@ -210,7 +210,11 @@ export function buildEffectiveReport(storedData, sources, ctx) {
         ...(synced.productividad?.tareas ?? []).filter(
           (t) => t.nombre !== 'Actualización de Plataformas',
         ),
-        computePlataformasProductividad(sources.checks ?? [], activeLineClients, weeks),
+        computePlataformasProductividad(
+          sources.checks ?? [],
+          activeLineClients,
+          buildChequeoWeeks(year, month),
+        ),
       ],
     }
   }
