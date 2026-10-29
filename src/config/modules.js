@@ -108,10 +108,12 @@ export const MODULES = [
       { key: 'lineas', label: 'Líneas' },
       { key: 'permisos', label: 'Permisos' },
       { key: 'suscripciones', label: 'Suscripciones' },
+      { key: 'equipos', label: 'Equipos' },
       { key: 'accesos', label: 'Accesos' },
     ],
     manageActions: [
       { key: 'empresa.suscripciones.manage', label: 'Agregar / editar / eliminar suscripciones' },
+      { key: 'empresa.equipos.manage', label: 'Agregar / editar / eliminar equipos' },
       { key: 'empresa.clientes.manage', label: 'Modificar clientes' },
       {
         key: 'empresa.clientes.mensualidad',
