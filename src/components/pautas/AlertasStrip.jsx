@@ -11,6 +11,10 @@ export const ALERTA_META = {
     label: (n) => `${n} ${n === 1 ? 'grilla vencida' : 'grillas vencidas'}`,
     tone: 'red',
   },
+  fechaEntregaSinConfirmar: {
+    label: (n) => `${n} ${n === 1 ? 'pauta' : 'pautas'} con fecha de entrega sin confirmar`,
+    tone: 'amber',
+  },
   piezasAtrasadas: {
     label: (n, a) => {
       const cnps = a?.cnpPendientes?.length ?? 0
