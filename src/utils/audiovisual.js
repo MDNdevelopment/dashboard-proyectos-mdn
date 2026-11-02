@@ -610,6 +610,12 @@ export function briefComplete(pauta) {
 export function pautaErrorMessage(err) {
   if (!err) return null
   const raw = err.message || ''
+  if (err.code === '22023' || /fecha de entrega ya venci/i.test(raw)) {
+    return 'La fecha de entrega ya venció y no se puede mover.'
+  }
+  if (/permiso para cambiar la fecha de entrega/i.test(raw)) {
+    return 'No tienes permiso para cambiar la fecha de entrega de las piezas.'
+  }
   if (
     err.code === '42501' ||
     /row-level security/i.test(raw) ||
@@ -1374,6 +1380,7 @@ export function pautaPermissions({
       canReagendar: false,
       canMarkRealizada: false,
       canEditPiezas: false,
+      canSetFechaEntrega: false,
       canDelete: false,
       canRestore: false,
       canReopen: false,
@@ -1396,6 +1403,8 @@ export function pautaPermissions({
     canReagendar: !deleted && (canCoordinate || canGestionPautas) && pauta.status === 'programada',
     canMarkRealizada: !deleted && canCoordinate && pauta.status === 'programada',
     canEditPiezas: !deleted && canEditPiezas && ['programada', 'realizada'].includes(pauta.status),
+    // Espejo de `av_pieza_puede_fijar_fecha`: coordina, gestión o jefa de la línea.
+    canSetFechaEntrega: !deleted && (canCoordinate || canGestionPautas || isLead),
     canDelete: !deleted && (canCoordinate || (solicitada && isCreator)),
     canRestore: deleted && canCoordinate,
     canReopen: !deleted && canCoordinate && pauta.status === 'declinada',
@@ -1791,6 +1800,45 @@ export function pautaEstadoResumen(pauta, piezas) {
   return { kind: 'editando', label: `${listas}/${salieron} editadas`, pct, salieron, listas }
 }
 
+// ─── Fecha de entrega de las piezas (lotes de av_pauta_piezas) ─────────────
+
+/** Lotes con `fecha_entrega` (null = lote anterior a la regla de plazo). */
+export function lotesConFecha(piezas) {
+  return (piezas ?? []).filter((l) => l.es_lote && l.fecha_entrega && l.status !== 'cancelado')
+}
+
+function fechaEntregaMinima(piezas) {
+  return lotesConFecha(piezas).reduce(
+    (m, l) => (l.fecha_entrega < m ? l.fecha_entrega : m),
+    '9999-99-99',
+  )
+}
+
+/**
+ * Resumen de la fecha de entrega de una pauta para la UI (un solo campo por pauta).
+ * `fecha`: la común a todos los lotes con fecha (null si no hay o difieren → `mixta`).
+ * `confirmada`: todos los lotes con fecha están confirmados. `vencida`: algún lote ya
+ * venció (el trigger no deja mover una fecha vencida). `sinFecha`: lotes sin fecha.
+ */
+export function fechaEntregaInfo(piezas, hoy) {
+  const lotes = (piezas ?? []).filter((l) => l.es_lote && l.status !== 'cancelado')
+  const conFecha = lotes.filter((l) => l.fecha_entrega)
+  const fechas = [...new Set(conFecha.map((l) => l.fecha_entrega))]
+  return {
+    tieneLotes: lotes.length > 0,
+    fecha: fechas.length === 1 ? fechas[0] : null,
+    mixta: fechas.length > 1,
+    confirmada: conFecha.length > 0 && conFecha.every((l) => l.fecha_entrega_confirmada),
+    vencida: conFecha.some((l) => l.fecha_entrega < hoy),
+    sinFecha: lotes.length - conFecha.length,
+  }
+}
+
+/** Una fecha de entrega vencida (anterior a hoy) ya no se puede mover. */
+export function fechaEntregaVencida(fecha, hoy) {
+  return Boolean(fecha) && fecha < hoy
+}
+
 /**
  * Cosas que necesitan acción hoy. Todas derivadas de datos existentes, nada que marcar:
  *  - porAprobar: solicitadas enviadas.
@@ -1800,7 +1848,12 @@ export function pautaEstadoResumen(pauta, piezas) {
  *  - cnpPendientes: CNP audiovisuales sin terminar (los `cnps` ya vienen filtrados por línea
  *    por quien llama, igual que las pautas), por fecha de entrega y los sin fecha al final.
  */
-export function alertas(pautas, piezasByPauta, today = new Date(), { cnps = [] } = {}) {
+export function alertas(
+  pautas,
+  piezasByPauta,
+  today = new Date(),
+  { cnps = [], puedeFijarFecha = () => true } = {},
+) {
   const hoy = typeof today === 'string' ? today : isoDateKey(today)
   const activas = (pautas ?? []).filter((p) => !p.deleted_at)
   const porAprobar = activas.filter((p) => p.status === 'solicitada' && p.submitted)
@@ -1821,10 +1874,31 @@ export function alertas(pautas, piezasByPauta, today = new Date(), { cnps = [] }
   )
   const piezasAtrasadas = activas.filter((p) => {
     if (p.status !== 'realizada' || !p.pauta_date) return false
+    // Con fecha de entrega en algún lote, manda ella: atrasada si algún lote ya vencido
+    // tiene menos listas que asignadas. Sin ninguna fecha (lotes anteriores a la regla), la
+    // regla de PIEZAS_ATRASO_DIAS.
+    const conFecha = lotesConFecha(piezasByPauta?.get(p.id))
+    if (conFecha.length > 0) {
+      return conFecha.some(
+        (l) => l.fecha_entrega < hoy && (Number(l.listas) || 0) < (Number(l.cantidad) || 0),
+      )
+    }
     if (diffDays(p.pauta_date, hoy) <= PIEZAS_ATRASO_DIAS) return false
     const { salieron, listas } = capturaYEdicion(p, piezasByPauta?.get(p.id))
     return salieron > listas
   })
+  const fechaEntregaSinConfirmar = activas
+    .filter((p) => {
+      if (p.status !== 'realizada' || !puedeFijarFecha(p)) return false
+      return lotesConFecha(piezasByPauta?.get(p.id)).some(
+        (l) => !l.fecha_entrega_confirmada && l.fecha_entrega >= hoy,
+      )
+    })
+    .sort((a, b) =>
+      fechaEntregaMinima(piezasByPauta?.get(a.id)).localeCompare(
+        fechaEntregaMinima(piezasByPauta?.get(b.id)),
+      ),
+    )
   const cnpPendientes = (cnps ?? [])
     .filter((c) => !c.deleted_at && c.is_audiovisual && !isClosed(c))
     .sort((a, b) => (a.due_date ?? '9999-99-99').localeCompare(b.due_date ?? '9999-99-99'))
@@ -1833,12 +1907,14 @@ export function alertas(pautas, piezasByPauta, today = new Date(), { cnps = [] }
     sinCaptura,
     grillaIncumple,
     piezasAtrasadas,
+    fechaEntregaSinConfirmar,
     cnpPendientes,
     total:
       porAprobar.length +
       sinCaptura.length +
       grillaIncumple.length +
       piezasAtrasadas.length +
+      fechaEntregaSinConfirmar.length +
       cnpPendientes.length,
   }
 }

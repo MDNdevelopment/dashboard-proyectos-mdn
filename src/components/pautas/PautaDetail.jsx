@@ -129,6 +129,7 @@ export default function PautaDetail({
                 editorUsers={editorUsers}
                 usersById={usersById}
                 canEdit={perms.canEditPiezas}
+                canSetFecha={perms.canSetFechaEntrega}
                 userId={userId}
                 companyId={companyId}
                 onPiezaChanged={onPiezaChanged}

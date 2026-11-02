@@ -299,8 +299,18 @@ export default function AudiovisualView({
     generalLineId,
   )
   const pendingCount = pendingApprovalCount(scopedPautas)
+  const puedeFijarFecha = (p) =>
+    pautaPermissions({
+      canCoordinate,
+      canGestionPautas,
+      canManage,
+      userId: userProfile?.user_id,
+      pauta: p,
+      leadLineIds,
+    }).canSetFechaEntrega
   const alertas = calcAlertas(visibleScopedPautas, piezasByPautaMap, undefined, {
     cnps: cnpAvAbiertos,
+    puedeFijarFecha,
   })
   const permsFor = (p) =>
     pautaPermissions({
@@ -425,6 +435,8 @@ export default function AudiovisualView({
           recursoUsers={recursoOptions}
           allEmployees={activeEmployees}
           canApprove={canCoordinate}
+          puedeFijarFecha={puedeFijarFecha}
+          onPiezaChanged={handlePiezaChanged}
           onFields={handlePautaFields}
           onPautaClick={(p) => setDetailId(p.id)}
           onGoDatos={() => setView('datos')}

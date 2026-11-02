@@ -2,6 +2,7 @@ import { useState } from 'react'
 import Stepper from '../common/Stepper'
 import { Block } from './CapturaSection'
 import { upsertLote, deleteLote, updatePieza } from './avPautasApi'
+import FechaEntregaPauta, { SinConfirmarChip } from './FechaEntregaPauta'
 import {
   FORMAT_KEYS,
   FORMAT_LABELS,
@@ -14,6 +15,9 @@ import {
   editorLabel,
   canActOnEditorGroup,
   pautaErrorMessage,
+  isoDateKey,
+  fechaEntregaVencida,
+  formatDayShort,
 } from '../../utils/audiovisual'
 
 /**
@@ -28,6 +32,8 @@ export default function EdicionSection({
   editorUsers,
   usersById,
   canEdit,
+  canSetFecha = false,
+  hoy = isoDateKey(new Date()),
   userId,
   companyId,
   onPiezaChanged,
@@ -84,6 +90,14 @@ export default function EdicionSection({
       }
       onPiezaDeleted(lote.id)
     }
+  }
+
+  async function changeFecha(lote, fecha) {
+    if (!fecha || fecha === lote.fecha_entrega) return
+    setError(null)
+    const { data, error: err } = await updatePieza(lote.id, { fecha_entrega: fecha })
+    if (err) setError(pautaErrorMessage(err))
+    else if (data) onPiezaChanged(data)
   }
 
   const sinCaptura = activeFormats.every((code) => (breakdown[code]?.salieron ?? 0) === 0)
@@ -153,6 +167,13 @@ export default function EdicionSection({
               Registra primero la captura: el cupo de edición sale de lo que salió de cada formato.
             </p>
           )}
+          <FechaEntregaPauta
+            pauta={pauta}
+            piezas={piezas}
+            canEdit={canSetFecha}
+            hoy={hoy}
+            onPiezaChanged={onPiezaChanged}
+          />
           <div className="overflow-x-auto">
             <table className="w-full text-[12.5px]" aria-label="Edición por editor y formato">
               <thead>
@@ -194,6 +215,10 @@ export default function EdicionSection({
                     activeFormats={activeFormats}
                     canEdit={canEdit}
                     canAct={canActOnEditorGroup({ canEditPiezas: canEdit, userId, editorId })}
+                    realizada={pauta.status === 'realizada'}
+                    canSetFecha={canSetFecha}
+                    hoy={hoy}
+                    onFecha={changeFecha}
                     cupo={cupo}
                     onChange={change}
                     onRemove={removeEditor}
@@ -207,6 +232,10 @@ export default function EdicionSection({
                     activeFormats={activeFormats}
                     canEdit={canEdit}
                     canAct={canEdit}
+                    realizada={pauta.status === 'realizada'}
+                    canSetFecha={canSetFecha}
+                    hoy={hoy}
+                    onFecha={changeFecha}
                     cupo={cupo}
                     onChange={change}
                     onRemove={removeEditor}
@@ -228,6 +257,10 @@ function EditorRow({
   activeFormats,
   canEdit,
   canAct,
+  realizada = false,
+  canSetFecha = false,
+  hoy,
+  onFecha,
   cupo,
   onChange,
   onRemove,
@@ -260,6 +293,15 @@ function EditorRow({
                 aria={`listas de ${FORMAT_LABELS[code]} de ${name}`}
               />
             </div>
+            {realizada && lote?.fecha_entrega && (
+              <LoteFecha
+                lote={lote}
+                label={`Fecha de entrega de ${FORMAT_LABELS[code]} de ${name}`}
+                canSetFecha={canSetFecha}
+                hoy={hoy}
+                onChange={(f) => onFecha(lote, f)}
+              />
+            )}
           </td>
         )
       })}
@@ -292,6 +334,35 @@ function Counter({ label, value, editable, max, onChange, aria }) {
       ) : (
         <span className="font-mono text-[13px] font-semibold text-[#333] px-1">{value}</span>
       )}
+    </div>
+  )
+}
+
+/** Ajuste excepcional de la fecha de UN lote; vencida = bloqueada. */
+function LoteFecha({ lote, label, canSetFecha, hoy, onChange }) {
+  const vencida = fechaEntregaVencida(lote.fecha_entrega, hoy)
+  return (
+    <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+      <span className="text-[10px] font-mono uppercase tracking-wide text-[#aaa]">entrega</span>
+      {canSetFecha && !vencida ? (
+        <input
+          type="date"
+          className="input-base input-compact w-auto font-mono"
+          aria-label={label}
+          value={lote.fecha_entrega}
+          min={hoy}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      ) : (
+        <span
+          className="font-mono text-[12px] font-semibold text-[#333]"
+          title={vencida ? 'Ya venció: no se puede mover' : undefined}
+        >
+          {formatDayShort(lote.fecha_entrega)}
+          {vencida && ' (vencida)'}
+        </span>
+      )}
+      {!lote.fecha_entrega_confirmada && <SinConfirmarChip />}
     </div>
   )
 }
