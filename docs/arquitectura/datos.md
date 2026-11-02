@@ -82,6 +82,8 @@ Catálogo del estado actual. Leyenda FK: `──→` FK declarada · `··→` r
 - `prev_editor_user_id`: al quitar un editor en `RemoveEditorDialog.jsx` con "dejarlas sin asignar", guarda el editor previo para ofrecer devolvérselas (banner en `PautaDetailModal.jsx`); ningún trigger lo lee.
 - `nombre` puede ir vacío: "Video #1", "Reel #2" se derivan en cliente (`piezaOrdinals`/`piezaDisplayName`, `utils/audiovisual.js`), nunca se persisten.
 - Trigger `av_pauta_piezas_sync_counters` (AFTER INSERT/UPDATE/DELETE) → `av_pautas.piezas_editadas` = piezas con `status='listo'`.
+- `fecha_entrega date` (null = lote anterior a la regla) y `fecha_entrega_confirmada boolean`: la fija un trigger al pasar la pauta a `realizada` (`pauta_date + 7`) y la valida `av_pauta_piezas_guard_fecha_entrega` (ver `audiovisual.md`).
+- `av_pieza_listas_log(pieza_id, pauta_id, company_id, formato, editor_user_id, listas, origen, at)`: historia append-only de `listas`; solo la escribe un trigger. Alimenta el score de edición a tiempo.
 - RLS: SELECT autenticados; escritura `user_can('audiovisual.coordina') OR (auth.uid()::text = any(av_pautas.recurso_ids) de la pauta referenciada)`. Realtime.
 
 ### `external_resources`
