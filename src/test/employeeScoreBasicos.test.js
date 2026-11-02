@@ -343,6 +343,66 @@ describe('calcEdicion', () => {
     expect(r.pct).toBe(1)
   })
 
+  describe('con fecha de entrega', () => {
+    const lote = (o = {}) =>
+      pieza({
+        es_lote: true,
+        cantidad: 10,
+        listas: 10,
+        status: 'listo',
+        fecha_entrega: '2026-10-20',
+        listas_a_fecha_entrega: 10,
+        ...o,
+      })
+    const NOV = { year: 2026, month: 11, monthIdx: 2026 * 12 + 10 }
+
+    it('mide lo que estaba listo a la fecha, no lo que lleva hoy', () => {
+      // Hoy el lote está completo (10/10), pero a su fecha de entrega solo había 7.
+      const r = calcEdicion(base({ piezas: [lote({ listas_a_fecha_entrega: 7 })] }))
+      expect(r.unidades).toBe(10)
+      expect(r.pct).toBeCloseTo(0.7)
+    })
+
+    it('cuenta en el mes de la fecha de entrega, no en el de asignación', () => {
+      // Asignado el 29 de octubre con entrega el 2 de noviembre: no es de octubre, es de noviembre.
+      const p = lote({ created_at: '2026-10-29T10:00:00Z', fecha_entrega: '2026-11-02' })
+      expect(calcEdicion(base({ piezas: [p] })).aplica).toBe(false)
+      const nov = calcEdicion(base({ ...NOV, piezas: [p] }))
+      expect(nov.unidades).toBe(10)
+      expect(nov.pct).toBe(1)
+    })
+
+    it('un lote que aún no vence y no está completo queda fuera; completo sí cuenta', () => {
+      const pendiente = lote({ fecha_entrega: '2026-11-20', listas_a_fecha_entrega: 3 })
+      expect(calcEdicion(base({ ...NOV, piezas: [pendiente] })).aplica).toBe(false)
+      const completo = lote({ fecha_entrega: '2026-11-20', listas_a_fecha_entrega: 10 })
+      expect(calcEdicion(base({ ...NOV, piezas: [completo] })).pct).toBe(1)
+    })
+
+    it('sin historia a esa fecha (null) usa el avance actual', () => {
+      const r = calcEdicion(
+        base({ piezas: [lote({ listas: 6, status: 'en_edicion', listas_a_fecha_entrega: null })] }),
+      )
+      expect(r.pct).toBeCloseTo(0.6)
+    })
+
+    it('un lote sin fecha (anterior a la regla) conserva el criterio de antes', () => {
+      const sinFecha = lote({ fecha_entrega: null, listas_a_fecha_entrega: null, listas: 4 })
+      const r = calcEdicion(base({ piezas: [sinFecha] }))
+      expect(r.unidades).toBe(10)
+      expect(r.pct).toBeCloseTo(0.4)
+    })
+
+    it('las canceladas no cuentan y el lote de otro editor tampoco', () => {
+      const r = calcEdicion(
+        base({
+          piezas: [lote({ status: 'cancelado' }), lote({ editor_user_id: 'otro' })],
+        }),
+      )
+      expect(r.aplica).toBe(false)
+    })
+  })
+
   it('suma las piezas de CNP audiovisual al mismo cociente', () => {
     const cnp = [
       {

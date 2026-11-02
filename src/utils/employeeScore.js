@@ -264,21 +264,41 @@ export function calcTareasFijas(ctx) {
 
 // ─── 5. Piezas audiovisuales ─────────────────────────────────────────────────
 
-/** Unidades de piezas asignadas (editor_user_id) y las que están en 'listo', del mes. */
+/**
+ * Unidades de piezas asignadas (editor_user_id) y las que estaban listas, del mes.
+ *
+ * Un lote con `fecha_entrega` cuenta en el MES de esa fecha (no en el de asignación: lo
+ * asignado el 29 con entrega el 2 no perjudica al mes que cierra) y se mide a tiempo: las
+ * unidades listas al terminar esa fecha (`listas_a_fecha_entrega`, del registro de avances
+ * `av_pieza_listas_log`), no las que lleva hoy. Como `calcPorVencimiento`, un lote que aún no
+ * vence y no está completo queda fuera. Si no hay historia anterior a esa fecha
+ * (`listas_a_fecha_entrega` null) se usa el avance actual. Un lote SIN fecha (anterior a la
+ * regla) conserva el criterio de antes: mes de creación y avance actual.
+ */
 function piezasEditorStats(ctx) {
   const { userId, monthIdx, piezas } = ctx
-  const misPiezas = (piezas ?? []).filter((p) => {
-    if (p.editor_user_id !== userId) return false
-    const d = parseD((p.created_at ?? '').slice(0, 10))
-    return d ? d.getFullYear() * 12 + d.getMonth() === monthIdx : false
-  })
-  // Una fila puede ser un lote de N unidades (es_lote/cantidad/listas): se suman unidades,
-  // no filas. Las canceladas no son trabajo pendiente ni hecho.
-  const activas = misPiezas.filter((p) => p.status !== 'cancelado')
-  return {
-    unidades: activas.reduce((sum, p) => sum + piezaUnidades(p), 0),
-    listas: activas.reduce((sum, p) => sum + piezaListas(p), 0),
+  const hoy = ctx.today ?? today()
+  let unidades = 0
+  let listas = 0
+  for (const p of piezas ?? []) {
+    // Las canceladas no son trabajo pendiente ni hecho. Un lote puede ser de N unidades
+    // (es_lote/cantidad/listas): se suman unidades, no filas.
+    if (p.editor_user_id !== userId || p.status === 'cancelado') continue
+    const n = piezaUnidades(p)
+    if (p.fecha_entrega) {
+      if (monthOf(p.fecha_entrega) !== monthIdx) continue
+      const aFecha = p.listas_a_fecha_entrega
+      const hechas = Math.min(n, aFecha == null ? piezaListas(p) : Number(aFecha) || 0)
+      if (parseD(p.fecha_entrega.slice(0, 10)) >= hoy && hechas < n) continue
+      unidades += n
+      listas += hechas
+    } else {
+      if (monthOf(p.created_at) !== monthIdx) continue
+      unidades += n
+      listas += piezaListas(p)
+    }
   }
+  return { unidades, listas }
 }
 
 /** Piezas asignadas (editor_user_id) vs entregadas ('listo'), del mes. */

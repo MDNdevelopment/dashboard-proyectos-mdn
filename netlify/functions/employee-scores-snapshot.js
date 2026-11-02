@@ -58,6 +58,7 @@ export async function loadCompanyInputs(companyId) {
     cnpRes,
     marksRes,
     piezasRes,
+    piezasAFechaRes,
     pautasRes,
     meetingsRes,
     paidRes,
@@ -78,6 +79,9 @@ export async function loadCompanyInputs(companyId) {
     selectAll('cnp_requests', (q) => q.eq('company_id', companyId)),
     selectAll('fixed_task_marks', (q) => q.eq('company_id', companyId)),
     selectAll('av_pauta_piezas', (q) => q.eq('company_id', companyId)),
+    // Unidades listas a la fecha de entrega de cada lote (regla única en SQL, ver
+    // 20261102130200_score_edicion_a_fecha_entrega.sql); se une por id más abajo.
+    selectAll('av_pieza_listas_a_fecha_v', (q) => q.eq('company_id', companyId)),
     selectAll('av_pautas', (q) => q.eq('company_id', companyId).is('deleted_at', null)),
     selectAll('meetings', (q) => q.eq('company_id', companyId)),
     selectAll('paid_campaigns', (q) => q.eq('company_id', companyId)),
@@ -97,6 +101,7 @@ export async function loadCompanyInputs(companyId) {
     cnp: cnpRes,
     marks: marksRes,
     piezas: piezasRes,
+    piezasAFecha: piezasAFechaRes,
     pautas: pautasRes,
     meetings: meetingsRes,
     paidCampaigns: paidRes,
@@ -112,6 +117,13 @@ export async function loadCompanyInputs(companyId) {
   const users = usersRes.data ?? []
   const companyUserIds = new Set(users.map((u) => u.user_id))
   const campaigns = (allCampaignsRes.data ?? []).filter((c) => companyUserIds.has(c.assignee))
+  const aFechaById = new Map(
+    (piezasAFechaRes.data ?? []).map((r) => [r.id, r.listas_a_fecha_entrega]),
+  )
+  const piezas = (piezasRes.data ?? []).map((p) => ({
+    ...p,
+    listas_a_fecha_entrega: aFechaById.get(p.id) ?? null,
+  }))
 
   return {
     users,
@@ -119,7 +131,7 @@ export async function loadCompanyInputs(companyId) {
     tasks: tasksRes.data ?? [],
     cnp: cnpRes.data ?? [],
     marks: marksRes.data ?? [],
-    piezas: piezasRes.data ?? [],
+    piezas,
     pautas: pautasRes.data ?? [],
     meetings: meetingsRes.data ?? [],
     campaigns,
