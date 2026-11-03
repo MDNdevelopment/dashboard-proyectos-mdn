@@ -6,6 +6,7 @@ const api = vi.hoisted(() => ({
   deleteLote: vi.fn(),
   updatePieza: vi.fn(),
   setFechaEntregaPauta: vi.fn(),
+  setFechaEntregaFormato: vi.fn(),
 }))
 vi.mock('../components/pautas/avPautasApi', () => api)
 
@@ -234,5 +235,40 @@ describe('EdicionSection: fecha de entrega', () => {
   it('pauta no realizada: no muestra fecha', () => {
     renderSec({ pauta: pauta({ status: 'programada' }) })
     expect(screen.queryByTestId('fecha-entrega-pauta')).toBeNull()
+  })
+
+  describe('una fecha por formato', () => {
+    const dos = () => ({
+      pauta: pauta({
+        formats: ['F', 'V'],
+        piezas_por_formato: { F: { salieron: 5, editadas: 0 }, V: { salieron: 4, editadas: 0 } },
+      }),
+      piezas: [
+        lote({ id: 'zf', formato: 'F', cantidad: 5 }),
+        lote({ id: 'zv', formato: 'V', cantidad: 4 }),
+      ],
+    })
+
+    it('fotos para mañana y video para la semana que viene, cada uno con su fecha', async () => {
+      api.setFechaEntregaFormato.mockResolvedValue({ data: [{ id: 'zf' }], error: null })
+      const { onPiezaChanged } = renderSec(dos())
+      fireEvent.click(screen.getByLabelText('Mañana: entrega de Foto'))
+      await waitFor(() =>
+        expect(api.setFechaEntregaFormato).toHaveBeenCalledWith('p1', 'F', '2026-11-11'),
+      )
+      expect(onPiezaChanged).toHaveBeenCalledWith({ id: 'zf' })
+      fireEvent.change(screen.getByLabelText('Fecha de entrega de Video de marca'), {
+        target: { value: '2026-11-17' },
+      })
+      await waitFor(() =>
+        expect(api.setFechaEntregaFormato).toHaveBeenCalledWith('p1', 'V', '2026-11-17'),
+      )
+      expect(api.setFechaEntregaPauta).not.toHaveBeenCalled()
+    })
+
+    it('un formato sin lotes avisa que falta asignar editor', () => {
+      renderSec({ ...dos(), piezas: [lote({ id: 'zv', formato: 'V' })] })
+      expect(screen.getByText(/Foto: asigna un editor para ponerle fecha/)).toBeInTheDocument()
+    })
   })
 })
