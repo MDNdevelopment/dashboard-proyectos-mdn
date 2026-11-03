@@ -212,6 +212,55 @@ describe('grabadas vs editadas (piezas_grabadas / fotos / videos)', () => {
     expect(calcVideos(base({ pautas })).pct).toBe(0.5)
   })
 
+  describe('con fecha de entrega (entrega_por_formato)', () => {
+    const NOV = { year: 2026, month: 11, monthIdx: 2026 * 12 + 10 }
+    const entrega = (fecha, listas, cantidad = 10) => ({ fecha, listas, cantidad })
+
+    it('mide lo listo a la fecha de entrega, no el contador de hoy', () => {
+      // El contador dice 10/10 editadas, pero a la fecha de entrega solo había 6.
+      const pautas = [conPiezas({ entrega_por_formato: { F: entrega('2026-10-20', 6) } })]
+      expect(calcFotos(base({ pautas })).pct).toBeCloseTo(0.6)
+    })
+
+    it('cuenta en el mes de la fecha de entrega, no en el de la pauta', () => {
+      // Pauta del 29 de octubre con entrega el 5 de noviembre: es de noviembre.
+      const pautas = [
+        conPiezas({
+          pauta_date: '2026-10-29',
+          entrega_por_formato: { F: entrega('2026-11-05', 10) },
+        }),
+      ]
+      expect(calcFotos(base({ pautas })).aplica).toBe(false)
+      const nov = calcFotos(base({ ...NOV, pautas }))
+      expect(nov.unidades).toBe(10)
+      expect(nov.pct).toBe(1)
+    })
+
+    it('lo que aún no vence y no está completo queda fuera; completo sí cuenta', () => {
+      const pendiente = conPiezas({
+        pauta_date: '2026-11-10',
+        entrega_por_formato: { F: entrega('2026-11-20', 3) },
+      })
+      expect(calcFotos(base({ ...NOV, pautas: [pendiente] })).aplica).toBe(false)
+      const completo = conPiezas({
+        pauta_date: '2026-11-10',
+        entrega_por_formato: { F: entrega('2026-11-20', 10) },
+      })
+      expect(calcFotos(base({ ...NOV, pautas: [completo] })).pct).toBe(1)
+    })
+
+    it('un formato sin fecha conserva el criterio de antes y no arrastra al que sí la tiene', () => {
+      // Video sin fecha: contador 2/4 en octubre. Fotos con entrega en noviembre: no es de octubre.
+      const pautas = [conPiezas({ entrega_por_formato: { F: entrega('2026-11-05', 10) } })]
+      const r = calcPiezasGrabadas(base({ pautas }))
+      expect(r.unidades).toBe(4)
+      expect(r.pct).toBeCloseTo(0.5)
+      expect(
+        calcPiezasGrabadas(base({ pautas: [conPiezas({ entrega_por_formato: {} })] })).unidades,
+      ).toBe(14)
+    })
+  })
+
   it('reparte las editadas en proporción a lo que grabó cada persona', () => {
     // 4 salieron, 2 editadas: quien grabó 3 recibe 1,5 editadas; el otro recurso, 0,5.
     const pautas = [
@@ -341,6 +390,66 @@ describe('calcEdicion', () => {
     expect(r.key).toBe('edicion')
     expect(r.aplica).toBe(true)
     expect(r.pct).toBe(1)
+  })
+
+  describe('con fecha de entrega', () => {
+    const lote = (o = {}) =>
+      pieza({
+        es_lote: true,
+        cantidad: 10,
+        listas: 10,
+        status: 'listo',
+        fecha_entrega: '2026-10-20',
+        listas_a_fecha_entrega: 10,
+        ...o,
+      })
+    const NOV = { year: 2026, month: 11, monthIdx: 2026 * 12 + 10 }
+
+    it('mide lo que estaba listo a la fecha, no lo que lleva hoy', () => {
+      // Hoy el lote está completo (10/10), pero a su fecha de entrega solo había 7.
+      const r = calcEdicion(base({ piezas: [lote({ listas_a_fecha_entrega: 7 })] }))
+      expect(r.unidades).toBe(10)
+      expect(r.pct).toBeCloseTo(0.7)
+    })
+
+    it('cuenta en el mes de la fecha de entrega, no en el de asignación', () => {
+      // Asignado el 29 de octubre con entrega el 2 de noviembre: no es de octubre, es de noviembre.
+      const p = lote({ created_at: '2026-10-29T10:00:00Z', fecha_entrega: '2026-11-02' })
+      expect(calcEdicion(base({ piezas: [p] })).aplica).toBe(false)
+      const nov = calcEdicion(base({ ...NOV, piezas: [p] }))
+      expect(nov.unidades).toBe(10)
+      expect(nov.pct).toBe(1)
+    })
+
+    it('un lote que aún no vence y no está completo queda fuera; completo sí cuenta', () => {
+      const pendiente = lote({ fecha_entrega: '2026-11-20', listas_a_fecha_entrega: 3 })
+      expect(calcEdicion(base({ ...NOV, piezas: [pendiente] })).aplica).toBe(false)
+      const completo = lote({ fecha_entrega: '2026-11-20', listas_a_fecha_entrega: 10 })
+      expect(calcEdicion(base({ ...NOV, piezas: [completo] })).pct).toBe(1)
+    })
+
+    it('sin historia a esa fecha (null) usa el avance actual', () => {
+      const r = calcEdicion(
+        base({ piezas: [lote({ listas: 6, status: 'en_edicion', listas_a_fecha_entrega: null })] }),
+      )
+      expect(r.pct).toBeCloseTo(0.6)
+    })
+
+    it('un lote sin fecha (anterior a la regla) conserva el criterio de antes', () => {
+      const sinFecha = lote({ fecha_entrega: null, listas_a_fecha_entrega: null, listas: 4 })
+      const r = calcEdicion(base({ piezas: [sinFecha] }))
+      expect(r.unidades).toBe(10)
+      expect(r.pct).toBeCloseTo(0.4)
+    })
+
+    it('las canceladas no cuentan y el lote de otro editor tampoco', () => {
+      const r = calcEdicion(
+        base({
+          piezas: [lote({ status: 'cancelado' }), lote({ editor_user_id: 'otro' })],
+        }),
+      )
+      expect(r.aplica).toBe(false)
+    })
   })
 
   it('suma las piezas de CNP audiovisual al mismo cociente', () => {

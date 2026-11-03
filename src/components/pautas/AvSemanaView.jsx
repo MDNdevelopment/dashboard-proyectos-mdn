@@ -7,6 +7,7 @@ import ColaAprobacion from './ColaAprobacion'
 import PautaCard from './PautaCard'
 import CnpPendienteCard from './CnpPendienteCard'
 import PendientesResumen from './PendientesResumen'
+import FechaEntregaPauta from './FechaEntregaPauta'
 import {
   weekRange,
   pautasInWeek,
@@ -54,6 +55,9 @@ export default function AvSemanaView({
   recursoUsers,
   allEmployees,
   canApprove,
+  puedeFijarFecha,
+  puedeMoverFechaVencida,
+  onPiezaChanged,
   today = new Date(),
   onFields,
   onPautaClick,
@@ -70,7 +74,7 @@ export default function AvSemanaView({
   const range = weekRange(anchor)
   const semana = pautasInWeek(pautas, range)
   const byDay = groupByDay(semana)
-  const alertas = calcAlertas(pautas, piezasByPauta, hoy, { cnps })
+  const alertas = calcAlertas(pautas, piezasByPauta, hoy, { cnps, puedeFijarFecha })
   const d0 = parseISODate(range.start)
   const resumen = resumenMes(pautas, piezasByPauta, {
     year: d0.getFullYear(),
@@ -248,6 +252,31 @@ export default function AvSemanaView({
                 />
               ))}
             </>
+          ) : drawer === 'sinFechaEntrega' ? (
+            alertas.sinFechaEntrega.map((p) => (
+              <div key={p.id} className="space-y-1.5">
+                <PautaCard
+                  pauta={p}
+                  piezas={piezasByPauta?.get(p.id) ?? []}
+                  usersById={usersById}
+                  showDate
+                  onClick={(x) => {
+                    setDrawer(null)
+                    onPautaClick(x)
+                  }}
+                />
+                <div className="px-1">
+                  <FechaEntregaPauta
+                    pauta={p}
+                    piezas={piezasByPauta?.get(p.id) ?? []}
+                    canEdit
+                    canMoveVencida={puedeMoverFechaVencida?.(p) ?? false}
+                    hoy={hoy}
+                    onPiezaChanged={onPiezaChanged}
+                  />
+                </div>
+              </div>
+            ))
           ) : (
             alertas[drawer].map((p) => (
               <PautaCard
@@ -273,6 +302,8 @@ const DRAWER_HINT = {
   porAprobar: 'Agenda cada una con fecha, lugar y recursos, o declínala.',
   sinCaptura: 'Pautas que ya pasaron y nadie registró cuántas piezas salieron.',
   grillaIncumple: 'La grilla debía estar 2 días antes de la pauta y no se ha cargado.',
+  sinFechaEntrega:
+    'Pautas realizadas con piezas por editar y sin fecha de entrega: ponla para que la edición se mida a tiempo.',
   piezasAtrasadas:
     'Pautas realizadas hace más de una semana con piezas por editar y CNPs audiovisuales sin terminar de tu línea.',
 }

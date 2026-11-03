@@ -149,7 +149,9 @@ describe('alertas', () => {
     expect(a.sinCaptura.map((p) => p.id)).toEqual(['ayer'])
     expect(a.grillaIncumple.map((p) => p.id)).toEqual(['grilla'])
     expect(a.piezasAtrasadas.map((p) => p.id)).toEqual(['atras'])
-    expect(a.total).toBe(4)
+    // `atras` también es una realizada con piezas por editar y sin fecha de entrega.
+    expect(a.sinFechaEntrega.map((p) => p.id)).toEqual(['atras'])
+    expect(a.total).toBe(5)
   })
 
   it('cnpPendientes: solo CNP audiovisuales abiertos, por entrega y sumados al total', () => {
