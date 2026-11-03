@@ -574,13 +574,14 @@ export function calcPautas(ctx) {
 function calcGrabadasVsEditadas(key, codes, ctx) {
   const { userId, monthIdx, pautas, disponibilidad } = ctx
   const rangos = disponibilidad?.rangosExcluidos ?? []
+  const hoy = ctx.today ?? today()
   let grabadas = 0
   let editadas = 0
   let nPautas = 0
   for (const p of pautas ?? []) {
     if (p.deleted_at || p.status !== 'realizada') continue
     if (!(p.recurso_ids ?? []).includes(userId)) continue
-    if (monthOf(p.pauta_date) !== monthIdx || isExcluded(p.pauta_date, rangos)) continue
+    if (isExcluded(p.pauta_date, rangos)) continue
     const reparto = grabacionPorFormato(p)
     const porFormato = piezasPorFormato(p)
     let cuenta = false
@@ -588,8 +589,21 @@ function calcGrabadasVsEditadas(key, codes, ctx) {
       const mias = reparto[code]?.[userId] ?? 0
       const { salieron = 0, editadas: ed = 0 } = porFormato[code] ?? {}
       if (mias <= 0 || salieron <= 0) continue
+      // Con fecha de entrega en los lotes del formato (`entrega_por_formato`) la pieza cuenta
+      // en el MES de esa fecha y se mide por lo listo A esa fecha, no por el contador de hoy;
+      // lo que aún no vence y no está completo queda fuera. Sin fecha (pautas anteriores a la
+      // regla) se mantiene el criterio de antes: mes de la pauta y contador actual.
+      const entrega = p.entrega_por_formato?.[code]
+      let hechas = ed
+      if (entrega?.fecha) {
+        if (monthOf(entrega.fecha) !== monthIdx) continue
+        hechas = Number(entrega.listas) || 0
+        if (parseD(entrega.fecha.slice(0, 10)) >= hoy && hechas < salieron) continue
+      } else if (monthOf(p.pauta_date) !== monthIdx) {
+        continue
+      }
       grabadas += mias
-      editadas += mias * Math.min(1, ed / salieron)
+      editadas += mias * Math.min(1, hechas / salieron)
       cuenta = true
     }
     if (cuenta) nPautas += 1

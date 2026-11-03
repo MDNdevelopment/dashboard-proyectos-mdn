@@ -60,6 +60,7 @@ export async function loadCompanyInputs(companyId) {
     piezasRes,
     piezasAFechaRes,
     pautasRes,
+    pautasEntregaRes,
     meetingsRes,
     paidRes,
     checksRes,
@@ -83,6 +84,9 @@ export async function loadCompanyInputs(companyId) {
     // 20261102130200_score_edicion_a_fecha_entrega.sql); se une por id más abajo.
     selectAll('av_pieza_listas_a_fecha_v', (q) => q.eq('company_id', companyId)),
     selectAll('av_pautas', (q) => q.eq('company_id', companyId).is('deleted_at', null)),
+    // Fecha de entrega y listas a esa fecha por formato de cada pauta (regla única en SQL, ver
+    // 20261103120000_score_grabadas_a_fecha_entrega.sql); se une por id más abajo.
+    selectAll('av_pauta_entrega_v', (q) => q.eq('company_id', companyId)),
     selectAll('meetings', (q) => q.eq('company_id', companyId)),
     selectAll('paid_campaigns', (q) => q.eq('company_id', companyId)),
     selectAll('publication_checks', (q) => q.eq('company_id', companyId)),
@@ -103,6 +107,7 @@ export async function loadCompanyInputs(companyId) {
     piezas: piezasRes,
     piezasAFecha: piezasAFechaRes,
     pautas: pautasRes,
+    pautasEntrega: pautasEntregaRes,
     meetings: meetingsRes,
     paidCampaigns: paidRes,
     checks: checksRes,
@@ -120,6 +125,13 @@ export async function loadCompanyInputs(companyId) {
   const aFechaById = new Map(
     (piezasAFechaRes.data ?? []).map((r) => [r.id, r.listas_a_fecha_entrega]),
   )
+  const entregaById = new Map(
+    (pautasEntregaRes.data ?? []).map((r) => [r.id, r.entrega_por_formato]),
+  )
+  const pautas = (pautasRes.data ?? []).map((p) => ({
+    ...p,
+    entrega_por_formato: entregaById.get(p.id) ?? {},
+  }))
   const piezas = (piezasRes.data ?? []).map((p) => ({
     ...p,
     listas_a_fecha_entrega: aFechaById.get(p.id) ?? null,
@@ -132,7 +144,7 @@ export async function loadCompanyInputs(companyId) {
     cnp: cnpRes.data ?? [],
     marks: marksRes.data ?? [],
     piezas,
-    pautas: pautasRes.data ?? [],
+    pautas,
     meetings: meetingsRes.data ?? [],
     campaigns,
     paidCampaigns: paidRes.data ?? [],
