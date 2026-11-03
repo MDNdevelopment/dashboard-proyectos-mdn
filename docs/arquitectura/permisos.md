@@ -37,6 +37,8 @@ Gotcha: el seed `20260706000002` nunca se aplicó en prod; los defaults de prod 
 - `empresa.permisos.manage` — registrar/editar/eliminar permisos, ausencias y reposos — `min_level 4` o `user_id` de Sofía Lauretta.
 - `empresa.suscripciones` — tab "Suscripciones" (`/empresa/suscripciones`), lectura de `company_subscriptions` — mismas reglas que `finanzas` (nivel ≥ 4 o departamento Administración; admin siempre).
 - `empresa.suscripciones.manage` — agregar/editar/eliminar suscripciones — mismas reglas que `finanzas`. Sembradas copiando la fila `finanzas` (fallback nivel ≥ 4); ajustables desde Accesos.
+- `empresa.equipos` — tab "Equipos" (`/empresa/equipos`), lectura de `company_equipment` y su historial, y bloque en la ficha del empleado — `min_level 3`; admin siempre.
+- `empresa.equipos.manage` — agregar/editar/eliminar equipos — `min_level 4`. Sembradas en su migración; ajustables desde Accesos.
 - RPC `line_subscription_costs`: no exige `empresa.suscripciones`; se gatea con `metrics_user_can_view()` / `metrics_user_view_all()` + membresía de línea (mismo alcance que la RLS de `metric_reports`) para que los jefes de línea vean su gasto por suscripciones sin leer la tabla.
 - Gotcha: `empresa.permisos` antes gateaba la tab de configuración (hoy `empresa.accesos`); hoy gatea el reporte RRHH (`employee_permissions`, §2.6).
 

@@ -4,7 +4,7 @@
 Administración organizacional: departamentos, cargos, empleados, vacaciones, permisos/ausencias de RRHH, preguntas de evaluación, clientes, líneas operativas, recursos externos y accesos por módulo.
 
 ## Rutas y archivos
-**Rutas:** `/empresa` · `/empresa/departamentos` · `/empresa/empleados` · `/empresa/preguntas` · `/empresa/clientes` · `/empresa/lineas` · `/empresa/permisos` (RRHH, `PermisosRrhhView.jsx`) · `/empresa/suscripciones` (`SubscriptionsView.jsx`, capability `empresa.suscripciones`) · `/empresa/accesos` (accesos por módulo, `PermisosView.jsx`) · `/empresa/mappi` (backlog de huecos de MAPPI, `MappiLogsView.jsx`, capability `empresa.mappi`, ver §2.14 "Registro de huecos").
+**Rutas:** `/empresa` · `/empresa/departamentos` · `/empresa/empleados` · `/empresa/preguntas` · `/empresa/clientes` · `/empresa/lineas` · `/empresa/permisos` (RRHH, `PermisosRrhhView.jsx`) · `/empresa/suscripciones` (`SubscriptionsView.jsx`, capability `empresa.suscripciones`) · `/empresa/equipos` (iPhones por team, `EquipmentView.jsx`, capability `empresa.equipos`) · `/empresa/accesos` (accesos por módulo, `PermisosView.jsx`) · `/empresa/mappi` (backlog de huecos de MAPPI, `MappiLogsView.jsx`, capability `empresa.mappi`, ver §2.14 "Registro de huecos").
 
 **Página:** `src/pages/EmpresaPage.jsx`.
 
@@ -16,6 +16,7 @@ Administración organizacional: departamentos, cargos, empleados, vacaciones, pe
 - Líneas: `LinesView.jsx` · `LineModal.jsx` · `LineMetasModal.jsx` · `LineFichaModal.jsx`
 - Accesos/RRHH: `PermisosView.jsx` (pestaña "Accesos") · `PermisosRrhhView.jsx` / `PermissionFormDialog.jsx` (pestaña "Permisos")
 - Suscripciones: `SubscriptionsView.jsx` · `SubscriptionModal.jsx`
+- Equipos: `EquipmentView.jsx` · `EquipmentModal.jsx` · `EquipmentArchiveWarning.jsx` (aviso en el diálogo de baja) · `src/components/metricas/EmployeeEquipmentBlock.jsx` (bloque en la ficha del empleado)
 - Otros: `src/components/common/ConfirmDeleteDialog.jsx` · `src/components/metricas/EmployeePermissionsBlock.jsx` (historial de permisos en la ficha del empleado)
 
 **Lib / utils:**
@@ -27,12 +28,13 @@ Administración organizacional: departamentos, cargos, empleados, vacaciones, pe
 - `src/utils/lineFilters.js` · `lineMembers.js` · `src/utils/clientInMonth.js` · `src/utils/clientsPerMonth.js` · `src/utils/employeeInMonth.js` (`employeeActiveInMonth`)
 - Export: `src/utils/exportClientsToPdf.js` (jsPDF; `buildClientColumns`, `computeClientSheetLayout`, `renderClientSheet`)
 - `src/lib/permissions.js` (`canViewEmployeeFicha`)
+- `src/lib/equipment.js` (CRUD de `company_equipment`, `fetchEquipmentHistory`, `fetchEquipmentForUser`) · `src/utils/equipment.js` (lógica pura: `filterEquipment`, `countsByStatus`, `groupByLine`, `validateEquipment`, `IPHONE_MODELS`, `STATUS_META`)
 - `src/lib/subscriptions.js` (CRUD de `company_subscriptions`) · `src/utils/subscriptions.js` (lógica pura: `nextBillingDate`, `daysUntil`, `monthlyEquivalent`, `totalsByCurrency`, `FREQUENCIES`, `STATUS_META`)
 
 **Netlify functions:** `netlify/functions/create-employee.js` (`/api/employees`, service role + invite Supabase Auth) · `netlify/functions/archive-employee.js` (`/api/employees/manage`, service role).
 
 ## Datos
-- `departments` · `positions` · `users` (empleados) · `vacations` · `metric_clients` · `metric_lines` · `metric_line_members` (N:M línea↔empleado) · `module_permissions` · `external_resources` · `company_subscriptions`.
+- `departments` · `positions` · `users` (empleados) · `vacations` · `metric_clients` · `metric_lines` · `metric_line_members` (N:M línea↔empleado) · `module_permissions` · `external_resources` · `company_subscriptions` · `company_equipment` + `company_equipment_assignments`.
 - `questions` + `question_positions` + `question_tags`: banco de preguntas del flujo manual de Evaluaciones, retirado en F6 → solo lectura (§2.7).
 - `users`: `deleted_at` (soft delete), `baja_incluye_mes` (default `true`), `on_probation` (bool, default false), `birth_date`, `hire_date`, `monthly_salary`, `access_level`, `admin`, `first_name`.
 - `metric_clients`: `deleted_at`, `contract_end`, `contract_end_reason`, `baja_incluye_mes`, `mdn_since`, `created_at`, `social_manager_id`.
@@ -52,6 +54,7 @@ Administración organizacional: departamentos, cargos, empleados, vacaciones, pe
   - `empresa.permisos`: ver reporte de permisos RRHH (`min_level 3`).
   - `empresa.permisos.manage`: registrar/editar/eliminar permisos (`min_level 4` o `user_id` de Sofía Lauretta).
 - Asignar `access_level`/`admin` a otro empleado: solo admin (toggle y selector ocultos en `EmployeeModal`/`NewEmployeeDialog`). `create-employee.js`/`archive-employee.js` usan `requireCapability(event, 'empresa.empleados.manage')` (no `requireAdmin`) con clamp server-side de `admin`/`access_level` si el caller no es admin.
+  - `empresa.equipos` (ver, `min_level 3`) / `empresa.equipos.manage` (agregar, editar, eliminar; `min_level 4`): admin siempre pasa.
   - `empresa.suscripciones` / `empresa.suscripciones.manage`: ver / agregar, editar y eliminar suscripciones; mismas reglas que `finanzas` (nivel ≥ 4 o departamento Administración).
 - RLS `vacations`: SELECT/INSERT/UPDATE/DELETE exigen `user_can('empresa.vacaciones.manage')`.
 - `users` select de `loadAll` usa columnas explícitas (no `*`); `monthly_salary` solo se pide si `canSeeLevels`.
@@ -107,6 +110,15 @@ Administración organizacional: departamentos, cargos, empleados, vacaciones, pe
 - Reporte de línea: ver `metricas.md` (filas `fuente:'suscripcion'` en `gastosOperativos`). No hay reporte de gastos por departamento: los departamentos solo se resumen aquí.
 - Sin `empresa.suscripciones.manage` la vista es de solo lectura. Cancelar = estado `cancelada` (fija `cancelled_at`); eliminar es para registros cargados por error.
 
+### Equipos (`EquipmentView.jsx`)
+- Inventario de **iPhones** de la agencia (solo iPhones: no hay tipo de equipo). Campos: modelo (texto libre con sugerencias `IPHONE_MODELS` + los ya registrados), serial opcional (único por empresa sin distinguir mayúsculas), correo de iCloud (sugiere los ya usados), línea/team, responsable (`activeEmployees`), estado y notas.
+- Lista agrupada por línea (`groupByLine`, orden de `sort_order`; sin línea al final), como la hoja "Correos de equipos audiovisuales". La cabecera de cada team muestra cuántos iPhones tiene y sus correos de iCloud distintos.
+- Cards Total / En uso / Disponibles / En reparación (atajos de filtro; el total excluye bajas) + `FilterBar` (búsqueda por modelo, serial, iCloud y responsable; línea; responsable). Los dados de baja se ocultan salvo con "Ver dados de baja" o filtrando por ese estado.
+- Un responsable archivado sigue mostrando su nombre con "Dado de baja · reasignar". El diálogo de baja de empleado lista los iPhones que aún tiene a su cargo (`EquipmentArchiveWarning`); no bloquea.
+- Historial: cada cambio de `responsible_user_id` o `line_id` lo registra un trigger en `company_equipment_assignments`; el modal de edición lo muestra de solo lectura. Dejar de usar un equipo = estado `baja`; eliminar es para registros cargados por error (borra también su historial).
+- Ficha del empleado: bloque "Equipos a su cargo" gateado por `can('empresa.equipos')`.
+- Sin `empresa.equipos.manage` la vista es de solo lectura.
+
 ### Clientes (`ClientsView`)
 - Carga todos incl. archivados (`loadClients({ includeArchived: true })`). Modo Actual: activos (`deleted_at IS NULL`); "Ver archivados" → Restaurar (limpia `contract_end`/`contract_end_reason`).
 - Archivar = soft delete (`deleteClient(clientId, { incluyeMes, contractEnd, reason })`): pide fecha real de fin (default hoy → `contract_end`) y motivo opcional (`contract_end_reason`). Si la fecha cae en el mes actual, radio "Sí, facturó/trabajó" → `baja_incluye_mes=true` / "No, sacarlo también de este mes" → `false`; si es de un mes anterior, manda `contract_end` (texto informativo).
@@ -141,5 +153,6 @@ Administración organizacional: departamentos, cargos, empleados, vacaciones, pe
 - §2.7 Evaluaciones: banco de preguntas legacy de solo lectura.
 - §2.4ter Pautas/Audiovisual: consume `external_resources`; calendario calcado de `AvCalendar.jsx`.
 - §2.14 MAPPI: `/empresa/mappi`.
+- Equipos: `company_equipment.line_id → metric_lines`, `responsible_user_id → users`; alimenta la ficha del empleado y el aviso de baja.
 - §2.15 Finanzas: Suscripciones comparte sus reglas de acceso y las keys de `CATEGORIAS_GASTO`, pero no alimenta `fin_*`.
 - §5: convención de soft delete.

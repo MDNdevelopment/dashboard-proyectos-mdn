@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { canViewEmployeeFicha } from '../../lib/permissions'
 import EmployeePermissionsBlock from './EmployeePermissionsBlock'
+import EmployeeEquipmentBlock from './EmployeeEquipmentBlock'
 
 /**
  * Cuerpo embebible de la ficha de un empleado (users). Sin overlay, botón X
@@ -159,6 +160,8 @@ export default function EmployeeFichaContent({ employee, line, onClose }) {
 
         {/* Permisos (RRHH): permisos, ausencias y reposos médicos registrados */}
         {can('empresa.permisos') && <EmployeePermissionsBlock userId={employee.user_id} />}
+
+        {can('empresa.equipos') && <EmployeeEquipmentBlock userId={employee.user_id} />}
 
         {/* Acciones */}
         {can('evaluaciones') && (

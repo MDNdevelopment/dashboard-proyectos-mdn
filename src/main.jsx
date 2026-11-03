@@ -224,6 +224,14 @@ createRoot(document.getElementById('root')).render(
               }
             />
             <Route
+              path="/empresa/equipos"
+              element={
+                <RequireModule moduleKey="empresa">
+                  <EmpresaPage />
+                </RequireModule>
+              }
+            />
+            <Route
               path="/empresa/mappi"
               element={
                 <RequireModule moduleKey="empresa">

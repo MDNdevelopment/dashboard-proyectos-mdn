@@ -229,7 +229,8 @@ export const MONTHLY_TARGET_PER_NETWORK = 4
  * `weeksWithDate`: igual que Grillas Redes→Diseño y Grillas Diseño→Redes en
  * `computeProductividad` (utils/fixedTasks.js), esa semana no es parte de la cadencia real
  * de 4/mes, así que una celda registrada solo en la semana 5 no debe poder "tapar" un mes
- * incompleto (sin `weeks`, o con 4, no cambia nada).
+ * incompleto (sin `weeks`, o con 4, no cambia nada). Tampoco cuenta un registro en una semana
+ * que el mes no tiene (p. ej. S5 en un mes de 4 semanas, como sep 2026 con la regla de mayoría).
  *
  * @param {Array} checks   publication_checks del mes (line_id ya filtrado)
  * @param {Array} clients  cuentas de la línea (con social_links, fixed_tasks)
@@ -239,6 +240,7 @@ export const MONTHLY_TARGET_PER_NETWORK = 4
  */
 export function computePlataformasProductividad(checks, clients, weeks = []) {
   const excludedWeekN = weeks.length >= 5 ? weeks.at(-1)?.n : null
+  const knownWeekNs = new Set(weeks.map((w) => w.n))
   let meta = 0
   let realizado = 0
   clients.forEach((client) => {
@@ -261,7 +263,12 @@ export function computePlataformasProductividad(checks, clients, weeks = []) {
         meta += MONTHLY_TARGET_PER_NETWORK
         const weeksWithDate = new Set(
           cellChecks
-            .filter((c) => c.last_published_at && c.period_week !== excludedWeekN)
+            .filter(
+              (c) =>
+                c.last_published_at &&
+                c.period_week !== excludedWeekN &&
+                (knownWeekNs.size === 0 || knownWeekNs.has(c.period_week)),
+            )
             .map((c) => c.period_week),
         )
         realizado += Math.min(MONTHLY_TARGET_PER_NETWORK, weeksWithDate.size)

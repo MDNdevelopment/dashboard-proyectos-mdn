@@ -16,7 +16,7 @@ import {
   effectiveLineId,
   clientsForLine,
 } from '../utils/chequeo'
-import { buildFixedWeeks } from '../utils/fixedTasks'
+import { buildFixedWeeks, buildChequeoWeeks } from '../utils/fixedTasks'
 
 // Agosto 2026: miércoles 4, 11, 18, 25 → 4 semanas. S3 = monIni 16 ago, dom 22 ago.
 const WEEKS = buildFixedWeeks(2026, 8)
@@ -27,6 +27,10 @@ describe('currentFixedWeekN', () => {
     expect(currentFixedWeekN(WEEKS, new Date(2026, 7, 20))).toBe(3)
     expect(currentFixedWeekN(WEEKS, S3.monIni)).toBe(3)
     expect(currentFixedWeekN(WEEKS, S3.dom)).toBe(3)
+  })
+
+  it('hoy (29 oct 2026) es S5 de octubre con la regla de mayoría', () => {
+    expect(currentFixedWeekN(buildChequeoWeeks(2026, 10), new Date(2026, 9, 29))).toBe(5)
   })
 
   it('null si la fecha cae fuera de todas las semanas del mes', () => {

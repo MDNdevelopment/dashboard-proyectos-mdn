@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   buildFixedWeeks,
+  buildChequeoWeeks,
   tasksForWeek,
   taskDeadline,
   taskAppliesToClient,
@@ -42,6 +43,45 @@ describe('buildFixedWeeks', () => {
   it('numera las semanas consecutivamente desde 1', () => {
     const weeks = buildFixedWeeks(YEAR, MONTH)
     expect(weeks.map((w) => w.n)).toEqual([1, 2, 3, 4, 5])
+  })
+
+  it('antes de nov 2026 usa la regla del miércoles (sep 2026 = 5 semanas)', () => {
+    expect(buildFixedWeeks(2026, 9)).toHaveLength(5)
+  })
+
+  it('desde nov 2026 usa por defecto la regla de mayoría (jueves)', () => {
+    // Marzo 2027: la semana 29 mar–4 abr tiene 3 días de marzo y 4 de abril → gana abril.
+    const marzo = buildFixedWeeks(2027, 3)
+    expect(marzo.at(-1).dom.getMonth()).toBe(2) // el domingo de la última semana sigue en marzo
+    const abril = buildFixedWeeks(2027, 4)
+    expect(abril[0].monIni.getDate()).toBe(29)
+    expect(abril[0].monIni.getMonth()).toBe(2)
+  })
+})
+
+describe('buildChequeoWeeks (mayoría: gana el mes con más días)', () => {
+  const fmt = (d) => `${d.getMonth() + 1}/${d.getDate()}`
+
+  it('octubre 2026 tiene 5 semanas: S1 = 28 sep–4 oct, S5 = 26 oct–1 nov', () => {
+    const weeks = buildChequeoWeeks(2026, 10)
+    expect(weeks).toHaveLength(5)
+    expect([fmt(weeks[0].monIni), fmt(weeks[0].dom)]).toEqual(['9/28', '10/4'])
+    expect([fmt(weeks[4].monIni), fmt(weeks[4].dom)]).toEqual(['10/26', '11/1'])
+  })
+
+  it('septiembre 2026 tiene 4 semanas: S1 = 31 ago–6 sep, S4 = 21–27 sep', () => {
+    const weeks = buildChequeoWeeks(2026, 9)
+    expect(weeks).toHaveLength(4)
+    expect([fmt(weeks[0].monIni), fmt(weeks[0].dom)]).toEqual(['8/31', '9/6'])
+    expect([fmt(weeks[3].monIni), fmt(weeks[3].dom)]).toEqual(['9/21', '9/27'])
+  })
+
+  it('`wed` sigue siendo el miércoles de cada semana (fechas tope intactas)', () => {
+    buildChequeoWeeks(2026, 10).forEach((w) => {
+      expect(w.wed.getDay()).toBe(3)
+      expect(w.monIni.getDay()).toBe(1)
+      expect(w.dom.getDay()).toBe(0)
+    })
   })
 })
 

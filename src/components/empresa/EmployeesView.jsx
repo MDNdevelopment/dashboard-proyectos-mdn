@@ -10,6 +10,7 @@ import NewEmployeeDialog from './NewEmployeeDialog'
 import EmployeeInfoModal from '../metricas/EmployeeInfoModal'
 import ConfirmDeleteDialog from '../common/ConfirmDeleteDialog'
 import ExternalResourcesView from './ExternalResourcesView'
+import EquipmentArchiveWarning from './EquipmentArchiveWarning'
 import EmployeeDatesCalendar from './EmployeeDatesCalendar'
 import EmployeeDayEventsModal from './EmployeeDayEventsModal'
 import TeamStatusCards from './TeamStatusCards'
@@ -946,6 +947,7 @@ export default function EmployeesView({ companyId }) {
           onCancel={() => setConfirmArchive(null)}
           confirming={archiving}
         >
+          <EquipmentArchiveWarning userId={confirmArchive.user_id} />
           {/* Espejo del radio de clientes en ClientsView: decide si el mes de la baja
               todavía cuenta en los reportes mensuales (utils/employeeInMonth.js). */}
           <fieldset className="rounded-xl border border-[#ece9df] bg-[#faf9f4] p-3">

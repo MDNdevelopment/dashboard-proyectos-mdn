@@ -6,10 +6,11 @@
 - `src/pages/ChequeoPage.jsx` · `src/components/chequeo/ChequeoGrid.jsx`
 - `src/components/chequeo/ChequeoSummary.jsx` — fila de KPIs, reutiliza `src/components/tareas/KpiCard.jsx`
 - `chequeoApi.js` — datos: `loadChecks(companyId, year, month)`, `upsertCheck`
+- `src/utils/fixedTasks.js` → `buildChequeoWeeks`
 - `src/utils/chequeo.js` — lógica pura: `currentFixedWeekN`, `mostRecentCheck`, `recentCheckStatus`, `daysSince`, `formatCheckDate`, `contentTypeApplies`, `WEEKLY_EXEMPT_NETWORKS`, `MONTHLY_TARGET_PER_NETWORK`, `computePlataformasProductividad`, `computeChequeoSummary`, `periodEndDate`, `checkReferenceDate`, `effectiveLineId`, `clientsForLine`
 
 #### Grilla
-- Filas `cuenta/red social × tipo de contenido`, periodizada por **mes + semana fija** (igual que Tareas Fijas §2.4bis, ancladas al miércoles, `buildFixedWeeks`). Selector de mes + chips `S1…Sn`.
+- Filas `cuenta/red social × tipo de contenido`, periodizada por **mes + semana lun-dom**. Cada semana pertenece al mes que tiene más días de ella (4 o más de 7, o sea el mes de su jueves): `buildChequeoWeeks` (`fixedTasks.js`), siempre esa regla, también hacia atrás. Ej.: 28 sep–4 oct es S1 de octubre; oct 2026 tiene 5 semanas y sep 2026, 4. Tareas Fijas (§2.4bis) usa la misma regla solo desde nov 2026. Selector de mes + chips `S1…Sn`.
 - El chip es solo la casilla donde se registra; la **fecha es libre** (`<input type="date">` sin `min`/`max`, puede ser de otra semana/mes): registro histórico fiel. Cualquier semana (incluido histórico) es editable sin confirmación. Guardado instantáneo.
 - Cada marca: fila de encabezado a ancho completo (fondo más oscuro) con logo (`metric_clients.logo_url`, o inicial). Cada red: ícono real (`NetworkIcon`, §5) y nombre enlazado a `social_links[].link`.
 - Redes de cada fila derivadas de `metric_clients.social_links` (no se recapturan en Chequeo).
@@ -22,6 +23,7 @@
 - Referencia (`checkReferenceDate` + `periodEndDate`): "hoy" si el período (semana activa, o mes en vista reciente) sigue en curso; si ya pasó, **congelada en la fecha de cierre** del período.
 - `ChequeoGrid`/`ChequeoPage` la calculan una vez por render y la pasan explícita a `recentCheckStatus`/`computeChequeoSummary` (no usar su default `new Date()`).
 - Gotcha: con el default `new Date()` todo lo marcado a tiempo terminaba en rojo al pasar el tiempo.
+- Gotcha: el semáforo se mide contra el domingo de la semana; si las semanas se construyen con otra regla que la de las CMs (miércoles en vez de mayoría) todo sale una semana tarde → naranja/rojo. Chequeo y su fila de Productividad usan siempre `buildChequeoWeeks`.
 
 #### Vista "Ver fecha más reciente"
 - Botón junto al selector de semana → `ChequeoGrid` con `viewMode='recent'`: solo lectura; cada celda muestra la fecha más reciente de cualquier semana del mes (`mostRecentCheck`, ignora `period_week`). Mismo semáforo. Chips `S1…Sn` ocultos.

@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { loadLines, loadClients } from '../components/metricas/metricsApi'
 import { MONTHS } from '../components/metricas/constants'
 import { visibleLinesForUser } from '../utils/lineMembers'
-import { buildFixedWeeks } from '../utils/fixedTasks'
+import { buildChequeoWeeks } from '../utils/fixedTasks'
 import {
   currentFixedWeekN,
   computeChequeoSummary,
@@ -41,7 +41,7 @@ export default function ChequeoPage() {
   const [weekN, setWeekN] = useState(1)
   const [viewMode, setViewMode] = useState('week')
 
-  const weeks = buildFixedWeeks(year, month)
+  const weeks = buildChequeoWeeks(year, month)
   const todayWeekN = currentFixedWeekN(weeks)
 
   // Reinicia la semana activa si el mes cambia y esa semana ya no existe (meses de 4/5 semanas).

@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { loadLines, loadClients } from '../components/metricas/metricsApi'
 import { MONTHS } from '../components/metricas/constants'
 import { visibleLinesForUser } from '../utils/lineMembers'
-import { buildFixedWeeks } from '../utils/fixedTasks'
+import { buildFixedWeeks, buildChequeoWeeks } from '../utils/fixedTasks'
 import { loadChecks } from '../components/chequeo/chequeoApi'
 import { selectAllPages } from '../lib/supabasePaginate'
 import FixedTasksGrid from '../components/tareas-fijas/FixedTasksGrid'
@@ -298,6 +298,7 @@ export default function TareasFijasPage() {
               clients={clients}
               marks={marks}
               weeks={weeks}
+              chequeoWeeks={buildChequeoWeeks(year, month)}
               checks={checks}
               showMatrix={activeLineId === ALL_LINES}
               lineLabel={activeLine?.name}
