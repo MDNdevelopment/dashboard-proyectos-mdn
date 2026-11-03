@@ -257,14 +257,15 @@ export async function updatePieza(piezaId, fields) {
 
 /**
  * Fija la fecha de entrega de TODOS los lotes de una pauta (un solo campo por pauta en la UI).
- * El trigger `av_pauta_piezas_guard_fecha_entrega` valida permiso (42501) y que ninguna fecha
- * vencida se mueva (22023); `pautaErrorMessage` traduce esos errores. Devuelve las filas
+ * El trigger `av_pauta_piezas_guard_fecha_entrega` valida permiso (42501) y que una fecha ya
+ * vencida solo la mueva la jefa de la línea (22023); `pautaErrorMessage` traduce esos errores.
+ * `fecha` vacía borra la fecha. Devuelve las filas
  * actualizadas en `data`.
  */
 export async function setFechaEntregaPauta(pautaId, fecha) {
   return supabase
     .from('av_pauta_piezas')
-    .update({ fecha_entrega: fecha || null, fecha_entrega_confirmada: true })
+    .update({ fecha_entrega: fecha || null })
     .eq('pauta_id', pautaId)
     .eq('es_lote', true)
     .select()
@@ -282,7 +283,6 @@ function sanitizePiezaFields(fields) {
     'cantidad',
     'listas',
     'fecha_entrega',
-    'fecha_entrega_confirmada',
   ]
   const out = {}
   for (const key of allowed) {

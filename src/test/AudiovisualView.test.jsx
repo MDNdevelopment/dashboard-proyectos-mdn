@@ -455,6 +455,16 @@ describe('AudiovisualView — vista Calendario', () => {
 })
 
 describe('AudiovisualView — toggle Semana / Mes', () => {
+  // El test navega "cuatro semanas adelante" desde hoy: depende del reloj, así que se fija el
+  // día (solo `Date`, para no frenar los timers de waitFor).
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 9, 5))
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('Mes abre el calendario en el mes de la semana que se estaba viendo y Semana vuelve a la grilla', async () => {
     renderView({ userProfile: COORD, can: (key) => key === 'audiovisual.coordina', lines: [] })
     await waitFor(() => expect(screen.getByText('+ Agregar pauta')).toBeInTheDocument())

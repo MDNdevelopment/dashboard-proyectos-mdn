@@ -610,8 +610,8 @@ export function briefComplete(pauta) {
 export function pautaErrorMessage(err) {
   if (!err) return null
   const raw = err.message || ''
-  if (err.code === '22023' || /fecha de entrega ya venci/i.test(raw)) {
-    return 'La fecha de entrega ya venció y no se puede mover.'
+  if (err.code === '22023' || /fecha de entrega vencida/i.test(raw)) {
+    return 'La fecha de entrega ya venció: solo la jefa de la línea puede cambiarla.'
   }
   if (/permiso para cambiar la fecha de entrega/i.test(raw)) {
     return 'No tienes permiso para cambiar la fecha de entrega de las piezas.'
@@ -1381,6 +1381,7 @@ export function pautaPermissions({
       canMarkRealizada: false,
       canEditPiezas: false,
       canSetFechaEntrega: false,
+      canMoveFechaVencida: false,
       canDelete: false,
       canRestore: false,
       canReopen: false,
@@ -1405,6 +1406,8 @@ export function pautaPermissions({
     canEditPiezas: !deleted && canEditPiezas && ['programada', 'realizada'].includes(pauta.status),
     // Espejo de `av_pieza_puede_fijar_fecha`: coordina, gestión o jefa de la línea.
     canSetFechaEntrega: !deleted && (canCoordinate || canGestionPautas || isLead),
+    // Espejo de `av_pieza_puede_mover_vencida`: una fecha ya vencida solo la mueve la jefa.
+    canMoveFechaVencida: !deleted && isLead,
     canDelete: !deleted && (canCoordinate || (solicitada && isCreator)),
     canRestore: deleted && canCoordinate,
     canReopen: !deleted && canCoordinate && pauta.status === 'declinada',
@@ -1699,6 +1702,8 @@ export const STUDIO_DAY_START = 8
 export const STUDIO_DAY_END = 18
 /** Días que una pauta realizada puede tener piezas sin editar antes de marcarse atrasada. */
 export const PIEZAS_ATRASO_DIAS = 7
+/** Antigüedad máxima de una pauta realizada para avisar que le falta la fecha de entrega. */
+export const FECHA_ENTREGA_AVISO_DIAS = 45
 
 function addDays(iso, n) {
   const d = parseISODate(iso)
@@ -1807,18 +1812,22 @@ export function lotesConFecha(piezas) {
   return (piezas ?? []).filter((l) => l.es_lote && l.fecha_entrega && l.status !== 'cancelado')
 }
 
-function fechaEntregaMinima(piezas) {
-  return lotesConFecha(piezas).reduce(
-    (m, l) => (l.fecha_entrega < m ? l.fecha_entrega : m),
-    '9999-99-99',
+/** Lotes sin fecha de entrega que aún tienen unidades por editar (donde la fecha hace falta). */
+export function lotesSinFechaPendientes(piezas) {
+  return (piezas ?? []).filter(
+    (l) =>
+      l.es_lote &&
+      !l.fecha_entrega &&
+      l.status !== 'cancelado' &&
+      (Number(l.listas) || 0) < (Number(l.cantidad) || 0),
   )
 }
 
 /**
  * Resumen de la fecha de entrega de una pauta para la UI (un solo campo por pauta).
  * `fecha`: la común a todos los lotes con fecha (null si no hay o difieren → `mixta`).
- * `confirmada`: todos los lotes con fecha están confirmados. `vencida`: algún lote ya
- * venció (el trigger no deja mover una fecha vencida). `sinFecha`: lotes sin fecha.
+ * `vencida`: algún lote ya venció (solo la jefa de la línea puede moverla). `sinFecha`: lotes
+ * sin fecha.
  */
 export function fechaEntregaInfo(piezas, hoy) {
   const lotes = (piezas ?? []).filter((l) => l.es_lote && l.status !== 'cancelado')
@@ -1828,13 +1837,12 @@ export function fechaEntregaInfo(piezas, hoy) {
     tieneLotes: lotes.length > 0,
     fecha: fechas.length === 1 ? fechas[0] : null,
     mixta: fechas.length > 1,
-    confirmada: conFecha.length > 0 && conFecha.every((l) => l.fecha_entrega_confirmada),
     vencida: conFecha.some((l) => l.fecha_entrega < hoy),
     sinFecha: lotes.length - conFecha.length,
   }
 }
 
-/** Una fecha de entrega vencida (anterior a hoy) ya no se puede mover. */
+/** Una fecha de entrega vencida (anterior a hoy): solo la jefa de la línea puede moverla. */
 export function fechaEntregaVencida(fecha, hoy) {
   return Boolean(fecha) && fecha < hoy
 }
@@ -1845,6 +1853,9 @@ export function fechaEntregaVencida(fecha, hoy) {
  *  - sinCaptura: confirmadas con fecha pasada (hasta ayer) y sin captura registrada.
  *  - grillaIncumple: programadas futuras cuya grilla ya venció sin entregarse.
  *  - piezasAtrasadas: realizadas hace > PIEZAS_ATRASO_DIAS con piezas pendientes.
+ *  - sinFechaEntrega: realizadas con lotes de edición sin fecha de entrega y piezas por editar
+ *    (solo las que quien mira puede fijar: opción `puedeFijarFecha`; de los últimos
+ *    FECHA_ENTREGA_AVISO_DIAS días, no del histórico).
  *  - cnpPendientes: CNP audiovisuales sin terminar (los `cnps` ya vienen filtrados por línea
  *    por quien llama, igual que las pautas), por fecha de entrega y los sin fecha al final.
  */
@@ -1887,18 +1898,16 @@ export function alertas(
     const { salieron, listas } = capturaYEdicion(p, piezasByPauta?.get(p.id))
     return salieron > listas
   })
-  const fechaEntregaSinConfirmar = activas
-    .filter((p) => {
-      if (p.status !== 'realizada' || !puedeFijarFecha(p)) return false
-      return lotesConFecha(piezasByPauta?.get(p.id)).some(
-        (l) => !l.fecha_entrega_confirmada && l.fecha_entrega >= hoy,
-      )
-    })
-    .sort((a, b) =>
-      fechaEntregaMinima(piezasByPauta?.get(a.id)).localeCompare(
-        fechaEntregaMinima(piezasByPauta?.get(b.id)),
-      ),
+  const sinFechaEntrega = activas
+    .filter(
+      (p) =>
+        p.status === 'realizada' &&
+        p.pauta_date &&
+        diffDays(p.pauta_date, hoy) <= FECHA_ENTREGA_AVISO_DIAS &&
+        puedeFijarFecha(p) &&
+        lotesSinFechaPendientes(piezasByPauta?.get(p.id)).length > 0,
     )
+    .sort((a, b) => (a.pauta_date ?? '').localeCompare(b.pauta_date ?? ''))
   const cnpPendientes = (cnps ?? [])
     .filter((c) => !c.deleted_at && c.is_audiovisual && !isClosed(c))
     .sort((a, b) => (a.due_date ?? '9999-99-99').localeCompare(b.due_date ?? '9999-99-99'))
@@ -1907,14 +1916,14 @@ export function alertas(
     sinCaptura,
     grillaIncumple,
     piezasAtrasadas,
-    fechaEntregaSinConfirmar,
+    sinFechaEntrega,
     cnpPendientes,
     total:
       porAprobar.length +
       sinCaptura.length +
       grillaIncumple.length +
       piezasAtrasadas.length +
-      fechaEntregaSinConfirmar.length +
+      sinFechaEntrega.length +
       cnpPendientes.length,
   }
 }

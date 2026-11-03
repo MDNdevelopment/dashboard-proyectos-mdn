@@ -56,6 +56,7 @@ export default function AvSemanaView({
   allEmployees,
   canApprove,
   puedeFijarFecha,
+  puedeMoverFechaVencida,
   onPiezaChanged,
   today = new Date(),
   onFields,
@@ -251,8 +252,8 @@ export default function AvSemanaView({
                 />
               ))}
             </>
-          ) : drawer === 'fechaEntregaSinConfirmar' ? (
-            alertas.fechaEntregaSinConfirmar.map((p) => (
+          ) : drawer === 'sinFechaEntrega' ? (
+            alertas.sinFechaEntrega.map((p) => (
               <div key={p.id} className="space-y-1.5">
                 <PautaCard
                   pauta={p}
@@ -269,6 +270,7 @@ export default function AvSemanaView({
                     pauta={p}
                     piezas={piezasByPauta?.get(p.id) ?? []}
                     canEdit
+                    canMoveVencida={puedeMoverFechaVencida?.(p) ?? false}
                     hoy={hoy}
                     onPiezaChanged={onPiezaChanged}
                   />
@@ -300,8 +302,8 @@ const DRAWER_HINT = {
   porAprobar: 'Agenda cada una con fecha, lugar y recursos, o declínala.',
   sinCaptura: 'Pautas que ya pasaron y nadie registró cuántas piezas salieron.',
   grillaIncumple: 'La grilla debía estar 2 días antes de la pauta y no se ha cargado.',
-  fechaEntregaSinConfirmar:
-    'La fecha de entrega se supuso 7 días después de la pauta. Confírmala o muévela antes de que venza.',
+  sinFechaEntrega:
+    'Pautas realizadas con piezas por editar y sin fecha de entrega: ponla para que la edición se mida a tiempo.',
   piezasAtrasadas:
     'Pautas realizadas hace más de una semana con piezas por editar y CNPs audiovisuales sin terminar de tu línea.',
 }

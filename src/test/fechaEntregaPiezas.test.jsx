@@ -33,7 +33,6 @@ const lote = (o = {}) => ({
   listas: 1,
   status: 'en_edicion',
   fecha_entrega: null,
-  fecha_entrega_confirmada: false,
   ...o,
 })
 const map = (...ls) => new Map([['p1', ls]])
@@ -63,43 +62,47 @@ describe('alertas() con fecha de entrega', () => {
   })
 })
 
-describe('alerta fechaEntregaSinConfirmar', () => {
-  it('lista pautas realizadas con fecha futura sin confirmar, ordenadas, y suma al total', () => {
-    const ps = [pauta({ id: 'a' }), pauta({ id: 'b' }), pauta({ id: 'c' })]
+describe('alerta sinFechaEntrega', () => {
+  it('lista pautas realizadas con piezas por editar y sin fecha, ordenadas por pauta, y suma al total', () => {
+    const ps = [
+      pauta({ id: 'a', pauta_date: '2026-11-08' }),
+      pauta({ id: 'b', pauta_date: '2026-11-03' }),
+      pauta({ id: 'c' }),
+    ]
     const m = new Map([
-      ['a', [lote({ pauta_id: 'a', fecha_entrega: '2026-11-20' })]],
-      ['b', [lote({ pauta_id: 'b', fecha_entrega: '2026-11-12' })]],
-      ['c', [lote({ pauta_id: 'c', fecha_entrega: '2026-11-12', fecha_entrega_confirmada: true })]],
+      ['a', [lote({ pauta_id: 'a' })]],
+      ['b', [lote({ pauta_id: 'b' })]],
+      ['c', [lote({ pauta_id: 'c', fecha_entrega: '2026-11-20' })]], // ya tiene fecha
     ])
     const a = alertas(ps, m, HOY)
-    expect(a.fechaEntregaSinConfirmar.map((p) => p.id)).toEqual(['b', 'a'])
-    expect(a.total).toBe(2)
+    expect(a.sinFechaEntrega.map((p) => p.id)).toEqual(['b', 'a'])
+    expect(a.total).toBe(2 + a.piezasAtrasadas.length)
   })
-  it('ignora fechas ya vencidas, pautas no realizadas y borradas', () => {
+  it('ignora pautas con todo editado, no realizadas y borradas', () => {
     const ps = [
       pauta({ id: 'a' }),
       pauta({ id: 'b', status: 'programada' }),
       pauta({ id: 'c', deleted_at: '2026-11-01' }),
     ]
-    const m = new Map(
-      ['a', 'b', 'c'].map((id) => [
-        id,
-        [lote({ pauta_id: id, fecha_entrega: id === 'a' ? '2026-11-09' : '2026-11-20' })],
-      ]),
-    )
-    expect(alertas(ps, m, HOY).fechaEntregaSinConfirmar).toHaveLength(0)
+    const m = new Map([
+      ['a', [lote({ pauta_id: 'a', listas: 4, status: 'listo' })]], // nada por editar
+      ['b', [lote({ pauta_id: 'b' })]],
+      ['c', [lote({ pauta_id: 'c' })]],
+    ])
+    expect(alertas(ps, m, HOY).sinFechaEntrega).toHaveLength(0)
+  })
+  it('no avisa de pautas viejas (más de 45 días): ya no hay qué medir', () => {
+    const vieja = pauta({ id: 'v', pauta_date: '2026-09-01' }) // HOY 2026-11-10: 70 días
+    const m = new Map([['v', [lote({ pauta_id: 'v' })]]])
+    expect(alertas([vieja], m, HOY).sinFechaEntrega).toHaveLength(0)
   })
   it('solo cuenta las pautas que quien mira puede fijar', () => {
-    const m = map(lote({ fecha_entrega: '2026-11-20' }))
-    const a = alertas([pauta()], m, HOY, { puedeFijarFecha: () => false })
-    expect(a.fechaEntregaSinConfirmar).toHaveLength(0)
-    expect(a.total).toBe(0)
+    const a = alertas([pauta()], map(lote()), HOY, { puedeFijarFecha: () => false })
+    expect(a.sinFechaEntrega).toHaveLength(0)
   })
   it('tiene metadatos para el chip', () => {
-    expect(ALERTA_META.fechaEntregaSinConfirmar.label(2)).toBe(
-      '2 pautas con fecha de entrega sin confirmar',
-    )
-    expect(alertaCount({ fechaEntregaSinConfirmar: [1] }, 'fechaEntregaSinConfirmar')).toBe(1)
+    expect(ALERTA_META.sinFechaEntrega.label(2)).toBe('2 pautas sin fecha de entrega')
+    expect(alertaCount({ sinFechaEntrega: [1] }, 'sinFechaEntrega')).toBe(1)
   })
 })
 
@@ -112,13 +115,19 @@ describe('permisos y errores de fecha de entrega', () => {
     expect(pautaPermissions({ ...base, leadLineIds: ['l1'] }).canSetFechaEntrega).toBe(true)
     expect(pautaPermissions(base).canSetFechaEntrega).toBe(false)
   })
+  it('canMoveFechaVencida: solo la jefa de la línea (ni coordinación ni gestión)', () => {
+    const base = { pauta: pauta({ recurso_ids: ['u1'] }), userId: 'u1' }
+    expect(pautaPermissions({ ...base, leadLineIds: ['l1'] }).canMoveFechaVencida).toBe(true)
+    expect(pautaPermissions({ ...base, canCoordinate: true }).canMoveFechaVencida).toBe(false)
+    expect(pautaPermissions({ ...base, canGestionPautas: true }).canMoveFechaVencida).toBe(false)
+  })
   it('traduce los errores del trigger', () => {
     expect(
       pautaErrorMessage({
         code: '22023',
-        message: 'La fecha de entrega ya venció y no se puede mover',
+        message: 'Una fecha de entrega vencida solo la puede cambiar la jefa de la línea',
       }),
-    ).toMatch(/ya venció/)
+    ).toMatch(/jefa de la línea/)
     expect(
       pautaErrorMessage({
         code: '42501',
@@ -156,12 +165,17 @@ describe('EdicionSection: fecha de entrega', () => {
   it('editable: cambia la fecha de toda la pauta y avisa por cada lote', async () => {
     api.setFechaEntregaPauta.mockResolvedValue({ data: [{ id: 'z1' }], error: null })
     const { onPiezaChanged } = renderSec()
-    expect(screen.getAllByText('sin confirmar').length).toBeGreaterThan(0)
     fireEvent.change(screen.getByLabelText('Fecha de entrega de las piezas'), {
       target: { value: '2026-11-18' },
     })
     await waitFor(() => expect(api.setFechaEntregaPauta).toHaveBeenCalledWith('p1', '2026-11-18'))
     expect(onPiezaChanged).toHaveBeenCalledWith({ id: 'z1' })
+  })
+
+  it('sin fecha: pide llenarla a mano y no inventa ninguna', () => {
+    renderSec({ piezas: [lote()] })
+    expect(screen.getByLabelText('Fecha de entrega de las piezas')).toHaveValue('')
+    expect(screen.getByText(/Pendiente: ponle fecha/)).toBeInTheDocument()
   })
 
   it('muestra el error en español si el trigger rechaza', async () => {
@@ -190,29 +204,35 @@ describe('EdicionSection: fecha de entrega', () => {
     )
   })
 
-  it('solo lectura sin permiso: sin inputs de fecha, con chip', () => {
+  it('solo lectura sin permiso: sin inputs de fecha', () => {
     renderSec({ canSetFecha: false })
     expect(screen.queryByLabelText('Fecha de entrega de las piezas')).toBeNull()
     expect(screen.queryByLabelText(/Fecha de entrega de .* de Eva Ed/)).toBeNull()
-    expect(screen.getAllByText('sin confirmar').length).toBeGreaterThan(0)
   })
 
-  it('vencida: bloqueada con el motivo aunque tenga permiso', () => {
-    renderSec({ piezas: [lote({ fecha_entrega: '2026-11-09', fecha_entrega_confirmada: true })] })
-    expect(screen.queryByLabelText('Fecha de entrega de las piezas')).toBeNull()
-    expect(screen.queryByLabelText(/Fecha de entrega de .* de Eva Ed/)).toBeNull()
-    expect(screen.getByText(/Ya venció/)).toBeInTheDocument()
+  describe('fecha vencida', () => {
+    const vencida = () => ({ piezas: [lote({ fecha_entrega: '2026-11-09' })] })
+
+    it('con permiso de fechas pero sin ser jefa: bloqueada con el motivo', () => {
+      renderSec(vencida())
+      expect(screen.queryByLabelText('Fecha de entrega de las piezas')).toBeNull()
+      expect(screen.queryByLabelText(/Fecha de entrega de .* de Eva Ed/)).toBeNull()
+      expect(screen.getByText(/solo la jefa de la línea puede cambiarla/)).toBeInTheDocument()
+    })
+
+    it('la jefa de la línea sí puede moverla', async () => {
+      api.setFechaEntregaPauta.mockResolvedValue({ data: [], error: null })
+      renderSec({ ...vencida(), canMoveFechaVencida: true })
+      fireEvent.change(screen.getByLabelText('Fecha de entrega de las piezas'), {
+        target: { value: '2026-11-30' },
+      })
+      await waitFor(() => expect(api.setFechaEntregaPauta).toHaveBeenCalledWith('p1', '2026-11-30'))
+      expect(screen.getByLabelText(/Fecha de entrega de .* de Eva Ed/)).toBeInTheDocument()
+    })
   })
 
   it('pauta no realizada: no muestra fecha', () => {
     renderSec({ pauta: pauta({ status: 'programada' }) })
     expect(screen.queryByTestId('fecha-entrega-pauta')).toBeNull()
-  })
-
-  it('confirmar la fecha por defecto reenvía la misma fecha', async () => {
-    api.setFechaEntregaPauta.mockResolvedValue({ data: [], error: null })
-    renderSec()
-    fireEvent.click(screen.getByRole('button', { name: 'Confirmar fecha' }))
-    await waitFor(() => expect(api.setFechaEntregaPauta).toHaveBeenCalledWith('p1', '2026-11-12'))
   })
 })
