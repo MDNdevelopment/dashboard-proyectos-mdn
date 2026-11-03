@@ -17,6 +17,7 @@ import {
   pautaErrorMessage,
   isoDateKey,
   fechaEntregaVencida,
+  fechaEntregaInfo,
   formatDayShort,
 } from '../../utils/audiovisual'
 
@@ -52,6 +53,7 @@ export default function EdicionSection({
       .filter((pz) => pz.es_lote && pz.formato === code)
       .reduce((s, pz) => s + (Number(pz.cantidad) || 0), 0)
   })
+  const lotesDe = (code) => (piezas ?? []).filter((pz) => pz.formato === code)
   const cupo = (code) => Math.max(0, (breakdown[code]?.salieron ?? 0) - asignadasPorFormato[code])
 
   async function change(editorId, code, key, delta) {
@@ -74,7 +76,16 @@ export default function EdicionSection({
     }
     const { data, error: err } =
       plan.action === 'insert'
-        ? await upsertLote(companyId, pauta.id, editorId, code, plan.fields, null)
+        ? await upsertLote(
+            companyId,
+            pauta.id,
+            editorId,
+            code,
+            canSetFecha
+              ? { ...plan.fields, fecha_entrega: fechaEntregaInfo(lotesDe(code)).fecha }
+              : plan.fields,
+            null,
+          )
         : await updatePieza(lote.id, plan.fields)
     if (err) setError(pautaErrorMessage(err))
     else if (data) onPiezaChanged(data)
@@ -171,6 +182,7 @@ export default function EdicionSection({
           <FechaEntregaPauta
             pauta={pauta}
             piezas={piezas}
+            formats={activeFormats}
             canEdit={canSetFecha}
             canMoveVencida={canMoveFechaVencida}
             hoy={hoy}

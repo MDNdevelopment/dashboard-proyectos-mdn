@@ -241,6 +241,8 @@ export async function upsertLote(companyId, pautaId, editorUserId, formato, fiel
       es_lote: true,
       cantidad: Number(fields.cantidad) || 1,
       listas: Number(fields.listas) || 0,
+      // Un lote nuevo hereda la fecha de su formato (el trigger la descarta si no puede fijarla).
+      ...(fields.fecha_entrega ? { fecha_entrega: fields.fecha_entrega } : {}),
     })
     .select()
     .single()
@@ -268,6 +270,20 @@ export async function setFechaEntregaPauta(pautaId, fecha) {
     .update({ fecha_entrega: fecha || null })
     .eq('pauta_id', pautaId)
     .eq('es_lote', true)
+    .select()
+}
+
+/**
+ * Igual que `setFechaEntregaPauta` pero solo para los lotes de UN formato (fotos mañana,
+ * video la semana que viene). Mismas guardas del trigger y mismo retorno.
+ */
+export async function setFechaEntregaFormato(pautaId, formato, fecha) {
+  return supabase
+    .from('av_pauta_piezas')
+    .update({ fecha_entrega: fecha || null })
+    .eq('pauta_id', pautaId)
+    .eq('es_lote', true)
+    .eq('formato', formato)
     .select()
 }
 
