@@ -12,6 +12,8 @@ import { buildEffectiveReport, needsSourcesFor } from '../../utils/buildEffectiv
 import { loadReportSources } from './reportSourcesApi'
 import { clientInMonth } from '../../utils/clientInMonth'
 import { employeeActiveInMonth } from '../../utils/employeeInMonth'
+import { initMetricReport } from '../../utils/initMetricReport'
+import { pruneCarryForward } from '../../utils/pruneCarryForward'
 import { selectAllPages } from '../../lib/supabasePaginate'
 
 // ─── Líneas ───────────────────────────────────────────────────────────────────
@@ -591,6 +593,24 @@ function emptyReportShape() {
   }
 }
 
+/**
+ * Reporte del mes de una línea que aún no existe: se siembra con el carry-forward del mes
+ * anterior (sueldos, gastos, ingresos), igual que cuando la vista lo crea al abrirlo. Sin esto,
+ * mover una cuenta guardaba un reporte vacío y la vista ya no lo inicializaba (existía).
+ */
+async function seedReportData(companyId, lineId, year, month) {
+  const [prevRes, clientsRes] = await Promise.all([
+    loadPrevReport(lineId, year, month),
+    loadClients(companyId, lineId, { includeArchived: true }),
+  ])
+  if (prevRes.error) return { error: prevRes.error }
+  if (clientsRes.error) return { error: clientsRes.error }
+  const allClients = clientsRes.data ?? []
+  const activeClients = allClients.filter((c) => clientInMonth(c, year, month))
+  const carried = initMetricReport(prevRes.data?.data ?? null, activeClients, {}, [])
+  return { data: pruneCarryForward(carried, { allClients, year, month }) }
+}
+
 // Parseo/formateo de fechas 'YYYY-MM-DD' sin pasar por Date (evita corrimientos de zona).
 function isoDateParts(isoDate) {
   const [y, m, d] = String(isoDate).split('-').map(Number)
@@ -643,8 +663,19 @@ export async function moveClientToLine({
   if (oldRes.error) return { error: oldRes.error }
   if (newRes.error) return { error: newRes.error }
 
-  const oldData = oldRes.data?.data ?? emptyReportShape()
-  const newData = newRes.data?.data ?? emptyReportShape()
+  let oldData = oldRes.data?.data
+  let newData = newRes.data?.data
+  if (!oldData && fromLineId) {
+    const seeded = await seedReportData(companyId, fromLineId, year, month)
+    if (seeded.error) return { error: seeded.error }
+    oldData = seeded.data
+  }
+  if (!newData) {
+    const seeded = await seedReportData(companyId, toLineId, year, month)
+    if (seeded.error) return { error: seeded.error }
+    newData = seeded.data
+  }
+  oldData = oldData ?? emptyReportShape()
 
   const { oldReportData, newReportData } = moveClientLine({
     clientId: client.id,
