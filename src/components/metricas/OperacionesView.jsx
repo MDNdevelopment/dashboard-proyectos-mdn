@@ -40,7 +40,14 @@ function clientAvatar(c) {
   }
 }
 
-export default function OperacionesView({ line, companyId, year, month, closed = false }) {
+export default function OperacionesView({
+  line,
+  companyId,
+  year,
+  month,
+  closed = false,
+  readOnly = false,
+}) {
   const { can = () => true } = useAuth()
   // La Meta de reuniones se recalcula sola (1 por marca de la línea, menos las "No
   // aplica") solo en el mes en curso, no cerrado, y en o después de
@@ -202,7 +209,7 @@ export default function OperacionesView({ line, companyId, year, month, closed =
     // Operaciones de un mes sin reporte todavía no debe crear uno solo por mirarlo (eso
     // sigue siendo exclusivo de handleSave). No se espera (fire-and-forget): no debe
     // bloquear el render ni el estado `loading` de la vista.
-    if (reportRes.data) {
+    if (reportRes.data && !readOnly) {
       maybeAutoPersistEffectiveReport(companyId, {
         lineId: line.id,
         year,
@@ -241,7 +248,7 @@ export default function OperacionesView({ line, companyId, year, month, closed =
   useUnsavedChanges({ value: report, baseline: baselineRef.current, onClose: () => {} })
 
   async function handleSave() {
-    if (!report || closed) return
+    if (!report || closed || readOnly) return
     setSaving(true)
     const { error: err } = await upsertReport(companyId, line.id, year, month, report)
     setSaving(false)
@@ -377,7 +384,7 @@ export default function OperacionesView({ line, companyId, year, month, closed =
   })()
 
   return (
-    <fieldset disabled={closed} className="space-y-5 border-0 p-0 m-0 min-w-0">
+    <fieldset disabled={closed || readOnly} className="space-y-5 border-0 p-0 m-0 min-w-0">
       {/* Header con score en tiempo real */}
       <div className="flex items-center justify-between">
         <div>

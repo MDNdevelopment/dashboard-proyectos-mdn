@@ -63,6 +63,7 @@ export function moveClientLine({
     clienteId: null,
     descripcion: `${clientName} (parcial hasta ${effectiveLabel})`,
     monto: oldAmount,
+    soloEsteMes: true,
   })
 
   // ── 4. Línea NUEVA: migrar operativo con sus valores (mezclando por clienteId) ─

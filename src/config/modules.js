@@ -161,6 +161,7 @@ export const MODULES = [
     manageActions: [
       { key: 'reportes.manage', label: 'Editar / importar reportes' },
       { key: 'reportes.close', label: 'Cerrar reportes de cualquier línea' },
+      { key: 'reportes.ver_todo', label: 'Ver los reportes de todas las líneas (solo lectura)' },
     ],
   },
   {

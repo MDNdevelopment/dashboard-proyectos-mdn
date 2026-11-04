@@ -244,20 +244,53 @@ describe('initMetricReport — lineMetas tiene prioridad sobre carry-forward', (
   })
 })
 
-describe('initMetricReport — filas de suscripción', () => {
-  it('no hereda del mes anterior las filas de gasto por suscripción', () => {
-    const prev = {
+describe('initMetricReport — ingresos que no se arrastran', () => {
+  const prev = () =>
+    makePrevReport({
       finanzas: {
-        ingresos: [],
+        // c1 se editó de 400 a 700 para sumar un extra; c2 conserva su monto
+        ingresos: [
+          { id: 'ing-c1', clienteId: 'c1', descripcion: 'Cliente A', monto: 700 },
+          { id: 'ing-c2', clienteId: 'c2', descripcion: 'Cliente B', monto: 600 },
+          {
+            id: 'x1',
+            clienteId: null,
+            descripcion: 'Extra puntual',
+            monto: 150,
+            soloEsteMes: true,
+          },
+          { id: 'x2', clienteId: null, descripcion: 'Asesoría fija', monto: 80 },
+        ],
+        gastosOperativos: [{ id: 'g1', descripcion: 'Manual', monto: 10 }],
         sueldos: [],
         otrosGastos: [],
-        gastosOperativos: [
-          { id: 'm1', descripcion: 'manual', monto: 3 },
-          { id: 'sub-1', fuente: 'suscripcion', descripcion: 'CapCut (suscripción)', monto: 5 },
-        ],
       },
-    }
-    const out = initMetricReport(prev, [], {}, [])
-    expect(out.finanzas.gastosOperativos.map((i) => i.id)).toEqual(['m1'])
+    })
+
+  it('no hereda los ingresos marcados «solo este mes»', () => {
+    const r = initMetricReport(prev(), CLIENTS)
+    expect(r.finanzas.ingresos.map((i) => i.id)).not.toContain('x1')
+  })
+
+  it('sí hereda los ingresos manuales recurrentes', () => {
+    const r = initMetricReport(prev(), CLIENTS)
+    expect(r.finanzas.ingresos.find((i) => i.id === 'x2')?.monto).toBe(80)
+  })
+
+  it('cada cliente arranca el mes con su mensualidad, no con el monto editado', () => {
+    const r = initMetricReport(prev(), CLIENTS)
+    expect(r.finanzas.ingresos.find((i) => i.clienteId === 'c1').monto).toBe(400)
+    expect(r.finanzas.ingresos.find((i) => i.clienteId === 'c2').monto).toBe(600)
+  })
+
+  it('no toca el reporte previo', () => {
+    const p = prev()
+    initMetricReport(p, CLIENTS)
+    expect(p.finanzas.ingresos.find((i) => i.clienteId === 'c1').monto).toBe(700)
+  })
+
+  it('los gastos operativos se heredan tal cual (ya no hay filas de suscripción automáticas)', () => {
+    const r = initMetricReport(prev(), CLIENTS)
+    expect(r.finanzas.gastosOperativos.map((i) => i.id)).toEqual(['g1'])
   })
 })

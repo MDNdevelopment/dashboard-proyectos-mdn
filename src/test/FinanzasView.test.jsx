@@ -27,11 +27,6 @@ vi.mock('../components/metricas/metricsApi', () => ({
   loadRecentReports: (...a) => mockLoadRecentReports(...a),
 }))
 
-const mockLoadSubCosts = vi.fn()
-vi.mock('../lib/subscriptions', () => ({
-  loadLineSubscriptionCosts: (...a) => mockLoadSubCosts(...a),
-}))
-
 vi.mock('../context/AuthContext', () => ({
   useAuth: () => ({ can: () => true, userProfile: { admin: true } }),
 }))
@@ -261,45 +256,56 @@ describe('FinanzasView — eliminar una fila de sueldo ligada a empleado', () =>
   })
 })
 
-describe('FinanzasView — gasto por suscripciones asignadas a la línea', () => {
+describe('FinanzasView — ingresos «Solo este mes» y modo solo lectura', () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.setSystemTime(new Date('2026-07-17T12:00:00'))
     vi.clearAllMocks()
     mockLoadPrevReport.mockResolvedValue({ data: null, error: null })
-    mockLoadClients.mockResolvedValue({ data: [], error: null })
+    mockLoadClients.mockResolvedValue({
+      data: [{ id: 'c-1', name: 'Banco Exterior', monthly_fee: 100 }],
+      error: null,
+    })
     mockLoadCompanyEmployees.mockResolvedValue({ data: [], error: null })
+    mockUpsertReport.mockResolvedValue({ data: null, error: null })
     mockLoadRecentReports.mockResolvedValue({ data: [], error: null })
-    mockLoadReport.mockResolvedValue({ data: { data: makeReportData([]) }, error: null })
-    mockLoadSubCosts.mockResolvedValue([
-      {
-        line_id: 'line-1',
-        subscription_id: 's1',
-        name: 'CapCut Team',
-        frequency: 'mensual',
-        amount: 10,
-        allocations: [
-          { line_id: 'line-1', department_id: null, share_pct: null },
-          { line_id: 'line-2', department_id: null, share_pct: null },
-        ],
+    mockLoadReport.mockResolvedValue({
+      data: {
+        data: makeReportData([
+          { id: 'ing-c-1', clienteId: 'c-1', descripcion: 'Banco Exterior', monto: 100 },
+          { id: 'x1', clienteId: null, descripcion: 'Extra', monto: 40 },
+        ]),
       },
-    ])
+      error: null,
+    })
   })
   afterEach(() => {
     vi.useRealTimers()
   })
 
-  it('mes en curso: muestra la parte de la línea como fila de solo lectura', async () => {
+  it('la casilla aparece solo en los ingresos manuales, no en los de cliente', async () => {
     renderView({ month: 7 })
-    expect(await screen.findByText('CapCut Team (suscripción)')).toBeInTheDocument()
-    expect(screen.getByText('Suscripción')).toBeInTheDocument()
-    expect(screen.getByDisplayValue('5')).toBeDisabled()
+    expect(await screen.findAllByLabelText(/Solo este mes/i)).toHaveLength(1)
   })
 
-  it('mes pasado: no agrega la fila ni pide las suscripciones', async () => {
-    renderView({ month: 6 })
-    await waitFor(() => expect(screen.getByText(/Ingresos brutos/)).toBeInTheDocument())
-    expect(screen.queryByText('CapCut Team (suscripción)')).not.toBeInTheDocument()
-    expect(mockLoadSubCosts).not.toHaveBeenCalled()
+  it('al marcarla y guardar, la fila queda con soloEsteMes', async () => {
+    const user = userEvent.setup()
+    renderView({ month: 7 })
+    await user.click(await screen.findByLabelText(/Solo este mes/i))
+    await user.click(screen.getByRole('button', { name: /Guardar finanzas/i }))
+
+    await waitFor(() => expect(mockUpsertReport).toHaveBeenCalled())
+    const saved = mockUpsertReport.mock.calls[0][4]
+    expect(saved.finanzas.ingresos.find((i) => i.id === 'x1').soloEsteMes).toBe(true)
+    expect(saved.finanzas.ingresos.find((i) => i.id === 'ing-c-1').soloEsteMes).toBeUndefined()
+  })
+
+  it('readOnly: la vista queda deshabilitada y no guarda', async () => {
+    renderView({ month: 7, readOnly: true })
+    const casilla = await screen.findByLabelText(/Solo este mes/i)
+    expect(casilla).toBeDisabled()
+    const guardar = screen.getByRole('button', { name: /Guardar finanzas/i })
+    expect(guardar).toBeDisabled()
+    expect(mockUpsertReport).not.toHaveBeenCalled()
   })
 })

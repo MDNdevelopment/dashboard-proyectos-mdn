@@ -132,7 +132,6 @@ export default function SubscriptionsView({ companyId, canManage = false }) {
     allocations.forEach((a) => (map[a.subscription_id] ??= []).push(a))
     return map
   }, [allocations])
-  const lineName = useMemo(() => Object.fromEntries(lines.map((l) => [l.id, l.name])), [lines])
   const deptName = useMemo(
     () => Object.fromEntries(departments.map((d) => [d.department_id, d.department_name])),
     [departments],
@@ -239,8 +238,8 @@ export default function SubscriptionsView({ companyId, canManage = false }) {
     <div className="space-y-5">
       <div className="px-4 py-3 rounded-xl bg-[#fff8e6] border border-[#f0dfae] text-[13.5px] text-[#8a6600]">
         <strong>Finanzas:</strong> estos cobros aún no se reflejan en Finanzas; si un pago es un
-        gasto del mes, regístralo allá por separado. Las suscripciones activas asignadas a una línea
-        sí salen como gasto en el reporte mensual de esa línea.
+        gasto del mes, regístralo allá por separado. La asignación a líneas es solo de referencia:
+        el gasto de cada línea se carga a mano en su reporte mensual.
       </div>
 
       {error && (
@@ -466,17 +465,19 @@ export default function SubscriptionsView({ companyId, canManage = false }) {
                       ? ` · ${employeeName[sub.owner_user_id]}`
                       : ''}
                   </p>
-                  {(allocsBySub[sub.id] ?? []).length > 0 && (
+                  {(allocsBySub[sub.id] ?? []).some((a) => !a.line_id) && (
                     <div className="flex flex-wrap gap-1 mt-1">
-                      {allocsBySub[sub.id].map((a) => (
-                        <span
-                          key={a.id}
-                          className="text-[11.5px] font-mono px-1.5 py-0.5 rounded bg-[#f2f0e8] text-[#555]"
-                        >
-                          {a.line_id ? lineName[a.line_id] : deptName[a.department_id]}
-                          {a.share_pct != null ? ` ${Number(a.share_pct)}%` : ''}
-                        </span>
-                      ))}
+                      {allocsBySub[sub.id]
+                        .filter((a) => !a.line_id)
+                        .map((a) => (
+                          <span
+                            key={a.id}
+                            className="text-[11.5px] font-mono px-1.5 py-0.5 rounded bg-[#f2f0e8] text-[#555]"
+                          >
+                            {deptName[a.department_id]}
+                            {a.share_pct != null ? ` ${Number(a.share_pct)}%` : ''}
+                          </span>
+                        ))}
                     </div>
                   )}
                   {sub.account_email && (
