@@ -37,6 +37,11 @@ function readChainable(getResult) {
     obj[m] = vi.fn(() => obj)
   })
   obj.then = (resolve, reject) => Promise.resolve(getResult()).then(resolve, reject)
+  // Lectura fresca de saveReportKeys (loadReport): la fila guardada que ve el test.
+  obj.maybeSingle = () => {
+    const res = getResult()
+    return Promise.resolve({ data: res.data?.[0] ?? null, error: res.error ?? null })
+  }
   return obj
 }
 

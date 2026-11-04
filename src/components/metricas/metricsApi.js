@@ -191,7 +191,12 @@ export async function deleteClient(
 export async function restoreClient(clientId) {
   return supabase
     .from('metric_clients')
-    .update({ deleted_at: null, contract_end: null, contract_end_reason: null })
+    .update({
+      deleted_at: null,
+      contract_end: null,
+      contract_end_reason: null,
+      baja_incluye_mes: true,
+    })
     .eq('id', clientId)
 }
 
@@ -321,7 +326,7 @@ export async function loadYearReports(companyId, year) {
 // (needsSourcesFor): un mes cerrado o previo a todas las eras de auto-llenado sale tal
 // cual venía guardado, sin ningún costo extra de queries.
 
-const OPERATIONAL_KEYS = [
+export const OPERATIONAL_KEYS = [
   'reuniones',
   'productividad',
   'crecimiento',
@@ -480,11 +485,15 @@ export async function maybeAutoPersistEffectiveReport(
   if (_autoSaveDone.get(dedupeKey) === payloadHash) return
   // Merge: solo las claves operativas; `finanzas` y cualquier clave desconocida quedan
   // exactamente como estaban.
-  const payload = {
-    ...stored,
-    ...pickOperationalKeys(effectiveData),
-  }
-  const { error } = await upsertReport(companyId, lineId, year, month, payload)
+  const { error } = await saveReportKeys(
+    companyId,
+    lineId,
+    year,
+    month,
+    pickOperationalKeys(effectiveData),
+    stored,
+    { keepFreshJustificativos: true },
+  )
   if (error) {
     console.warn('[metricas] auto-persistencia del reporte efectivo falló', error)
     return
@@ -512,6 +521,42 @@ export async function upsertReport(companyId, lineId, year, month, data) {
     )
     .select()
     .single()
+}
+
+/**
+ * Guarda SOLO las claves indicadas de `data`, mezcladas contra la fila vigente en la base
+ * (lectura fresca), no contra la copia que la vista cargó hace rato. Así Operaciones,
+ * Finanzas y el auto-guardado de Resumen no se pisan entre sí: cada uno escribe únicamente
+ * lo que le pertenece. Si todavía no hay fila, parte de `fallbackData` (reporte completo).
+ * Con `keepFreshJustificativos` (auto-guardado, que escribe con una copia cargada hace rato)
+ * los justificativos de Reuniones que ya están en la base prevalecen sobre los de `partial`.
+ *
+ * @param {string} companyId
+ * @param {string} lineId
+ * @param {number} year
+ * @param {number} month
+ * @param {object} partial       claves de `data` a escribir (p.ej. { reuniones } o { finanzas })
+ * @param {object} [fallbackData] base si no existe fila
+ * @param {{keepFreshJustificativos?: boolean}} [opts]
+ */
+export async function saveReportKeys(
+  companyId,
+  lineId,
+  year,
+  month,
+  partial,
+  fallbackData = {},
+  { keepFreshJustificativos = false } = {},
+) {
+  const { data: row, error } = await loadReport(lineId, year, month)
+  if (error) return { data: null, error }
+  if (row?.closed_at) return { data: null, error: { message: 'El reporte está cerrado.' } }
+  const base = row?.data ?? fallbackData ?? {}
+  const next = { ...base, ...partial }
+  if (keepFreshJustificativos && partial.reuniones && base.reuniones?.justificativos) {
+    next.reuniones = { ...partial.reuniones, justificativos: base.reuniones.justificativos }
+  }
+  return upsertReport(companyId, lineId, year, month, next)
 }
 
 /**

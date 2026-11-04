@@ -45,6 +45,16 @@ vi.mock('../components/metricas/metricsApi', () => ({
   loadClients: (...a) => mockLoadClients(...a),
   loadCompanyEmployees: (...a) => mockLoadCompanyEmployees(...a),
   upsertReport: (...a) => mockUpsertReport(...a),
+  saveReportKeys: (...a) => mockUpsertReport(...a),
+  OPERATIONAL_KEYS: [
+    'reuniones',
+    'productividad',
+    'crecimiento',
+    'solicitudes',
+    'pautas',
+    'piezas',
+    'feedback',
+  ],
   loadFixedTaskMarks: (...a) => mockLoadFixedTaskMarks(...a),
   maybeAutoPersistEffectiveReport: vi.fn().mockResolvedValue(undefined),
 }))
@@ -117,7 +127,7 @@ describe('OperacionesView — "6. Nº Piezas vs Piezas editadas"', () => {
     mockCountPiezasForLine.mockResolvedValue({ piezas: 999, editadas: 999, error: null })
     renderView({ month: 8 })
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     const piezasInput = screen.getByDisplayValue('12')
     expect(piezasInput).not.toBeDisabled()
@@ -131,7 +141,7 @@ describe('OperacionesView — "6. Nº Piezas vs Piezas editadas"', () => {
     mockCountPiezasForLine.mockResolvedValue({ piezas: 20, editadas: 15, error: null })
     renderView({ month: 9 })
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     const piezasInput = screen.getByDisplayValue('20')
     const editadasInput = screen.getByDisplayValue('15')
@@ -159,7 +169,7 @@ describe('OperacionesView — "6. Nº Piezas vs Piezas editadas"', () => {
     })
     renderView({ month: 9 })
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     expect(
       screen.getByText('Video 4K: 12 piezas / 9 editadas · Reels: 8 piezas / 6 editadas'),
@@ -180,7 +190,7 @@ describe('OperacionesView — "6. Nº Piezas vs Piezas editadas"', () => {
     })
     renderView({ month: 9 })
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     expect(screen.getByText(/Sin desglosar: 7 piezas \/ 5 editadas/)).toBeInTheDocument()
   })
@@ -200,7 +210,7 @@ describe('OperacionesView — "6. Nº Piezas vs Piezas editadas"', () => {
     })
     renderView({ month: 9 })
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     const section = screen.getByText('6. Nº Piezas vs Piezas editadas').closest('div.space-y-3')
     const fila = within(section).getByText('CNP audiovisual (solo edición)').closest('tr')
@@ -228,7 +238,7 @@ describe('OperacionesView — "6. Nº Piezas vs Piezas editadas"', () => {
     })
     renderView({ month: 9 })
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     expect(screen.queryByText(/Video 4K:/)).not.toBeInTheDocument()
   })
@@ -238,7 +248,7 @@ describe('OperacionesView — "6. Nº Piezas vs Piezas editadas"', () => {
     mockCountPiezasForLine.mockResolvedValue({ piezas: 999, editadas: 999, error: null })
     renderView({ month: 9, closed: true })
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     expect(screen.getByDisplayValue('12')).toBeInTheDocument()
     expect(screen.getByDisplayValue('9')).toBeInTheDocument()

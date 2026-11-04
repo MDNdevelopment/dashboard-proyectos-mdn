@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import {
   loadReport,
   loadPrevReport,
   loadClients,
-  upsertReport,
+  saveReportKeys,
   loadCompanyEmployees,
   loadFixedTaskMarks,
   maybeAutoPersistEffectiveReport,
@@ -20,7 +20,8 @@ import { buildEffectiveReport, effectiveReportGates } from '../../utils/buildEff
 import { computeReunionesMeta, countMarcasSinReunion } from '../../utils/reunionesMeta'
 import { loadChecks } from '../chequeo/chequeoApi'
 import { MONTHS, INDICATORS, REUNIONES_META_AUTO_START } from './constants'
-import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
+import { useAutosave } from '../../hooks/useAutosave'
+import AutosaveStatus from './AutosaveStatus'
 import { Avatar } from '../tareas/UserPickerSingle'
 import { loadAds, spentByClientInPeriod } from '../ads/campaignSpendApi'
 import { fmtUSD } from '../../utils/metricsFinance'
@@ -74,8 +75,6 @@ export default function OperacionesView({
   const [companyEmployees, setCompanyEmployees] = useState([])
   const [ads, setAds] = useState([])
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
   const [error, setError] = useState(null)
   const [cliModal, setCliModal] = useState(null) // null=cerrado, objeto=cliente abierto
   const [heldClientIds, setHeldClientIds] = useState([]) // clientes con reunión realizada en el período
@@ -84,9 +83,31 @@ export default function OperacionesView({
   // se deriva del propio reporte guardado, igual que crecimiento/pautas — ver `load()`.
   const [reunionesClients, setReunionesClients] = useState([])
 
-  // Snapshot del reporte tal como vino del servidor (o quedó tras un save).
-  // Se usa para detectar cambios sin guardar y mostrar aviso al recargar/cerrar.
-  const baselineRef = useRef(null)
+  // Autoguardado: sin botón. Guarda solo las secciones que cambiaron (todas las de Operaciones,
+  // nunca `finanzas`), mezcladas contra la fila vigente: no pisa lo que Finanzas u otra pestaña
+  // hayan guardado mientras esta vista estaba abierta.
+  const saveOperaciones = async (next, prev) => {
+    const partial = Object.fromEntries(
+      Object.keys(next)
+        .filter((k) => k !== 'finanzas' && JSON.stringify(next[k]) !== JSON.stringify(prev?.[k]))
+        .map((k) => [k, next[k]]),
+    )
+    if (Object.keys(partial).length === 0) return null
+    const { error: err } = await saveReportKeys(companyId, line.id, year, month, partial, next)
+    if (err) {
+      setError(err.message)
+      return err
+    }
+    setError(null)
+    return null
+  }
+  const autosave = useAutosave({
+    value: report,
+    enabled: !!report && !loading && !closed && !readOnly,
+    onSave: saveOperaciones,
+    contextKey: `${line?.id}:${year}:${month}`,
+  })
+  const resetAutosave = autosave.reset
 
   const load = useCallback(async () => {
     if (!line?.id || !companyId) return
@@ -201,13 +222,13 @@ export default function OperacionesView({
       { year, month, closed, activeLineClients, lineEmployees, now: today },
     )
     setReport(synced)
-    baselineRef.current = synced
+    resetAutosave(synced)
 
     // Auto-persistencia silenciosa: si lo derivado difiere de lo guardado, se guarda
     // solo (merge de claves operativas, nunca finanzas) para que SQL/MCP y las demás
-    // vistas converjan aunque nadie pulse "Guardar". Solo si YA existía una fila — abrir
+    // vistas converjan aunque nadie edite. Solo si YA existía una fila — abrir
     // Operaciones de un mes sin reporte todavía no debe crear uno solo por mirarlo (eso
-    // sigue siendo exclusivo de handleSave). No se espera (fire-and-forget): no debe
+    // sigue siendo exclusivo de la primera edición, vía useAutosave). No se espera (fire-and-forget): no debe
     // bloquear el render ni el estado `loading` de la vista.
     if (reportRes.data && !readOnly) {
       maybeAutoPersistEffectiveReport(companyId, {
@@ -238,29 +259,11 @@ export default function OperacionesView({
       setReunionesClients(activeLineClients)
     }
     setLoading(false)
-  }, [line?.id, line?.member_user_ids, companyId, year, month, closed, metaAutoSync])
+  }, [line?.id, line?.member_user_ids, companyId, year, month, closed, metaAutoSync, resetAutosave])
 
   useEffect(() => {
     load()
   }, [load])
-
-  // Aviso nativo del navegador si se intenta recargar/cerrar con cambios sin guardar.
-  useUnsavedChanges({ value: report, baseline: baselineRef.current, onClose: () => {} })
-
-  async function handleSave() {
-    if (!report || closed || readOnly) return
-    setSaving(true)
-    const { error: err } = await upsertReport(companyId, line.id, year, month, report)
-    setSaving(false)
-    if (err) {
-      setError(err.message)
-      return
-    }
-    // Actualizar baseline para que el aviso desaparezca tras guardar
-    baselineRef.current = report
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-  }
 
   // Resuelve el cliente por id: primero en la cartera de la línea; si no está (p.ej. se
   // movió a otra línea después de este reporte), cae al mapa company-wide.
@@ -326,7 +329,8 @@ export default function OperacionesView({
   }
 
   // Guarda (o quita, si value es "") el justificativo de una marca sin reunión en el período.
-  // En mes en curso, la Meta se recalcula en el acto (1 por marca activa, menos "No aplica").
+  // En todo mes abierto la Meta se recalcula en el acto (1 por marca, menos "No aplica"); el
+  // cambio se guarda solo con el resto del reporte (useAutosave).
   function setJustificativo(clienteId, value) {
     setReport((prev) => {
       const next = structuredClone(prev)
@@ -1165,7 +1169,7 @@ export default function OperacionesView({
         )}
       </Section>
 
-      {/* Botón guardar */}
+      {/* Mes incompleto */}
       <div className="flex flex-col items-end gap-2 pt-2 pb-6">
         {/* Checkbox mes incompleto */}
         <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -1180,29 +1184,6 @@ export default function OperacionesView({
             <span className="text-[#bbb]">(no contar en el promedio anual)</span>
           </span>
         </label>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-[15px] transition-all ${
-            saved ? 'bg-green-500 text-white' : 'bg-[#FAB51A] text-[#111] hover:bg-[#e8a315]'
-          } disabled:opacity-60`}
-        >
-          {saving ? (
-            <div className="w-4 h-4 border-2 border-[#111] border-t-transparent rounded-full animate-spin" />
-          ) : saved ? (
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="M3 8l3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          ) : null}
-          {saved ? 'Guardado' : saving ? 'Guardando...' : 'Guardar reporte'}
-        </button>
       </div>
       {cliModal && (
         <ClientFichaModal
@@ -1212,6 +1193,11 @@ export default function OperacionesView({
           employees={companyEmployees}
         />
       )}
+      <AutosaveStatus
+        status={autosave.status}
+        onRetry={autosave.retry}
+        readOnly={closed || readOnly}
+      />
     </fieldset>
   )
 }

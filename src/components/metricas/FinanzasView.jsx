@@ -15,7 +15,7 @@ import {
 import {
   loadReport,
   loadPrevReport,
-  upsertReport,
+  saveReportKeys,
   loadClients,
   loadCompanyEmployees,
   updateEmployeeSalaries,
@@ -41,7 +41,8 @@ import { MONTHS } from './constants'
 import ClientFichaModal from './ClientFichaModal'
 import EmployeeInfoModal from './EmployeeInfoModal'
 import { Avatar } from '../tareas/UserPickerSingle'
-import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
+import { useAutosave } from '../../hooks/useAutosave'
+import AutosaveStatus from './AutosaveStatus'
 
 /** Adapta un objeto cliente (logo_url) al shape que espera <Avatar> (avatar_url). */
 function clientAvatar(c) {
@@ -81,11 +82,8 @@ export default function FinanzasView({
   const [lineEmployees, setLineEmployees] = useState([])
   const [companyEmployees, setCompanyEmployees] = useState([])
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
   const [error, setError] = useState(null)
   // Se quitó al menos una fila de la nómina y todavía no se guardó el reporte.
-  const [removedSueldo, setRemovedSueldo] = useState(false)
   const [cliModal, setCliModal] = useState(null) // null=cerrado, objeto=cliente
   const [empModal, setEmpModal] = useState(null) // null=cerrado, objeto=empleado
   const [ingresosView, setIngresosView] = useState('tarjetas') // "lista" | "tarjetas" — tarjetas por defecto
@@ -93,7 +91,6 @@ export default function FinanzasView({
 
   // Snapshot del reporte tal como vino del servidor (o quedó tras un save).
   // Se usa para detectar cambios sin guardar y mostrar aviso al recargar/cerrar.
-  const baselineRef = useRef(null)
 
   // Refs para scroll de KPIs
   const ingresosRef = useRef(null)
@@ -103,6 +100,56 @@ export default function FinanzasView({
   // scroll one-shot a la sección tras la primera carga, luego se limpia el param.
   const [searchParams, setSearchParams] = useSearchParams()
   const pendingSection = useRef(searchParams.get('section'))
+
+  // Autoguardado: sin botón. Guarda solo `finanzas`, mezclado contra la fila vigente (no pisa
+  // los justificativos de Reuniones ni lo operativo guardado desde Operaciones).
+  const saveFinanzas = async (next, prev) => {
+    const finanzasChanged = JSON.stringify(next.finanzas) !== JSON.stringify(prev?.finanzas)
+    if (!finanzasChanged) return null
+    const { error: err } = await saveReportKeys(
+      companyId,
+      line.id,
+      year,
+      month,
+      { finanzas: next.finanzas },
+      next,
+    )
+    if (err) {
+      setError(err.message)
+      return err
+    }
+    setError(null)
+
+    // Write-back: persistir sueldos editados al sueldo maestro del empleado (users.monthly_salary).
+    // Solo para usuarios privilegiados, solo montos > 0 que difieran del maestro actual.
+    if (privileged) {
+      const salaryUpdates = pickSalaryUpdates(next.finanzas?.sueldos, lineEmployees)
+      if (salaryUpdates.length) {
+        const { error: salErr } = await updateEmployeeSalaries(salaryUpdates)
+        if (salErr) {
+          // El reporte ya se guardó; informar pero no bloquear
+          setError(`Reporte guardado. Error al actualizar sueldos maestros: ${salErr.message}`)
+        } else {
+          // Reflejar nuevo maestro en memoria para evitar re-disparar updates en el próximo guardado
+          setLineEmployees((prev) =>
+            prev.map((e) => {
+              const u = salaryUpdates.find((x) => x.user_id === e.user_id)
+              return u ? { ...e, monthly_salary: u.monto } : e
+            }),
+          )
+        }
+      }
+    }
+    return null
+  }
+  const autosave = useAutosave({
+    value: report,
+    enabled: !!report && !loading && !closed && !readOnly,
+    onSave: saveFinanzas,
+    contextKey: `${line?.id}:${year}:${month}`,
+    delay: 1500,
+  })
+  const resetAutosave = autosave.reset
 
   const load = useCallback(async () => {
     if (!line?.id || !companyId) return
@@ -147,7 +194,7 @@ export default function FinanzasView({
       ensureFinanzas(d)
       const synced = frozen ? d : syncReportClients(d, activeClients, employees)
       setReport(synced)
-      baselineRef.current = synced
+      resetAutosave(synced)
     } else {
       // El carry-forward copia sueldos/ingresos del mes anterior tal cual. Si este mes ya pasó
       // (frozen) no hay syncReportClients que los reconcilie, así que hay que podar a quien no
@@ -157,18 +204,14 @@ export default function FinanzasView({
       ensureFinanzas(fresh)
       const synced = frozen ? fresh : syncReportClients(fresh, activeClients, employees)
       setReport(synced)
-      baselineRef.current = synced
+      resetAutosave(synced)
     }
-    setRemovedSueldo(false) // el aviso pertenece a la edición en curso, no al mes que se abre
     setLoading(false)
-  }, [line?.id, line?.member_user_ids, companyId, year, month, closed])
+  }, [line?.id, line?.member_user_ids, companyId, year, month, closed, resetAutosave])
 
   useEffect(() => {
     load()
   }, [load])
-
-  // Aviso nativo del navegador si se intenta recargar/cerrar con cambios sin guardar.
-  useUnsavedChanges({ value: report, baseline: baselineRef.current, onClose: () => {} })
 
   useEffect(() => {
     if (loading || !pendingSection.current) return
@@ -190,44 +233,6 @@ export default function FinanzasView({
     )
   }, [loading, setSearchParams])
 
-  async function handleSave() {
-    if (!report || closed || readOnly) return
-    setSaving(true)
-    const { error: err } = await upsertReport(companyId, line.id, year, month, report)
-    setSaving(false)
-    if (err) {
-      setError(err.message)
-      return
-    }
-
-    // Write-back: persistir sueldos editados al sueldo maestro del empleado (users.monthly_salary).
-    // Solo para usuarios privilegiados, solo montos > 0 que difieran del maestro actual.
-    if (privileged) {
-      const salaryUpdates = pickSalaryUpdates(report.finanzas?.sueldos, lineEmployees)
-      if (salaryUpdates.length) {
-        const { error: salErr } = await updateEmployeeSalaries(salaryUpdates)
-        if (salErr) {
-          // El reporte ya se guardó; informar pero no bloquear
-          setError(`Reporte guardado. Error al actualizar sueldos maestros: ${salErr.message}`)
-        } else {
-          // Reflejar nuevo maestro en memoria para evitar re-disparar updates en el próximo save
-          setLineEmployees((prev) =>
-            prev.map((e) => {
-              const u = salaryUpdates.find((x) => x.user_id === e.user_id)
-              return u ? { ...e, monthly_salary: u.monto } : e
-            }),
-          )
-        }
-      }
-    }
-
-    // Actualizar baseline para que el aviso desaparezca tras guardar
-    baselineRef.current = report
-    setRemovedSueldo(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-  }
-
   function addItem(seccion) {
     setReport((prev) => {
       const next = structuredClone(prev)
@@ -246,7 +251,6 @@ export default function FinanzasView({
     })
     // Sacar a alguien de la nómina solo queda en memoria hasta que se guarde el reporte:
     // se avisa dentro del bloque de Sueldos para que no se pierda el cambio al salir.
-    if (seccion === 'sueldos') setRemovedSueldo(true)
   }
 
   // Casilla de los ingresos manuales: marcada, la fila no se hereda al mes siguiente.
@@ -760,17 +764,6 @@ export default function FinanzasView({
               </svg>
               Agregar entrada
             </button>
-            {/* Quitar a alguien de la nómina solo vive en memoria hasta guardar: si se sale
-                o se cambia de mes sin guardar, la fila vuelve. */}
-            {isSueldos && removedSueldo && (
-              <p
-                role="status"
-                className="mt-2 text-[13px] text-[#8a6d00] bg-[#fff8e1] border border-[#f0e0a8] rounded-lg px-3 py-2"
-              >
-                Quitaste a alguien de la nómina. El cambio <strong>no está guardado</strong>: baja
-                hasta el final y pulsa <strong>Guardar finanzas</strong>.
-              </p>
-            )}
             <SectionTotal label={sec.totalLabel} count={items.length} />
           </div>
         )
@@ -867,33 +860,6 @@ export default function FinanzasView({
         </div>
       )}
 
-      {/* Guardar */}
-      <div className="flex items-center justify-end pt-2 pb-6">
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-[15px] transition-all ${
-            saved ? 'bg-green-500 text-white' : 'bg-[#FAB51A] text-[#111] hover:bg-[#e8a315]'
-          } disabled:opacity-60`}
-        >
-          {saving ? (
-            <div className="w-4 h-4 border-2 border-[#111] border-t-transparent rounded-full animate-spin" />
-          ) : saved ? (
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="M3 8l3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          ) : null}
-          {saved ? 'Guardado' : saving ? 'Guardando...' : 'Guardar finanzas'}
-        </button>
-      </div>
-
       {/* Modal ficha técnica cliente */}
       {cliModal && (
         <ClientFichaModal
@@ -908,6 +874,11 @@ export default function FinanzasView({
       {empModal && (
         <EmployeeInfoModal employee={empModal} line={line} onClose={() => setEmpModal(null)} />
       )}
+      <AutosaveStatus
+        status={autosave.status}
+        onRetry={autosave.retry}
+        readOnly={closed || readOnly}
+      />
     </fieldset>
   )
 }

@@ -46,6 +46,16 @@ vi.mock('../components/metricas/metricsApi', () => ({
   loadClients: (...a) => mockLoadClients(...a),
   loadCompanyEmployees: (...a) => mockLoadCompanyEmployees(...a),
   upsertReport: (...a) => mockUpsertReport(...a),
+  saveReportKeys: (...a) => mockUpsertReport(...a),
+  OPERATIONAL_KEYS: [
+    'reuniones',
+    'productividad',
+    'crecimiento',
+    'solicitudes',
+    'pautas',
+    'piezas',
+    'feedback',
+  ],
   loadFixedTaskMarks: (...a) => mockLoadFixedTaskMarks(...a),
   maybeAutoPersistEffectiveReport: vi.fn().mockResolvedValue(undefined),
 }))
@@ -118,7 +128,7 @@ describe('OperacionesView — "5. Nº Pautas" (Realizadas)', () => {
     mockCountPautasRealizadasByClient.mockResolvedValue({ byClient: { 'c-1': 999 }, error: null })
     renderView({ month: 8 })
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     const realizadasInput = screen.getByDisplayValue('3')
     const metaInput = screen.getByDisplayValue('5')
@@ -132,7 +142,7 @@ describe('OperacionesView — "5. Nº Pautas" (Realizadas)', () => {
     mockCountPautasRealizadasByClient.mockResolvedValue({ byClient: { 'c-1': 7 }, error: null })
     renderView({ month: 9 })
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     // El título es único al input de Realizadas derivado; se ubica la fila del cliente
     // a partir de ahí para encontrar, dentro de esa misma fila, el input de Meta.
@@ -152,7 +162,7 @@ describe('OperacionesView — "5. Nº Pautas" (Realizadas)', () => {
     mockCountPautasRealizadasByClient.mockResolvedValue({ byClient: {}, error: null })
     renderView({ month: 9 })
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     const realizadasInput = screen.getByTitle(
       'Derivado automáticamente de Audiovisual: pautas realizadas del cliente en el mes',
@@ -165,7 +175,7 @@ describe('OperacionesView — "5. Nº Pautas" (Realizadas)', () => {
     mockCountPautasRealizadasByClient.mockResolvedValue({ byClient: { 'c-1': 999 }, error: null })
     renderView({ month: 9, closed: true })
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     expect(screen.getByDisplayValue('3')).toBeInTheDocument()
     expect(screen.getByDisplayValue('5')).toBeInTheDocument()
