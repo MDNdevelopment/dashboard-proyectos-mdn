@@ -26,7 +26,7 @@ Gotcha: el seed `20260706000002` nunca se aplicó en prod; los defaults de prod 
 - `empresa` — módulo Empresa — abierto.
 - `empresa.clientes` — tab Clientes — `min_level 2`.
 - `empresa.clientes.manage` — crear/editar/eliminar clientes (y `metric_clients.audiovisual_ids`, bloque "Audiovisual" de `ClientModal.jsx`) — prod: dos grupos OR: `min_level ≥ 3`, o usuarios Nairim + Lizdania (nivel 2) (`20260928170000_empresa_clientes_manage_or_lizdania.sql`). Mensualidad/día de pago se ven con `empresa.clientes.mensualidad`, no con esta.
-- `empresa.clientes.mensualidad` — **solo lectura** de mensualidad y día de pago de clientes (chip en Empresa → Clientes, bloque en `ClientModal`, `ClientFichaContent`/`LineFichaModal`). Nivel ≥ 3 y admin ya la ven vía `canViewClientFee()`; la capability extiende a otros. Editar sigue siendo `finanzas.clientes.manage` — prod: dos grupos OR: `min_level ≥ 3`, o usuario Lizdania (nivel 2) (`20261023120000_empresa_clientes_mensualidad.sql`). Sin fila en `module_permissions` quedaría abierta a todos. Es de presentación: `monthly_fee` sigue legible por SELECT de `metric_clients` (`using(true)`).
+- `empresa.clientes.mensualidad` — **solo lectura** de mensualidad y día de pago de clientes (chip en Empresa → Clientes, bloque en `ClientModal`, `ClientFichaContent`/`LineFichaModal`). Nivel ≥ 3 y admin ya la ven vía `canViewClientFee()`; la capability extiende a otros. Editar es `finanzas.clientes.manage` (incluye nivel ≥ 3). Prod de `empresa.clientes.mensualidad`: dos grupos OR: `min_level ≥ 3`, o usuario Lizdania (nivel 2) (`20261023120000_empresa_clientes_mensualidad.sql`). Sin fila en `module_permissions` quedaría abierta a todos. Es de presentación: `monthly_fee` sigue legible por SELECT de `metric_clients` (`using(true)`).
 - `empresa.lineas` — tab Líneas — `min_level 2`.
 - `empresa.lineas.manage` — crear/editar/eliminar Líneas y miembros — `min_level 4`.
 - `empresa.departamentos`, `empresa.empleados`, `empresa.preguntas` — tabs — `admin=true`.
@@ -39,7 +39,6 @@ Gotcha: el seed `20260706000002` nunca se aplicó en prod; los defaults de prod 
 - `empresa.suscripciones.manage` — agregar/editar/eliminar suscripciones — mismas reglas que `finanzas`. Sembradas copiando la fila `finanzas` (fallback nivel ≥ 4); ajustables desde Accesos.
 - `empresa.equipos` — tab "Equipos" (`/empresa/equipos`), lectura de `company_equipment` y su historial, y bloque en la ficha del empleado — `min_level 3`; admin siempre.
 - `empresa.equipos.manage` — agregar/editar/eliminar equipos — `min_level 4`. Sembradas en su migración; ajustables desde Accesos.
-- RPC `line_subscription_costs`: no exige `empresa.suscripciones`; se gatea con `metrics_user_can_view()` / `metrics_user_view_all()` + membresía de línea (mismo alcance que la RLS de `metric_reports`) para que los jefes de línea vean su gasto por suscripciones sin leer la tabla.
 - Gotcha: `empresa.permisos` antes gateaba la tab de configuración (hoy `empresa.accesos`); hoy gatea el reporte RRHH (`employee_permissions`, §2.6).
 
 **Tareas**
@@ -63,6 +62,7 @@ Gotcha: el seed `20260706000002` nunca se aplicó en prod; los defaults de prod 
 **Reportes / Monitor / Ads / Proyectos / Leads**
 - `reportes.manage` — editar/importar reportes — `min_level 3`.
 - `reportes.close` — cerrar cualquier reporte mensual — `min_level 4`/admin (la jefa de línea siempre puede cerrar el suyo).
+- `reportes.ver_todo` — ver los reportes de todas las líneas, solo lectura (amplía solo el SELECT de `metric_reports`) — prod: usuario Andrea Garcia (Administración); sin fila quedaría abierta a todos.
 - `monitor_uso` — módulo Monitor de uso (§2.5bis) — `min_level 4`.
 - `ads.manage` — crear/editar/eliminar campañas — `min_level 3`.
 - `proyectos.manage` — crear/editar/eliminar proyectos (RLS `projects`).
@@ -81,7 +81,7 @@ Gotcha: el seed `20260706000002` nunca se aplicó en prod; los defaults de prod 
 - `finanzas.cobros.manage` — registrar/quitar cobros y abonos.
 - `finanzas.distribucion.manage` — registrar distribuciones y pagos de partida.
 - `finanzas.cerrar_mes` — cerrar mes activo y abrir el siguiente.
-- `finanzas.clientes.manage` — modificar datos económicos del cliente (mensualidad, día de pago, intercambio). **Único camino**: `empresa.clientes.manage` no alcanza; lo impone un trigger en `metric_clients`.
+- `finanzas.clientes.manage` — modificar datos económicos del cliente (mensualidad, día de pago, intercambio). **Único camino**: `empresa.clientes.manage` no alcanza; lo impone un trigger en `metric_clients`. Prod: nivel ≥ 4, departamento Administración, un usuario puntual y nivel ≥ 3 (`20261104120100_finanzas_clientes_manage_nivel3.sql`), así las jefas nivel 3 editan todo el cliente desde `ClientModal`.
 
 #### Audiovisual: edición de pautas y piezas
 - Edición de piezas = `canEditPiezasForPauta` (`src/utils/audiovisual.js`): `audiovisual.coordina`, recurso asignado (`av_pautas.recurso_ids`), `audiovisual.pautas.gestion`, o jefa de la línea de la pauta (`leadLineIds`, derivado con `leadLineIdsFor(lines, userId)` desde `lines[].lead_user_id` de `loadLines`).

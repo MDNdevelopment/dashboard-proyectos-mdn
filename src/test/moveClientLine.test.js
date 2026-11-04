@@ -99,6 +99,8 @@ describe('moveClientLine — línea vieja', () => {
     )
     expect(manual).toBeTruthy()
     expect(manual.descripcion).toContain('Marca X')
+    // el parcial es de ese mes: no debe arrastrarse al mes siguiente de la línea vieja
+    expect(manual.soloEsteMes).toBe(true)
     // el ingreso del otro cliente sigue
     expect(oldReportData.finanzas.ingresos.find((r) => r.clienteId === 'cKeep')).toBeTruthy()
   })

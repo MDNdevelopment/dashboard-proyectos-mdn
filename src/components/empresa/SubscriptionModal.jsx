@@ -416,8 +416,8 @@ export default function SubscriptionModal({
             ) : (
               <>
                 <p className="text-[12px] text-[#999]">
-                  Cada línea asignada ve su parte como gasto en su reporte mensual. Con varias
-                  asignaciones el costo mensual se reparte.
+                  Asignar es solo de referencia (no genera gasto en el reporte de la línea: se carga
+                  a mano). Con varias asignaciones el costo mensual se reparte.
                 </p>
                 {alloc.length > 0 && (
                   <ul className="space-y-1.5">

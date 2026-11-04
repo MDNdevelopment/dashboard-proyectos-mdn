@@ -43,7 +43,8 @@ Reportes mensuales ponderados (100 pts) por línea operativa: reuniones, product
 ```
 - `crecimiento.items`: `seguidoresGanados` (mes actual, editable, se compara contra `meta`); `seguidoresGanadosPrev` (ganados del periodo anterior, línea base, solo informativo, no puntúa); `seguidoresActuales` (totales al cierre, editable); `seguidoresBase` (totales del periodo anterior; tras bootstrap = `seguidoresActuales` del mes previo vía `loadPrevReport`).
 - UI crecimiento: columnas del mes anterior (cada campo disabled si el reporte previo lo tiene; editable si vacío o sin reporte previo — el override se guarda en `seguidoresGanadosPrev`/`seguidoresBase` del reporte ACTUAL sin tocar el previo), columnas del mes del reporte (siempre editables), `meta` e indicador ✓ Cumple / Pendiente con `ganados/meta×100`.
-- Gasto por suscripciones: `finanzas.gastosOperativos` puede traer filas `{id:'sub-<subscriptionId>', fuente:'suscripcion', suscripcionId, descripcion:'<nombre> (suscripción)', monto, clienteId:null}`, derivadas de Empresa → Suscripciones (`syncSubscriptionCosts`, RPC `line_subscription_costs`). Solo de lectura en `FinanzasView` (etiqueta «Suscripción», sin borrar). Se reemplazan en cada carga de un mes NO congelado (`FinanzasView.load` y `buildEffectiveReport` con `ctx.lineId`/`ctx.subscriptionCosts`); mes pasado o cerrado conserva lo guardado; si la RPC falla (`null`) no se tocan. `initMetricReport` no las hereda. El auto-guardado (`metricsApi`, `pickPersistable`) persiste, además de las 7 claves operativas, solo estas filas de `finanzas.gastosOperativos`.
+- Gastos de la línea: se cargan a mano en `finanzas.gastosOperativos` (y demás secciones). Las suscripciones de Empresa → Suscripciones asignadas a una línea NO generan gasto en el reporte; la asignación es solo de referencia (panel «Costo mensual por línea»). El auto-guardado (`metricsApi`) persiste solo las 7 claves operativas; `finanzas` solo se guarda con «Guardar finanzas».
+- Ingresos manuales (`clienteId:null`) con `soloEsteMes:true` («Solo este mes» en `FinanzasView`): no se heredan al mes siguiente. Las filas de cliente no llevan la casilla; el extra de un cliente se carga como fila manual aparte.
 - `incompleto=true`: el mes se excluye del promedio anual, ranking, cobertura y gráfico histórico (`aggregateMetricsDashboard.js` + `LineHubView.jsx`); sus finanzas sí se acumulan. Ausente/false = cuenta.
 - `feedback` puede existir en reportes viejos: no se captura ni puntúa.
 
@@ -54,8 +55,9 @@ Reportes mensuales ponderados (100 pts) por línea operativa: reuniones, product
 
 ## Permisos
 - Acceso: `can('reportes')` (`src/lib/permissions.js`). Sin reglas → libre para autenticados; admins siempre pasan. Compuerta en `Sidebar.jsx` y `MetricasPage.jsx` (redirige a `/`).
-- RLS (`20260704000000_metric_reports_team_rls.sql`): helpers `metrics_user_can_view()` (nivel ≥3 o admin) y `metrics_user_view_all()` (≥4 o admin), hardcodeados por nivel. Predicados SELECT y UPDATE/INSERT idénticos.
-- Nivel 3: ve/edita solo su línea (frontend + RLS). Nivel 4 y admin: todas. Filtro: `visibleLinesForUser(lines, userProfile)` en `src/utils/lineMembers.js`.
+- RLS (`20260704000000_metric_reports_team_rls.sql`): helpers `metrics_user_can_view()` (nivel ≥3 o admin) y `metrics_user_view_all()` (≥4 o admin), hardcodeados por nivel. Predicados SELECT, UPDATE/INSERT y DELETE idénticos, salvo que SELECT también admite `user_can('reportes.ver_todo')` (`20261104120200_reportes_ver_todo.sql`).
+- Nivel 3: ve/edita solo su línea (frontend + RLS). Nivel 4 y admin: todas. Filtro: `visibleLinesForUser(lines, userProfile, { extraViewAll })` en `src/utils/lineMembers.js`.
+- `reportes.ver_todo`: ver los reportes de todas las líneas, **solo lectura** (`MetricasPage` pasa `extraViewAll: can('reportes.ver_todo')`). `userCanWriteLineReports(userProfile, line)` (nivel ≥4, admin, miembro o jefa de la línea) espeja la RLS de escritura; `LineView` pasa `readOnly` a `OperacionesView`/`FinanzasView` (fieldset deshabilitado, sin guardar ni auto-guardar) y oculta el cierre.
 - Cerrar reporte: capability `reportes.close` (§1, nivel 4/admin) o la jefa de la línea (`metric_line_members.is_lead`, `line.lead_user_id === userProfile.user_id`).
 - `isFinancePrivileged` (nivel 4/admin): mensualidad y día de pago en `ClientFichaModal`, sección Sueldos en `FinanzasView`, flujo "Mover de línea".
 
@@ -74,7 +76,7 @@ Reportes mensuales ponderados (100 pts) por línea operativa: reuniones, product
 
 ### Captura e inicialización
 - Captura mayormente manual en `OperacionesView`/`FinanzasView`.
-- Periodo no guardado: `initMetricReport.js` copia el mes anterior tal cual (carry-forward, incl. `finanzas.sueldos`/`finanzas.ingresos`) y luego aplica `metric_lines.metas` (prioridad de la línea). Recibe flag `metaAuto` (de `REUNIONES_META_AUTO_START`) para sembrar `reuniones.meta` derivada o `null`.
+- Periodo no guardado: `initMetricReport.js` copia el mes anterior (carry-forward, incl. `finanzas.sueldos`/`finanzas.ingresos`) con dos excepciones en ingresos: las filas `soloEsteMes` se descartan y cada fila de cliente vuelve a su `monthly_fee` (un monto editado no se arrastra). Luego aplica `metric_lines.metas` (prioridad de la línea). Recibe flag `metaAuto` (de `REUNIONES_META_AUTO_START`) para sembrar `reuniones.meta` derivada o `null`.
 - `pruneCarryForward` (`src/utils/pruneCarryForward.js`): se aplica al resultado de `initMetricReport` en ambas vistas; descarta filas heredadas cuyo empleado no cumple `employeeActiveInMonth` o cliente no cumple `clientInMonth` para ese mes. Solo mira fechas de baja (nunca `metric_line_members`), seguro en meses pasados. Nunca sobre reportes guardados. Las filas de sueldo ligadas a empleado se pueden borrar a mano en `FinanzasView`.
 - Solo `OperacionesView` materializa un mes sin fila (`initMetricReport`+`pruneCarryForward`), y solo con "Guardar reporte".
 
@@ -123,7 +125,7 @@ Reportes mensuales ponderados (100 pts) por línea operativa: reuniones, product
 
 ### Mover cuenta de línea
 - Cuenta que ya tiene línea: flujo "Mover de línea" (`MoverClienteModal.jsx` desde `ClientModal`, `isFinancePrivileged`). Orquestador `metricsApi.moveClientToLine()` + util puro `src/utils/moveClientLine.js`. Auditoría en `metric_client_line_moves`.
-- Inmediato ("este mes cuenta para la nueva"): ingreso `monthly_fee` prorrateado por días (`src/utils/prorateMonthlyFee.js`, editable) → fila manual en la vieja (sobrevive a `syncReportClients`) + fila ligada en la nueva; operativo (crecimiento/pautas/feedback/justificativo) migra con valores a la nueva.
+- Inmediato ("este mes cuenta para la nueva"): ingreso `monthly_fee` prorrateado por días (`src/utils/prorateMonthlyFee.js`, editable) → fila manual `soloEsteMes` en la vieja (sobrevive a `syncReportClients`, no pasa al mes siguiente) + fila ligada en la nueva; operativo (crecimiento/pautas/feedback/justificativo) migra con valores a la nueva.
 - Diferido ("se queda con la vieja"): `scheduleClientLineMove` no toca `line_id` ni reportes; setea `pending_line_id` + `line_change_at` = 1° del próximo mes. pg_cron diario `apply_due_client_line_moves` hace el flip (y limpia staff). Cancelable desde `ClientModal`.
 - Tareas: al aplicarse, las abiertas (`status <> 'Terminado'`) pasan a `tasks.team_id` nueva con `assignee_ids = [lead]` vía SECURITY DEFINER `reassign_client_open_tasks(client_id, to_line_id, assignee?)`; las 'Terminado' quedan intactas.
 - Destino puede ser "Independientes" (`is_general`; el modal recarga con `includeGeneral`). Si el destino no tiene jefe, se elige responsable a mano (diferido: `metric_clients.pending_task_assignee`).

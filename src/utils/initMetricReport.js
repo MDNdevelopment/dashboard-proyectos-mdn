@@ -17,13 +17,13 @@
  *   4. Los reportes YA GUARDADOS no pasan por esta función; se muestran tal cual
  *      (congelados) desde OperacionesView.
  *
- *   Las finanzas se heredan con sus montos (sueldos/gastos fijos son recurrentes).
+ *   Las finanzas se heredan con sus montos (sueldos/gastos fijos son recurrentes), salvo los
+ *   ingresos marcados `soloEsteMes` y el monto de cada cliente, que vuelve a su mensualidad.
  *   Los items de crecimiento/pautas/feedback se reconcilian vía syncReportClients.
  */
 
 import { DEFAULT_SUBTAREAS } from '../components/metricas/constants'
 import { computeReunionesMeta } from './reunionesMeta'
-import { isSubscriptionRow } from './syncSubscriptionCosts'
 
 /**
  * @param {object|null} prevReport   - Reporte del mes anterior, o null.
@@ -47,6 +47,8 @@ export function initMetricReport(
   // ── 1. Construir base (carry-forward o defaults) ──────────────────────────────
   let base
   const reunionesMeta = metaAuto ? computeReunionesMeta(lineClients, {}) : null
+
+  const lineClientsById = new Map(lineClients.map((c) => [c.id, c]))
 
   if (prevReport) {
     base = {
@@ -91,11 +93,15 @@ export function initMetricReport(
       // Finanzas: heredar montos (sueldos/gastos fijos son recurrentes)
       finanzas: prevReport.finanzas
         ? {
-            ingresos: (prevReport.finanzas.ingresos ?? []).map((it) => ({ ...it })),
-            // Las filas de suscripción no se heredan: las vuelve a sembrar syncSubscriptionCosts.
-            gastosOperativos: (prevReport.finanzas.gastosOperativos ?? [])
-              .filter((it) => !isSubscriptionRow(it))
-              .map((it) => ({ ...it })),
+            // Los ingresos «Solo este mes» no se heredan, y cada cliente arranca el mes con su
+            // mensualidad (un monto editado para sumar un extra no debe arrastrarse).
+            ingresos: (prevReport.finanzas.ingresos ?? [])
+              .filter((it) => !it.soloEsteMes)
+              .map((it) => {
+                const client = it.clienteId != null && lineClientsById.get(it.clienteId)
+                return client ? { ...it, monto: Number(client.monthly_fee) || 0 } : { ...it }
+              }),
+            gastosOperativos: (prevReport.finanzas.gastosOperativos ?? []).map((it) => ({ ...it })),
             sueldos: (prevReport.finanzas.sueldos ?? []).map((it) => ({ ...it })),
             otrosGastos: (prevReport.finanzas.otrosGastos ?? []).map((it) => ({ ...it })),
           }

@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import LineHubView from './LineHubView'
 import OperacionesView from './OperacionesView'
 import FinanzasView from './FinanzasView'
+import { userCanWriteLineReports } from '../../utils/lineMembers'
 import { loadReport, closeReport } from './metricsApi'
 
 const MONTHS = [
@@ -36,7 +37,9 @@ export default function LineView({ line, companyId, onLinesChange }) {
   // La jefa de línea (metric_line_members.is_lead) puede marcar su propio
   // reporte como listo y cerrarlo, aunque no tenga la capability reportes.close.
   const isLead = !!userProfile?.user_id && line.lead_user_id === userProfile.user_id
-  const canClose = can('reportes.close') || isLead
+  // Ver una línea ajena (reportes.ver_todo) es solo lectura: la RLS tampoco deja escribir.
+  const canWrite = userCanWriteLineReports(userProfile, line)
+  const canClose = canWrite && (can('reportes.close') || isLead)
 
   // sub-tab, mes y año viven en la URL para sobrevivir a F5 y remounts.
   const [searchParams, setSearchParams] = useSearchParams()
@@ -237,6 +240,7 @@ export default function LineView({ line, companyId, onLinesChange }) {
           year={year}
           month={month}
           closed={isClosed}
+          readOnly={!canWrite}
         />
       )}
       {subView === 'finanzas' && (
@@ -246,6 +250,7 @@ export default function LineView({ line, companyId, onLinesChange }) {
           year={year}
           month={month}
           closed={isClosed}
+          readOnly={!canWrite}
         />
       )}
 

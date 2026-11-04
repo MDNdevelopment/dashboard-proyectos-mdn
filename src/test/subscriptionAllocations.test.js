@@ -5,11 +5,6 @@ import {
   allocatedMonthly,
   costsByTarget,
 } from '../utils/subscriptions'
-import {
-  syncSubscriptionCosts,
-  subscriptionRowsForLine,
-  withSubscriptionRowsFrom,
-} from '../utils/syncSubscriptionCosts'
 
 const L = (id, share_pct = null) => ({ line_id: id, department_id: null, share_pct })
 const D = (id, share_pct = null) => ({ line_id: null, department_id: id, share_pct })
@@ -81,71 +76,5 @@ describe('costsByTarget', () => {
       unassigned: 0,
     })
     expect(costsByTarget([sub()], []).unassigned).toBe(10)
-  })
-})
-
-describe('syncSubscriptionCosts', () => {
-  const costRows = [
-    {
-      line_id: 'a',
-      subscription_id: 's1',
-      name: 'CapCut',
-      frequency: 'mensual',
-      amount: 10,
-      allocations: [L('a'), L('b')],
-    },
-    {
-      line_id: 'z',
-      subscription_id: 's2',
-      name: 'Otra',
-      frequency: 'mensual',
-      amount: 8,
-      allocations: [L('z')],
-    },
-  ]
-  const data = {
-    finanzas: {
-      ingresos: [{ id: 'i' }],
-      sueldos: [{ id: 'x' }],
-      otrosGastos: [],
-      gastosOperativos: [
-        { id: 'm1', descripcion: 'manual', monto: 3 },
-        { id: 'sub-viejo', fuente: 'suscripcion', descripcion: 'viejo', monto: 99 },
-      ],
-    },
-  }
-
-  it('genera solo las filas de la línea, con su parte', () => {
-    expect(subscriptionRowsForLine('a', costRows)).toEqual([
-      {
-        id: 'sub-s1',
-        fuente: 'suscripcion',
-        suscripcionId: 's1',
-        descripcion: 'CapCut (suscripción)',
-        monto: 5,
-        clienteId: null,
-      },
-    ])
-  })
-
-  it('reemplaza las filas de suscripción, conserva las manuales y no muta', () => {
-    const before = structuredClone(data)
-    const out = syncSubscriptionCosts(data, 'a', costRows)
-    expect(out.finanzas.gastosOperativos.map((i) => i.id)).toEqual(['m1', 'sub-s1'])
-    expect(out.finanzas.ingresos).toEqual(data.finanzas.ingresos)
-    expect(data).toEqual(before)
-  })
-
-  it('si la suscripción ya no está asignada, su fila desaparece', () => {
-    const out = syncSubscriptionCosts(data, 'a', [])
-    expect(out.finanzas.gastosOperativos.map((i) => i.id)).toEqual(['m1'])
-  })
-
-  it('withSubscriptionRowsFrom toma solo las filas de suscripción del efectivo', () => {
-    const effective = syncSubscriptionCosts(data, 'a', costRows)
-    effective.finanzas.sueldos = [{ id: 'reconciliado' }]
-    const out = withSubscriptionRowsFrom(data, effective)
-    expect(out.finanzas.sueldos).toEqual([{ id: 'x' }])
-    expect(out.finanzas.gastosOperativos.map((i) => i.id)).toEqual(['m1', 'sub-s1'])
   })
 })

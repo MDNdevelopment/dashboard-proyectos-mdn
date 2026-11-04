@@ -80,23 +80,3 @@ export async function saveAllocations(subscriptionId, companyId, allocations) {
   const { error } = await supabase.from('company_subscription_allocations').insert(rows)
   if (error) throw error
 }
-
-/**
- * Costos de suscripciones por línea para el reporte mensual (RPC con el mismo alcance que
- * la RLS de metric_reports; no requiere `empresa.suscripciones`). Un fallo no debe romper el
- * reporte ni borrar filas ya guardadas: devuelve `null` (= "no se pudo cargar", el llamador
- * no sincroniza) y avisa por consola.
- */
-export async function loadLineSubscriptionCosts(companyId) {
-  if (!companyId) return null
-  try {
-    const { data, error } = await supabase.rpc('line_subscription_costs', {
-      p_company_id: String(companyId),
-    })
-    if (error) throw error
-    return data ?? []
-  } catch (err) {
-    console.warn('[suscripciones] no se pudieron cargar los costos por línea', err)
-    return null
-  }
-}

@@ -7,6 +7,7 @@ import {
   userViewsAllLines,
   withDerivedGeneralMembers,
   clientsForUser,
+  userCanWriteLineReports,
 } from '../utils/lineMembers'
 
 const LINES = [
@@ -340,5 +341,49 @@ describe('clientsForUser', () => {
   it('clients vacío o nulo devuelve []', () => {
     expect(clientsForUser([], REAL_LINES, { user_id: 'u-jefa1' })).toEqual([])
     expect(clientsForUser(null, REAL_LINES, { user_id: 'u-jefa1' })).toEqual([])
+  })
+})
+
+describe('userCanWriteLineReports', () => {
+  const line = { id: 'line-1', member_user_ids: ['u-a'] }
+
+  it('el miembro de la línea puede escribir', () => {
+    expect(userCanWriteLineReports({ user_id: 'u-a', access_level: 3 }, line)).toBe(true)
+  })
+
+  it('la jefa de la línea puede escribir', () => {
+    expect(
+      userCanWriteLineReports(
+        { user_id: 'u-j', access_level: 3 },
+        { ...line, lead_user_id: 'u-j' },
+      ),
+    ).toBe(true)
+  })
+
+  it('nivel 4 y admin escriben en cualquier línea', () => {
+    expect(userCanWriteLineReports({ user_id: 'u-z', access_level: 4 }, line)).toBe(true)
+    expect(userCanWriteLineReports({ user_id: 'u-z', access_level: 1, admin: true }, line)).toBe(
+      true,
+    )
+  })
+
+  it('quien solo ve la línea (reportes.ver_todo / tasks_view_all) no puede escribir', () => {
+    expect(userCanWriteLineReports({ user_id: 'u-z', access_level: 3 }, line)).toBe(false)
+    expect(
+      userCanWriteLineReports({ user_id: 'u-z', access_level: 3, tasks_view_all: true }, line),
+    ).toBe(false)
+  })
+
+  it('sin perfil o sin línea no escribe', () => {
+    expect(userCanWriteLineReports(null, line)).toBe(false)
+    expect(userCanWriteLineReports({ user_id: 'u-a', access_level: 3 }, null)).toBe(false)
+  })
+})
+
+describe('visibleLinesForUser — extraViewAll (reportes.ver_todo)', () => {
+  it('nivel 3 sin membresía ve todas las líneas con extraViewAll', () => {
+    const u = { user_id: 'u-z', access_level: 3 }
+    expect(visibleLinesForUser(LINES, u)).toHaveLength(0)
+    expect(visibleLinesForUser(LINES, u, { extraViewAll: true })).toHaveLength(3)
   })
 })

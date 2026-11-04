@@ -74,6 +74,22 @@ export function userViewsAllLines(userProfile, { extraViewAll = false } = {}) {
 }
 
 /**
+ * ¿Puede escribir en los reportes de esta línea? Espeja la RLS de metric_reports
+ * (insert/update/delete): nivel ≥ 4, admin, o miembro (incl. jefa) de la línea. Quien solo ve la línea por
+ * `reportes.ver_todo` (o `tasks_view_all`) la ve en solo lectura.
+ *
+ * @param {object|null} userProfile
+ * @param {{ member_user_ids?: string[], lead_user_id?: string }|null} line
+ * @returns {boolean}
+ */
+export function userCanWriteLineReports(userProfile, line) {
+  if (userProfile?.access_level >= 4 || userProfile?.admin === true) return true
+  const uid = userProfile?.user_id
+  if (!uid) return false
+  return line?.lead_user_id === uid || (line?.member_user_ids ?? []).includes(uid)
+}
+
+/**
  * Filtra las líneas visibles para un usuario según su nivel de acceso.
  * - userViewsAllLines(): ve todas las líneas.
  * - Nivel 1-3 sin flag: ve solo las líneas donde está en member_user_ids.
