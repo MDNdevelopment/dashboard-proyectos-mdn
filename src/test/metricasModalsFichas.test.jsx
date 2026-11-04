@@ -103,6 +103,16 @@ vi.mock('../components/metricas/metricsApi', () => ({
   loadPrevReport: (...a) => mockLoadPrevReport(...a),
   loadRecentReports: vi.fn().mockResolvedValue({ data: [], error: null }),
   upsertReport: (...a) => mockUpsertReport(...a),
+  saveReportKeys: (...a) => mockUpsertReport(...a),
+  OPERATIONAL_KEYS: [
+    'reuniones',
+    'productividad',
+    'crecimiento',
+    'solicitudes',
+    'pautas',
+    'piezas',
+    'feedback',
+  ],
   loadCompanyUsers: vi.fn().mockResolvedValue({ data: [], error: null }),
   seedMetricsIfEmpty: vi.fn().mockResolvedValue(null),
   loadLines: vi.fn().mockResolvedValue({ data: [], error: null }),
@@ -869,23 +879,24 @@ describe('FinanzasView — reporte cerrado (prop "closed")', () => {
     })
   })
 
-  it('deshabilita todos los inputs y el botón "Guardar finanzas"', async () => {
+  it('deshabilita todos los inputs y el indicador de autoguardado dice «Solo lectura»', async () => {
     wrap(<FinanzasView line={MOCK_LINE} companyId="co-1" year={2026} month={6} closed />)
     await waitFor(() => {
-      expect(screen.getByText('Guardar finanzas')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
-    expect(screen.getByText('Guardar finanzas')).toBeDisabled()
+    expect(screen.getByTestId('autosave-status')).toHaveTextContent('Solo lectura')
     const inputs = document.querySelectorAll('input, textarea, select')
     expect(inputs.length).toBeGreaterThan(0)
     inputs.forEach((input) => expect(input).toBeDisabled())
   })
 
-  it('sin "closed" (default) los inputs y el botón "Guardar finanzas" siguen habilitados', async () => {
+  it('sin "closed" (default) no hay botón de guardar y el indicador avisa que se guarda solo', async () => {
     wrap(<FinanzasView line={MOCK_LINE} companyId="co-1" year={2026} month={6} />)
     await waitFor(() => {
-      expect(screen.getByText('Guardar finanzas')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
-    expect(screen.getByText('Guardar finanzas')).not.toBeDisabled()
+    expect(screen.queryByText('Guardar finanzas')).not.toBeInTheDocument()
+    expect(screen.getByTestId('autosave-status')).toHaveTextContent(/se guardan automáticamente/)
   })
 })
 

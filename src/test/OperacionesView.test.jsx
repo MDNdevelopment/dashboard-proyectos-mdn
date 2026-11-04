@@ -67,6 +67,16 @@ vi.mock('../components/metricas/metricsApi', () => ({
   loadClients: (...a) => mockLoadClients(...a),
   loadCompanyEmployees: (...a) => mockLoadCompanyEmployees(...a),
   upsertReport: (...a) => mockUpsertReport(...a),
+  saveReportKeys: (...a) => mockUpsertReport(...a),
+  OPERATIONAL_KEYS: [
+    'reuniones',
+    'productividad',
+    'crecimiento',
+    'solicitudes',
+    'pautas',
+    'piezas',
+    'feedback',
+  ],
   loadFixedTaskMarks: (...a) => mockLoadFixedTaskMarks(...a),
   maybeAutoPersistEffectiveReport: vi.fn().mockResolvedValue(undefined),
 }))
@@ -146,7 +156,7 @@ describe('OperacionesView — columna Inversión Ads (Crecimiento de seguidores)
     // el reporte quedaba por debajo de la grilla de Tareas Fijas.
     renderView()
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     expect(mockLoadFixedTaskMarks).toHaveBeenCalledWith('co-1', 2026, 7)
   })
@@ -173,7 +183,7 @@ describe('OperacionesView — columna Inversión Ads (Crecimiento de seguidores)
     })
     renderView()
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     expect(await screen.findByText('$125.50')).toBeInTheDocument()
   })
@@ -193,7 +203,7 @@ describe('OperacionesView — columna Inversión Ads (Crecimiento de seguidores)
     })
     renderView()
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     const spentEl = await screen.findByText('$80.00')
     const budgetEl = await screen.findByText('/ $200.00')
@@ -209,7 +219,7 @@ describe('OperacionesView — columna Inversión Ads (Crecimiento de seguidores)
     mockLoadAds.mockResolvedValue({ data: [], error: null })
     renderView()
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     // Un $0.00 por cada cliente sin pauta en la columna Inversión Ads (Banco Exterior y Pepsi)
     const zeros = await screen.findAllByText('$0.00')
@@ -231,7 +241,7 @@ describe('OperacionesView — columna Inversión Ads (Crecimiento de seguidores)
     })
     renderView()
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     expect(screen.queryByText('$999.00')).not.toBeInTheDocument()
     const zeros = await screen.findAllByText('$0.00')
@@ -257,7 +267,7 @@ describe('OperacionesView — "Reuniones realizadas" (solo lectura, siempre deri
     mockCountMeetingsHeldForLine.mockResolvedValue({ count: 5, error: null })
     renderView()
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     const realizadasInput = document.querySelectorAll('input[type="number"]')[0]
     expect(realizadasInput.value).toBe('5')
@@ -270,7 +280,7 @@ describe('OperacionesView — "Reuniones realizadas" (solo lectura, siempre deri
     mockCountMeetingsHeldForLine.mockResolvedValue({ count: 7, error: null })
     renderView()
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     const realizadasInput = document.querySelectorAll('input[type="number"]')[0]
     expect(realizadasInput.value).toBe('7')
@@ -281,7 +291,7 @@ describe('OperacionesView — "Reuniones realizadas" (solo lectura, siempre deri
     mockCountMeetingsHeldForLine.mockResolvedValue({ count: 3, error: null })
     renderView()
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     const realizadasInput = document.querySelectorAll('input[type="number"]')[0]
     expect(realizadasInput.value).toBe('3')
@@ -292,7 +302,7 @@ describe('OperacionesView — "Reuniones realizadas" (solo lectura, siempre deri
     mockCountMeetingsHeldForLine.mockResolvedValue({ count: 10, error: null })
     renderView()
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     const realizadasInput = document.querySelectorAll('input[type="number"]')[0]
     expect(realizadasInput).toBeDisabled()
@@ -318,7 +328,7 @@ describe('OperacionesView — meses previos al módulo Reuniones conservan el va
     mockCountMeetingsHeldForLine.mockResolvedValue({ count: 0, error: null })
     renderView({ month: 6 })
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     const realizadasInput = document.querySelectorAll('input[type="number"]')[0]
     expect(realizadasInput.value).toBe('10')
@@ -329,7 +339,7 @@ describe('OperacionesView — meses previos al módulo Reuniones conservan el va
     mockCountMeetingsHeldForLine.mockResolvedValue({ count: 4, error: null })
     renderView({ month: 7 })
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     const realizadasInput = document.querySelectorAll('input[type="number"]')[0]
     expect(realizadasInput.value).toBe('4')
@@ -355,7 +365,7 @@ describe('OperacionesView — "Productividad – Tareas Fijas" antes del lanzami
     mockLoadReport.mockResolvedValue({ data: { data }, error: null })
     renderView({ month: 8 })
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     const nombreInput = screen.getByDisplayValue('Grillas Redes→Diseño')
     expect(nombreInput).not.toBeDisabled()
@@ -370,7 +380,7 @@ describe('OperacionesView — "Productividad – Tareas Fijas" antes del lanzami
     mockLoadReport.mockResolvedValue({ data: { data }, error: null })
     renderView({ month: 9 })
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     // Al ser la era del módulo, computeProductividad deriva las 4 tareas de TASK_KEYS +
     // la fila "Actualización de Plataformas" (derivada de Chequeo, ver
@@ -438,7 +448,7 @@ describe('OperacionesView — reporte cerrado (prop "closed")', () => {
     mockCountMeetingsHeldForLine.mockResolvedValue({ count: 999, error: null })
     renderView({ month: 7, closed: true })
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     const realizadasInput = document.querySelectorAll('input[type="number"]')[0]
     expect(realizadasInput.value).toBe('10')
@@ -449,21 +459,22 @@ describe('OperacionesView — reporte cerrado (prop "closed")', () => {
     mockCountMeetingsHeldForLine.mockResolvedValue({ count: 0, error: null })
     renderView({ month: 7, closed: true })
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     const inputs = document.querySelectorAll('input, textarea')
     expect(inputs.length).toBeGreaterThan(0)
     inputs.forEach((input) => expect(input).toBeDisabled())
   })
 
-  it('deshabilita el botón "Guardar reporte"', async () => {
+  it('no hay botón de guardar y el indicador dice «Solo lectura»', async () => {
     mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
     mockCountMeetingsHeldForLine.mockResolvedValue({ count: 0, error: null })
     renderView({ month: 7, closed: true })
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
-    expect(screen.getByText('Guardar reporte')).toBeDisabled()
+    expect(screen.queryByText('Guardar reporte')).not.toBeInTheDocument()
+    expect(screen.getByTestId('autosave-status')).toHaveTextContent('Solo lectura')
   })
 })
 
@@ -491,7 +502,7 @@ describe('OperacionesView — meta de reuniones automática (1 por marca, menos 
     mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
     renderView({ month: 9 })
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     const metaInput = document.querySelectorAll('input[type="number"]')[1]
     expect(metaInput.value).toBe('2') // MOCK_CLIENTS tiene 2 marcas
@@ -502,7 +513,7 @@ describe('OperacionesView — meta de reuniones automática (1 por marca, menos 
     mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
     renderView({ month: 9 })
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     fireEvent.click(screen.getByRole('button', { name: /Ver marcas/ }))
     const heading = await screen.findByText('Cobertura de reuniones por marca')
@@ -514,11 +525,46 @@ describe('OperacionesView — meta de reuniones automática (1 por marca, menos 
     expect(metaInput.value).toBe('1')
   })
 
+  it('mes pasado sin cerrar: «No aplica» baja la Meta y se guarda sola', async () => {
+    // Hoy = 4 oct 2026: septiembre ya pasó (congelado) pero sigue abierto hasta el cierre del día 5.
+    vi.setSystemTime(new Date('2026-10-04T12:00:00'))
+    const data = makeReportData()
+    data.crecimiento = {
+      items: MOCK_CLIENTS.map((c) => ({ clienteId: c.id, seguidoresGanados: 0, meta: 0 })),
+    }
+    mockLoadReport.mockResolvedValue({ data: { data, closed_at: null }, error: null })
+    renderView({ month: 9 })
+    await waitFor(() => {
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Ver marcas/ }))
+    const heading = await screen.findByText('Cobertura de reuniones por marca')
+    const modal = heading.closest('div.bg-white')
+    fireEvent.change(within(modal).getAllByRole('combobox')[0], {
+      target: { value: 'no_aplica' },
+    })
+    const metaInput = document.querySelectorAll('input[type="number"]')[1]
+    expect(metaInput.value).toBe('1')
+    await waitFor(
+      () => {
+        expect(mockUpsertReport).toHaveBeenCalledWith(
+          'co-1',
+          'line-1',
+          2026,
+          9,
+          { reuniones: expect.objectContaining({ meta: 1 }) },
+          expect.anything(),
+        )
+      },
+      { timeout: 4000 },
+    )
+  })
+
   it('muestra el hint de meta derivada', async () => {
     mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
     renderView({ month: 9 })
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     expect(screen.getByText('Marcas de la línea − «No aplica»')).toBeInTheDocument()
   })
@@ -527,7 +573,7 @@ describe('OperacionesView — meta de reuniones automática (1 por marca, menos 
     mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null }) // meta guardada: 15
     renderView({ month: 9, closed: true })
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     const metaInput = document.querySelectorAll('input[type="number"]')[1]
     expect(metaInput.value).toBe('15')
@@ -538,7 +584,7 @@ describe('OperacionesView — meta de reuniones automática (1 por marca, menos 
     mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null }) // meta guardada: 15
     renderView({ month: 8 })
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     const metaInput = document.querySelectorAll('input[type="number"]')[1]
     expect(metaInput.value).toBe('15')
@@ -615,7 +661,7 @@ describe('OperacionesView — meses pasados congelados no reconcilian contra el 
   it('junio (mes pasado): conserva a la marca archivada y NO agrega a la marca nueva', async () => {
     renderView({ month: 6 })
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     expect(await screen.findByText('Marca Archivada')).toBeInTheDocument()
     expect(screen.queryByText('Marca Nueva')).not.toBeInTheDocument()
@@ -624,7 +670,7 @@ describe('OperacionesView — meses pasados congelados no reconcilian contra el 
   it('julio (mes en curso): descarta a la marca archivada en junio y agrega a la marca nueva', async () => {
     renderView({ month: 7 })
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     expect((await screen.findAllByText('Marca Nueva')).length).toBeGreaterThan(0)
     expect(screen.queryByText('Marca Archivada')).not.toBeInTheDocument()
@@ -633,7 +679,7 @@ describe('OperacionesView — meses pasados congelados no reconcilian contra el 
   it('reporte cerrado en el mes en curso también queda congelado (conserva la marca archivada)', async () => {
     renderView({ month: 7, closed: true })
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     expect(await screen.findByText('Marca Archivada')).toBeInTheDocument()
     expect(screen.queryByText('Marca Nueva')).not.toBeInTheDocument()
@@ -646,7 +692,7 @@ describe('OperacionesView — meses pasados congelados no reconcilian contra el 
     // en el picker de justificativos, y la meta (mes pasado, no editable) no se recalcula.
     renderView({ month: 6 })
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     // Junio es previo a REUNIONES_META_AUTO_START: la Meta sigue siendo captura manual,
     // pero conserva el valor guardado en vez de recalcularse contra el roster de hoy.
@@ -704,7 +750,7 @@ describe('OperacionesView — alineación de columnas en "Crecimiento de seguido
   it('el encabezado y todas las filas de cliente comparten el mismo grid-template-columns fijo (sin "auto")', async () => {
     renderView()
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
 
     const sectionTitle = await screen.findByText('3. Crecimiento de seguidores')
@@ -785,7 +831,7 @@ describe('OperacionesView — cuenta movida a otra línea resuelve nombre (no "[
     // closed => congelado => no corre syncReportClients => el item de c-moved se conserva.
     renderView({ month: 7, closed: true })
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     expect(await screen.findByText('Marca Movida')).toBeInTheDocument()
     expect(screen.queryByText('[Cliente eliminado]')).not.toBeInTheDocument()
@@ -809,7 +855,7 @@ describe('OperacionesView — modal de cobertura de reuniones por marca', () => 
     mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: ['c-1'], error: null })
     renderView()
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
 
     fireEvent.click(screen.getByRole('button', { name: /Ver marcas/ }))
@@ -828,7 +874,7 @@ describe('OperacionesView — modal de cobertura de reuniones por marca', () => 
     mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: ['c-1'], error: null })
     renderView()
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     expect(screen.getByRole('button', { name: /Ver marcas \(1 sin reunión\)/ })).toBeInTheDocument()
   })
@@ -840,16 +886,37 @@ describe('OperacionesView — modal de cobertura de reuniones por marca', () => 
     mockLoadReport.mockResolvedValue({ data: { data }, error: null })
     renderView()
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     expect(screen.getByRole('button', { name: /Ver marcas \(0 sin reunión\)/ })).toBeInTheDocument()
+  })
+
+  it('«Marcar mes como incompleto» también se guarda solo (clave fuera de las 7 operativas)', async () => {
+    renderView()
+    await waitFor(() => {
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByLabelText(/Marcar mes como incompleto/))
+    await waitFor(
+      () => {
+        expect(mockUpsertReport).toHaveBeenCalledWith(
+          'co-1',
+          'line-1',
+          2026,
+          7,
+          { incompleto: true },
+          expect.anything(),
+        )
+      },
+      { timeout: 4000 },
+    )
   })
 
   it('elegir un justificativo lo persiste en report.reuniones.justificativos', async () => {
     mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: ['c-1'], error: null })
     renderView()
     await waitFor(() => {
-      expect(screen.getByText('Guardar reporte')).toBeInTheDocument()
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
     })
     fireEvent.click(screen.getByRole('button', { name: /Ver marcas/ }))
     await screen.findByText('Cobertura de reuniones por marca')
@@ -861,19 +928,23 @@ describe('OperacionesView — modal de cobertura de reuniones por marca', () => 
       expect(select.value).toBe('no_cumplio')
     })
 
-    fireEvent.click(screen.getByText('Guardar reporte'))
-    await waitFor(() => {
-      expect(mockUpsertReport).toHaveBeenCalledWith(
-        'co-1',
-        'line-1',
-        2026,
-        7,
-        expect.objectContaining({
-          reuniones: expect.objectContaining({
-            justificativos: { 'c-2': 'no_cumplio' },
-          }),
-        }),
-      )
-    })
+    // Se guarda sola (autoguardado) y solo la clave `reuniones`.
+    await waitFor(
+      () => {
+        expect(mockUpsertReport).toHaveBeenCalledWith(
+          'co-1',
+          'line-1',
+          2026,
+          7,
+          {
+            reuniones: expect.objectContaining({
+              justificativos: { 'c-2': 'no_cumplio' },
+            }),
+          },
+          expect.anything(),
+        )
+      },
+      { timeout: 4000 },
+    )
   })
 })

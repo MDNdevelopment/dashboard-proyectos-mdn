@@ -63,7 +63,7 @@ export const SOLICITUDES_MODULE_START = { year: 2026, month: 9 }
 // línea, menos las «No aplica» — ver utils/reunionesMeta.js). Antes de este mes la Meta
 // se capturaba a mano y esos reportes ya guardados reflejan esa captura manual; no tiene
 // sentido derivarla retroactivamente. Meses en o después de este corte usan la regla
-// automática (solo en el mes en curso y no cerrado, ver `metaAutoSync` en OperacionesView).
+// automática (en todo mes no cerrado, ver `metaAutoSync` en buildEffectiveReport).
 export const REUNIONES_META_AUTO_START = { year: 2026, month: 9 }
 
 export const INDICATORS = [

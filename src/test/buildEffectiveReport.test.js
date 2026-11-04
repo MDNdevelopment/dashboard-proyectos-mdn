@@ -42,8 +42,11 @@ describe('effectiveReportGates', () => {
     expect(g.isFijasEra && !false).toBe(true) // isFijasEra no depende de closed, solo el uso lo gatea
   })
 
-  it('metaAutoSync solo aplica en el mes en curso, no cerrado', () => {
+  it('metaAutoSync aplica en todo mes abierto de la era, no en cerrados ni previos a la era', () => {
     expect(effectiveReportGates(2026, 9, false, new Date(2026, 8, 15)).metaAutoSync).toBe(true)
+    // mes pasado pero sin cerrar (ventana hasta el día 5): también se recalcula
+    expect(effectiveReportGates(2026, 9, false, new Date(2026, 9, 4)).metaAutoSync).toBe(true)
+    // previo a REUNIONES_META_AUTO_START: meta manual histórica
     expect(effectiveReportGates(2026, 8, false, new Date(2026, 8, 15)).metaAutoSync).toBe(false)
     expect(effectiveReportGates(2026, 9, true, new Date(2026, 8, 15)).metaAutoSync).toBe(false)
   })
@@ -111,14 +114,43 @@ describe('buildEffectiveReport — meta de reuniones (metaAutoSync)', () => {
     expect(result.reuniones.meta).toBe(1)
   })
 
-  it('no toca la meta fuera del mes en curso', () => {
+  it('no toca la meta de meses previos a la era automática', () => {
     const stored = baseStored()
     const result = buildEffectiveReport(
       stored,
       { meetingsCount: 0 },
-      { ...HOT_CTX, month: 8 }, // no es el mes de `now` (septiembre)
+      { ...HOT_CTX, month: 8, now: new Date(2026, 7, 15) }, // agosto: meta manual
     )
     expect(result.reuniones.meta).toBe(2) // valor original
+  })
+
+  it('mes pasado sin cerrar: descuenta «No aplica» usando el roster congelado del reporte', () => {
+    const stored = baseStored()
+    stored.reuniones.meta = 21
+    stored.crecimiento.items = [
+      { clienteId: 'c1', seguidoresGanados: 0, meta: 0 },
+      { clienteId: 'c2', seguidoresGanados: 0, meta: 0 },
+      { clienteId: 'c3', seguidoresGanados: 0, meta: 0 },
+    ]
+    // Roster ACTUAL de la línea distinto (solo c1): no debe usarse en un mes congelado.
+    const result = buildEffectiveReport(
+      stored,
+      { meetingsCount: 0 },
+      { ...HOT_CTX, activeLineClients: [CLIENTS[0]], now: new Date(2026, 9, 4) },
+    )
+    // 3 marcas guardadas − c1 «no_aplica» = 2
+    expect(result.reuniones.meta).toBe(2)
+  })
+
+  it('reporte cerrado conserva su meta histórica', () => {
+    const stored = baseStored()
+    stored.reuniones.meta = 21
+    const result = buildEffectiveReport(
+      stored,
+      { meetingsCount: 0 },
+      { ...HOT_CTX, closed: true, now: new Date(2026, 9, 4) },
+    )
+    expect(result.reuniones.meta).toBe(21)
   })
 })
 

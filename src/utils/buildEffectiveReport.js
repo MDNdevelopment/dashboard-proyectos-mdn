@@ -51,8 +51,9 @@ export function effectiveReportGates(year, month, closed, now = new Date()) {
   const shouldAutoSync = isReunionesEra && !closed
 
   const isReunionesMetaEra = isEraOrLater(year, month, REUNIONES_META_AUTO_START)
-  const metaAutoSync =
-    isReunionesMetaEra && !closed && year === now.getFullYear() && month === now.getMonth() + 1
+  // Cualquier mes abierto de la era: el de un mes ya pasado pero sin cerrar (ventana hasta el
+  // día 5) también debe descontar las «No aplica», con el roster congelado del período.
+  const metaAutoSync = isReunionesMetaEra && !closed
 
   const isFijasEra = isEraOrLater(year, month, TAREAS_FIJAS_MODULE_START)
   const isChequeoEra = isEraOrLater(year, month, CHEQUEO_PRODUCTIVIDAD_START)
@@ -162,13 +163,18 @@ export function buildEffectiveReport(storedData, sources, ctx) {
     synced.reuniones = { ...synced.reuniones, realizadas: meetingsCount }
   }
 
-  // Meta de reuniones: 1 por marca de la línea, menos las "No aplica" — recalculada
-  // solo en el mes en curso (metaAutoSync implica mes no congelado, así que el roster
-  // vigente es siempre activeLineClients).
+  // Meta de reuniones: 1 por marca de la línea, menos las "No aplica" — recalculada en todo
+  // mes abierto de la era. En un mes congelado (pasado, sin cerrar) el roster es el que quedó
+  // en el reporte (crecimiento), no el vigente, para no mezclar altas/bajas posteriores.
   if (metaAutoSync) {
+    const roster = frozen
+      ? [...new Set((synced.crecimiento?.items ?? []).map((i) => i.clienteId))].map((id) => ({
+          id,
+        }))
+      : activeLineClients
     synced.reuniones = {
       ...synced.reuniones,
-      meta: computeReunionesMeta(activeLineClients, synced.reuniones.justificativos),
+      meta: computeReunionesMeta(roster, synced.reuniones.justificativos),
     }
   }
 

@@ -23,6 +23,16 @@ vi.mock('../components/metricas/metricsApi', () => ({
   loadClients: (...a) => mockLoadClients(...a),
   loadCompanyEmployees: (...a) => mockLoadCompanyEmployees(...a),
   upsertReport: (...a) => mockUpsertReport(...a),
+  saveReportKeys: (...a) => mockUpsertReport(...a),
+  OPERATIONAL_KEYS: [
+    'reuniones',
+    'productividad',
+    'crecimiento',
+    'solicitudes',
+    'pautas',
+    'piezas',
+    'feedback',
+  ],
   updateEmployeeSalaries: (...a) => mockUpdateEmployeeSalaries(...a),
   loadRecentReports: (...a) => mockLoadRecentReports(...a),
 }))
@@ -222,37 +232,18 @@ describe('FinanzasView — eliminar una fila de sueldo ligada a empleado', () =>
     })
   })
 
-  it('tras eliminar avisa dentro del bloque que falta guardar el reporte', async () => {
-    const user = userEvent.setup()
-    renderView({ month: 6 })
-
-    expect(await screen.findByText('Paula Viloria')).toBeInTheDocument()
-    expect(screen.queryByRole('status')).not.toBeInTheDocument()
-
-    await borrarPaula(user)
-
-    const aviso = await screen.findByRole('status')
-    expect(aviso).toHaveTextContent(/no está guardado/i)
-    expect(aviso).toHaveTextContent(/Guardar finanzas/i)
-    // El aviso vive dentro de la tarjeta de Sueldos, no al pie de la vista.
-    expect(within(aviso.closest('div')).getByText(/Sueldos \/ Nómina/)).toBeInTheDocument()
-  })
-
-  it('el aviso desaparece al guardar', async () => {
+  it('tras eliminar se guarda solo, sin botón ni aviso de «falta guardar»', async () => {
     const user = userEvent.setup()
     renderView({ month: 6 })
 
     await borrarPaula(user)
-    expect(await screen.findByRole('status')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: /Guardar finanzas/i }))
-
-    await waitFor(() => {
-      expect(mockUpsertReport).toHaveBeenCalled()
-    })
-    await waitFor(() => {
-      expect(screen.queryByRole('status')).not.toBeInTheDocument()
-    })
+    expect(screen.queryByRole('button', { name: /Guardar finanzas/i })).not.toBeInTheDocument()
+    await waitFor(() => expect(mockUpsertReport).toHaveBeenCalled(), { timeout: 4000 })
+    const saved = mockUpsertReport.mock.calls[0][4]
+    expect(Object.keys(saved)).toEqual(['finanzas'])
+    expect(JSON.stringify(saved.finanzas.sueldos)).not.toMatch(/Paula/)
+    await waitFor(() => expect(screen.getByTestId('autosave-status')).toHaveTextContent(/Guardado/))
   })
 })
 
@@ -288,14 +279,14 @@ describe('FinanzasView — ingresos «Solo este mes» y modo solo lectura', () =
     expect(await screen.findAllByLabelText(/Solo este mes/i)).toHaveLength(1)
   })
 
-  it('al marcarla y guardar, la fila queda con soloEsteMes', async () => {
+  it('al marcarla se guarda sola y la fila queda con soloEsteMes', async () => {
     const user = userEvent.setup()
     renderView({ month: 7 })
     await user.click(await screen.findByLabelText(/Solo este mes/i))
-    await user.click(screen.getByRole('button', { name: /Guardar finanzas/i }))
 
-    await waitFor(() => expect(mockUpsertReport).toHaveBeenCalled())
-    const saved = mockUpsertReport.mock.calls[0][4]
+    await waitFor(() => expect(mockUpsertReport).toHaveBeenCalled(), { timeout: 4000 })
+    const saved = mockUpsertReport.mock.calls[0][4] // solo { finanzas }
+    expect(Object.keys(saved)).toEqual(['finanzas'])
     expect(saved.finanzas.ingresos.find((i) => i.id === 'x1').soloEsteMes).toBe(true)
     expect(saved.finanzas.ingresos.find((i) => i.id === 'ing-c-1').soloEsteMes).toBeUndefined()
   })
@@ -304,8 +295,8 @@ describe('FinanzasView — ingresos «Solo este mes» y modo solo lectura', () =
     renderView({ month: 7, readOnly: true })
     const casilla = await screen.findByLabelText(/Solo este mes/i)
     expect(casilla).toBeDisabled()
-    const guardar = screen.getByRole('button', { name: /Guardar finanzas/i })
-    expect(guardar).toBeDisabled()
+    expect(screen.queryByRole('button', { name: /Guardar finanzas/i })).not.toBeInTheDocument()
+    expect(screen.getByTestId('autosave-status')).toHaveTextContent('Solo lectura')
     expect(mockUpsertReport).not.toHaveBeenCalled()
   })
 })

@@ -114,10 +114,46 @@ describe('clientInMonth', () => {
       expect(clientInMonth(c, 2026, 7)).toBe(false)
     })
 
-    it('contract_end ignora baja_incluye_mes:false (el último mes siempre cuenta completo)', () => {
+    it('archivado con baja_incluye_mes:false y contract_end del mismo mes: sale también de ese mes', () => {
+      // «No, sacarlo también de este mes»: archivar siempre fija contract_end (hoy).
+      const c = make({
+        created_at: '2026-06-25T00:00:00Z',
+        contract_end: '2026-10-06',
+        deleted_at: '2026-10-06T21:52:05Z',
+        baja_incluye_mes: false,
+      })
+      expect(clientInMonth(c, 2026, 9)).toBe(true) // meses anteriores se conservan
+      expect(clientInMonth(c, 2026, 10)).toBe(false)
+    })
+
+    it('archivado con baja_incluye_mes:true y contract_end: cuenta el mes de baja', () => {
+      const c = make({
+        created_at: '2026-06-25T00:00:00Z',
+        contract_end: '2026-10-06',
+        deleted_at: '2026-10-06T21:52:05Z',
+        baja_incluye_mes: true,
+      })
+      expect(clientInMonth(c, 2026, 10)).toBe(true)
+      expect(clientInMonth(c, 2026, 11)).toBe(false)
+    })
+
+    it('contract_end de otro mes que el archivado conserva su último mes completo', () => {
       const c = make({
         created_at: '2026-01-01T00:00:00Z',
         contract_end: '2026-08-30',
+        deleted_at: '2026-10-02T00:00:00Z',
+        baja_incluye_mes: false,
+      })
+      expect(clientInMonth(c, 2026, 8)).toBe(true)
+      expect(clientInMonth(c, 2026, 9)).toBe(false)
+    })
+
+    it('baja_incluye_mes:false sobrante en un cliente activo con fin de contrato no lo recorta', () => {
+      // Quedó en false por una baja anterior ya restaurada; sin deleted_at no aplica.
+      const c = make({
+        created_at: '2026-01-01T00:00:00Z',
+        contract_end: '2026-08-30',
+        deleted_at: null,
         baja_incluye_mes: false,
       })
       expect(clientInMonth(c, 2026, 8)).toBe(true)
