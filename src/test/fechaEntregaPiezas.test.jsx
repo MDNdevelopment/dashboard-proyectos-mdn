@@ -223,8 +223,10 @@ describe('EdicionSection: fecha de entrega', () => {
       expect(screen.getByLabelText(/Fecha de entrega de .* de Eva Ed/)).toBeInTheDocument()
     })
 
-    it('pauta independiente (sin línea): también se puede mover', () => {
-      renderSec({ ...vencida(), pauta: pauta({ line_id: null }) })
+    it('pauta independiente (sin línea): coordinación también la puede mover', () => {
+      const p = pauta({ line_id: null })
+      const { canSetFechaEntrega } = pautaPermissions({ pauta: p, canCoordinate: true })
+      renderSec({ ...vencida(), pauta: p, canSetFecha: canSetFechaEntrega })
       expect(screen.getByLabelText('Fecha de entrega de las piezas')).toHaveValue('2026-11-09')
     })
 
