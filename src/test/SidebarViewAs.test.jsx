@@ -137,6 +137,27 @@ describe('Sidebar — selector "Ver como"', () => {
     expect(stopViewAs).toHaveBeenCalled()
   })
 
+  it('el suplente ve "Ver como" pero no el Modo dios (no está en CEO_ANALYSIS_USER_IDS)', () => {
+    const OVIDIO_PROFILE = {
+      user_id: 'c4c5f406-dafc-4a0b-b0f7-860306953ca1',
+      first_name: 'Ovidio',
+      last_name: 'Pirela',
+      company_id: 'co-1',
+      admin: false,
+      access_level: 1,
+    }
+    renderSidebar({ userProfile: OVIDIO_PROFILE, realUserProfile: OVIDIO_PROFILE })
+    openMenu()
+    expect(screen.getByLabelText(/ver la plataforma como otro usuario/i)).toBeInTheDocument()
+    expect(screen.queryByText('Modo dios')).not.toBeInTheDocument()
+  })
+
+  it('el desarrollador sigue viendo el Modo dios', () => {
+    renderSidebar({ userProfile: JUAN_PROFILE, realUserProfile: JUAN_PROFILE })
+    openMenu()
+    expect(screen.getByText('Modo dios')).toBeInTheDocument()
+  })
+
   it('deshabilita el Modo dios mientras se suplanta', () => {
     renderSidebar({ userProfile: NAIRIM, realUserProfile: JUAN_PROFILE, isViewingAs: true })
     openMenu()
