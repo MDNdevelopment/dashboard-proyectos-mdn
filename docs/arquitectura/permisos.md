@@ -112,7 +112,7 @@ Gotcha: el seed `20260706000002` nunca se aplicó en prod; los defaults de prod 
 
 #### Modo "Ver como" (impersonación visual, solo desarrollador)
 - `AuthContext` expone `userProfile` = **perfil efectivo** (el suplantado si está activo, `src/lib/viewAs.js`): guards, `can()` y checks de `access_level`/`admin` cambian sin tocar consumidores. Real en `realUserProfile`; además `isViewingAs`, `startViewAs(userId)`, `stopViewAs()`.
-- Gate: `canUseViewAs(realUserProfile)` — lista de `user_id` en `src/lib/viewAs.js` (hoy Juan Lauretta).
+- Gate: `canUseViewAs(realUserProfile)` — lista de `user_id` en `src/lib/viewAs.js` (hoy Juan Lauretta y Ovidio Pirela, desarrollador suplente).
 - **Sin paridad JS↔SQL:** el JWT sigue siendo el real; `user_can()`, `is_company_admin()`, `user_leads_line()` y lo que dependa de `auth.uid()` responden como el real. Datos filtrados por usuario (`notifications`, `tasks` de nivel 1, `manager_ratings`, `anonymous_feedback`) son del real. `src/components/ViewAsBanner.jsx` lo advierte; `NotificationBell` se oculta.
 - **Solo lectura, impuesta en el cliente** (ninguna policy distingue el modo y `created_by`/`author_id` salen de `userProfile`): `src/lib/viewOnlyClient.js` envuelve `supabase.from()` y `supabase.rpc()` (todas las escrituras del frontend); RPC de lectura en allowlist `READONLY_RPCS`. Netlify functions con service-role (`/api/employees*`, `/api/self-god-mode`) se guardan con `blockedByViewOnly()`.
 
