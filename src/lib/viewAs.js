@@ -12,11 +12,15 @@
  * (ciclo: AuthContext → supabase → AuthContext).
  */
 
-// Juan Lauretta. Mismo criterio que el "Modo dios" del Sidebar y que
-// CEO_ANALYSIS_USER_IDS (ceoAnalysisAccess.js): se identifica por user_id porque
-// users.email no es confiable. No se reutiliza esa lista porque incluye a César y
-// Jesús, que no deben poder suplantar a nadie.
-export const VIEW_AS_USER_IDS = ['2d50a4e5-35db-4be5-b27a-a24d1282ce82']
+// Desarrolladores: Juan Lauretta y Ovidio Pirela (suplente mientras Juan no está).
+// Mismo criterio que el "Modo dios" del Sidebar y que CEO_ANALYSIS_USER_IDS
+// (ceoAnalysisAccess.js): se identifica por user_id porque users.email no es
+// confiable. No se reutiliza esa lista porque incluye a César y Jesús, que no deben
+// poder suplantar a nadie.
+export const VIEW_AS_USER_IDS = [
+  '2d50a4e5-35db-4be5-b27a-a24d1282ce82', // Juan Lauretta
+  'c4c5f406-dafc-4a0b-b0f7-860306953ca1', // Ovidio Pirela
+]
 
 export const VIEW_AS_STORAGE_KEY = 'mdn_view_as_user_id'
 

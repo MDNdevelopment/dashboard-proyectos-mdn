@@ -11,10 +11,15 @@ import {
 } from './viewAs'
 
 const JUAN = '2d50a4e5-35db-4be5-b27a-a24d1282ce82'
+const OVIDIO = 'c4c5f406-dafc-4a0b-b0f7-860306953ca1'
 
 describe('canUseViewAs', () => {
   it('acepta solo el user_id del desarrollador', () => {
     expect(canUseViewAs({ user_id: JUAN })).toBe(true)
+  })
+
+  it('acepta al desarrollador suplente', () => {
+    expect(canUseViewAs({ user_id: OVIDIO })).toBe(true)
   })
 
   it('rechaza a otro admin', () => {

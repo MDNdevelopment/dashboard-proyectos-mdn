@@ -12,6 +12,7 @@ export const CHANGELOG = [
     version: '1.2.0',
     title: 'Mejoras en Campañas y Empresa',
     changes: [
+      'El modo "Ver como" ahora también lo puede usar Ovidio, que suple al desarrollador mientras no está, para revisar cómo ve la plataforma cada persona del equipo al probar los cambios.',
       'Corregido: al mover una marca de una línea a otra en un mes cuyo reporte aún no existía, el reporte de esa línea quedaba en blanco (sin sueldos, gastos ni el resto de ingresos). Ahora se arma con lo del mes anterior, como cualquier reporte nuevo. Se repusieron las finanzas de octubre de Team Daniellys y Team Bianca, afectadas por el movimiento de Fein Kaffee; los gastos operativos de octubre de esas dos líneas hay que cargarlos de nuevo.',
       'Los reportes de Operaciones y Finanzas ya no tienen botón «Guardar»: todo se guarda solo unos segundos después de cada cambio, y también al cambiar de mes o de pestaña. Un indicador abajo a la derecha muestra «Guardando…», «Guardado ✓» o, si algo falla, «No se pudo guardar» con un botón para reintentar. En Finanzas, los sueldos que edites también actualizan el sueldo maestro del empleado al guardarse. Corrige además que los «No aplica» de Reuniones se perdían si no se pulsaba «Guardar reporte» antes de salir, y que guardar Finanzas podía borrarlos.',
       'Corregido en Reportes → Operaciones → Reuniones: al marcar una marca como «No aplica», la Meta ahora baja también en el mes anterior mientras sigue abierto (hasta el cierre del día 5), no solo en el mes en curso.',

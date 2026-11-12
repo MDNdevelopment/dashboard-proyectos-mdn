@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../supabase'
 import { canUseViewAs } from '../lib/viewAs'
+import { canSeeCeoAnalysis } from '../lib/ceoAnalysisAccess'
 import { blockedByViewOnly } from '../lib/viewOnlyClient'
 import MDNLogo from './MDNLogo'
 import AvatarUpload from './empresa/AvatarUpload'
@@ -217,6 +218,10 @@ function Sidebar() {
   // Mismo user_id que VIEW_AS_USER_IDS (viewAs.js) — el email de users.email no es confiable.
   const godProfile = realUserProfile ?? userProfile
   const isGodModeUser = canUseViewAs(godProfile)
+  // El "Modo dios" exige además estar en CEO_ANALYSIS_USER_IDS, que es lo que valida
+  // self-god-mode.js: sin esto, un usuario de "Ver como" fuera de esa lista vería
+  // controles que el servidor rechaza con 403 sin avisar.
+  const canUseGodMode = isGodModeUser && canSeeCeoAnalysis(godProfile)
 
   // Vía Netlify function con service-role: un UPDATE directo con el cliente anon
   // choca con el trigger anti-escalada (is_company_admin() evalúa el admin ACTUAL
@@ -890,7 +895,7 @@ function Sidebar() {
               </div>
             )}
 
-            {isGodModeUser && (
+            {canUseGodMode && (
               <div className="border-t border-[#ece9df] px-4 py-3">
                 <p className="text-[11px] font-mono font-bold tracking-[0.1em] uppercase text-[#999] mb-2">
                   Modo dios
