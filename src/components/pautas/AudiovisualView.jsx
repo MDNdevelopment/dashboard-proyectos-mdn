@@ -308,15 +308,6 @@ export default function AudiovisualView({
       pauta: p,
       leadLineIds,
     }).canSetFechaEntrega
-  const puedeMoverFechaVencida = (p) =>
-    pautaPermissions({
-      canCoordinate,
-      canGestionPautas,
-      canManage,
-      userId: userProfile?.user_id,
-      pauta: p,
-      leadLineIds,
-    }).canMoveFechaVencida
   const alertas = calcAlertas(visibleScopedPautas, piezasByPautaMap, undefined, {
     cnps: cnpAvAbiertos,
     puedeFijarFecha,
@@ -445,7 +436,6 @@ export default function AudiovisualView({
           allEmployees={activeEmployees}
           canApprove={canCoordinate}
           puedeFijarFecha={puedeFijarFecha}
-          puedeMoverFechaVencida={puedeMoverFechaVencida}
           onPiezaChanged={handlePiezaChanged}
           onFields={handlePautaFields}
           onPautaClick={(p) => setDetailId(p.id)}

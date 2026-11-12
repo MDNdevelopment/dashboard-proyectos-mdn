@@ -116,19 +116,17 @@ describe('permisos y errores de fecha de entrega', () => {
     expect(pautaPermissions({ ...base, leadLineIds: ['l1'] }).canSetFechaEntrega).toBe(true)
     expect(pautaPermissions(base).canSetFechaEntrega).toBe(false)
   })
-  it('canMoveFechaVencida: solo la jefa de la línea (ni coordinación ni gestión)', () => {
-    const base = { pauta: pauta({ recurso_ids: ['u1'] }), userId: 'u1' }
-    expect(pautaPermissions({ ...base, leadLineIds: ['l1'] }).canMoveFechaVencida).toBe(true)
-    expect(pautaPermissions({ ...base, canCoordinate: true }).canMoveFechaVencida).toBe(false)
-    expect(pautaPermissions({ ...base, canGestionPautas: true }).canMoveFechaVencida).toBe(false)
+  it('pauta sin línea (cuenta independiente, sin jefa): coordinación y gestión fijan la fecha', () => {
+    const base = { pauta: pauta({ line_id: null }), userId: 'u1' }
+    expect(pautaPermissions({ ...base, canCoordinate: true }).canSetFechaEntrega).toBe(true)
+    expect(pautaPermissions({ ...base, canGestionPautas: true }).canSetFechaEntrega).toBe(true)
+    expect(pautaPermissions(base).canSetFechaEntrega).toBe(false)
   })
-  it('traduce los errores del trigger', () => {
-    expect(
-      pautaErrorMessage({
-        code: '22023',
-        message: 'Una fecha de entrega vencida solo la puede cambiar la jefa de la línea',
-      }),
-    ).toMatch(/jefa de la línea/)
+  it('ya no existe un permiso aparte para mover fechas vencidas', () => {
+    const perms = pautaPermissions({ pauta: pauta(), canCoordinate: true })
+    expect(perms).not.toHaveProperty('canMoveFechaVencida')
+  })
+  it('traduce el error de permiso del trigger', () => {
     expect(
       pautaErrorMessage({
         code: '42501',
@@ -214,21 +212,29 @@ describe('EdicionSection: fecha de entrega', () => {
   describe('fecha vencida', () => {
     const vencida = () => ({ piezas: [lote({ fecha_entrega: '2026-11-09' })] })
 
-    it('con permiso de fechas pero sin ser jefa: bloqueada con el motivo', () => {
-      renderSec(vencida())
-      expect(screen.queryByLabelText('Fecha de entrega de las piezas')).toBeNull()
-      expect(screen.queryByLabelText(/Fecha de entrega de .* de Eva Ed/)).toBeNull()
-      expect(screen.getByText(/solo la jefa de la línea puede cambiarla/)).toBeInTheDocument()
-    })
-
-    it('la jefa de la línea sí puede moverla', async () => {
+    it('quien puede fijar fechas (p. ej. coordinación, sin ser jefa) la mueve aunque haya vencido', async () => {
       api.setFechaEntregaPauta.mockResolvedValue({ data: [], error: null })
-      renderSec({ ...vencida(), canMoveFechaVencida: true })
+      renderSec(vencida())
+      expect(screen.queryByText(/solo la jefa/)).toBeNull()
       fireEvent.change(screen.getByLabelText('Fecha de entrega de las piezas'), {
         target: { value: '2026-11-30' },
       })
       await waitFor(() => expect(api.setFechaEntregaPauta).toHaveBeenCalledWith('p1', '2026-11-30'))
       expect(screen.getByLabelText(/Fecha de entrega de .* de Eva Ed/)).toBeInTheDocument()
+    })
+
+    it('pauta independiente (sin línea): coordinación también la puede mover', () => {
+      const p = pauta({ line_id: null })
+      const { canSetFechaEntrega } = pautaPermissions({ pauta: p, canCoordinate: true })
+      renderSec({ ...vencida(), pauta: p, canSetFecha: canSetFechaEntrega })
+      expect(screen.getByLabelText('Fecha de entrega de las piezas')).toHaveValue('2026-11-09')
+    })
+
+    it('sin permiso de fechas: solo lectura, marcada como vencida', () => {
+      renderSec({ ...vencida(), canSetFecha: false })
+      expect(screen.queryByLabelText('Fecha de entrega de las piezas')).toBeNull()
+      expect(screen.queryByLabelText(/Fecha de entrega de .* de Eva Ed/)).toBeNull()
+      expect(screen.getByText(/\(vencida\)/)).toBeInTheDocument()
     })
   })
 
