@@ -24,8 +24,8 @@ function sumarDias(hoy, dias) {
  * Fecha de entrega de las piezas de UNA pauta realizada. Con un solo formato es un campo para
  * todos sus lotes; con varios, una fecha POR FORMATO (fotos para mañana, video para la semana
  * que viene) con atajos. El ajuste por lote va en la tabla de Edición. Se llena a mano: no hay
- * fecha supuesta. Editable para quien puede fijarla (`canEdit`); una fecha ya vencida solo la
- * mueve la jefa de la línea (`canMoveVencida`). Para el resto, solo lectura. Un formato sin
+ * fecha supuesta. Editable para quien puede fijarla (`canEdit`), también si ya venció. Para el
+ * resto, solo lectura. Un formato sin
  * lotes aún no tiene dónde guardar fecha: se le pone al asignar su primer editor.
  */
 export default function FechaEntregaPauta({
@@ -33,7 +33,6 @@ export default function FechaEntregaPauta({
   piezas,
   formats = [],
   canEdit,
-  canMoveVencida = false,
   hoy,
   onPiezaChanged,
 }) {
@@ -69,7 +68,7 @@ export default function FechaEntregaPauta({
             </div>
           )
         }
-        const editable = canEdit && (!info.vencida || canMoveVencida)
+        const editable = canEdit
         const pendiente = !info.fecha && !info.mixta
         const nombre = formato ? FORMAT_LABELS[formato] : null
         return (
@@ -118,11 +117,6 @@ export default function FechaEntregaPauta({
             {editable && pendiente && (
               <span className="text-[11.5px] text-[#9a7400]">
                 Pendiente: ponle fecha para que la edición se mida a tiempo.
-              </span>
-            )}
-            {info.vencida && !canMoveVencida && (
-              <span className="text-[11.5px] text-[#c0392b]">
-                Ya venció: solo la jefa de la línea puede cambiarla.
               </span>
             )}
             {!canEdit && !info.vencida && !formato && (

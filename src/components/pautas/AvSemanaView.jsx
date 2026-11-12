@@ -56,7 +56,6 @@ export default function AvSemanaView({
   allEmployees,
   canApprove,
   puedeFijarFecha,
-  puedeMoverFechaVencida,
   onPiezaChanged,
   today = new Date(),
   onFields,
@@ -270,7 +269,6 @@ export default function AvSemanaView({
                     pauta={p}
                     piezas={piezasByPauta?.get(p.id) ?? []}
                     canEdit
-                    canMoveVencida={puedeMoverFechaVencida?.(p) ?? false}
                     hoy={hoy}
                     onPiezaChanged={onPiezaChanged}
                   />

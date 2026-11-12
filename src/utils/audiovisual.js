@@ -610,9 +610,6 @@ export function briefComplete(pauta) {
 export function pautaErrorMessage(err) {
   if (!err) return null
   const raw = err.message || ''
-  if (err.code === '22023' || /fecha de entrega vencida/i.test(raw)) {
-    return 'La fecha de entrega ya venció: solo la jefa de la línea puede cambiarla.'
-  }
   if (/permiso para cambiar la fecha de entrega/i.test(raw)) {
     return 'No tienes permiso para cambiar la fecha de entrega de las piezas.'
   }
@@ -1381,7 +1378,6 @@ export function pautaPermissions({
       canMarkRealizada: false,
       canEditPiezas: false,
       canSetFechaEntrega: false,
-      canMoveFechaVencida: false,
       canDelete: false,
       canRestore: false,
       canReopen: false,
@@ -1404,10 +1400,9 @@ export function pautaPermissions({
     canReagendar: !deleted && (canCoordinate || canGestionPautas) && pauta.status === 'programada',
     canMarkRealizada: !deleted && canCoordinate && pauta.status === 'programada',
     canEditPiezas: !deleted && canEditPiezas && ['programada', 'realizada'].includes(pauta.status),
-    // Espejo de `av_pieza_puede_fijar_fecha`: coordina, gestión o jefa de la línea.
+    // Espejo de `av_pieza_puede_fijar_fecha`: coordina, gestión o jefa de la línea. Incluye
+    // mover una fecha ya vencida.
     canSetFechaEntrega: !deleted && (canCoordinate || canGestionPautas || isLead),
-    // Espejo de `av_pieza_puede_mover_vencida`: una fecha ya vencida solo la mueve la jefa.
-    canMoveFechaVencida: !deleted && isLead,
     canDelete: !deleted && (canCoordinate || (solicitada && isCreator)),
     canRestore: deleted && canCoordinate,
     canReopen: !deleted && canCoordinate && pauta.status === 'declinada',
@@ -1826,7 +1821,7 @@ export function lotesSinFechaPendientes(piezas) {
 /**
  * Resumen de la fecha de entrega de una pauta para la UI (un solo campo por pauta).
  * `fecha`: la común a todos los lotes con fecha (null si no hay o difieren → `mixta`).
- * `vencida`: algún lote ya venció (solo la jefa de la línea puede moverla). `sinFecha`: lotes
+ * `vencida`: algún lote ya venció (solo informativo: se puede mover). `sinFecha`: lotes
  * sin fecha.
  */
 export function fechaEntregaInfo(piezas, hoy) {
@@ -1842,7 +1837,7 @@ export function fechaEntregaInfo(piezas, hoy) {
   }
 }
 
-/** Una fecha de entrega vencida (anterior a hoy): solo la jefa de la línea puede moverla. */
+/** Una fecha de entrega vencida (anterior a hoy). Informativo: no bloquea moverla. */
 export function fechaEntregaVencida(fecha, hoy) {
   return Boolean(fecha) && fecha < hoy
 }

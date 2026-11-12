@@ -34,7 +34,6 @@ export default function EdicionSection({
   usersById,
   canEdit,
   canSetFecha = false,
-  canMoveFechaVencida = false,
   hoy = isoDateKey(new Date()),
   userId,
   companyId,
@@ -184,7 +183,6 @@ export default function EdicionSection({
             piezas={piezas}
             formats={activeFormats}
             canEdit={canSetFecha}
-            canMoveVencida={canMoveFechaVencida}
             hoy={hoy}
             onPiezaChanged={onPiezaChanged}
           />
@@ -231,7 +229,6 @@ export default function EdicionSection({
                     canAct={canActOnEditorGroup({ canEditPiezas: canEdit, userId, editorId })}
                     realizada={pauta.status === 'realizada'}
                     canSetFecha={canSetFecha}
-                    canMoveVencida={canMoveFechaVencida}
                     hoy={hoy}
                     onFecha={changeFecha}
                     cupo={cupo}
@@ -249,7 +246,6 @@ export default function EdicionSection({
                     canAct={canEdit}
                     realizada={pauta.status === 'realizada'}
                     canSetFecha={canSetFecha}
-                    canMoveVencida={canMoveFechaVencida}
                     hoy={hoy}
                     onFecha={changeFecha}
                     cupo={cupo}
@@ -275,7 +271,6 @@ function EditorRow({
   canAct,
   realizada = false,
   canSetFecha = false,
-  canMoveVencida = false,
   hoy,
   onFecha,
   cupo,
@@ -315,7 +310,6 @@ function EditorRow({
                 lote={lote}
                 label={`Fecha de entrega de ${FORMAT_LABELS[code]} de ${name}`}
                 canSetFecha={canSetFecha}
-                canMoveVencida={canMoveVencida}
                 hoy={hoy}
                 onChange={(f) => onFecha(lote, f)}
               />
@@ -356,10 +350,13 @@ function Counter({ label, value, editable, max, onChange, aria }) {
   )
 }
 
-/** Ajuste de la fecha de UN lote (lo excepcional); vencida = solo la jefa de la línea. */
-function LoteFecha({ lote, label, canSetFecha, canMoveVencida, hoy, onChange }) {
+/**
+ * Ajuste de la fecha de UN lote (lo excepcional). Quien puede fijarla la mueve aunque ya
+ * haya vencido; el marcador "(vencida)" solo informa.
+ */
+function LoteFecha({ lote, label, canSetFecha, hoy, onChange }) {
   const vencida = fechaEntregaVencida(lote.fecha_entrega, hoy)
-  const editable = canSetFecha && (!vencida || canMoveVencida)
+  const editable = canSetFecha
   return (
     <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
       <span className="text-[10px] font-mono uppercase tracking-wide text-[#aaa]">entrega</span>
@@ -372,10 +369,7 @@ function LoteFecha({ lote, label, canSetFecha, canMoveVencida, hoy, onChange }) 
           onChange={(e) => onChange(e.target.value)}
         />
       ) : (
-        <span
-          className="font-mono text-[12px] font-semibold text-[#333]"
-          title={vencida ? 'Ya venció: solo la jefa de la línea puede cambiarla' : undefined}
-        >
+        <span className="font-mono text-[12px] font-semibold text-[#333]">
           {formatDayShort(lote.fecha_entrega)}
           {vencida && ' (vencida)'}
         </span>
