@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { useAuth } from '../context/AuthContext'
-import { loadLines, loadClients } from '../components/metricas/metricsApi'
+import { loadLines, loadClients, createClient } from '../components/metricas/metricsApi'
 import { visibleLinesForUser } from '../utils/lineMembers'
 import { clientsForLine, effectiveLineId } from '../utils/chequeo'
 import {
@@ -25,6 +25,7 @@ import {
 import FilterBar, { FilterField } from '../components/common/FilterBar'
 import KpiCard from '../components/tareas/KpiCard'
 import TemporadaGrid from '../components/chequeo/temporada/TemporadaGrid'
+import AddClientModal from '../components/chequeo/temporada/AddClientModal'
 
 const ALL_LINES = '__all__'
 
@@ -35,6 +36,9 @@ const ALL_LINES = '__all__'
 export default function ChequeoTemporadaPage() {
   const { userProfile, can = () => true } = useAuth()
   const canManage = can('chequeo.manage')
+  // Crear un cliente es de Empresa: lo exige la RLS de metric_clients, así que el botón solo
+  // lo ve quien tiene ese permiso.
+  const canCreateClients = can('empresa.clientes.manage')
   const canViewAll =
     userProfile?.access_level >= 4 || userProfile?.admin === true || can('chequeo.ver_todo')
 
@@ -50,6 +54,7 @@ export default function ChequeoTemporadaPage() {
   const [statusFilter, setStatusFilter] = useState('')
   const [onlyPending, setOnlyPending] = useState(false)
   const [error, setError] = useState(null)
+  const [addingClient, setAddingClient] = useState(false)
 
   const loadAll = useCallback(async () => {
     if (!userProfile?.company_id) return
@@ -264,6 +269,21 @@ export default function ChequeoTemporadaPage() {
     )
   }
 
+  // Alta rápida: crea el cliente en MAPPI y lo muestra de una vez en la grilla.
+  async function handleCreateClient({ name, lineId, socialManagerId }) {
+    const { data, error: err } = await createClient(userProfile.company_id, {
+      name,
+      line_id: lineId,
+      social_manager_id: socialManagerId,
+    })
+    if (err) return { error: err }
+    setClients((prev) => [...prev, data].sort((a, b) => a.name.localeCompare(b.name, 'es')))
+    // Si se está viendo otra línea, pasa a la del cliente nuevo para que se vea de inmediato.
+    setActiveLineId((prev) => (prev === ALL_LINES ? prev : (data.line_id ?? prev)))
+    setAddingClient(false)
+    return { error: null }
+  }
+
   function clearFilters() {
     setStatusFilter('')
     setOnlyPending(false)
@@ -279,13 +299,24 @@ export default function ChequeoTemporadaPage() {
           </Link>{' '}
           <span className="text-[#ccc]">›</span> Temporada
         </div>
-        <div className="mb-6">
-          <h1 className="text-[26px] font-bold text-[#111] leading-tight">
-            {campaign?.name ?? 'Chequeo de temporada'}
-          </h1>
-          <p className="text-[15px] text-[#888] mt-0.5">
-            Piezas por fecha y su estado — diseño, foto y reel por cliente
-          </p>
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-[26px] font-bold text-[#111] leading-tight">
+              {campaign?.name ?? 'Chequeo de temporada'}
+            </h1>
+            <p className="text-[15px] text-[#888] mt-0.5">
+              Piezas por fecha y su estado — diseño, foto y reel por cliente
+            </p>
+          </div>
+          {campaign && canCreateClients && (
+            <button
+              type="button"
+              onClick={() => setAddingClient(true)}
+              className="self-start rounded-lg bg-[#FFB800] px-3 py-1.5 text-[14px] font-semibold text-[#111] hover:brightness-95"
+            >
+              + Agregar cliente
+            </button>
+          )}
         </div>
 
         {loading ? (
@@ -418,6 +449,16 @@ export default function ChequeoTemporadaPage() {
           </>
         )}
       </div>
+      {addingClient && (
+        <AddClientModal
+          lines={lines}
+          users={users}
+          existingNames={clients.map((c) => c.name)}
+          defaultLineId={activeLineId !== ALL_LINES ? activeLineId : null}
+          onCreate={handleCreateClient}
+          onClose={() => setAddingClient(false)}
+        />
+      )}
     </main>
   )
 }
