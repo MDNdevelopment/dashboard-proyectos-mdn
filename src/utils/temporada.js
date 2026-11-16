@@ -152,3 +152,56 @@ export function computeTemporadaSummary(clients, pieces, slots) {
     bySlot,
   }
 }
+
+// ─── Personal asignado a mano ──────────────────────────────────────────────────────────
+
+/**
+ * Casillas con nombre de empleado. Cada una arranca con lo que ya hay en MAPPI y se puede
+ * cambiar solo para la temporada (tabla `seasonal_assignments`).
+ */
+export const ASSIGNMENT_ROLES = ['jefe', 'sm', 'disenador', 'audiovisual']
+
+export const ASSIGNMENT_LABELS = {
+  jefe: 'Jefe',
+  sm: 'SM',
+  disenador: 'Diseño',
+  audiovisual: 'Audiovisual',
+}
+
+/** Sentinela del selector: «usar el valor de MAPPI» (quita la asignación manual). */
+export const USE_MAPPI = '__mappi__'
+
+/**
+ * Valor de MAPPI para una casilla: jefe = líder de la línea; SM, diseñador y audiovisual =
+ * los del cliente (de audiovisual, que admite varios, se toma el primero).
+ * @returns {string|null} user_id
+ */
+export function mappiAssignee(role, client, line) {
+  if (role === 'jefe') return line?.lead_user_id ?? null
+  if (role === 'sm') return client?.social_manager_id ?? null
+  if (role === 'disenador') return client?.designer_id ?? null
+  if (role === 'audiovisual') {
+    const ids = Array.isArray(client?.audiovisual_ids) ? client.audiovisual_ids : []
+    return ids[0] ?? null
+  }
+  return null
+}
+
+/** Índice `clientId|role` → asignación manual. */
+export function indexAssignments(assignments) {
+  const index = new Map()
+  for (const a of assignments) index.set(`${a.client_id}|${a.role}`, a)
+  return index
+}
+
+/**
+ * Quién va en la casilla: la asignación manual si existe (aunque sea «sin asignar»); si no,
+ * el valor de MAPPI.
+ * @returns {{ userId: string|null, overridden: boolean, mappiUserId: string|null }}
+ */
+export function resolveAssignee(index, role, client, line) {
+  const mappiUserId = mappiAssignee(role, client, line)
+  const manual = index.get(`${client.id}|${role}`)
+  if (manual) return { userId: manual.user_id ?? null, overridden: true, mappiUserId }
+  return { userId: mappiUserId, overridden: false, mappiUserId }
+}

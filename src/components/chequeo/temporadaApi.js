@@ -64,3 +64,52 @@ export async function upsertPiece({
 export async function deletePiece(pieceId) {
   return supabase.from('seasonal_pieces').delete().eq('id', pieceId)
 }
+
+/** Asignaciones manuales de personal de una temporada (jefe, SM, diseño, audiovisual). */
+export async function loadAssignments(campaignId) {
+  return selectAllPages((from, to) =>
+    supabase
+      .from('seasonal_assignments')
+      .select('*', { count: 'exact' })
+      .eq('campaign_id', campaignId)
+      .order('id', { ascending: true })
+      .range(from, to),
+  )
+}
+
+/**
+ * Fija a mano quién va en una casilla de personal. `userId` null = «Sin asignar» a propósito
+ * (distinto de no tener fila, que significa «usar el valor de MAPPI»).
+ */
+export async function upsertAssignment({
+  companyId,
+  campaignId,
+  clientId,
+  lineId,
+  role,
+  userId,
+  updatedBy,
+}) {
+  return supabase
+    .from('seasonal_assignments')
+    .upsert(
+      {
+        company_id: companyId,
+        campaign_id: campaignId,
+        client_id: clientId,
+        line_id: lineId,
+        role,
+        user_id: userId ?? null,
+        updated_by: updatedBy ?? null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'campaign_id,client_id,role' },
+    )
+    .select()
+    .single()
+}
+
+/** Vuelve la casilla al valor de MAPPI (borra la asignación manual). */
+export async function deleteAssignment(assignmentId) {
+  return supabase.from('seasonal_assignments').delete().eq('id', assignmentId)
+}

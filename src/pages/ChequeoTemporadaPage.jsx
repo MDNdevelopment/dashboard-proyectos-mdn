@@ -5,12 +5,21 @@ import { useAuth } from '../context/AuthContext'
 import { loadLines, loadClients } from '../components/metricas/metricsApi'
 import { visibleLinesForUser } from '../utils/lineMembers'
 import { clientsForLine, effectiveLineId } from '../utils/chequeo'
-import { PIECE_STATUSES, computeTemporadaSummary, slotsOf, statusLabel } from '../utils/temporada'
+import {
+  PIECE_STATUSES,
+  USE_MAPPI,
+  computeTemporadaSummary,
+  slotsOf,
+  statusLabel,
+} from '../utils/temporada'
 import {
   loadCampaigns,
   loadPieces,
+  loadAssignments,
   upsertPiece,
   deletePiece,
+  upsertAssignment,
+  deleteAssignment,
 } from '../components/chequeo/temporadaApi'
 import FilterBar, { FilterField } from '../components/common/FilterBar'
 import KpiCard from '../components/tareas/KpiCard'
@@ -34,6 +43,7 @@ export default function ChequeoTemporadaPage() {
   const [campaigns, setCampaigns] = useState([])
   const [campaignId, setCampaignId] = useState(null)
   const [pieces, setPieces] = useState([])
+  const [assignments, setAssignments] = useState([])
   const [loading, setLoading] = useState(true)
   const [activeLineId, setActiveLineId] = useState(null)
   const [statusFilter, setStatusFilter] = useState('')
@@ -79,11 +89,15 @@ export default function ChequeoTemporadaPage() {
   useEffect(() => {
     if (!campaignId) {
       setPieces([])
+      setAssignments([])
       return
     }
     let cancelled = false
     loadPieces(campaignId).then(({ data }) => {
       if (!cancelled) setPieces(data ?? [])
+    })
+    loadAssignments(campaignId).then(({ data }) => {
+      if (!cancelled) setAssignments(data ?? [])
     })
     return () => {
       cancelled = true
@@ -96,6 +110,7 @@ export default function ChequeoTemporadaPage() {
     function onVisibilityChange() {
       if (document.visibilityState === 'visible' && campaignId) {
         loadPieces(campaignId).then(({ data }) => setPieces(data ?? []))
+        loadAssignments(campaignId).then(({ data }) => setAssignments(data ?? []))
       }
     }
     document.addEventListener('visibilitychange', onVisibilityChange)
@@ -118,6 +133,20 @@ export default function ChequeoTemporadaPage() {
             const exists = prev.some((p) => p.id === payload.new.id)
             return exists
               ? prev.map((p) => (p.id === payload.new.id ? payload.new : p))
+              : [...prev, payload.new]
+          })
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'seasonal_assignments' },
+        (payload) => {
+          if (payload.eventType !== 'DELETE' && payload.new.campaign_id !== campaignId) return
+          setAssignments((prev) => {
+            if (payload.eventType === 'DELETE') return prev.filter((a) => a.id !== payload.old.id)
+            const exists = prev.some((a) => a.id === payload.new.id)
+            return exists
+              ? prev.map((a) => (a.id === payload.new.id ? payload.new : a))
               : [...prev, payload.new]
           })
         },
@@ -196,6 +225,41 @@ export default function ChequeoTemporadaPage() {
       return
     }
     setPieces((prev) => prev.filter((p) => p.id !== piece.id))
+  }
+
+  // Personal: `value` es el id del empleado, '' = «Sin asignar» o USE_MAPPI = volver al valor
+  // de MAPPI (borra la asignación manual de esta temporada).
+  async function handleAssign(client, role, value) {
+    setError(null)
+    const existing = assignments.find((a) => a.client_id === client.id && a.role === role)
+    if (value === USE_MAPPI) {
+      if (!existing) return
+      const { error: err } = await deleteAssignment(existing.id)
+      if (err) {
+        setError('No se pudo cambiar la asignación. Intenta de nuevo.')
+        return
+      }
+      setAssignments((prev) => prev.filter((a) => a.id !== existing.id))
+      return
+    }
+    const { data, error: err } = await upsertAssignment({
+      companyId: userProfile.company_id,
+      campaignId,
+      clientId: client.id,
+      lineId: effectiveLineId(client, generalLineId),
+      role,
+      userId: value || null,
+      updatedBy: userProfile.user_id,
+    })
+    if (err) {
+      setError('No se pudo cambiar la asignación. Intenta de nuevo.')
+      return
+    }
+    setAssignments((prev) =>
+      prev.some((a) => a.id === data.id)
+        ? prev.map((a) => (a.id === data.id ? data : a))
+        : [...prev, data],
+    )
   }
 
   function clearFilters() {
@@ -337,7 +401,9 @@ export default function ChequeoTemporadaPage() {
               lines={scopedLines}
               clients={visibleClients}
               pieces={pieces}
+              assignments={assignments}
               slots={slots}
+              users={users}
               usersById={usersById}
               generalLineId={generalLineId}
               groupByLine={activeLineId === ALL_LINES}
@@ -345,6 +411,7 @@ export default function ChequeoTemporadaPage() {
               onAdd={handleAdd}
               onStatusChange={handleStatusChange}
               onRemove={handleRemove}
+              onAssign={handleAssign}
             />
           </>
         )}

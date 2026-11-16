@@ -1,29 +1,29 @@
 import { Fragment } from 'react'
-import { Avatar } from '../../tareas/UserPickerSingle'
 import { effectiveLineId } from '../../../utils/chequeo'
-import { indexPieces, piecesFor } from '../../../utils/temporada'
+import {
+  ASSIGNMENT_LABELS,
+  ASSIGNMENT_ROLES,
+  indexAssignments,
+  indexPieces,
+  piecesFor,
+  resolveAssignee,
+} from '../../../utils/temporada'
 import TemporadaCell from './TemporadaCell'
-
-function PersonCell({ user }) {
-  if (!user) return <span className="text-[13px] text-[#ccc]">—</span>
-  return (
-    <span className="flex items-center gap-1.5 text-[13.5px] text-[#333]">
-      <Avatar user={user} size={20} />
-      {user.first_name}
-    </span>
-  )
-}
+import PersonSelect from './PersonSelect'
 
 /**
- * Grilla de la temporada: una fila por cliente, una columna por slot. JEFE y SM no se
- * capturan: salen de `metric_line_members.is_lead` y `metric_clients.social_manager_id`.
- * Las cuentas de «Independientes» no tienen jefe, así que esa celda queda vacía.
+ * Grilla de la temporada: una fila por cliente, una columna por slot. El personal (jefe, SM,
+ * diseño y audiovisual) arranca con lo de MAPPI (líder de la línea y recursos del cliente) y
+ * se puede cambiar a mano solo para esta temporada. Las cuentas de «Independientes» no
+ * tienen jefe, así que esa casilla arranca vacía.
  */
 export default function TemporadaGrid({
   lines,
   clients,
   pieces,
+  assignments,
   slots,
+  users,
   usersById,
   generalLineId,
   groupByLine,
@@ -31,10 +31,12 @@ export default function TemporadaGrid({
   onAdd,
   onStatusChange,
   onRemove,
+  onAssign,
 }) {
   const index = indexPieces(pieces)
+  const assignmentIndex = indexAssignments(assignments ?? [])
   const lineById = new Map(lines.map((l) => [l.id, l]))
-  const colSpan = 3 + slots.length
+  const colSpan = 1 + ASSIGNMENT_ROLES.length + slots.length
 
   const groups = groupByLine
     ? lines
@@ -58,7 +60,7 @@ export default function TemporadaGrid({
       <table className="w-full text-left border-collapse">
         <thead>
           <tr className="bg-[#faf9f5] border-b border-[#e0ddd4]">
-            {['Cliente', 'Jefe', 'SM'].map((h) => (
+            {['Cliente', ...ASSIGNMENT_ROLES.map((r) => ASSIGNMENT_LABELS[r])].map((h) => (
               <th
                 key={h}
                 className="px-3 py-2.5 text-[12px] font-mono font-bold uppercase tracking-[0.12em] text-[#888]"
@@ -91,20 +93,24 @@ export default function TemporadaGrid({
               )}
               {groupClients.map((client) => {
                 const clientLine = lineById.get(effectiveLineId(client, generalLineId))
-                const lead = clientLine?.lead_user_id
-                  ? usersById.get(clientLine.lead_user_id)
-                  : null
                 return (
                   <tr key={client.id} className="border-b border-[#f0ede3] align-top">
                     <td className="px-3 py-2.5 text-[14.5px] font-semibold text-[#111]">
                       {client.name}
                     </td>
-                    <td className="px-3 py-2.5">
-                      <PersonCell user={lead} />
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <PersonCell user={usersById.get(client.social_manager_id)} />
-                    </td>
+                    {ASSIGNMENT_ROLES.map((role) => (
+                      <td key={role} className="px-3 py-2.5">
+                        <PersonSelect
+                          role={role}
+                          client={client}
+                          resolved={resolveAssignee(assignmentIndex, role, client, clientLine)}
+                          users={users}
+                          usersById={usersById}
+                          canManage={canManage}
+                          onChange={(value) => onAssign(client, role, value)}
+                        />
+                      </td>
+                    ))}
                     {slots.map((slot) => (
                       <td key={slot.key} className="px-3 py-2.5">
                         <TemporadaCell

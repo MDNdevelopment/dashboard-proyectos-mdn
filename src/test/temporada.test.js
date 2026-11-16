@@ -1,11 +1,15 @@
 import { describe, it, expect } from 'vitest'
 import {
+  ASSIGNMENT_ROLES,
   PIECE_STATUSES,
   addableTypes,
   allowedPieceTypes,
   clientsWithPending,
   computeTemporadaSummary,
+  indexAssignments,
   indexPieces,
+  mappiAssignee,
+  resolveAssignee,
   isDone,
   piecesFor,
   slotsOf,
@@ -130,5 +134,55 @@ describe('computeTemporadaSummary', () => {
       { key: POST.key, label: '24/12', total: 2, done: 1, pct: 50 },
       { key: TARJETA.key, label: 'Tarjeta navidad', total: 1, done: 1, pct: 100 },
     ])
+  })
+})
+
+describe('personal asignado', () => {
+  const client = {
+    id: 'c1',
+    social_manager_id: 'u-sm',
+    designer_id: 'u-dis',
+    audiovisual_ids: ['u-av', 'u-av2'],
+  }
+  const line = { id: 'l1', lead_user_id: 'u-jefe' }
+
+  it('hay 4 casillas: jefe, SM, diseño y audiovisual', () => {
+    expect(ASSIGNMENT_ROLES).toEqual(['jefe', 'sm', 'disenador', 'audiovisual'])
+  })
+
+  it('el valor de MAPPI sale de la línea (jefe) y del cliente (el resto)', () => {
+    expect(mappiAssignee('jefe', client, line)).toBe('u-jefe')
+    expect(mappiAssignee('sm', client, line)).toBe('u-sm')
+    expect(mappiAssignee('disenador', client, line)).toBe('u-dis')
+    expect(mappiAssignee('audiovisual', client, line)).toBe('u-av')
+  })
+
+  it('tolera línea o recursos ausentes', () => {
+    expect(mappiAssignee('jefe', client, undefined)).toBeNull()
+    expect(mappiAssignee('audiovisual', { id: 'c2', audiovisual_ids: [] }, line)).toBeNull()
+    expect(mappiAssignee('audiovisual', { id: 'c2' }, line)).toBeNull()
+    expect(mappiAssignee('otro', client, line)).toBeNull()
+  })
+
+  it('sin asignación manual usa MAPPI', () => {
+    const r = resolveAssignee(indexAssignments([]), 'sm', client, line)
+    expect(r).toEqual({ userId: 'u-sm', overridden: false, mappiUserId: 'u-sm' })
+  })
+
+  it('con asignación manual manda ella, y «sin asignar» (null) también', () => {
+    const index = indexAssignments([
+      { client_id: 'c1', role: 'sm', user_id: 'u-otro' },
+      { client_id: 'c1', role: 'jefe', user_id: null },
+      { client_id: 'c9', role: 'disenador', user_id: 'u-x' },
+    ])
+    expect(resolveAssignee(index, 'sm', client, line)).toEqual({
+      userId: 'u-otro',
+      overridden: true,
+      mappiUserId: 'u-sm',
+    })
+    expect(resolveAssignee(index, 'jefe', client, line).userId).toBeNull()
+    expect(resolveAssignee(index, 'jefe', client, line).overridden).toBe(true)
+    // La asignación de otro cliente no se mezcla.
+    expect(resolveAssignee(index, 'disenador', client, line).userId).toBe('u-dis')
   })
 })

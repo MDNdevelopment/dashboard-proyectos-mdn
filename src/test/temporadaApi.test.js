@@ -25,7 +25,14 @@ vi.mock('../supabase', () => {
   return { supabase: { from: vi.fn((table) => builder(table)) } }
 })
 
-import { upsertPiece, deletePiece, loadPieces } from '../components/chequeo/temporadaApi'
+import {
+  upsertPiece,
+  deletePiece,
+  loadPieces,
+  loadAssignments,
+  upsertAssignment,
+  deleteAssignment,
+} from '../components/chequeo/temporadaApi'
 
 beforeEach(() => {
   calls.length = 0
@@ -77,6 +84,41 @@ describe('temporadaApi', () => {
 
   it('loadPieces pagina sobre seasonal_pieces', async () => {
     const res = await loadPieces('camp')
+    expect(res.error).toBeNull()
+    expect(res.data).toEqual([])
+  })
+
+  it('upsertAssignment guarda por (campaña, cliente, rol) y admite «sin asignar» (null)', async () => {
+    await upsertAssignment({
+      companyId: 'co',
+      campaignId: 'camp',
+      clientId: 'c1',
+      lineId: 'gen',
+      role: 'jefe',
+      userId: null,
+      updatedBy: 'u1',
+    })
+    const call = calls.find((c) => c.table === 'seasonal_assignments' && c.op === 'upsert')
+    expect(call.opts).toEqual({ onConflict: 'campaign_id,client_id,role' })
+    expect(call.row).toMatchObject({
+      company_id: 'co',
+      campaign_id: 'camp',
+      client_id: 'c1',
+      line_id: 'gen',
+      role: 'jefe',
+      user_id: null,
+      updated_by: 'u1',
+    })
+  })
+
+  it('deleteAssignment borra de seasonal_assignments (vuelve al valor de MAPPI)', async () => {
+    await deleteAssignment('a1')
+    const call = calls.find((c) => c.table === 'seasonal_assignments' && c.op === 'delete')
+    expect(call).toBeTruthy()
+  })
+
+  it('loadAssignments pagina sobre seasonal_assignments', async () => {
+    const res = await loadAssignments('camp')
     expect(res.error).toBeNull()
     expect(res.data).toEqual([])
   })
