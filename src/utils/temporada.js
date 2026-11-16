@@ -10,41 +10,77 @@
 
 export const PIECE_TYPES = ['diseno', 'foto', 'reel']
 
-export const PIECE_LABELS = { diseno: 'Diseño', foto: 'Foto', reel: 'Reel' }
-
-/** Orden de avance de una pieza; también el orden del menú de StatusPill. */
-export const PIECE_STATUSES = [
-  'pendiente',
-  'en_produccion',
-  'en_edicion',
-  'enviado_cliente',
-  'ajustes',
-  'aprobado',
-  'publicado',
-]
-
-/** Estados que cuentan como pieza terminada para los KPIs. */
-export const DONE_STATUSES = ['aprobado', 'publicado']
+/** Textos tal cual el desplegable FORMATO de la hoja. */
+export const PIECE_LABELS = {
+  diseno: 'Diseño',
+  foto: 'Audiovisual - Foto',
+  reel: 'Audiovisual - Reel',
+}
 
 /**
- * La etiqueta del estado "en producción" depende del tipo de pieza: «grabar» es solo para
- * video (Reel); una foto se «captura» y un diseño «está en diseño».
+ * Estados que ofrece la hoja. La columna DISEÑO (y las tarjetas) y la columna AUDIOVISUAL
+ * tienen listas distintas. «N/A» no es un estado: es no tener la pieza (se quita con la ×).
+ * Una pieza sin estado equivale a la celda en blanco de la hoja.
  */
-const PRODUCTION_LABEL = {
-  reel: 'Por grabar',
-  foto: 'Por capturar',
-  diseno: 'En diseño',
+const DESIGN_STATUSES = [
+  'pendiente_redes',
+  'enviado_diseno',
+  'en_modificacion',
+  'enviado_cliente',
+  'aprobado',
+  'pendiente_cliente',
+]
+const AUDIOVISUAL_STATUSES = [
+  'pendiente_grabar',
+  'agendado',
+  'en_edicion',
+  'enviado_cliente',
+  'aprobado',
+  'pendiente_cliente',
+  'en_diseno',
+]
+
+/** Estados permitidos por tipo de pieza (foto y reel comparten la lista AUDIOVISUAL). */
+export const STATUSES_BY_TYPE = {
+  diseno: DESIGN_STATUSES,
+  foto: AUDIOVISUAL_STATUSES,
+  reel: AUDIOVISUAL_STATUSES,
 }
+
+/** Todos los estados posibles (filtros y validación), sin repetir. */
+export const PIECE_STATUSES = [...new Set([...DESIGN_STATUSES, ...AUDIOVISUAL_STATUSES])]
+
+/** Valor del menú para «sin estado» (celda en blanco); se guarda como null. */
+export const NO_STATUS = ''
+
+/** Estados que cuentan como pieza terminada para los KPIs. */
+export const DONE_STATUSES = ['aprobado']
 
 // Clases Tailwind LITERALES (StatusPill no admite clases armadas en runtime).
 const STATUS_STYLE = {
-  pendiente: { label: 'Pendiente', bg: 'bg-[#f5f3eb]', text: 'text-[#666]', dot: 'bg-[#bbb]' },
-  en_produccion: { bg: 'bg-[#fff4d6]', text: 'text-[#8a6100]', dot: 'bg-[#FFB800]' },
-  en_edicion: {
-    label: 'En edición',
-    bg: 'bg-[#e8f0fe]',
-    text: 'text-[#1d4ed8]',
-    dot: 'bg-[#3b82f6]',
+  [NO_STATUS]: {
+    label: 'Sin estado',
+    bg: 'bg-[#f5f3eb]',
+    text: 'text-[#888]',
+    dot: 'bg-[#ccc]',
+  },
+  pendiente_redes: {
+    label: 'Pendiente por redes',
+    bg: 'bg-[#fff4d6]',
+    text: 'text-[#8a6100]',
+    dot: 'bg-[#FFB800]',
+  },
+  enviado_diseno: {
+    label: 'Enviado a diseño',
+    bg: 'bg-[#e0e7ff]',
+    text: 'text-[#4338ca]',
+    dot: 'bg-[#6366f1]',
+  },
+  en_modificacion: {
+    label: 'En modificación',
+    bg: 'bg-[#ffe4e6]',
+    text: 'text-[#be123c]',
+    dot: 'bg-[#f43f5e]',
   },
   enviado_cliente: {
     label: 'Enviado al cliente',
@@ -52,28 +88,48 @@ const STATUS_STYLE = {
     text: 'text-[#7e22ce]',
     dot: 'bg-[#a855f7]',
   },
-  ajustes: { label: 'Ajustes', bg: 'bg-[#ffe4e6]', text: 'text-[#be123c]', dot: 'bg-[#f43f5e]' },
   aprobado: { label: 'Aprobado', bg: 'bg-[#dcfce7]', text: 'text-[#15803d]', dot: 'bg-[#22c55e]' },
-  publicado: {
-    label: 'Publicado',
-    bg: 'bg-[#d1fae5]',
-    text: 'text-[#047857]',
-    dot: 'bg-[#10b981]',
+  pendiente_cliente: {
+    label: 'Pendiente cliente',
+    bg: 'bg-[#ffedd5]',
+    text: 'text-[#c2410c]',
+    dot: 'bg-[#f97316]',
+  },
+  pendiente_grabar: {
+    label: 'Pendiente por grabar',
+    bg: 'bg-[#fff4d6]',
+    text: 'text-[#8a6100]',
+    dot: 'bg-[#FFB800]',
+  },
+  agendado: { label: 'Agendado', bg: 'bg-[#ccfbf1]', text: 'text-[#0f766e]', dot: 'bg-[#14b8a6]' },
+  en_edicion: {
+    label: 'En edición',
+    bg: 'bg-[#e8f0fe]',
+    text: 'text-[#1d4ed8]',
+    dot: 'bg-[#3b82f6]',
+  },
+  en_diseno: {
+    label: 'En diseño',
+    bg: 'bg-[#e0e7ff]',
+    text: 'text-[#4338ca]',
+    dot: 'bg-[#6366f1]',
   },
 }
 
-/** Etiqueta legible de un estado para un tipo de pieza dado. */
-export function statusLabel(status, pieceType) {
-  if (status === 'en_produccion') return PRODUCTION_LABEL[pieceType] ?? 'En producción'
-  return STATUS_STYLE[status]?.label ?? status
+/** Etiqueta legible de un estado (null/'' = «Sin estado»). */
+export function statusLabel(status) {
+  return STATUS_STYLE[status ?? NO_STATUS]?.label ?? status
 }
 
-/** Mapa `meta` para `StatusPill` ya con las etiquetas del tipo de pieza. */
+/** Opciones del menú de estado de un tipo de pieza: «Sin estado» + los de la hoja. */
+export function statusOptionsFor(pieceType) {
+  return [NO_STATUS, ...(STATUSES_BY_TYPE[pieceType] ?? [])]
+}
+
+/** Mapa `meta` para `StatusPill` con los estados de ese tipo de pieza. */
 export function statusMetaFor(pieceType) {
   const meta = {}
-  for (const key of PIECE_STATUSES) {
-    meta[key] = { ...STATUS_STYLE[key], label: statusLabel(key, pieceType) }
-  }
+  for (const key of statusOptionsFor(pieceType)) meta[key] = STATUS_STYLE[key]
   return meta
 }
 
@@ -156,34 +212,78 @@ export function computeTemporadaSummary(clients, pieces, slots) {
 // ─── Personal asignado a mano ──────────────────────────────────────────────────────────
 
 /**
- * Casillas con nombre de empleado. Cada una arranca con lo que ya hay en MAPPI y se puede
- * cambiar solo para la temporada (tabla `seasonal_assignments`).
+ * Casillas con nombre de empleado: las dos que tiene la hoja (JEFE y SM). Cada una arranca
+ * con lo que ya hay en MAPPI y se puede cambiar solo para la temporada
+ * (`seasonal_assignments`).
  */
-export const ASSIGNMENT_ROLES = ['jefe', 'sm', 'disenador', 'audiovisual']
+export const ASSIGNMENT_ROLES = ['jefe', 'sm']
 
-export const ASSIGNMENT_LABELS = {
-  jefe: 'Jefe',
-  sm: 'SM',
-  disenador: 'Diseño',
-  audiovisual: 'Audiovisual',
-}
+export const ASSIGNMENT_LABELS = { jefe: 'Jefe', sm: 'SM' }
 
-/** Sentinela del selector: «usar el valor de MAPPI» (quita la asignación manual). */
+/** Sentinela: «volver a la persona de MAPPI» (quita la asignación manual). */
 export const USE_MAPPI = '__mappi__'
 
+/** Personas que ofrecen los desplegables JEFE y SM de la hoja (por nombre de pila). */
+export const SHEET_ASSIGNEES = {
+  jefe: [
+    'Mayber',
+    'Sabrina',
+    'Georgina',
+    'Katherine',
+    'Paola',
+    'Stephanie',
+    'Jesus',
+    'Daniellys',
+    'Bianca',
+  ],
+  sm: [
+    'Celeste',
+    'Valeria',
+    'Daniellys',
+    'Bianca',
+    'Nairim',
+    'Mayber',
+    'Sabrina',
+    'Georgina',
+    'Katherine',
+    'Paola',
+    'Stephanie',
+    'Jesus',
+    'Maria Jose',
+    'Madeleine',
+    'Maria Fernanda',
+    'Luisa Fernanda',
+    'Damilis',
+    'Carlos',
+  ],
+}
+
+const normalizeName = (name) =>
+  (name ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+
 /**
- * Valor de MAPPI para una casilla: jefe = líder de la línea; SM, diseñador y audiovisual =
- * los del cliente (de audiovisual, que admite varios, se toma el primero).
+ * Empleados que se pueden elegir en una casilla: los activos cuyo nombre de pila está en el
+ * desplegable de la hoja, más la persona ya asignada (aunque esté fuera de la lista o
+ * archivada) para no perderla.
+ */
+export function allowedAssignees(role, users, keepUserId = null) {
+  const names = new Set((SHEET_ASSIGNEES[role] ?? []).map(normalizeName))
+  return users.filter(
+    (u) => u.user_id === keepUserId || (!u.deleted_at && names.has(normalizeName(u.first_name))),
+  )
+}
+
+/**
+ * Valor de MAPPI para una casilla: jefe = líder de la línea; SM = el del cliente.
  * @returns {string|null} user_id
  */
 export function mappiAssignee(role, client, line) {
   if (role === 'jefe') return line?.lead_user_id ?? null
   if (role === 'sm') return client?.social_manager_id ?? null
-  if (role === 'disenador') return client?.designer_id ?? null
-  if (role === 'audiovisual') {
-    const ids = Array.isArray(client?.audiovisual_ids) ? client.audiovisual_ids : []
-    return ids[0] ?? null
-  }
   return null
 }
 

@@ -8,6 +8,7 @@ import { clientsForLine, effectiveLineId } from '../utils/chequeo'
 import {
   PIECE_STATUSES,
   USE_MAPPI,
+  isDone,
   computeTemporadaSummary,
   slotsOf,
   statusLabel,
@@ -175,7 +176,7 @@ export default function ChequeoTemporadaPage() {
   const visibleClients = scopedClients.filter((c) => {
     const own = piecesByClient.get(c.id) ?? []
     if (statusFilter && !own.some((p) => p.status === statusFilter)) return false
-    if (onlyPending && !own.some((p) => !['aprobado', 'publicado'].includes(p.status))) return false
+    if (onlyPending && !own.some((p) => !isDone(p.status))) return false
     return true
   })
   const hasFilters = Boolean(statusFilter) || onlyPending
@@ -208,13 +209,14 @@ export default function ChequeoTemporadaPage() {
     replacePiece(data)
   }
 
-  const handleAdd = (client, slot, type) => savePiece(client, slot, type, 'pendiente')
+  const handleAdd = (client, slot, type) => savePiece(client, slot, type, null)
 
   const handleStatusChange = (piece, status) => {
     const client = clients.find((c) => c.id === piece.client_id)
     const slot = slots.find((s) => s.key === piece.slot_key)
     if (!client || !slot) return
-    return savePiece(client, slot, piece.piece_type, status)
+    // El menú usa '' para «Sin estado» (celda en blanco de la hoja): se guarda como null.
+    return savePiece(client, slot, piece.piece_type, status || null)
   }
 
   async function handleRemove(piece) {
@@ -380,7 +382,7 @@ export default function ChequeoTemporadaPage() {
                   <option value="">Todos</option>
                   {PIECE_STATUSES.map((s) => (
                     <option key={s} value={s}>
-                      {s === 'en_produccion' ? 'En producción' : statusLabel(s)}
+                      {statusLabel(s)}
                     </option>
                   ))}
                 </select>

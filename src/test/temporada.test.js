@@ -1,20 +1,24 @@
-import { describe, it, expect } from 'vitest'
 import {
   ASSIGNMENT_ROLES,
+  NO_STATUS,
+  PIECE_LABELS,
   PIECE_STATUSES,
+  STATUSES_BY_TYPE,
   addableTypes,
+  allowedAssignees,
   allowedPieceTypes,
   clientsWithPending,
   computeTemporadaSummary,
   indexAssignments,
   indexPieces,
-  mappiAssignee,
-  resolveAssignee,
   isDone,
+  mappiAssignee,
   piecesFor,
+  resolveAssignee,
   slotsOf,
   statusLabel,
   statusMetaFor,
+  statusOptionsFor,
 } from '../utils/temporada'
 
 const POST = { key: '2026-12-24', label: '24/12', kind: 'post' }
@@ -25,41 +29,73 @@ const piece = (over) => ({
   client_id: 'c1',
   slot_key: POST.key,
   piece_type: 'diseno',
-  status: 'pendiente',
+  status: null,
   ...over,
 })
 
-describe('statusLabel', () => {
-  it('«en producción» se llama «grabar» solo para Reel', () => {
-    expect(statusLabel('en_produccion', 'reel')).toBe('Por grabar')
-    expect(statusLabel('en_produccion', 'foto')).toBe('Por capturar')
-    expect(statusLabel('en_produccion', 'diseno')).toBe('En diseño')
+describe('formatos y estados: los mismos que la hoja', () => {
+  it('los formatos se llaman como en el desplegable FORMATO', () => {
+    expect(PIECE_LABELS).toEqual({
+      diseno: 'Diseño',
+      foto: 'Audiovisual - Foto',
+      reel: 'Audiovisual - Reel',
+    })
   })
 
-  it('los demás estados no dependen del tipo', () => {
-    expect(statusLabel('aprobado', 'reel')).toBe('Aprobado')
-    expect(statusLabel('enviado_cliente', 'foto')).toBe('Enviado al cliente')
+  it('DISEÑO (y las tarjetas) ofrece la lista de la hoja', () => {
+    expect(STATUSES_BY_TYPE.diseno.map(statusLabel)).toEqual([
+      'Pendiente por redes',
+      'Enviado a diseño',
+      'En modificación',
+      'Enviado al cliente',
+      'Aprobado',
+      'Pendiente cliente',
+    ])
   })
-})
 
-describe('statusMetaFor', () => {
-  it('trae todos los estados con clases literales y la etiqueta del tipo', () => {
-    const meta = statusMetaFor('reel')
-    expect(Object.keys(meta)).toEqual(PIECE_STATUSES)
-    expect(meta.en_produccion.label).toBe('Por grabar')
-    for (const m of Object.values(meta)) {
-      expect(m.bg).toMatch(/^bg-\[#/)
-      expect(m.dot).toMatch(/^bg-\[#/)
+  it('AUDIOVISUAL (foto y reel) ofrece la lista de la hoja', () => {
+    const esperado = [
+      'Pendiente por grabar',
+      'Agendado',
+      'En edición',
+      'Enviado al cliente',
+      'Aprobado',
+      'Pendiente cliente',
+      'En diseño',
+    ]
+    expect(STATUSES_BY_TYPE.foto.map(statusLabel)).toEqual(esperado)
+    expect(STATUSES_BY_TYPE.reel.map(statusLabel)).toEqual(esperado)
+  })
+
+  it('«N/A» no es un estado: es no tener la pieza', () => {
+    expect(PIECE_STATUSES.map(statusLabel)).not.toContain('N/A')
+  })
+
+  it('el menú de cada tipo empieza por «Sin estado» (celda en blanco)', () => {
+    expect(statusOptionsFor('reel')[0]).toBe(NO_STATUS)
+    expect(statusLabel(NO_STATUS)).toBe('Sin estado')
+    expect(statusLabel(null)).toBe('Sin estado')
+    expect(statusOptionsFor('diseno')).toHaveLength(STATUSES_BY_TYPE.diseno.length + 1)
+  })
+
+  it('statusMetaFor trae clases literales para cada opción', () => {
+    for (const type of ['diseno', 'foto', 'reel']) {
+      const meta = statusMetaFor(type)
+      expect(Object.keys(meta)).toEqual(statusOptionsFor(type))
+      for (const m of Object.values(meta)) {
+        expect(m.bg).toMatch(/^bg-\[#/)
+        expect(m.dot).toMatch(/^bg-\[#/)
+      }
     }
   })
 })
 
 describe('isDone', () => {
-  it('aprobado y publicado cuentan como terminados', () => {
+  it('solo «Aprobado» cuenta como terminado; sin estado no', () => {
     expect(isDone('aprobado')).toBe(true)
-    expect(isDone('publicado')).toBe(true)
     expect(isDone('enviado_cliente')).toBe(false)
-    expect(isDone('pendiente')).toBe(false)
+    expect(isDone('pendiente_cliente')).toBe(false)
+    expect(isDone(null)).toBe(false)
   })
 })
 
@@ -121,8 +157,8 @@ describe('computeTemporadaSummary', () => {
   it('cuenta solo las piezas de las cuentas en alcance', () => {
     const pieces = [
       piece({ client_id: 'c1', status: 'aprobado' }),
-      piece({ client_id: 'c1', piece_type: 'reel', status: 'pendiente' }),
-      piece({ client_id: 'c1', slot_key: TARJETA.key, status: 'publicado' }),
+      piece({ client_id: 'c1', piece_type: 'reel', status: 'enviado_cliente' }),
+      piece({ client_id: 'c1', slot_key: TARJETA.key, status: 'aprobado' }),
       piece({ client_id: 'otra-linea', status: 'aprobado' }),
     ]
     const s = computeTemporadaSummary([{ id: 'c1' }], pieces, slots)
@@ -138,30 +174,22 @@ describe('computeTemporadaSummary', () => {
 })
 
 describe('personal asignado', () => {
-  const client = {
-    id: 'c1',
-    social_manager_id: 'u-sm',
-    designer_id: 'u-dis',
-    audiovisual_ids: ['u-av', 'u-av2'],
-  }
+  const client = { id: 'c1', social_manager_id: 'u-sm' }
   const line = { id: 'l1', lead_user_id: 'u-jefe' }
 
-  it('hay 4 casillas: jefe, SM, diseño y audiovisual', () => {
-    expect(ASSIGNMENT_ROLES).toEqual(['jefe', 'sm', 'disenador', 'audiovisual'])
+  it('hay 2 casillas con nombre, como la hoja: jefe y SM', () => {
+    expect(ASSIGNMENT_ROLES).toEqual(['jefe', 'sm'])
   })
 
-  it('el valor de MAPPI sale de la línea (jefe) y del cliente (el resto)', () => {
+  it('el valor de MAPPI sale de la línea (jefe) y del cliente (SM)', () => {
     expect(mappiAssignee('jefe', client, line)).toBe('u-jefe')
     expect(mappiAssignee('sm', client, line)).toBe('u-sm')
-    expect(mappiAssignee('disenador', client, line)).toBe('u-dis')
-    expect(mappiAssignee('audiovisual', client, line)).toBe('u-av')
   })
 
-  it('tolera línea o recursos ausentes', () => {
+  it('tolera línea o cliente sin esos datos', () => {
     expect(mappiAssignee('jefe', client, undefined)).toBeNull()
-    expect(mappiAssignee('audiovisual', { id: 'c2', audiovisual_ids: [] }, line)).toBeNull()
-    expect(mappiAssignee('audiovisual', { id: 'c2' }, line)).toBeNull()
-    expect(mappiAssignee('otro', client, line)).toBeNull()
+    expect(mappiAssignee('sm', { id: 'c2' }, line)).toBeNull()
+    expect(mappiAssignee('disenador', client, line)).toBeNull()
   })
 
   it('sin asignación manual usa MAPPI', () => {
@@ -173,7 +201,7 @@ describe('personal asignado', () => {
     const index = indexAssignments([
       { client_id: 'c1', role: 'sm', user_id: 'u-otro' },
       { client_id: 'c1', role: 'jefe', user_id: null },
-      { client_id: 'c9', role: 'disenador', user_id: 'u-x' },
+      { client_id: 'c9', role: 'sm', user_id: 'u-x' },
     ])
     expect(resolveAssignee(index, 'sm', client, line)).toEqual({
       userId: 'u-otro',
@@ -183,6 +211,42 @@ describe('personal asignado', () => {
     expect(resolveAssignee(index, 'jefe', client, line).userId).toBeNull()
     expect(resolveAssignee(index, 'jefe', client, line).overridden).toBe(true)
     // La asignación de otro cliente no se mezcla.
-    expect(resolveAssignee(index, 'disenador', client, line).userId).toBe('u-dis')
+    expect(resolveAssignee(index, 'sm', { id: 'c9' }, line).userId).toBe('u-x')
+    expect(resolveAssignee(index, 'sm', { id: 'c3', social_manager_id: 'u-m3' }, line).userId).toBe(
+      'u-m3',
+    )
+  })
+})
+
+describe('allowedAssignees: solo las personas del desplegable de la hoja', () => {
+  const users = [
+    { user_id: '1', first_name: 'Sabrina', last_name: 'B' },
+    { user_id: '2', first_name: 'Jesús ', last_name: 'G' },
+    { user_id: '3', first_name: 'Maria Fernanda', last_name: 'G' },
+    { user_id: '4', first_name: 'Pedro', last_name: 'P' },
+    { user_id: '5', first_name: 'Katherine', last_name: 'M', deleted_at: '2026-01-01' },
+    { user_id: '6', first_name: 'Maria', last_name: 'Altuve' },
+  ]
+  const ids = (list) => list.map((u) => u.user_id)
+
+  it('empareja por nombre de pila sin tildes ni espacios, y excluye archivados', () => {
+    expect(ids(allowedAssignees('jefe', users))).toEqual(['1', '2'])
+  })
+
+  it('cada casilla tiene su propia lista (SM incluye a Maria Fernanda)', () => {
+    expect(ids(allowedAssignees('sm', users))).toEqual(['1', '2', '3'])
+  })
+
+  it('no empareja nombres parciales', () => {
+    expect(ids(allowedAssignees('sm', users))).not.toContain('6')
+  })
+
+  it('conserva a la persona ya asignada aunque esté fuera de la lista o archivada', () => {
+    expect(ids(allowedAssignees('jefe', users, '4'))).toContain('4')
+    expect(ids(allowedAssignees('jefe', users, '5'))).toContain('5')
+  })
+
+  it('un rol desconocido no ofrece a nadie', () => {
+    expect(allowedAssignees('otro', users)).toEqual([])
   })
 })

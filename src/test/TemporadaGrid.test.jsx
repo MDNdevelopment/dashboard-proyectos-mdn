@@ -17,18 +17,15 @@ const CLIENTS = [
     name: 'Flexmed',
     line_id: 'l1',
     social_manager_id: 'u-sm',
-    designer_id: 'u-dis',
-    audiovisual_ids: ['u-av', 'u-av2'],
   },
   { id: 'c2', name: 'Suelta', line_id: null, social_manager_id: null },
 ]
 const USER_LIST = [
   { user_id: 'u-jefe', first_name: 'Daniellys', last_name: 'X' },
   { user_id: 'u-sm', first_name: 'Maria', last_name: 'Y' },
-  { user_id: 'u-dis', first_name: 'Diego', last_name: 'Z' },
-  { user_id: 'u-av', first_name: 'Ana', last_name: 'V' },
-  { user_id: 'u-beto', first_name: 'Beto', last_name: 'B' },
-  { user_id: 'u-old', first_name: 'Archivado', last_name: 'Q', deleted_at: '2026-01-01' },
+  { user_id: 'u-sabrina', first_name: 'Sabrina', last_name: 'B' },
+  { user_id: 'u-ajeno', first_name: 'Pedro', last_name: 'P' },
+  { user_id: 'u-old', first_name: 'Katherine', last_name: 'Q', deleted_at: '2026-01-01' },
 ]
 const USERS = new Map(USER_LIST.map((u) => [u.user_id, u]))
 const PIECES = [
@@ -64,13 +61,13 @@ function renderGrid(props = {}) {
 describe('TemporadaGrid', () => {
   const group = (label) => screen.getByRole('group', { name: label })
 
-  it('las 4 casillas de personal muestran a la persona de MAPPI, sin texto extra', () => {
+  it('solo hay dos casillas de personal, Jefe y SM, como la hoja', () => {
     renderGrid({ clients: [CLIENTS[0]] })
+    expect(screen.getAllByRole('group')).toHaveLength(2)
     expect(within(group('Jefe de Flexmed')).getByText('Daniellys X')).toBeInTheDocument()
     expect(within(group('SM de Flexmed')).getByText('Maria Y')).toBeInTheDocument()
-    expect(within(group('Diseño de Flexmed')).getByText('Diego Z')).toBeInTheDocument()
-    // de audiovisual (que admite varios) se toma el primero
-    expect(within(group('Audiovisual de Flexmed')).getByText('Ana V')).toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: 'Diseño' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: 'Audiovisual' })).not.toBeInTheDocument()
     expect(screen.queryByText(/mappi/i)).not.toBeInTheDocument()
     expect(screen.queryByLabelText(/^Restablecer/)).not.toBeInTheDocument()
   })
@@ -90,17 +87,23 @@ describe('TemporadaGrid', () => {
     })
     expect(within(group('Jefe de Flexmed')).getByText('Maria Y')).toBeInTheDocument()
     expect(within(group('SM de Flexmed')).getByText('Sin asignar')).toBeInTheDocument()
-    expect(within(group('Diseño de Flexmed')).getByText('Diego Z')).toBeInTheDocument()
     expect(screen.getByLabelText('Restablecer Jefe de Flexmed')).toBeInTheDocument()
     expect(screen.getByLabelText('Restablecer SM de Flexmed')).toBeInTheDocument()
-    expect(screen.queryByLabelText('Restablecer Diseño de Flexmed')).not.toBeInTheDocument()
   })
 
   it('elegir una persona dispara onAssign con su id', () => {
     const { onAssign } = renderGrid({ clients: [CLIENTS[0]] })
     fireEvent.click(within(group('Jefe de Flexmed')).getAllByRole('button')[0])
-    fireEvent.click(screen.getByRole('button', { name: /Beto B/ }))
-    expect(onAssign).toHaveBeenCalledWith(CLIENTS[0], 'jefe', 'u-beto')
+    fireEvent.click(screen.getByRole('button', { name: /Sabrina B/ }))
+    expect(onAssign).toHaveBeenCalledWith(CLIENTS[0], 'jefe', 'u-sabrina')
+  })
+
+  it('solo ofrece a las personas del desplegable de la hoja', () => {
+    renderGrid({ clients: [CLIENTS[0]] })
+    fireEvent.click(within(group('Jefe de Flexmed')).getAllByRole('button')[0])
+    expect(screen.getByRole('button', { name: /Sabrina B/ })).toBeInTheDocument()
+    // Pedro no está en la lista de la hoja; Maria tampoco (la lista dice «Maria Fernanda»).
+    expect(screen.queryByRole('button', { name: /Pedro P/ })).not.toBeInTheDocument()
   })
 
   it('«Ninguno» deja la casilla sin asignar a propósito', () => {
@@ -124,38 +127,39 @@ describe('TemporadaGrid', () => {
       clients: [CLIENTS[0]],
       assignments: [{ id: 'a1', client_id: 'c1', role: 'jefe', user_id: 'u-old' }],
     })
-    expect(within(group('Jefe de Flexmed')).getByText('Archivado Q')).toBeInTheDocument()
+    expect(within(group('Jefe de Flexmed')).getByText('Katherine Q')).toBeInTheDocument()
     fireEvent.click(within(group('SM de Flexmed')).getAllByRole('button')[0])
-    // Abierto el selector, el archivado no aparece como opción (solo como asignado arriba).
-    expect(screen.getAllByText('Archivado Q')).toHaveLength(1)
+    // Katherine está en la lista de la hoja, pero archivada: no se ofrece como opción nueva.
+    expect(screen.getAllByText('Katherine Q')).toHaveLength(1)
   })
 
   it('muestra una columna por slot y la pieza existente con su estado', () => {
     renderGrid()
     expect(screen.getByText('24/12')).toBeInTheDocument()
     expect(screen.getByText('Tarjeta navidad')).toBeInTheDocument()
-    expect(screen.getByText('Foto')).toBeInTheDocument()
+    expect(screen.getByText('Audiovisual - Foto')).toBeInTheDocument()
     expect(screen.getByText('Aprobado')).toBeInTheDocument()
   })
 
   it('agregar un formato dispara onAdd con cliente, slot y tipo', () => {
     const { onAdd } = renderGrid()
-    // c1 ya tiene Foto en el 24/12, así que ofrece + Diseño y + Reel.
-    fireEvent.click(screen.getAllByText('+ Reel')[0])
+    // c1 ya tiene Foto en el 24/12, así que ofrece + Diseño y + Audiovisual - Reel.
+    fireEvent.click(screen.getAllByText('+ Audiovisual - Reel')[0])
     expect(onAdd).toHaveBeenCalledWith(CLIENTS[0], SLOTS[0], 'reel')
   })
 
-  it('la tarjeta solo ofrece diseño', () => {
-    renderGrid({ clients: [CLIENTS[0]] })
-    // Foto existe en el 24/12 → Diseño y Reel; la tarjeta → solo Diseño: 2 de Diseño en total.
-    expect(screen.getAllByText('+ Diseño')).toHaveLength(2)
-    expect(screen.getAllByText('+ Reel')).toHaveLength(1)
-    expect(screen.queryByText('+ Foto')).not.toBeInTheDocument()
+  it('la tarjeta es un solo estado: se agrega como «+ Tarjeta», sin elegir formato', () => {
+    const { onAdd } = renderGrid({ clients: [CLIENTS[0]] })
+    expect(screen.getAllByText('+ Diseño')).toHaveLength(1)
+    expect(screen.getAllByText('+ Audiovisual - Reel')).toHaveLength(1)
+    expect(screen.queryByText('+ Audiovisual - Foto')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByText('+ Tarjeta'))
+    expect(onAdd).toHaveBeenCalledWith(CLIENTS[0], SLOTS[1], 'diseno')
   })
 
   it('quitar una pieza dispara onRemove', () => {
     const { onRemove } = renderGrid()
-    fireEvent.click(screen.getByLabelText('Quitar Foto'))
+    fireEvent.click(screen.getByLabelText('Quitar Audiovisual - Foto'))
     expect(onRemove).toHaveBeenCalledWith(PIECES[0])
   })
 
@@ -165,7 +169,7 @@ describe('TemporadaGrid', () => {
     expect(screen.getByText('Daniellys')).toBeInTheDocument()
     expect(screen.getByText('Maria')).toBeInTheDocument()
     expect(screen.queryByText(/^\+ /)).not.toBeInTheDocument()
-    expect(screen.queryByLabelText('Quitar Foto')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Quitar Audiovisual - Foto')).not.toBeInTheDocument()
   })
 
   it('agrupado por línea muestra el encabezado de cada línea con cuentas', () => {

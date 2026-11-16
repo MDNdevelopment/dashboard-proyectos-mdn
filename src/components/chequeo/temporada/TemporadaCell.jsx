@@ -1,10 +1,18 @@
 import StatusPill from '../../common/StatusPill'
-import { PIECE_LABELS, PIECE_STATUSES, addableTypes, statusMetaFor } from '../../../utils/temporada'
+import {
+  NO_STATUS,
+  PIECE_LABELS,
+  addableTypes,
+  statusMetaFor,
+  statusOptionsFor,
+} from '../../../utils/temporada'
 
 /**
- * Una celda cliente × slot: las piezas que existen (cada una con su StatusPill) y, si se
- * puede editar, los botones para agregar los tipos que faltan. Una pieza que no aplica
- * simplemente no existe: se quita con la «×».
+ * Una celda cliente × slot: las piezas que existen (cada una con su StatusPill, con los
+ * estados de la hoja para ese formato) y, si se puede editar, los botones para agregar los
+ * formatos que faltan. «N/A» de la hoja = la pieza no existe: se quita con la «×».
+ *
+ * Las tarjetas son un solo estado (como en la hoja): sin chip de formato.
  */
 export default function TemporadaCell({
   slot,
@@ -14,6 +22,7 @@ export default function TemporadaCell({
   onStatusChange,
   onRemove,
 }) {
+  const isTarjeta = slot?.kind === 'tarjeta'
   const addable = canManage ? addableTypes(slot, pieces) : []
 
   if (pieces.length === 0 && addable.length === 0) {
@@ -23,29 +32,33 @@ export default function TemporadaCell({
   return (
     <div className="flex flex-col gap-1.5 min-w-[150px]">
       {pieces.map((piece) => (
-        <div key={piece.id} className="flex items-center gap-1.5">
-          <span className="w-[44px] flex-shrink-0 text-[11.5px] font-mono font-bold uppercase tracking-wide text-[#888]">
-            {PIECE_LABELS[piece.piece_type]}
-          </span>
-          <StatusPill
-            size="sm"
-            value={piece.status}
-            meta={statusMetaFor(piece.piece_type)}
-            options={PIECE_STATUSES}
-            editable={canManage}
-            onChange={(next) => onStatusChange(piece, next)}
-          />
-          {canManage && (
-            <button
-              type="button"
-              onClick={() => onRemove(piece)}
-              aria-label={`Quitar ${PIECE_LABELS[piece.piece_type]}`}
-              title="Quitar esta pieza (no aplica)"
-              className="text-[15px] leading-none text-[#bbb] hover:text-[#c0392b]"
-            >
-              ×
-            </button>
+        <div key={piece.id} className="flex flex-col items-start gap-1">
+          {!isTarjeta && (
+            <span className="text-[11.5px] font-mono font-bold uppercase tracking-wide text-[#888]">
+              {PIECE_LABELS[piece.piece_type]}
+            </span>
           )}
+          <div className="flex items-center gap-1.5">
+            <StatusPill
+              size="sm"
+              value={piece.status ?? NO_STATUS}
+              meta={statusMetaFor(piece.piece_type)}
+              options={statusOptionsFor(piece.piece_type)}
+              editable={canManage}
+              onChange={(next) => onStatusChange(piece, next)}
+            />
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => onRemove(piece)}
+                aria-label={`Quitar ${isTarjeta ? 'tarjeta' : PIECE_LABELS[piece.piece_type]}`}
+                title="Quitar (N/A: no aplica)"
+                className="text-[15px] leading-none text-[#bbb] hover:text-[#c0392b]"
+              >
+                ×
+              </button>
+            )}
+          </div>
         </div>
       ))}
       {addable.length > 0 && (
@@ -57,7 +70,7 @@ export default function TemporadaCell({
               onClick={() => onAdd(type)}
               className="px-1.5 py-0.5 rounded-md border border-dashed border-[#d6d2c4] text-[12px] font-semibold text-[#888] hover:border-[#FFB800] hover:text-[#111]"
             >
-              + {PIECE_LABELS[type]}
+              + {isTarjeta ? 'Tarjeta' : PIECE_LABELS[type]}
             </button>
           ))}
         </div>

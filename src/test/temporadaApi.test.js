@@ -65,7 +65,7 @@ describe('temporadaApi', () => {
     })
   })
 
-  it('upsertPiece crea la pieza como pendiente si no se indica estado', async () => {
+  it('upsertPiece crea la pieza sin estado (celda en blanco) si no se indica', async () => {
     await upsertPiece({
       companyId: 'co',
       campaignId: 'camp',
@@ -74,7 +74,7 @@ describe('temporadaApi', () => {
       slotKey: 'tarjeta_navidad',
       pieceType: 'diseno',
     })
-    expect(calls.find((c) => c.op === 'upsert').row.status).toBe('pendiente')
+    expect(calls.find((c) => c.op === 'upsert').row.status).toBeNull()
   })
 
   it('deletePiece borra de seasonal_pieces', async () => {

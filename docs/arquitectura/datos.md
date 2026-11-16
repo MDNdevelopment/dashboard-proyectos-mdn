@@ -62,9 +62,9 @@ Catálogo del estado actual. Leyenda FK: `──→` FK declarada · `··→` r
 
 ### `seasonal_campaigns` / `seasonal_pieces` / `seasonal_assignments`
 - Chequeo de temporada (§2.4quater): `seasonal_campaigns` = temporada (`name`, `starts_on/ends_on`, `slots jsonb` = `[{key,label,kind:'post'|'tarjeta'}]`). Sin pantalla de administración: una temporada nueva es un INSERT. SELECT autenticados, sin policies de escritura.
-- `seasonal_pieces`: una fila por pieza, UNIQUE `(campaign_id, client_id, slot_key, piece_type)`. `piece_type` `diseno|foto|reel`; `status` `pendiente|en_produccion|en_edicion|enviado_cliente|ajustes|aprobado|publicado` (CHECK). "N/A" no se guarda: la pieza no existe.
+- `seasonal_pieces`: una fila por pieza, UNIQUE `(campaign_id, client_id, slot_key, piece_type)`. `piece_type` `diseno|foto|reel`; `status` nullable (null = celda en blanco) con CHECK `pendiente_redes|enviado_diseno|en_modificacion|enviado_cliente|aprobado|pendiente_cliente` (DISEÑO/tarjetas) y `pendiente_grabar|agendado|en_edicion|en_diseno` (AUDIOVISUAL), los mismos de la hoja. "N/A" no se guarda: la pieza no existe.
 - FK `campaign_id→seasonal_campaigns` CASCADE, `client_id→metric_clients` CASCADE, `line_id→metric_lines` SET NULL (snapshot; cuentas sin línea guardan la línea general). Realtime habilitado.
-- `seasonal_assignments`: personal fijado a mano por `(campaign_id, client_id, role)` (UNIQUE), `role` `jefe|sm|disenador|audiovisual`, `user_id text` nullable. Sin fila = valor de MAPPI; con fila manda `user_id`, y `null` = «Sin asignar» a propósito. Mismos FK, snapshot de línea, RLS y realtime que `seasonal_pieces`.
+- `seasonal_assignments`: personal fijado a mano por `(campaign_id, client_id, role)` (UNIQUE), `role` `jefe|sm`, `user_id text` nullable. Sin fila = valor de MAPPI; con fila manda `user_id`, y `null` = «Sin asignar» a propósito. Mismos FK, snapshot de línea, RLS y realtime que `seasonal_pieces`.
 - RLS de `seasonal_pieces`: espejo de `publication_checks` (SELECT autenticados; escritura `chequeo.manage` + `task_user_view_all()` / `chequeo.ver_todo` / `task_user_in_line()` / `task_is_general_line()`).
 
 ### `fixed_task_marks`

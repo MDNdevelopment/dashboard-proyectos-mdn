@@ -37,7 +37,7 @@ export async function upsertPiece({
   lineId,
   slotKey,
   pieceType,
-  status = 'pendiente',
+  status = null,
   userId,
 }) {
   return supabase
@@ -50,7 +50,7 @@ export async function upsertPiece({
         line_id: lineId,
         slot_key: slotKey,
         piece_type: pieceType,
-        status,
+        status: status ?? null,
         updated_by: userId ?? null,
         updated_at: new Date().toISOString(),
       },

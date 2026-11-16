@@ -1,7 +1,7 @@
 -- Chequeo de temporada: personal asignado a mano por cliente y temporada.
 --
--- Jefe, SM, diseñador y audiovisual arrancan con lo que ya hay en MAPPI (jefe = líder de la
--- línea; SM / diseñador / audiovisual = los del cliente). Cuando alguien los cambia en la
+-- Jefe y SM (las dos casillas con nombre que tiene la hoja) arrancan con lo que ya hay en
+-- MAPPI (jefe = líder de la línea; SM = el del cliente). Cuando alguien los cambia en la
 -- grilla de la temporada, se guarda UNA fila aquí y solo vale para esa temporada: no toca la
 -- línea ni el cliente.
 --
@@ -22,7 +22,7 @@ create table if not exists public.seasonal_assignments (
   updated_by   text,
   updated_at   timestamptz not null default now(),
   constraint seasonal_assignments_role_check check (
-    role in ('jefe', 'sm', 'disenador', 'audiovisual')
+    role in ('jefe', 'sm')
   ),
   constraint seasonal_assignments_unique unique (campaign_id, client_id, role)
 );
