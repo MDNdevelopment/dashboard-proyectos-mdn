@@ -1,9 +1,10 @@
-import UserPickerSingle, { Avatar } from '../../tareas/UserPickerSingle'
+import { Avatar } from '../../tareas/UserPickerSingle'
+import PersonPicker from './PersonPicker'
 import { ASSIGNMENT_LABELS, USE_MAPPI, allowedAssignees } from '../../../utils/temporada'
 
 /**
  * Casilla de personal de la temporada: foto + nombre de la persona. Sin permiso de gestión
- * es solo lectura; con permiso abre el selector de personas (con buscador) limitado a las
+ * es solo lectura; con permiso abre un selector compacto (foto + nombre de pila, con buscador) limitado a las
  * que ofrece el desplegable de la hoja para esa casilla. Cuando la
  * persona se cambió a mano aparece un ↺ para volver a la original (la de MAPPI), y la
  * casilla se resalta para distinguirla.
@@ -31,11 +32,11 @@ export default function PersonSelect({
   }
 
   return (
-    <div role="group" aria-label={label} className="flex items-center gap-1 min-w-[190px]">
+    <div role="group" aria-label={label} className="flex items-center gap-1 min-w-0">
       <div
         className={`flex-1 min-w-0 rounded-lg ${resolved.overridden ? 'ring-1 ring-[#FFB800]' : ''}`}
       >
-        <UserPickerSingle
+        <PersonPicker
           users={allowedAssignees(role, users, resolved.userId)}
           selectedId={resolved.userId}
           onChange={(id) => onChange(id ?? '')}
