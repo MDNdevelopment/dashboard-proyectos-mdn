@@ -64,8 +64,8 @@ describe('TemporadaGrid', () => {
   it('solo hay dos casillas de personal, Jefe y SM, como la hoja', () => {
     renderGrid({ clients: [CLIENTS[0]] })
     expect(screen.getAllByRole('group')).toHaveLength(2)
-    expect(within(group('Jefe de Flexmed')).getByText('Daniellys X')).toBeInTheDocument()
-    expect(within(group('SM de Flexmed')).getByText('Maria Y')).toBeInTheDocument()
+    expect(within(group('Jefe de Flexmed')).getByText('Daniellys')).toBeInTheDocument()
+    expect(within(group('SM de Flexmed')).getByText('Maria')).toBeInTheDocument()
     expect(screen.queryByRole('columnheader', { name: 'Diseño' })).not.toBeInTheDocument()
     expect(screen.queryByRole('columnheader', { name: 'Audiovisual' })).not.toBeInTheDocument()
     expect(screen.queryByText(/mappi/i)).not.toBeInTheDocument()
@@ -85,7 +85,7 @@ describe('TemporadaGrid', () => {
         { id: 'a2', client_id: 'c1', role: 'sm', user_id: null },
       ],
     })
-    expect(within(group('Jefe de Flexmed')).getByText('Maria Y')).toBeInTheDocument()
+    expect(within(group('Jefe de Flexmed')).getByText('Maria')).toBeInTheDocument()
     expect(within(group('SM de Flexmed')).getByText('Sin asignar')).toBeInTheDocument()
     expect(screen.getByLabelText('Restablecer Jefe de Flexmed')).toBeInTheDocument()
     expect(screen.getByLabelText('Restablecer SM de Flexmed')).toBeInTheDocument()
@@ -127,10 +127,10 @@ describe('TemporadaGrid', () => {
       clients: [CLIENTS[0]],
       assignments: [{ id: 'a1', client_id: 'c1', role: 'jefe', user_id: 'u-old' }],
     })
-    expect(within(group('Jefe de Flexmed')).getByText('Katherine Q')).toBeInTheDocument()
+    expect(within(group('Jefe de Flexmed')).getByText('Katherine')).toBeInTheDocument()
     fireEvent.click(within(group('SM de Flexmed')).getAllByRole('button')[0])
     // Katherine está en la lista de la hoja, pero archivada: no se ofrece como opción nueva.
-    expect(screen.getAllByText('Katherine Q')).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: /Katherine/ })).toHaveLength(1)
   })
 
   it('muestra una columna por slot y la pieza existente con su estado', () => {

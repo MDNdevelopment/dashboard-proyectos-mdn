@@ -11,11 +11,17 @@ import {
 import TemporadaCell from './TemporadaCell'
 import PersonSelect from './PersonSelect'
 
+// Columnas angostas para que quepa más información sin scroll horizontal: el cliente y el
+// personal ocupan poco; el ancho se lo llevan las fechas, que son la información principal.
+const TH = 'px-2 py-2.5 text-[12px] font-mono font-bold uppercase tracking-[0.12em] text-[#888]'
+const CLIENT_COL = 'w-[118px] min-w-[96px] max-w-[118px]'
+const PERSON_COL = 'w-[112px] min-w-[96px] max-w-[112px]'
+
 /**
- * Grilla de la temporada: una fila por cliente, una columna por slot. El personal (jefe, SM,
- * diseño y audiovisual) arranca con lo de MAPPI (líder de la línea y recursos del cliente) y
- * se puede cambiar a mano solo para esta temporada. Las cuentas de «Independientes» no
- * tienen jefe, así que esa casilla arranca vacía.
+ * Grilla de la temporada: una fila por cliente, una columna por slot. El personal (jefe y SM,
+ * las dos casillas con nombre de la hoja) arranca con lo de MAPPI (líder de la línea y SM del
+ * cliente) y se puede cambiar a mano solo para esta temporada. Las cuentas de «Independientes»
+ * no tienen jefe, así que esa casilla arranca vacía.
  */
 export default function TemporadaGrid({
   lines,
@@ -60,19 +66,14 @@ export default function TemporadaGrid({
       <table className="w-full text-left border-collapse">
         <thead>
           <tr className="bg-[#faf9f5] border-b border-[#e0ddd4]">
-            {['Cliente', ...ASSIGNMENT_ROLES.map((r) => ASSIGNMENT_LABELS[r])].map((h) => (
-              <th
-                key={h}
-                className="px-3 py-2.5 text-[12px] font-mono font-bold uppercase tracking-[0.12em] text-[#888]"
-              >
-                {h}
+            <th className={`${TH} ${CLIENT_COL} sticky left-0 z-[2] bg-[#faf9f5]`}>Cliente</th>
+            {ASSIGNMENT_ROLES.map((r) => (
+              <th key={r} className={`${TH} ${PERSON_COL}`}>
+                {ASSIGNMENT_LABELS[r]}
               </th>
             ))}
             {slots.map((slot) => (
-              <th
-                key={slot.key}
-                className="px-3 py-2.5 text-[12px] font-mono font-bold uppercase tracking-[0.12em] text-[#888]"
-              >
+              <th key={slot.key} className={TH}>
                 {slot.label}
               </th>
             ))}
@@ -95,11 +96,13 @@ export default function TemporadaGrid({
                 const clientLine = lineById.get(effectiveLineId(client, generalLineId))
                 return (
                   <tr key={client.id} className="border-b border-[#f0ede3] align-top">
-                    <td className="px-3 py-2.5 text-[14.5px] font-semibold text-[#111]">
+                    <td
+                      className={`px-2 py-2 text-[14px] font-semibold leading-tight text-[#111] break-words sticky left-0 z-[1] bg-white ${CLIENT_COL}`}
+                    >
                       {client.name}
                     </td>
                     {ASSIGNMENT_ROLES.map((role) => (
-                      <td key={role} className="px-3 py-2.5">
+                      <td key={role} className={`px-1.5 py-2 ${PERSON_COL}`}>
                         <PersonSelect
                           role={role}
                           client={client}
@@ -112,7 +115,7 @@ export default function TemporadaGrid({
                       </td>
                     ))}
                     {slots.map((slot) => (
-                      <td key={slot.key} className="px-3 py-2.5">
+                      <td key={slot.key} className="px-2 py-2">
                         <TemporadaCell
                           slot={slot}
                           pieces={piecesFor(index, client.id, slot.key)}
