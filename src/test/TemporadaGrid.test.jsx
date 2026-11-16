@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, within } from '@testing-library/react'
 import { vi } from 'vitest'
 import TemporadaGrid from '../components/chequeo/temporada/TemporadaGrid'
 import { USE_MAPPI } from '../utils/temporada'
@@ -27,6 +27,7 @@ const USER_LIST = [
   { user_id: 'u-sm', first_name: 'Maria', last_name: 'Y' },
   { user_id: 'u-dis', first_name: 'Diego', last_name: 'Z' },
   { user_id: 'u-av', first_name: 'Ana', last_name: 'V' },
+  { user_id: 'u-beto', first_name: 'Beto', last_name: 'B' },
   { user_id: 'u-old', first_name: 'Archivado', last_name: 'Q', deleted_at: '2026-01-01' },
 ]
 const USERS = new Map(USER_LIST.map((u) => [u.user_id, u]))
@@ -61,27 +62,25 @@ function renderGrid(props = {}) {
 }
 
 describe('TemporadaGrid', () => {
-  it('las 4 casillas de personal son selectores que arrancan con lo de MAPPI', () => {
+  const group = (label) => screen.getByRole('group', { name: label })
+
+  it('las 4 casillas de personal muestran a la persona de MAPPI, sin texto extra', () => {
     renderGrid({ clients: [CLIENTS[0]] })
-    for (const [label, name] of [
-      ['Jefe de Flexmed', 'De MAPPI: Daniellys X'],
-      ['SM de Flexmed', 'De MAPPI: Maria Y'],
-      ['Diseño de Flexmed', 'De MAPPI: Diego Z'],
-      // de audiovisual (que admite varios) se toma el primero
-      ['Audiovisual de Flexmed', 'De MAPPI: Ana V'],
-    ]) {
-      const select = screen.getByLabelText(label)
-      expect(select).toHaveValue(USE_MAPPI)
-      expect(select).toHaveDisplayValue(name)
-    }
+    expect(within(group('Jefe de Flexmed')).getByText('Daniellys X')).toBeInTheDocument()
+    expect(within(group('SM de Flexmed')).getByText('Maria Y')).toBeInTheDocument()
+    expect(within(group('Diseño de Flexmed')).getByText('Diego Z')).toBeInTheDocument()
+    // de audiovisual (que admite varios) se toma el primero
+    expect(within(group('Audiovisual de Flexmed')).getByText('Ana V')).toBeInTheDocument()
+    expect(screen.queryByText(/mappi/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/^Restablecer/)).not.toBeInTheDocument()
   })
 
   it('Independientes arranca sin jefe', () => {
     renderGrid({ clients: [CLIENTS[1]] })
-    expect(screen.getByLabelText('Jefe de Suelta')).toHaveDisplayValue('De MAPPI: sin asignar')
+    expect(within(group('Jefe de Suelta')).getByText('Sin asignar')).toBeInTheDocument()
   })
 
-  it('una asignación manual manda sobre MAPPI, incluso «sin asignar»', () => {
+  it('una asignación manual manda sobre MAPPI, incluso «sin asignar», y se puede restablecer', () => {
     renderGrid({
       clients: [CLIENTS[0]],
       assignments: [
@@ -89,29 +88,46 @@ describe('TemporadaGrid', () => {
         { id: 'a2', client_id: 'c1', role: 'sm', user_id: null },
       ],
     })
-    expect(screen.getByLabelText('Jefe de Flexmed')).toHaveValue('u-sm')
-    expect(screen.getByLabelText('SM de Flexmed')).toHaveValue('')
-    expect(screen.getByLabelText('Diseño de Flexmed')).toHaveValue(USE_MAPPI)
+    expect(within(group('Jefe de Flexmed')).getByText('Maria Y')).toBeInTheDocument()
+    expect(within(group('SM de Flexmed')).getByText('Sin asignar')).toBeInTheDocument()
+    expect(within(group('Diseño de Flexmed')).getByText('Diego Z')).toBeInTheDocument()
+    expect(screen.getByLabelText('Restablecer Jefe de Flexmed')).toBeInTheDocument()
+    expect(screen.getByLabelText('Restablecer SM de Flexmed')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Restablecer Diseño de Flexmed')).not.toBeInTheDocument()
   })
 
-  it('elegir una persona, «sin asignar» o «de MAPPI» dispara onAssign', () => {
+  it('elegir una persona dispara onAssign con su id', () => {
     const { onAssign } = renderGrid({ clients: [CLIENTS[0]] })
-    fireEvent.change(screen.getByLabelText('Jefe de Flexmed'), { target: { value: 'u-av' } })
-    expect(onAssign).toHaveBeenLastCalledWith(CLIENTS[0], 'jefe', 'u-av')
-    fireEvent.change(screen.getByLabelText('SM de Flexmed'), { target: { value: '' } })
-    expect(onAssign).toHaveBeenLastCalledWith(CLIENTS[0], 'sm', '')
-    fireEvent.change(screen.getByLabelText('SM de Flexmed'), { target: { value: USE_MAPPI } })
-    expect(onAssign).toHaveBeenLastCalledWith(CLIENTS[0], 'sm', USE_MAPPI)
+    fireEvent.click(within(group('Jefe de Flexmed')).getAllByRole('button')[0])
+    fireEvent.click(screen.getByRole('button', { name: /Beto B/ }))
+    expect(onAssign).toHaveBeenCalledWith(CLIENTS[0], 'jefe', 'u-beto')
   })
 
-  it('no ofrece empleados archivados salvo que sean la persona asignada', () => {
-    renderGrid({ clients: [CLIENTS[0]] })
-    expect(screen.queryByRole('option', { name: 'Archivado Q' })).not.toBeInTheDocument()
+  it('«Ninguno» deja la casilla sin asignar a propósito', () => {
+    const { onAssign } = renderGrid({ clients: [CLIENTS[0]] })
+    fireEvent.click(within(group('SM de Flexmed')).getAllByRole('button')[0])
+    fireEvent.click(screen.getByRole('button', { name: /Ninguno/ }))
+    expect(onAssign).toHaveBeenCalledWith(CLIENTS[0], 'sm', '')
+  })
+
+  it('el ↺ vuelve a la persona original de MAPPI', () => {
+    const { onAssign } = renderGrid({
+      clients: [CLIENTS[0]],
+      assignments: [{ id: 'a1', client_id: 'c1', role: 'jefe', user_id: 'u-sm' }],
+    })
+    fireEvent.click(screen.getByLabelText('Restablecer Jefe de Flexmed'))
+    expect(onAssign).toHaveBeenCalledWith(CLIENTS[0], 'jefe', USE_MAPPI)
+  })
+
+  it('no ofrece empleados archivados, pero conserva al ya asignado', () => {
     renderGrid({
       clients: [CLIENTS[0]],
       assignments: [{ id: 'a1', client_id: 'c1', role: 'jefe', user_id: 'u-old' }],
     })
-    expect(screen.getAllByRole('option', { name: 'Archivado Q' }).length).toBeGreaterThan(0)
+    expect(within(group('Jefe de Flexmed')).getByText('Archivado Q')).toBeInTheDocument()
+    fireEvent.click(within(group('SM de Flexmed')).getAllByRole('button')[0])
+    // Abierto el selector, el archivado no aparece como opción (solo como asignado arriba).
+    expect(screen.getAllByText('Archivado Q')).toHaveLength(1)
   })
 
   it('muestra una columna por slot y la pieza existente con su estado', () => {
