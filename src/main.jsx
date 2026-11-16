@@ -20,6 +20,7 @@ import TareasFijasPage from './pages/TareasFijasPage.jsx'
 import CnpPage from './pages/CnpPage.jsx'
 import PautasPage from './pages/PautasPage.jsx'
 import ChequeoPage from './pages/ChequeoPage.jsx'
+import ChequeoTemporadaPage from './pages/ChequeoTemporadaPage.jsx'
 import EmpresaPage from './pages/EmpresaPage.jsx'
 import EvaluacionesPage from './pages/EvaluacionesPage.jsx'
 import MetricasPage from './pages/MetricasPage.jsx'
@@ -128,6 +129,14 @@ createRoot(document.getElementById('root')).render(
               element={
                 <RequireModule moduleKey="tareas">
                   <ChequeoPage />
+                </RequireModule>
+              }
+            />
+            <Route
+              path="/tareas/chequeo/temporada"
+              element={
+                <RequireModule moduleKey="tareas">
+                  <ChequeoTemporadaPage />
                 </RequireModule>
               }
             />
