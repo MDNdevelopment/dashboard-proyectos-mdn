@@ -182,4 +182,27 @@ describe('TemporadaGrid', () => {
     renderGrid({ clients: [] })
     expect(screen.getByText('No hay cuentas para mostrar')).toBeInTheDocument()
   })
+
+  it('separa las columnas con líneas verticales (la última sin línea)', () => {
+    renderGrid({ clients: [CLIENTS[0]] })
+    const headers = screen.getAllByRole('columnheader')
+    // Cliente (fija) usa sombra interior; el resto, borde derecho.
+    expect(headers[0].className).toContain('shadow-[inset_-1px_0_0_#e8e4d8]')
+    for (const th of headers.slice(1)) expect(th.className).toContain('border-r')
+    expect(headers.at(-1).className).toContain('last:border-r-0')
+    const cells = within(screen.getAllByRole('row')[1]).getAllByRole('cell')
+    expect(cells[0].className).toContain('shadow-[inset_-1px_0_0_#e8e4d8]')
+    for (const td of cells.slice(1)) expect(td.className).toContain('border-r')
+  })
+
+  it('no hay líneas horizontales; la fila se sombrea con hover, también la celda fija', () => {
+    renderGrid({ clients: [CLIENTS[0]] })
+    const [header, row] = screen.getAllByRole('row')
+    expect(header.className).not.toContain('border-b')
+    expect(row.className).not.toContain('border-b')
+    expect(row.className).toContain('hover:bg-[#faf9f5]')
+    expect(row.className).toContain('group')
+    // La celda de Cliente tiene fondo propio (sticky): debe seguir al hover de la fila.
+    expect(within(row).getAllByRole('cell')[0].className).toContain('group-hover:bg-[#faf9f5]')
+  })
 })
