@@ -12,7 +12,7 @@ export const CHANGELOG = [
     version: '1.2.0',
     title: 'Mejoras en Campañas y Empresa',
     changes: [
-      'En el «Chequeo de temporada» las columnas ahora van separadas por líneas verticales para leer la tabla con más facilidad.',
+      'En el «Chequeo de temporada» las columnas ahora van separadas por líneas verticales (sin líneas horizontales) y la fila se resalta al pasar el cursor, para leer la tabla con más facilidad.',
       'En el «Chequeo de temporada» hay un botón «Volver al chequeo» para regresar al chequeo normal de publicaciones.',
       'Nuevo en Gestión de Tareas → Chequeo: «Chequeo de temporada» (empieza con Navidad 2026). Por cada cliente y cada fecha o tarjeta registras qué piezas hay (diseño, foto, reel) y en qué estado está cada una, igual que en la hoja de seguimiento, pero con el jefe y la community manager ya cargados desde MAPPI (los puedes cambiar a mano, solo para esa temporada), los mismos formatos y estados de la hoja y los cambios visibles en vivo para todo el equipo. Con permiso para crear clientes, el botón «Agregar cliente» da de alta uno nuevo desde ahí mismo.',
       'Corregido: en Pautas, una fecha de entrega vencida ya no queda bloqueada. Coordinación, gestión de pautas y la jefa de la línea pueden cambiarla aunque ya haya pasado (antes solo podía la jefa, y en las cuentas independientes no podía nadie).',

@@ -16,7 +16,7 @@ import PersonSelect from './PersonSelect'
 const TH = 'px-2 py-2.5 text-[12px] font-mono font-bold uppercase tracking-[0.12em] text-[#888]'
 const CLIENT_COL = 'w-[118px] min-w-[96px] max-w-[118px]'
 const PERSON_COL = 'w-[112px] min-w-[96px] max-w-[112px]'
-// Líneas verticales entre columnas. La columna de Cliente está fija (sticky) y en una tabla
+// Solo líneas verticales entre columnas (sin horizontales: la fila se resalta con hover). La columna de Cliente está fija (sticky) y en una tabla
 // con bordes colapsados el borde de una celda fija no se mueve con ella al hacer scroll, por
 // eso esa usa una sombra interior en vez de borde.
 const VLINE = 'border-r border-[#e8e4d8] last:border-r-0'
@@ -70,7 +70,7 @@ export default function TemporadaGrid({
     <div className="bg-white rounded-xl border border-[#e0ddd4] overflow-x-auto">
       <table className="w-full text-left border-collapse">
         <thead>
-          <tr className="bg-[#faf9f5] border-b border-[#e0ddd4]">
+          <tr className="bg-[#faf9f5]">
             <th className={`${TH} ${CLIENT_COL} sticky left-0 z-[2] bg-[#faf9f5] ${STICKY_LINE}`}>
               Cliente
             </th>
@@ -102,9 +102,12 @@ export default function TemporadaGrid({
               {groupClients.map((client) => {
                 const clientLine = lineById.get(effectiveLineId(client, generalLineId))
                 return (
-                  <tr key={client.id} className="border-b border-[#f0ede3] align-top">
+                  <tr
+                    key={client.id}
+                    className="group align-top transition-colors hover:bg-[#f5f3eb]"
+                  >
                     <td
-                      className={`px-2 py-2 text-[14px] font-semibold leading-tight text-[#111] break-words sticky left-0 z-[1] bg-white ${STICKY_LINE} ${CLIENT_COL}`}
+                      className={`px-2 py-2 text-[14px] font-semibold leading-tight text-[#111] break-words sticky left-0 z-[1] bg-white transition-colors group-hover:bg-[#f5f3eb] ${STICKY_LINE} ${CLIENT_COL}`}
                     >
                       {client.name}
                     </td>

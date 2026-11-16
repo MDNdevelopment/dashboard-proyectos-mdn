@@ -194,4 +194,15 @@ describe('TemporadaGrid', () => {
     expect(cells[0].className).toContain('shadow-[inset_-1px_0_0_#e8e4d8]')
     for (const td of cells.slice(1)) expect(td.className).toContain('border-r')
   })
+
+  it('no hay líneas horizontales; la fila se sombrea con hover, también la celda fija', () => {
+    renderGrid({ clients: [CLIENTS[0]] })
+    const [header, row] = screen.getAllByRole('row')
+    expect(header.className).not.toContain('border-b')
+    expect(row.className).not.toContain('border-b')
+    expect(row.className).toContain('hover:bg-[#f5f3eb]')
+    expect(row.className).toContain('group')
+    // La celda de Cliente tiene fondo propio (sticky): debe seguir al hover de la fila.
+    expect(within(row).getAllByRole('cell')[0].className).toContain('group-hover:bg-[#f5f3eb]')
+  })
 })
