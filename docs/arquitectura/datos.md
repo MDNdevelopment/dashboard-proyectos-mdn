@@ -60,6 +60,12 @@ Catálogo del estado actual. Leyenda FK: `──→` FK declarada · `··→` r
 - RLS: SELECT autenticados; escritura `user_can('chequeo.manage')` + (`task_user_view_all()` o `user_can('chequeo.ver_todo')` o `task_user_in_line()` o `task_is_general_line()` — este último para el team "Independientes"). Realtime.
 - Gotcha: `publication_check_events` ya no existe (dropeada); no referenciar.
 
+### `seasonal_campaigns` / `seasonal_pieces`
+- Chequeo de temporada (§2.4quater): `seasonal_campaigns` = temporada (`name`, `starts_on/ends_on`, `slots jsonb` = `[{key,label,kind:'post'|'tarjeta'}]`). Sin pantalla de administración: una temporada nueva es un INSERT. SELECT autenticados, sin policies de escritura.
+- `seasonal_pieces`: una fila por pieza, UNIQUE `(campaign_id, client_id, slot_key, piece_type)`. `piece_type` `diseno|foto|reel`; `status` `pendiente|en_produccion|en_edicion|enviado_cliente|ajustes|aprobado|publicado` (CHECK). "N/A" no se guarda: la pieza no existe.
+- FK `campaign_id→seasonal_campaigns` CASCADE, `client_id→metric_clients` CASCADE, `line_id→metric_lines` SET NULL (snapshot; cuentas sin línea guardan la línea general). Realtime habilitado.
+- RLS de `seasonal_pieces`: espejo de `publication_checks` (SELECT autenticados; escritura `chequeo.manage` + `task_user_view_all()` / `chequeo.ver_todo` / `task_user_in_line()` / `task_is_general_line()`).
+
 ### `fixed_task_marks`
 - Tildes de Tareas Fijas (§2.4bis), uno por `(client_id, task_key, period_year, period_month, period_week, network)`. FK `client_id→metric_clients` CASCADE, `line_id→metric_lines` CASCADE (snapshot para RLS/rollup).
 - `network` default `''`; las 4 tareas vigentes usan `''` (solo la removida `'plataformas'` lo usaba).

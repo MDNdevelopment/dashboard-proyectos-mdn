@@ -53,6 +53,15 @@
 - UI: `visibleLinesForUser(lines, userProfile, { extraViewAll: can('chequeo.ver_todo') })` en `ChequeoPage.jsx` — nivel 4/admin o `chequeo.ver_todo` ven todas las líneas + "Todas"; el resto solo la suya; "Independientes" se agrega aparte para todos.
 - Gotcha: el bypass `chequeo.ver_todo` debe estar también en RLS; sin él la UI mostraba todas las líneas pero la BD rechazaba escribir fuera de la propia.
 
+#### Chequeo de temporada (`/tareas/chequeo/temporada`)
+- Botón «Chequeo de temporada →» en `ChequeoPage`. Página propia `src/pages/ChequeoTemporadaPage.jsx` (no es un `viewMode` de Chequeo: mes y semanas no aplican); breadcrumb vuelve a Chequeo y el Sidebar resalta Chequeo (`isChequeoRoute` usa `startsWith`).
+- Archivos: `src/components/chequeo/temporada/{TemporadaGrid,TemporadaCell}.jsx`, `src/components/chequeo/temporadaApi.js` (`loadCampaigns`, `loadPieces`, `upsertPiece`, `deletePiece`), `src/utils/temporada.js` (lógica pura: estados, etiquetas por tipo, KPIs).
+- Tablas `seasonal_campaigns` / `seasonal_pieces` (ver `datos.md`). Fila por cliente, columna por slot (fecha o tarjeta); cada celda lista sus piezas (Diseño/Foto/Reel) con `StatusPill` y botones «+ tipo». Las tarjetas solo admiten Diseño.
+- JEFE = `metric_line_members.is_lead` (`line.lead_user_id`; «Independientes» no tiene) y SM = `metric_clients.social_manager_id`: derivados, no se capturan.
+- La etiqueta de `en_produccion` depende del tipo: Reel «Por grabar», Foto «Por capturar», Diseño «En diseño» («grabar» es solo para video).
+- Mismo scoping de líneas, mismas capabilities (`tareas.chequeo`, `chequeo.manage`, `chequeo.ver_todo`) y misma RLS que Chequeo; sin capability nueva. Realtime sobre `seasonal_pieces`.
+- Filtros (`FilterBar`): temporada (si hay más de una), estado y «solo pendientes» (cuentas con alguna pieza sin aprobar/publicar).
+
 #### Conexión → Productividad / Reportes
 - Fila «Actualización de Plataformas» de `report.productividad.tareas`: `OperacionesView.jsx` la deriva de `publication_checks` del mes (`loadChecks` + `computePlataformasProductividad`). Corte: `CHEQUEO_PRODUCTIVIDAD_START = {year:2026, month:9}` en `constants.js` (§2.4bis).
 - Meta = celdas aplicables (`contentTypeApplies`) × `MONTHLY_TARGET_PER_NETWORK` (4 fijo, aunque el mes tenga 5 semanas); redes exentas × 1.
