@@ -74,6 +74,16 @@ describe('ChequeoTemporadaPage — agregar cliente', () => {
     loadAssignments.mockResolvedValue({ data: [], error: null })
   })
 
+  it('hay un botón para volver al chequeo normal, siempre visible', async () => {
+    authWith(['chequeo.manage'])
+    renderPage()
+    await screen.findByText('Pepsi')
+    expect(screen.getByRole('link', { name: '← Volver al chequeo' })).toHaveAttribute(
+      'href',
+      '/tareas/chequeo',
+    )
+  })
+
   it('el botón solo aparece con el permiso de crear clientes', async () => {
     authWith(['chequeo.manage'])
     renderPage()
