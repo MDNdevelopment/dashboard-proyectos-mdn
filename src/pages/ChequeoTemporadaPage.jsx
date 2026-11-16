@@ -308,15 +308,23 @@ export default function ChequeoTemporadaPage() {
               Piezas por fecha y su estado — diseño, foto y reel por cliente
             </p>
           </div>
-          {campaign && canCreateClients && (
-            <button
-              type="button"
-              onClick={() => setAddingClient(true)}
-              className="self-start rounded-lg bg-[#FFB800] px-3 py-1.5 text-[14px] font-semibold text-[#111] hover:brightness-95"
+          <div className="flex flex-wrap items-center gap-2 self-start">
+            <Link
+              to="/tareas/chequeo"
+              className="rounded-lg border border-[#e0ddd4] bg-white px-3 py-1.5 text-[14px] font-semibold text-[#555] transition-all hover:border-[#FFB800] hover:text-[#111]"
             >
-              + Agregar cliente
-            </button>
-          )}
+              ← Volver al chequeo
+            </Link>
+            {campaign && canCreateClients && (
+              <button
+                type="button"
+                onClick={() => setAddingClient(true)}
+                className="rounded-lg bg-[#FFB800] px-3 py-1.5 text-[14px] font-semibold text-[#111] hover:brightness-95"
+              >
+                + Agregar cliente
+              </button>
+            )}
+          </div>
         </div>
 
         {loading ? (
