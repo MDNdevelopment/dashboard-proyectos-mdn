@@ -104,10 +104,10 @@ export default function TemporadaGrid({
                 return (
                   <tr
                     key={client.id}
-                    className="group align-top transition-colors hover:bg-[#f5f3eb]"
+                    className="group align-top transition-colors hover:bg-[#faf9f5]"
                   >
                     <td
-                      className={`px-2 py-2 text-[14px] font-semibold leading-tight text-[#111] break-words sticky left-0 z-[1] bg-white transition-colors group-hover:bg-[#f5f3eb] ${STICKY_LINE} ${CLIENT_COL}`}
+                      className={`px-2 py-2 text-[14px] font-semibold leading-tight text-[#111] break-words sticky left-0 z-[1] bg-white transition-colors group-hover:bg-[#faf9f5] ${STICKY_LINE} ${CLIENT_COL}`}
                     >
                       {client.name}
                     </td>

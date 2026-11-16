@@ -200,9 +200,9 @@ describe('TemporadaGrid', () => {
     const [header, row] = screen.getAllByRole('row')
     expect(header.className).not.toContain('border-b')
     expect(row.className).not.toContain('border-b')
-    expect(row.className).toContain('hover:bg-[#f5f3eb]')
+    expect(row.className).toContain('hover:bg-[#faf9f5]')
     expect(row.className).toContain('group')
     // La celda de Cliente tiene fondo propio (sticky): debe seguir al hover de la fila.
-    expect(within(row).getAllByRole('cell')[0].className).toContain('group-hover:bg-[#f5f3eb]')
+    expect(within(row).getAllByRole('cell')[0].className).toContain('group-hover:bg-[#faf9f5]')
   })
 })
