@@ -9,10 +9,9 @@ import AdsDetail from '../components/ads/AdsDetail'
 import AdsSpendView from '../components/ads/AdsSpendView'
 import { loadClients, loadLines } from '../components/metricas/metricsApi'
 import { spansPeriod } from '../components/ads/campaignSpendApi'
-import { visibleLinesForUser, userViewsAllLines } from '../utils/lineMembers'
 import { MONTHS } from '../components/metricas/constants'
 
-// Sentinela de "ver todas las líneas" (solo nivel 4/admin), igual que ALL_TEAMS en TareasPage.
+// Sentinela de "ver todas las líneas" (capability ads.ver_todo), igual que ALL_TEAMS en TareasPage.
 const ALL_LINES = '__all__'
 
 const CURRENT_YEAR = new Date().getFullYear()
@@ -47,11 +46,11 @@ export default function AdsPage() {
   // Control de acceso config-driven — sin reglas configuradas: abierto a todos.
   const canManage = can('ads.manage')
 
-  // Nivel 4/admin/tasks_view_all ven el botón "Todos" y arrancan en él (mismo criterio que visibleLinesForUser).
-  const canViewAll = userViewsAllLines(userProfile)
+  // Quien tiene `ads.ver_todo` ve el botón "Todos" y arranca en él. Sin ella solo ve las líneas de las que es miembro.
+  const canViewAll = can('ads.ver_todo')
 
   // Ámbito de línea para filtrar: null = sin filtro (Todos); '__none__' = nada
-  // (una jefa sin línea no debe ver campañas de otras líneas ni las sin línea).
+  // (quien no tiene ads.ver_todo ni línea no ve campañas de otras líneas ni las sin línea).
   const lineScope =
     activeLineId === ALL_LINES ? null : activeLineId ? activeLineId : canViewAll ? null : '__none__'
 
@@ -105,9 +104,12 @@ export default function AdsPage() {
   useEffect(() => {
     if (!userProfile?.company_id) return
     loadLines(userProfile.company_id).then(({ data }) => {
-      const visible = visibleLinesForUser(data ?? [], userProfile)
+      const all = data ?? []
+      const visible = canViewAll
+        ? all
+        : all.filter((l) => l.member_user_ids?.includes(userProfile.user_id))
       setLines(visible)
-      // Selección por defecto (una sola vez): nivel 4/admin → Todos; jefas → su primera línea.
+      // Selección por defecto (una sola vez): ver_todo → Todos; el resto → su primera línea.
       setActiveLineId((prev) => prev ?? (canViewAll ? ALL_LINES : (visible[0]?.id ?? null)))
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps

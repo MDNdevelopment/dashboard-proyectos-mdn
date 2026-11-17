@@ -74,8 +74,8 @@ vi.mock('../supabase', () => ({
 }))
 
 // loadClients devuelve la lista de clientes de la empresa; loadLines, sus líneas.
-// userProfile (abajo) no tiene línea propia ni access_level >= 4, así que
-// useScopedClients() lo trata como "sin línea real" (Independiente) y no filtra —
+// userProfile (abajo) no trae `can`, que por defecto lo permite todo (incluida `ads.ver_todo`), así que
+// useScopedClients() lo trata como quien ve todas las líneas y no filtra —
 // mismo comportamiento que antes de introducir el scoping por línea.
 vi.mock('../components/metricas/metricsApi', () => ({
   loadClients: vi.fn().mockResolvedValue({
@@ -170,7 +170,8 @@ describe('AdsForm — cliente y responsable', () => {
     expect(screen.getByRole('option', { name: 'Pepsi' })).toBeInTheDocument()
   })
 
-  it('un usuario con línea propia solo ve los clientes de su línea en el desplegable', async () => {
+  it('sin ads.ver_todo, un usuario con línea propia solo ve los clientes de su línea en el desplegable', async () => {
+    useAuth.mockReturnValue({ userProfile, can: (key) => key !== 'ads.ver_todo' })
     const { loadLines } = await import('../components/metricas/metricsApi')
     loadLines.mockResolvedValueOnce({
       data: [

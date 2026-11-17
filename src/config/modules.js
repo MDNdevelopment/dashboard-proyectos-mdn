@@ -43,7 +43,10 @@ export const MODULES = [
     routePrefix: '/ads',
     description: 'Campañas publicitarias y tácticas',
     tabs: [],
-    manageActions: [{ key: 'ads.manage', label: 'Crear / editar / eliminar campañas' }],
+    manageActions: [
+      { key: 'ads.manage', label: 'Crear / editar / eliminar campañas' },
+      { key: 'ads.ver_todo', label: 'Ver las campañas de todas las líneas' },
+    ],
   },
   {
     key: 'tareas',

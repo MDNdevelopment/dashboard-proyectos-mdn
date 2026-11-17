@@ -40,11 +40,12 @@ const row = (over) => ({
 
 describe('formatos y estados: los mismos que la hoja', () => {
   it('los formatos se llaman como en el desplegable FORMATO', () => {
-    expect(FORMATOS).toEqual(['diseno', 'foto', 'reel'])
+    expect(FORMATOS).toEqual(['diseno_arte', 'diseno_video', 'audiovisual_reel', 'ia'])
     expect(FORMATO_LABELS).toEqual({
-      diseno: 'Diseño',
-      foto: 'Audiovisual - Foto',
-      reel: 'Audiovisual - Reel',
+      diseno_arte: 'Diseño - Arte',
+      diseno_video: 'Diseño - Video',
+      audiovisual_reel: 'Audiovisual Reel',
+      ia: 'IA',
     })
   })
 
@@ -145,9 +146,9 @@ describe('statusFieldsFor / countedStatuses', () => {
 
 describe('indexRows / rowFor', () => {
   it('indexa por cliente y slot', () => {
-    const index = indexRows([row(), row({ client_id: 'c2', formato: 'foto' })])
+    const index = indexRows([row(), row({ client_id: 'c2', formato: 'ia' })])
     expect(rowFor(index, 'c1', POST.key)).toMatchObject({ client_id: 'c1' })
-    expect(rowFor(index, 'c2', POST.key).formato).toBe('foto')
+    expect(rowFor(index, 'c2', POST.key).formato).toBe('ia')
     expect(rowFor(index, 'c3', POST.key)).toBeNull()
   })
 })

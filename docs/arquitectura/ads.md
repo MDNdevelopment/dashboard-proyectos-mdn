@@ -9,7 +9,7 @@
 - `src/pages/AdsPage.jsx` (host).
 - Tácticas: `src/components/ads/AdsList.jsx` · `AdsCard.jsx` · `AdsForm.jsx` · `AdsDetail.jsx` · `AdsStats.jsx` · `constants.js` · `CampaignChecklist.jsx`.
 - Ads: `AdsSpendView.jsx` · `AdsSpendStats.jsx` · `AdsSpendForm.jsx` · `AdsSpendDetail.jsx` · `AdsResultsModal.jsx` · `campaignSpendApi.js`.
-- Compartido: `ClientCell.jsx` (logo/inicial + nombre), `StatusPill` (§5), `src/hooks/useScopedClients.js`, `src/utils/lineMembers.js` (`clientsForUser()`, `userViewsAllLines()`, `visibleLinesForUser`).
+- Compartido: `ClientCell.jsx` (logo/inicial + nombre), `StatusPill` (§5), `src/hooks/useScopedClients.js`.
 - Export: `src/utils/exportAdsToExcel.js` (botón "Excel" en toolbar de tab Ads).
 - `campaignSpendApi.js`: `updateAd()`, `loadAdsResponsables(companyId)`, `inPeriod()`, `spentByClientInPeriod()` (también lo usa Reportes), `fmtDate()`/`dateColor()` (compartidas con Tácticas).
 - Edge fn `supabase/functions/notify-campaign-assignee/index.ts`: email Resend al asignar campaña (solo Tácticas).
@@ -23,14 +23,16 @@
 - Estados: `STATUSES` en `constants.js` = `Pendiente`, `En Curso`, `Finalizado` (seleccionables). `Descartado` es legacy: fuera de `STATUSES`, pero sigue en `STATUS` (meta) para que `StatusPill` pinte filas históricas. `campaigns.status`/`paid_campaigns.status` son `text` libre, sin CHECK.
 
 ## Permisos
-- Ver: cualquier autenticado.
-- Crear/editar/eliminar (`campaigns` y `paid_campaigns`): capability `ads.manage`, `access_level ≥ 3` o admin (`canManage` en UI).
+- Todo el acceso se gestiona desde Empresa → Accesos; no hay reglas fijas por nivel en el código.
+- `ads` (módulo): abierto. Lectura de `campaigns`/`paid_campaigns`: RLS `using(true)`.
+- `ads.manage`: crear/editar/eliminar en ambas tablas (UI `canManage` y RLS `user_can('ads.manage')`).
+- `ads.ver_todo`: botón "Todos" (campañas de todas las líneas) y todos los clientes en los selectores. Sin ella: solo las líneas de las que el usuario es miembro; sin línea y sin la capability no ve campañas (en selectores solo clientes sin línea). Prod: nivel ≥ 4, o usuarios Juan Pedro Sierra, Andrea Garcia y Luis Fernando González (`20261117140000_ads_ver_todo_y_rls_campaigns.sql`).
 
 ## Reglas de negocio
 ### Comunes a ambas tabs
 - Selector mes/año (patrón `ClientsView`, §2.6): filtra por `start_date` dentro del mes (`inPeriod()`).
-- Pills de línea (patrón `TareasPage`): "Todos" solo nivel 4/admin + una por línea de `visibleLinesForUser`; jefas arrancan en la suya. Acotan ambas tabs y sus tarjetas vía `lineScope` (`client_id → clientsById.get(id).line_id`).
-- Selector de cliente en `AdsForm`/`AdsSpendForm`: `useScopedClients()` → `clientsForUser()`. Con línea propia: clientes de esa línea + sin `line_id`. Sin línea real (Independientes/Alta gerencia) o `userViewsAllLines()` (nivel ≥4, admin, `tasks_view_all`): todos. Al editar, el cliente seleccionado se conserva aunque sea de otra línea.
+- Pills de línea (patrón `TareasPage`): "Todos" solo con `ads.ver_todo` + una por línea de la que el usuario es miembro (todas si tiene `ads.ver_todo`); quien no la tiene arranca en su primera línea. Acotan ambas tabs y sus tarjetas vía `lineScope` (`client_id → clientsById.get(id).line_id`).
+- Selector de cliente en `AdsForm`/`AdsSpendForm`: `useScopedClients()`. Con `ads.ver_todo`: todos. Sin ella: clientes de sus líneas + sin `line_id`. Al editar, el cliente seleccionado se conserva aunque sea de otra línea.
 - Clic en fila (fuera de controles) → modal solo lectura (`AdsDetail.jsx` / `AdsSpendDetail.jsx`) con Editar/Eliminar si `canManage`. El estado es editable ahí vía `StatusPill` (llama `supabase.update`/`updateAd`). Controles internos (`StatusPill`, edición inline del nombre, acciones, "Ver pieza") detienen la propagación.
 - Estado editable en tabla con `StatusPill` (`editable={canManage}`).
 - Cierre automático diario `pg_cron` (`enqueue_campaign_closures()`, §2.9): `end_date < hoy` (Caracas) y `Pendiente`/`En Curso` → `Finalizado`; notifica a responsable + Marketing Managers.

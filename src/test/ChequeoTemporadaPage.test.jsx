@@ -90,7 +90,7 @@ describe('ChequeoTemporadaPage — agregar cliente', () => {
           id: 'r1',
           client_id: 'c-1',
           slot_key: '2026-12-24',
-          formato: 'foto',
+          formato: 'audiovisual_reel',
           diseno_status: null,
           audiovisual_status: 'aprobado',
         },
@@ -101,14 +101,14 @@ describe('ChequeoTemporadaPage — agregar cliente', () => {
     authWith(['chequeo.manage'])
     const { unmount } = renderPage()
     await screen.findByText('Pepsi')
-    expect(await screen.findByText('Audiovisual - Foto')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Audiovisual - Foto/ })).not.toBeInTheDocument()
+    expect(await screen.findByText('Audiovisual Reel')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Audiovisual Reel/ })).not.toBeInTheDocument()
     unmount()
 
     authWith(['chequeo.temporada.manage'])
     renderPage()
     await screen.findByText('Pepsi')
-    expect(await screen.findByRole('button', { name: /Audiovisual - Foto/ })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /Audiovisual Reel/ })).toBeInTheDocument()
   })
 
   it('el botón solo aparece con el permiso de crear clientes', async () => {
