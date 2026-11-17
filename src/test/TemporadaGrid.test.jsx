@@ -28,22 +28,27 @@ const USER_LIST = [
   { user_id: 'u-old', first_name: 'Katherine', last_name: 'Q', deleted_at: '2026-01-01' },
 ]
 const USERS = new Map(USER_LIST.map((u) => [u.user_id, u]))
-const PIECES = [
-  { id: 'p1', client_id: 'c1', slot_key: '2026-12-24', piece_type: 'foto', status: 'aprobado' },
+const ROWS = [
+  {
+    id: 'r1',
+    client_id: 'c1',
+    slot_key: '2026-12-24',
+    formato: 'foto',
+    diseno_status: 'enviado_cliente',
+    audiovisual_status: 'aprobado',
+  },
 ]
 
 function renderGrid(props = {}) {
   const handlers = {
-    onAdd: vi.fn(),
-    onStatusChange: vi.fn(),
-    onRemove: vi.fn(),
+    onCellChange: vi.fn(),
     onAssign: vi.fn(),
   }
   render(
     <TemporadaGrid
       lines={LINES}
       clients={CLIENTS}
-      pieces={PIECES}
+      rows={ROWS}
       assignments={[]}
       slots={SLOTS}
       users={USER_LIST}
@@ -66,8 +71,6 @@ describe('TemporadaGrid', () => {
     expect(screen.getAllByRole('group')).toHaveLength(2)
     expect(within(group('Jefe de Flexmed')).getByText('Daniellys')).toBeInTheDocument()
     expect(within(group('SM de Flexmed')).getByText('Maria')).toBeInTheDocument()
-    expect(screen.queryByRole('columnheader', { name: 'Diseño' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('columnheader', { name: 'Audiovisual' })).not.toBeInTheDocument()
     expect(screen.queryByText(/mappi/i)).not.toBeInTheDocument()
     expect(screen.queryByLabelText(/^Restablecer/)).not.toBeInTheDocument()
   })
@@ -133,43 +136,78 @@ describe('TemporadaGrid', () => {
     expect(screen.getAllByRole('button', { name: /Katherine/ })).toHaveLength(1)
   })
 
-  it('muestra una columna por slot y la pieza existente con su estado', () => {
-    renderGrid()
-    expect(screen.getByText('24/12')).toBeInTheDocument()
-    expect(screen.getByText('Tarjeta navidad')).toBeInTheDocument()
+  it('cada fecha tiene un header con la fecha y debajo Formato, Diseño y Audiovisual', () => {
+    renderGrid({ clients: [CLIENTS[0]] })
+    const date = screen.getByRole('columnheader', { name: '24/12' })
+    expect(date).toHaveAttribute('colspan', '3')
+    expect(date).toHaveAttribute('rowspan', '1')
+    const [, subheaders] = screen.getAllByRole('row')
+    expect(
+      within(subheaders)
+        .getAllByRole('columnheader')
+        .map((th) => th.textContent),
+    ).toEqual(['Formato', 'Diseño', 'Audiovisual'])
+  })
+
+  it('la tarjeta es una sola columna de estado, sin subcolumnas', () => {
+    renderGrid({ clients: [CLIENTS[0]] })
+    const tarjeta = screen.getByRole('columnheader', { name: 'Tarjeta navidad' })
+    expect(tarjeta).toHaveAttribute('colspan', '1')
+    expect(tarjeta).toHaveAttribute('rowspan', '2')
+    // Cliente + Jefe + SM + 3 de la fecha + 1 de la tarjeta.
+    expect(within(screen.getAllByRole('row')[2]).getAllByRole('cell')).toHaveLength(7)
+  })
+
+  it('muestra el formato y el estado de cada columna; lo no tocado queda «Sin estado»', () => {
+    renderGrid({ clients: [CLIENTS[0]] })
     expect(screen.getByText('Audiovisual - Foto')).toBeInTheDocument()
+    expect(screen.getByText('Enviado al cliente')).toBeInTheDocument()
     expect(screen.getByText('Aprobado')).toBeInTheDocument()
+    // La tarjeta de Flexmed no tiene fila todavía.
+    expect(screen.getByText('Sin estado')).toBeInTheDocument()
   })
 
-  it('agregar un formato dispara onAdd con cliente, slot y tipo', () => {
-    const { onAdd } = renderGrid()
-    // c1 ya tiene Foto en el 24/12, así que ofrece + Diseño y + Audiovisual - Reel.
-    fireEvent.click(screen.getAllByText('+ Audiovisual - Reel')[0])
-    expect(onAdd).toHaveBeenCalledWith(CLIENTS[0], SLOTS[0], 'reel')
+  it('elegir un estado dispara onCellChange con cliente, slot, columna y valor', () => {
+    const { onCellChange } = renderGrid({ clients: [CLIENTS[0]] })
+    fireEvent.click(screen.getByRole('button', { name: /Aprobado/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'N/A' }))
+    expect(onCellChange).toHaveBeenCalledWith(CLIENTS[0], SLOTS[0], 'audiovisual_status', 'na')
   })
 
-  it('la tarjeta es un solo estado: se agrega como «+ Tarjeta», sin elegir formato', () => {
-    const { onAdd } = renderGrid({ clients: [CLIENTS[0]] })
-    expect(screen.getAllByText('+ Diseño')).toHaveLength(1)
-    expect(screen.getAllByText('+ Audiovisual - Reel')).toHaveLength(1)
-    expect(screen.queryByText('+ Audiovisual - Foto')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByText('+ Tarjeta'))
-    expect(onAdd).toHaveBeenCalledWith(CLIENTS[0], SLOTS[1], 'diseno')
+  it('el menú de estados ofrece N/A y los 6 estados de la hoja, en ese orden', () => {
+    renderGrid({ clients: [CLIENTS[0]] })
+    fireEvent.click(screen.getByRole('button', { name: /Aprobado/ }))
+    // El menú es un portal con posición fija: se distingue de las píldoras de la tabla.
+    const menu = document.body.querySelector('div[style*="position: fixed"]')
+    expect(
+      within(menu)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual([
+      'N/A',
+      'Pendiente por redes',
+      'Enviado a diseño',
+      'En modificación',
+      'Enviado al cliente',
+      'Aprobado',
+      'Pendiente cliente',
+    ])
   })
 
-  it('quitar una pieza dispara onRemove', () => {
-    const { onRemove } = renderGrid()
-    fireEvent.click(screen.getByLabelText('Quitar Audiovisual - Foto'))
-    expect(onRemove).toHaveBeenCalledWith(PIECES[0])
+  it('elegir un formato dispara onCellChange con la columna formato', () => {
+    const { onCellChange } = renderGrid({ clients: [CLIENTS[0]] })
+    fireEvent.click(screen.getByRole('button', { name: /Audiovisual - Foto/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Audiovisual - Reel' }))
+    expect(onCellChange).toHaveBeenCalledWith(CLIENTS[0], SLOTS[0], 'formato', 'reel')
   })
 
-  it('sin permiso de gestión es solo lectura: nombres como texto, sin selectores ni botones', () => {
+  it('sin permiso de gestión es solo lectura: nombres y estados como texto, sin botones', () => {
     renderGrid({ canManage: false, clients: [CLIENTS[0]] })
     expect(screen.queryByLabelText('Jefe de Flexmed')).not.toBeInTheDocument()
     expect(screen.getByText('Daniellys')).toBeInTheDocument()
     expect(screen.getByText('Maria')).toBeInTheDocument()
-    expect(screen.queryByText(/^\+ /)).not.toBeInTheDocument()
-    expect(screen.queryByLabelText('Quitar Audiovisual - Foto')).not.toBeInTheDocument()
+    expect(screen.getByText('Aprobado')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Aprobado/ })).not.toBeInTheDocument()
   })
 
   it('agrupado por línea muestra el encabezado de cada línea con cuentas', () => {
@@ -190,14 +228,14 @@ describe('TemporadaGrid', () => {
     expect(headers[0].className).toContain('shadow-[inset_-1px_0_0_#e8e4d8]')
     for (const th of headers.slice(1)) expect(th.className).toContain('border-r')
     expect(headers.at(-1).className).toContain('last:border-r-0')
-    const cells = within(screen.getAllByRole('row')[1]).getAllByRole('cell')
+    const cells = within(screen.getAllByRole('row')[2]).getAllByRole('cell')
     expect(cells[0].className).toContain('shadow-[inset_-1px_0_0_#e8e4d8]')
     for (const td of cells.slice(1)) expect(td.className).toContain('border-r')
   })
 
   it('no hay líneas horizontales; la fila se sombrea con hover, también la celda fija', () => {
     renderGrid({ clients: [CLIENTS[0]] })
-    const [header, row] = screen.getAllByRole('row')
+    const [header, , row] = screen.getAllByRole('row')
     expect(header.className).not.toContain('border-b')
     expect(row.className).not.toContain('border-b')
     expect(row.className).toContain('hover:bg-[#faf9f5]')

@@ -1,49 +1,55 @@
 import {
   ASSIGNMENT_ROLES,
+  FORMATOS,
+  FORMATO_LABELS,
+  FORMATO_META,
+  NA_STATUS,
   NO_STATUS,
-  PIECE_LABELS,
-  PIECE_STATUSES,
-  STATUSES_BY_TYPE,
-  addableTypes,
+  SHEET_STATUSES,
+  STATUS_META,
   allowedAssignees,
-  allowedPieceTypes,
+  clientHasPending,
+  clientHasStatus,
   clientsWithPending,
   computeTemporadaSummary,
+  countedStatuses,
   indexAssignments,
-  indexPieces,
+  indexRows,
   isDone,
   mappiAssignee,
-  piecesFor,
   resolveAssignee,
+  rowFor,
   slotsOf,
+  statusFieldsFor,
   statusLabel,
-  statusMetaFor,
-  statusOptionsFor,
 } from '../utils/temporada'
 
 const POST = { key: '2026-12-24', label: '24/12', kind: 'post' }
 const TARJETA = { key: 'tarjeta_navidad', label: 'Tarjeta navidad', kind: 'tarjeta' }
 
-const piece = (over) => ({
+const row = (over) => ({
   id: Math.random().toString(36).slice(2),
   client_id: 'c1',
   slot_key: POST.key,
-  piece_type: 'diseno',
-  status: null,
+  formato: null,
+  diseno_status: null,
+  audiovisual_status: null,
   ...over,
 })
 
 describe('formatos y estados: los mismos que la hoja', () => {
   it('los formatos se llaman como en el desplegable FORMATO', () => {
-    expect(PIECE_LABELS).toEqual({
+    expect(FORMATOS).toEqual(['diseno', 'foto', 'reel'])
+    expect(FORMATO_LABELS).toEqual({
       diseno: 'Diseño',
       foto: 'Audiovisual - Foto',
       reel: 'Audiovisual - Reel',
     })
   })
 
-  it('DISEÑO (y las tarjetas) ofrece la lista de la hoja', () => {
-    expect(STATUSES_BY_TYPE.diseno.map(statusLabel)).toEqual([
+  it('DISEÑO, AUDIOVISUAL y las tarjetas comparten una sola lista que empieza por N/A', () => {
+    expect(SHEET_STATUSES.map(statusLabel)).toEqual([
+      'N/A',
       'Pendiente por redes',
       'Enviado a diseño',
       'En modificación',
@@ -53,48 +59,44 @@ describe('formatos y estados: los mismos que la hoja', () => {
     ])
   })
 
-  it('AUDIOVISUAL (foto y reel) ofrece la lista de la hoja', () => {
-    const esperado = [
-      'Pendiente por grabar',
-      'Agendado',
-      'En edición',
-      'Enviado al cliente',
-      'Aprobado',
-      'Pendiente cliente',
-      'En diseño',
-    ]
-    expect(STATUSES_BY_TYPE.foto.map(statusLabel)).toEqual(esperado)
-    expect(STATUSES_BY_TYPE.reel.map(statusLabel)).toEqual(esperado)
+  it('ya no existen los estados propios de audiovisual', () => {
+    for (const k of ['pendiente_grabar', 'agendado', 'en_edicion', 'en_diseno']) {
+      expect(SHEET_STATUSES).not.toContain(k)
+    }
   })
 
-  it('«N/A» no es un estado: es no tener la pieza', () => {
-    expect(PIECE_STATUSES.map(statusLabel)).not.toContain('N/A')
-  })
-
-  it('el menú de cada tipo empieza por «Sin estado» (celda en blanco)', () => {
-    expect(statusOptionsFor('reel')[0]).toBe(NO_STATUS)
+  it('la columna en blanco se muestra como «Sin estado» pero no es una opción', () => {
     expect(statusLabel(NO_STATUS)).toBe('Sin estado')
     expect(statusLabel(null)).toBe('Sin estado')
-    expect(statusOptionsFor('diseno')).toHaveLength(STATUSES_BY_TYPE.diseno.length + 1)
+    expect(SHEET_STATUSES).not.toContain(NO_STATUS)
+    expect(STATUS_META[NO_STATUS]).toBeDefined()
   })
 
-  it('statusMetaFor trae clases literales para cada opción', () => {
-    for (const type of ['diseno', 'foto', 'reel']) {
-      const meta = statusMetaFor(type)
-      expect(Object.keys(meta)).toEqual(statusOptionsFor(type))
+  it('Aprobado es verde con letras blancas y Pendiente cliente rojo clarito con letras rojas', () => {
+    expect(STATUS_META.aprobado).toMatchObject({ bg: 'bg-[#16a34a]', text: 'text-white' })
+    expect(STATUS_META.pendiente_cliente).toMatchObject({
+      bg: 'bg-[#fee2e2]',
+      text: 'text-[#dc2626]',
+    })
+  })
+
+  it('cada opción trae clases literales', () => {
+    for (const meta of [STATUS_META, FORMATO_META]) {
       for (const m of Object.values(meta)) {
         expect(m.bg).toMatch(/^bg-\[#/)
         expect(m.dot).toMatch(/^bg-\[#/)
       }
     }
+    for (const f of FORMATOS) expect(FORMATO_META[f].label).toBe(FORMATO_LABELS[f])
   })
 })
 
 describe('isDone', () => {
-  it('solo «Aprobado» cuenta como terminado; sin estado no', () => {
+  it('solo «Aprobado» cuenta como terminado; sin estado y N/A no', () => {
     expect(isDone('aprobado')).toBe(true)
     expect(isDone('enviado_cliente')).toBe(false)
     expect(isDone('pendiente_cliente')).toBe(false)
+    expect(isDone(NA_STATUS)).toBe(false)
     expect(isDone(null)).toBe(false)
   })
 })
@@ -107,40 +109,60 @@ describe('slotsOf', () => {
   })
 })
 
-describe('allowedPieceTypes / addableTypes', () => {
-  it('una tarjeta solo admite diseño; una fecha admite los tres', () => {
-    expect(allowedPieceTypes(TARJETA)).toEqual(['diseno'])
-    expect(allowedPieceTypes(POST)).toEqual(['diseno', 'foto', 'reel'])
+describe('statusFieldsFor / countedStatuses', () => {
+  it('una fecha usa Diseño y Audiovisual; una tarjeta solo Diseño', () => {
+    expect(statusFieldsFor(POST)).toEqual(['diseno_status', 'audiovisual_status'])
+    expect(statusFieldsFor(TARJETA)).toEqual(['diseno_status'])
   })
 
-  it('ofrece solo los tipos que todavía no existen en la celda', () => {
-    expect(addableTypes(POST, [piece({ piece_type: 'foto' })])).toEqual(['diseno', 'reel'])
-    expect(addableTypes(TARJETA, [piece({ slot_key: TARJETA.key })])).toEqual([])
+  it('cuenta las columnas con valor y deja fuera N/A y los blancos', () => {
+    const r = row({ diseno_status: 'aprobado', audiovisual_status: NA_STATUS })
+    expect(countedStatuses(r, POST)).toEqual(['aprobado'])
+    expect(countedStatuses(row(), POST)).toEqual([])
+    expect(countedStatuses(null, POST)).toEqual([])
   })
-})
 
-describe('indexPieces / piecesFor', () => {
-  it('agrupa por cliente y slot, ordenado diseño → foto → reel', () => {
-    const index = indexPieces([
-      piece({ piece_type: 'reel' }),
-      piece({ piece_type: 'diseno' }),
-      piece({ client_id: 'c2', piece_type: 'foto' }),
-    ])
-    expect(piecesFor(index, 'c1', POST.key).map((p) => p.piece_type)).toEqual(['diseno', 'reel'])
-    expect(piecesFor(index, 'c2', POST.key)).toHaveLength(1)
-    expect(piecesFor(index, 'c3', POST.key)).toEqual([])
+  it('en una tarjeta ignora audiovisual aunque tenga valor', () => {
+    const r = row({ slot_key: TARJETA.key, audiovisual_status: 'aprobado' })
+    expect(countedStatuses(r, TARJETA)).toEqual([])
   })
 })
 
-describe('clientsWithPending', () => {
-  it('deja solo las cuentas con alguna pieza sin terminar', () => {
-    const clients = [{ id: 'c1' }, { id: 'c2' }, { id: 'c3' }]
-    const pieces = [
-      piece({ client_id: 'c1', status: 'aprobado' }),
-      piece({ client_id: 'c2', status: 'aprobado' }),
-      piece({ client_id: 'c2', piece_type: 'reel', status: 'en_edicion' }),
-    ]
-    expect(clientsWithPending(clients, pieces).map((c) => c.id)).toEqual(['c2'])
+describe('indexRows / rowFor', () => {
+  it('indexa por cliente y slot', () => {
+    const index = indexRows([row(), row({ client_id: 'c2', formato: 'foto' })])
+    expect(rowFor(index, 'c1', POST.key)).toMatchObject({ client_id: 'c1' })
+    expect(rowFor(index, 'c2', POST.key).formato).toBe('foto')
+    expect(rowFor(index, 'c3', POST.key)).toBeNull()
+  })
+})
+
+describe('filtros por cuenta', () => {
+  const slots = [POST, TARJETA]
+  const rows = [
+    row({ client_id: 'c1', diseno_status: 'aprobado', audiovisual_status: NA_STATUS }),
+    row({ client_id: 'c2', diseno_status: 'aprobado', audiovisual_status: 'enviado_cliente' }),
+    row({ client_id: 'c3', slot_key: TARJETA.key, diseno_status: 'pendiente_redes' }),
+  ]
+
+  it('«pendientes»: alguna pieza sin aprobar; N/A no cuenta', () => {
+    expect(clientHasPending(rows, slots, 'c1')).toBe(false)
+    expect(clientHasPending(rows, slots, 'c2')).toBe(true)
+    expect(
+      clientsWithPending([{ id: 'c1' }, { id: 'c2' }, { id: 'c3' }], rows, slots).map((c) => c.id),
+    ).toEqual(['c2', 'c3'])
+  })
+
+  it('por estado: busca en las columnas del slot, incluido N/A', () => {
+    expect(clientHasStatus(rows, slots, 'c1', NA_STATUS)).toBe(true)
+    expect(clientHasStatus(rows, slots, 'c2', 'enviado_cliente')).toBe(true)
+    expect(clientHasStatus(rows, slots, 'c2', 'pendiente_redes')).toBe(false)
+    expect(clientHasStatus(rows, slots, 'c3', 'pendiente_redes')).toBe(true)
+  })
+
+  it('ignora filas de slots que ya no existen en la temporada', () => {
+    const huerfana = [row({ client_id: 'c9', slot_key: 'viejo', diseno_status: 'pendiente_redes' })]
+    expect(clientHasPending(huerfana, slots, 'c9')).toBe(false)
   })
 })
 
@@ -154,14 +176,14 @@ describe('computeTemporadaSummary', () => {
     expect(s.bySlot.every((x) => x.pct === null)).toBe(true)
   })
 
-  it('cuenta solo las piezas de las cuentas en alcance', () => {
-    const pieces = [
-      piece({ client_id: 'c1', status: 'aprobado' }),
-      piece({ client_id: 'c1', piece_type: 'reel', status: 'enviado_cliente' }),
-      piece({ client_id: 'c1', slot_key: TARJETA.key, status: 'aprobado' }),
-      piece({ client_id: 'otra-linea', status: 'aprobado' }),
+  it('cuenta cada columna con estado como una pieza, sin N/A, solo de las cuentas en alcance', () => {
+    const rows = [
+      row({ client_id: 'c1', diseno_status: 'aprobado', audiovisual_status: 'enviado_cliente' }),
+      row({ client_id: 'c1', slot_key: TARJETA.key, diseno_status: 'aprobado' }),
+      row({ client_id: 'c1', slot_key: 'otra', diseno_status: NA_STATUS }),
+      row({ client_id: 'otra-linea', diseno_status: 'aprobado' }),
     ]
-    const s = computeTemporadaSummary([{ id: 'c1' }], pieces, slots)
+    const s = computeTemporadaSummary([{ id: 'c1' }], rows, slots)
     expect(s.totalPiezas).toBe(3)
     expect(s.terminadas).toBe(2)
     expect(s.pendientes).toBe(1)

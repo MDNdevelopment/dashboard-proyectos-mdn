@@ -26,8 +26,7 @@ vi.mock('../supabase', () => {
 })
 
 import {
-  upsertPiece,
-  deletePiece,
+  upsertCell,
   loadPieces,
   loadAssignments,
   upsertAssignment,
@@ -39,47 +38,44 @@ beforeEach(() => {
 })
 
 describe('temporadaApi', () => {
-  it('upsertPiece usa la unique key (campaña, cliente, slot, tipo) y guarda la línea', async () => {
-    await upsertPiece({
+  it('upsertCell usa la unique key (campaña, cliente, slot) y guarda solo la columna indicada', async () => {
+    await upsertCell({
       companyId: 'co',
       campaignId: 'camp',
       clientId: 'c1',
       lineId: 'gen',
       slotKey: '2026-12-24',
-      pieceType: 'reel',
-      status: 'aprobado',
+      field: 'audiovisual_status',
+      value: 'aprobado',
       userId: 'u1',
     })
     const call = calls.find((c) => c.op === 'upsert')
     expect(call.table).toBe('seasonal_pieces')
-    expect(call.opts).toEqual({ onConflict: 'campaign_id,client_id,slot_key,piece_type' })
+    expect(call.opts).toEqual({ onConflict: 'campaign_id,client_id,slot_key' })
     expect(call.row).toMatchObject({
       company_id: 'co',
       campaign_id: 'camp',
       client_id: 'c1',
       line_id: 'gen',
       slot_key: '2026-12-24',
-      piece_type: 'reel',
-      status: 'aprobado',
+      audiovisual_status: 'aprobado',
       updated_by: 'u1',
     })
+    // No pisa las otras columnas de la celda.
+    expect(call.row).not.toHaveProperty('formato')
+    expect(call.row).not.toHaveProperty('diseno_status')
   })
 
-  it('upsertPiece crea la pieza sin estado (celda en blanco) si no se indica', async () => {
-    await upsertPiece({
+  it('upsertCell deja la columna en blanco (null) si no se indica valor', async () => {
+    await upsertCell({
       companyId: 'co',
       campaignId: 'camp',
       clientId: 'c1',
       lineId: null,
       slotKey: 'tarjeta_navidad',
-      pieceType: 'diseno',
+      field: 'diseno_status',
     })
-    expect(calls.find((c) => c.op === 'upsert').row.status).toBeNull()
-  })
-
-  it('deletePiece borra de seasonal_pieces', async () => {
-    await deletePiece('p1')
-    expect(calls.find((c) => c.op === 'delete').table).toBe('seasonal_pieces')
+    expect(calls.find((c) => c.op === 'upsert').row.diseno_status).toBeNull()
   })
 
   it('loadPieces pagina sobre seasonal_pieces', async () => {

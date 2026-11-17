@@ -21,8 +21,7 @@ vi.mock('../components/chequeo/temporadaApi', () => ({
   loadCampaigns: vi.fn(),
   loadPieces: vi.fn(),
   loadAssignments: vi.fn(),
-  upsertPiece: vi.fn(),
-  deletePiece: vi.fn(),
+  upsertCell: vi.fn(),
   upsertAssignment: vi.fn(),
   deleteAssignment: vi.fn(),
 }))
