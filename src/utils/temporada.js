@@ -3,19 +3,20 @@
  *
  * Una temporada (`seasonal_campaigns`) define sus slots: fechas de publicación (`post`) y
  * tarjetas (`tarjeta`). Cada cliente tiene, por slot, UNA fila (`seasonal_pieces`) con tres
- * columnas, igual que la hoja: `formato` (diseño / foto / reel), `diseno_status` y
+ * columnas, igual que la hoja: `formato` (arte, video, reel o IA), `diseno_status` y
  * `audiovisual_status`. Las tarjetas solo usan `diseno_status`. «N/A» es un valor guardado
  * (`na`); una columna sin tocar es null (celda en blanco).
  * Todo es puro y testeable: no toca Supabase ni el DOM.
  */
 
-export const FORMATOS = ['diseno', 'foto', 'reel']
+export const FORMATOS = ['diseno_arte', 'diseno_video', 'audiovisual_reel', 'ia']
 
 /** Textos tal cual el desplegable FORMATO de la hoja. */
 export const FORMATO_LABELS = {
-  diseno: 'Diseño',
-  foto: 'Audiovisual - Foto',
-  reel: 'Audiovisual - Reel',
+  diseno_arte: 'Diseño - Arte',
+  diseno_video: 'Diseño - Video',
+  audiovisual_reel: 'Audiovisual Reel',
+  ia: 'IA',
 }
 
 /** «N/A»: la columna no aplica a ese cliente en esa fecha. No cuenta como pieza. */
@@ -131,19 +132,25 @@ export const FORMATO_META = {
     text: 'text-[#888]',
     dot: 'bg-[#ccc]',
   },
-  diseno: { label: 'Diseño', bg: 'bg-[#e0e7ff]', text: 'text-[#4338ca]', dot: 'bg-[#6366f1]' },
-  foto: {
-    label: 'Audiovisual - Foto',
-    bg: 'bg-[#ffedd5]',
-    text: 'text-[#9a3412]',
-    dot: 'bg-[#f97316]',
+  diseno_arte: {
+    label: 'Diseño - Arte',
+    bg: 'bg-[#e0e7ff]',
+    text: 'text-[#4338ca]',
+    dot: 'bg-[#6366f1]',
   },
-  reel: {
-    label: 'Audiovisual - Reel',
+  diseno_video: {
+    label: 'Diseño - Video',
+    bg: 'bg-[#ede9fe]',
+    text: 'text-[#6d28d9]',
+    dot: 'bg-[#8b5cf6]',
+  },
+  audiovisual_reel: {
+    label: 'Audiovisual Reel',
     bg: 'bg-[#fce7f3]',
     text: 'text-[#be185d]',
     dot: 'bg-[#ec4899]',
   },
+  ia: { label: 'IA', bg: 'bg-[#cffafe]', text: 'text-[#0e7490]', dot: 'bg-[#06b6d4]' },
 }
 
 /** Etiqueta legible de un estado (null/'' = «Sin estado»). */

@@ -33,7 +33,7 @@ const ROWS = [
     id: 'r1',
     client_id: 'c1',
     slot_key: '2026-12-24',
-    formato: 'foto',
+    formato: 'diseno_video',
     diseno_status: 'enviado_cliente',
     audiovisual_status: 'aprobado',
   },
@@ -160,7 +160,7 @@ describe('TemporadaGrid', () => {
 
   it('muestra el formato y el estado de cada columna; lo no tocado queda «Sin estado»', () => {
     renderGrid({ clients: [CLIENTS[0]] })
-    expect(screen.getByText('Audiovisual - Foto')).toBeInTheDocument()
+    expect(screen.getByText('Diseño - Video')).toBeInTheDocument()
     expect(screen.getByText('Enviado al cliente')).toBeInTheDocument()
     expect(screen.getByText('Aprobado')).toBeInTheDocument()
     // La tarjeta de Flexmed no tiene fila todavía.
@@ -209,9 +209,9 @@ describe('TemporadaGrid', () => {
 
   it('elegir un formato dispara onCellChange con la columna formato', () => {
     const { onCellChange } = renderGrid({ clients: [CLIENTS[0]] })
-    fireEvent.click(screen.getByRole('button', { name: /Audiovisual - Foto/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Audiovisual - Reel' }))
-    expect(onCellChange).toHaveBeenCalledWith(CLIENTS[0], SLOTS[0], 'formato', 'reel')
+    fireEvent.click(screen.getByRole('button', { name: /Diseño - Video/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Audiovisual Reel' }))
+    expect(onCellChange).toHaveBeenCalledWith(CLIENTS[0], SLOTS[0], 'formato', 'audiovisual_reel')
   })
 
   it('sin permiso de gestión es solo lectura: nombres y estados como texto, sin botones', () => {
