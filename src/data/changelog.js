@@ -12,6 +12,7 @@ export const CHANGELOG = [
     version: '1.2.0',
     title: 'Mejoras en Campañas y Empresa',
     changes: [
+      'Campañas: ahora quién ve las campañas de todas las líneas se maneja desde Empresa → Accesos con el nuevo permiso «Ver las campañas de todas las líneas». Quien no lo tiene solo ve las de su línea, y crear, editar o eliminar campañas Tácticas sigue el permiso de gestionar campañas. Luis Fernando González ya puede ver las campañas de todas las líneas.',
       'El «Chequeo de temporada» ahora se parece más a la hoja: cada fecha (24/12, 25/12, 31/12 y 01/01) tiene un encabezado con la fecha y debajo tres columnas, Formato (Diseño - Arte, Diseño - Video, Audiovisual Reel o IA), Diseño y Audiovisual; las tarjetas siguen siendo una sola columna de estado. Diseño y las tarjetas ofrecen N/A, Pendiente por redes, Enviado a diseño, En modificación, Enviado al cliente, Aprobado (verde con letras blancas) y Pendiente cliente (rojo clarito con letras rojas); Audiovisual ofrece N/A, Pendiente por grabar, Agendado, En edición, Enviado al cliente, Aprobado, Pendiente cliente y En diseño. Ya no hay botones «+» ni «×»: se elige directo en cada columna, y los N/A no cuentan como pendientes.',
       'En el «Chequeo de temporada» las columnas ahora van separadas por líneas verticales (sin líneas horizontales) y la fila se resalta al pasar el cursor, para leer la tabla con más facilidad.',
       'En el «Chequeo de temporada» hay un botón «Volver al chequeo» para regresar al chequeo normal de publicaciones.',

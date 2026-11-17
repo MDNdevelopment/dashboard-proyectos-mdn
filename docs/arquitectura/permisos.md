@@ -64,7 +64,8 @@ Gotcha: el seed `20260706000002` nunca se aplicó en prod; los defaults de prod 
 - `reportes.close` — cerrar cualquier reporte mensual — `min_level 4`/admin (la jefa de línea siempre puede cerrar el suyo).
 - `reportes.ver_todo` — ver los reportes de todas las líneas, solo lectura (amplía solo el SELECT de `metric_reports`) — prod: usuario Andrea Garcia (Administración); sin fila quedaría abierta a todos.
 - `monitor_uso` — módulo Monitor de uso (§2.5bis) — `min_level 4`.
-- `ads.manage` — crear/editar/eliminar campañas — `min_level 3`.
+- `ads.manage` — crear/editar/eliminar campañas (RLS de `campaigns` y `paid_campaigns`) — prod: cargos 47/61/6/49/42, `min_level 4` o usuario Luis Fernando González (`20261117140000_ads_ver_todo_y_rls_campaigns.sql`).
+- `ads.ver_todo` — ver las campañas de todas las líneas — prod: `min_level 4` + usuarios Juan Pedro Sierra, Andrea Garcia, Luis Fernando González.
 - `proyectos.manage` — crear/editar/eliminar proyectos (RLS `projects`).
 - `leads` — módulo Leads — `min_level 3`.
 - `leads.manage` — cambiar estado de un lead — `min_level 3`.

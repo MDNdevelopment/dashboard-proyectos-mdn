@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { loadClients, loadLines } from '../components/metricas/metricsApi'
-import { clientsForUser } from '../utils/lineMembers'
+import { useAuth } from '../context/AuthContext'
 
 /**
  * Clientes de la empresa acotados a la línea del usuario, para selectores de creación
- * (Ads → Nueva campaña/Ad). Carga clientes y líneas en paralelo y aplica clientsForUser().
- * Ver clientsForUser() en utils/lineMembers.js para las reglas de alcance.
+ * (Ads → Nueva campaña/Ad). Carga clientes y líneas en paralelo. Con `ads.ver_todo`: todos los clientes.
+ * Sin ella: clientes de las líneas del usuario + los sin línea (transversales) + `currentClientId`.
  *
  * @param {string|null|undefined} companyId
  * @param {object|null} userProfile - Perfil del usuario (de useAuth)
@@ -13,6 +13,8 @@ import { clientsForUser } from '../utils/lineMembers'
  * @returns {{ clients: Array, loading: boolean }}
  */
 export function useScopedClients(companyId, userProfile, currentClientId = null) {
+  const { can = () => true } = useAuth()
+  const canViewAll = can('ads.ver_todo')
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -26,15 +28,26 @@ export function useScopedClients(companyId, userProfile, currentClientId = null)
     Promise.all([loadClients(companyId), loadLines(companyId)]).then(
       ([{ data: clientsData }, { data: linesData }]) => {
         if (cancelled) return
-        setClients(clientsForUser(clientsData ?? [], linesData ?? [], userProfile, currentClientId))
+        const all = clientsData ?? []
+        if (canViewAll) {
+          setClients(all)
+        } else {
+          const myLineIds = new Set(
+            (linesData ?? [])
+              .filter((l) => l.member_user_ids?.includes(userProfile?.user_id))
+              .map((l) => l.id),
+          )
+          setClients(
+            all.filter((c) => !c.line_id || myLineIds.has(c.line_id) || c.id === currentClientId),
+          )
+        }
         setLoading(false)
       },
     )
     return () => {
       cancelled = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyId, userProfile?.user_id, currentClientId])
+  }, [companyId, userProfile?.user_id, currentClientId, canViewAll])
 
   return { clients, loading }
 }
