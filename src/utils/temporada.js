@@ -22,10 +22,10 @@ export const FORMATO_LABELS = {
 export const NA_STATUS = 'na'
 
 /**
- * Estados que ofrece la hoja. DISEÑO, AUDIOVISUAL y las tarjetas comparten la misma lista.
- * Una columna sin estado (null) equivale a la celda en blanco de la hoja.
+ * Estados que ofrece la hoja. DISEÑO (y las tarjetas) y AUDIOVISUAL tienen listas distintas;
+ * las dos empiezan por «N/A». Una columna sin estado (null) equivale a la celda en blanco.
  */
-export const SHEET_STATUSES = [
+const DESIGN_STATUSES = [
   NA_STATUS,
   'pendiente_redes',
   'enviado_diseno',
@@ -34,6 +34,25 @@ export const SHEET_STATUSES = [
   'aprobado',
   'pendiente_cliente',
 ]
+const AUDIOVISUAL_STATUSES = [
+  NA_STATUS,
+  'pendiente_grabar',
+  'agendado',
+  'en_edicion',
+  'enviado_cliente',
+  'aprobado',
+  'pendiente_cliente',
+  'en_diseno',
+]
+
+/** Opciones del menú de cada columna de estado. */
+export const STATUSES_BY_FIELD = {
+  diseno_status: DESIGN_STATUSES,
+  audiovisual_status: AUDIOVISUAL_STATUSES,
+}
+
+/** Todos los estados posibles (filtro de la página), sin repetir. */
+export const ALL_STATUSES = [...new Set([...DESIGN_STATUSES, ...AUDIOVISUAL_STATUSES])]
 
 /** Valor del menú para «sin valor» (celda en blanco); se guarda como null. */
 export const NO_STATUS = ''
@@ -82,6 +101,25 @@ export const STATUS_META = {
     bg: 'bg-[#fee2e2]',
     text: 'text-[#dc2626]',
     dot: 'bg-[#dc2626]',
+  },
+  pendiente_grabar: {
+    label: 'Pendiente por grabar',
+    bg: 'bg-[#fff4d6]',
+    text: 'text-[#8a6100]',
+    dot: 'bg-[#FFB800]',
+  },
+  agendado: { label: 'Agendado', bg: 'bg-[#ccfbf1]', text: 'text-[#0f766e]', dot: 'bg-[#14b8a6]' },
+  en_edicion: {
+    label: 'En edición',
+    bg: 'bg-[#e8f0fe]',
+    text: 'text-[#1d4ed8]',
+    dot: 'bg-[#3b82f6]',
+  },
+  en_diseno: {
+    label: 'En diseño',
+    bg: 'bg-[#e0e7ff]',
+    text: 'text-[#4338ca]',
+    dot: 'bg-[#6366f1]',
   },
 }
 

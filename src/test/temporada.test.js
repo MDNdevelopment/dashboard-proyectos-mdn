@@ -1,11 +1,12 @@
 import {
   ASSIGNMENT_ROLES,
+  ALL_STATUSES,
   FORMATOS,
   FORMATO_LABELS,
   FORMATO_META,
   NA_STATUS,
   NO_STATUS,
-  SHEET_STATUSES,
+  STATUSES_BY_FIELD,
   STATUS_META,
   allowedAssignees,
   clientHasPending,
@@ -47,8 +48,8 @@ describe('formatos y estados: los mismos que la hoja', () => {
     })
   })
 
-  it('DISEÑO, AUDIOVISUAL y las tarjetas comparten una sola lista que empieza por N/A', () => {
-    expect(SHEET_STATUSES.map(statusLabel)).toEqual([
+  it('DISEÑO (y las tarjetas) ofrece N/A y la lista de la hoja', () => {
+    expect(STATUSES_BY_FIELD.diseno_status.map(statusLabel)).toEqual([
       'N/A',
       'Pendiente por redes',
       'Enviado a diseño',
@@ -59,17 +60,31 @@ describe('formatos y estados: los mismos que la hoja', () => {
     ])
   })
 
-  it('ya no existen los estados propios de audiovisual', () => {
-    for (const k of ['pendiente_grabar', 'agendado', 'en_edicion', 'en_diseno']) {
-      expect(SHEET_STATUSES).not.toContain(k)
-    }
+  it('AUDIOVISUAL ofrece su propia lista, que también empieza por N/A', () => {
+    expect(STATUSES_BY_FIELD.audiovisual_status.map(statusLabel)).toEqual([
+      'N/A',
+      'Pendiente por grabar',
+      'Agendado',
+      'En edición',
+      'Enviado al cliente',
+      'Aprobado',
+      'Pendiente cliente',
+      'En diseño',
+    ])
   })
 
   it('la columna en blanco se muestra como «Sin estado» pero no es una opción', () => {
     expect(statusLabel(NO_STATUS)).toBe('Sin estado')
     expect(statusLabel(null)).toBe('Sin estado')
-    expect(SHEET_STATUSES).not.toContain(NO_STATUS)
+    expect(ALL_STATUSES).not.toContain(NO_STATUS)
     expect(STATUS_META[NO_STATUS]).toBeDefined()
+  })
+
+  it('cada estado de cada lista tiene estilo, y ALL_STATUSES no repite', () => {
+    for (const list of Object.values(STATUSES_BY_FIELD)) {
+      for (const k of list) expect(STATUS_META[k]).toBeDefined()
+    }
+    expect(new Set(ALL_STATUSES).size).toBe(ALL_STATUSES.length)
   })
 
   it('Aprobado es verde con letras blancas y Pendiente cliente rojo clarito con letras rojas', () => {

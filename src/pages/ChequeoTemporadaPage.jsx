@@ -6,7 +6,7 @@ import { loadLines, loadClients, createClient } from '../components/metricas/met
 import { visibleLinesForUser } from '../utils/lineMembers'
 import { clientsForLine, effectiveLineId } from '../utils/chequeo'
 import {
-  SHEET_STATUSES,
+  ALL_STATUSES,
   USE_MAPPI,
   clientHasPending,
   clientHasStatus,
@@ -391,7 +391,7 @@ export default function ChequeoTemporadaPage() {
                   onChange={(e) => setStatusFilter(e.target.value)}
                 >
                   <option value="">Todos</option>
-                  {SHEET_STATUSES.map((s) => (
+                  {ALL_STATUSES.map((s) => (
                     <option key={s} value={s}>
                       {statusLabel(s)}
                     </option>
