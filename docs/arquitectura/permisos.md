@@ -43,6 +43,8 @@ Gotcha: el seed `20260706000002` nunca se aplicó en prod; los defaults de prod 
 
 **Tareas**
 - `tareas.team`, `tareas.standup` — tabs — `min_level 2`.
+- `tareas.chequeo.temporada` — ver el Chequeo de temporada (botón en Chequeo, ruta `/tareas/chequeo/temporada` y SELECT de `seasonal_*`) — abierta, fila explícita `rules: [{all: []}]` sembrada en `20261117120000_seasonal_accesos.sql`.
+- `chequeo.temporada.manage` — editar piezas y personal de la temporada (INSERT/UPDATE/DELETE de `seasonal_pieces` y `seasonal_assignments`, con el mismo alcance por línea que Chequeo) — sembrada copiando las reglas de `chequeo.manage` de cada empresa (nivel 2+ si no hay fila). Independiente de `chequeo.manage`.
 - `tareas.manage` — crear/editar/eliminar tareas — abierto a propósito, fila explícita `rules: [{all: []}]`.
 - `tareas.panorama` — legacy huérfana (tab Panorama retirado; fila sigue en `module_permissions`, UI no la consulta) — `deny` a los 9 departamentos, a propósito.
 

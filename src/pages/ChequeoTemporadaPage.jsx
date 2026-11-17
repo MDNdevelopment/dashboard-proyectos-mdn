@@ -36,7 +36,7 @@ const ALL_LINES = '__all__'
  */
 export default function ChequeoTemporadaPage() {
   const { userProfile, can = () => true } = useAuth()
-  const canManage = can('chequeo.manage')
+  const canManage = can('chequeo.temporada.manage')
   // Crear un cliente es de Empresa: lo exige la RLS de metric_clients, así que el botón solo
   // lo ve quien tiene ese permiso.
   const canCreateClients = can('empresa.clientes.manage')
