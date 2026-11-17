@@ -2,27 +2,31 @@
  * Lógica pura del «Chequeo de temporada» (Gestión de Tareas → Chequeo → Temporada).
  *
  * Una temporada (`seasonal_campaigns`) define sus slots: fechas de publicación (`post`) y
- * tarjetas (`tarjeta`). Cada cliente tiene, por slot, cero o más piezas
- * (`seasonal_pieces`: diseño, foto o reel) con su propio estado. La grilla se deriva de las
- * piezas que existen: no hay "N/A" guardado, una pieza que no aplica simplemente no existe.
+ * tarjetas (`tarjeta`). Cada cliente tiene, por slot, UNA fila (`seasonal_pieces`) con tres
+ * columnas, igual que la hoja: `formato` (diseño / foto / reel), `diseno_status` y
+ * `audiovisual_status`. Las tarjetas solo usan `diseno_status`. «N/A» es un valor guardado
+ * (`na`); una columna sin tocar es null (celda en blanco).
  * Todo es puro y testeable: no toca Supabase ni el DOM.
  */
 
-export const PIECE_TYPES = ['diseno', 'foto', 'reel']
+export const FORMATOS = ['diseno', 'foto', 'reel']
 
 /** Textos tal cual el desplegable FORMATO de la hoja. */
-export const PIECE_LABELS = {
+export const FORMATO_LABELS = {
   diseno: 'Diseño',
   foto: 'Audiovisual - Foto',
   reel: 'Audiovisual - Reel',
 }
 
+/** «N/A»: la columna no aplica a ese cliente en esa fecha. No cuenta como pieza. */
+export const NA_STATUS = 'na'
+
 /**
- * Estados que ofrece la hoja. La columna DISEÑO (y las tarjetas) y la columna AUDIOVISUAL
- * tienen listas distintas. «N/A» no es un estado: es no tener la pieza (se quita con la ×).
- * Una pieza sin estado equivale a la celda en blanco de la hoja.
+ * Estados que ofrece la hoja. DISEÑO, AUDIOVISUAL y las tarjetas comparten la misma lista.
+ * Una columna sin estado (null) equivale a la celda en blanco de la hoja.
  */
-const DESIGN_STATUSES = [
+export const SHEET_STATUSES = [
+  NA_STATUS,
   'pendiente_redes',
   'enviado_diseno',
   'en_modificacion',
@@ -30,40 +34,23 @@ const DESIGN_STATUSES = [
   'aprobado',
   'pendiente_cliente',
 ]
-const AUDIOVISUAL_STATUSES = [
-  'pendiente_grabar',
-  'agendado',
-  'en_edicion',
-  'enviado_cliente',
-  'aprobado',
-  'pendiente_cliente',
-  'en_diseno',
-]
 
-/** Estados permitidos por tipo de pieza (foto y reel comparten la lista AUDIOVISUAL). */
-export const STATUSES_BY_TYPE = {
-  diseno: DESIGN_STATUSES,
-  foto: AUDIOVISUAL_STATUSES,
-  reel: AUDIOVISUAL_STATUSES,
-}
-
-/** Todos los estados posibles (filtros y validación), sin repetir. */
-export const PIECE_STATUSES = [...new Set([...DESIGN_STATUSES, ...AUDIOVISUAL_STATUSES])]
-
-/** Valor del menú para «sin estado» (celda en blanco); se guarda como null. */
+/** Valor del menú para «sin valor» (celda en blanco); se guarda como null. */
 export const NO_STATUS = ''
 
 /** Estados que cuentan como pieza terminada para los KPIs. */
 export const DONE_STATUSES = ['aprobado']
 
 // Clases Tailwind LITERALES (StatusPill no admite clases armadas en runtime).
-const STATUS_STYLE = {
+/** `meta` de `StatusPill` para los estados (incluida la celda en blanco, que se muestra pero no se elige). */
+export const STATUS_META = {
   [NO_STATUS]: {
     label: 'Sin estado',
     bg: 'bg-[#f5f3eb]',
     text: 'text-[#888]',
     dot: 'bg-[#ccc]',
   },
+  [NA_STATUS]: { label: 'N/A', bg: 'bg-[#eceae0]', text: 'text-[#555]', dot: 'bg-[#999]' },
   pendiente_redes: {
     label: 'Pendiente por redes',
     bg: 'bg-[#fff4d6]',
@@ -88,49 +75,42 @@ const STATUS_STYLE = {
     text: 'text-[#7e22ce]',
     dot: 'bg-[#a855f7]',
   },
-  aprobado: { label: 'Aprobado', bg: 'bg-[#dcfce7]', text: 'text-[#15803d]', dot: 'bg-[#22c55e]' },
+  // Verde sólido con letras blancas (el punto es claro para verse sobre el verde y en el menú).
+  aprobado: { label: 'Aprobado', bg: 'bg-[#16a34a]', text: 'text-white', dot: 'bg-[#4ade80]' },
   pendiente_cliente: {
     label: 'Pendiente cliente',
+    bg: 'bg-[#fee2e2]',
+    text: 'text-[#dc2626]',
+    dot: 'bg-[#dc2626]',
+  },
+}
+
+/** `meta` de `StatusPill` para la columna FORMATO. */
+export const FORMATO_META = {
+  [NO_STATUS]: {
+    label: 'Sin formato',
+    bg: 'bg-[#f5f3eb]',
+    text: 'text-[#888]',
+    dot: 'bg-[#ccc]',
+  },
+  diseno: { label: 'Diseño', bg: 'bg-[#e0e7ff]', text: 'text-[#4338ca]', dot: 'bg-[#6366f1]' },
+  foto: {
+    label: 'Audiovisual - Foto',
     bg: 'bg-[#ffedd5]',
-    text: 'text-[#c2410c]',
+    text: 'text-[#9a3412]',
     dot: 'bg-[#f97316]',
   },
-  pendiente_grabar: {
-    label: 'Pendiente por grabar',
-    bg: 'bg-[#fff4d6]',
-    text: 'text-[#8a6100]',
-    dot: 'bg-[#FFB800]',
-  },
-  agendado: { label: 'Agendado', bg: 'bg-[#ccfbf1]', text: 'text-[#0f766e]', dot: 'bg-[#14b8a6]' },
-  en_edicion: {
-    label: 'En edición',
-    bg: 'bg-[#e8f0fe]',
-    text: 'text-[#1d4ed8]',
-    dot: 'bg-[#3b82f6]',
-  },
-  en_diseno: {
-    label: 'En diseño',
-    bg: 'bg-[#e0e7ff]',
-    text: 'text-[#4338ca]',
-    dot: 'bg-[#6366f1]',
+  reel: {
+    label: 'Audiovisual - Reel',
+    bg: 'bg-[#fce7f3]',
+    text: 'text-[#be185d]',
+    dot: 'bg-[#ec4899]',
   },
 }
 
 /** Etiqueta legible de un estado (null/'' = «Sin estado»). */
 export function statusLabel(status) {
-  return STATUS_STYLE[status ?? NO_STATUS]?.label ?? status
-}
-
-/** Opciones del menú de estado de un tipo de pieza: «Sin estado» + los de la hoja. */
-export function statusOptionsFor(pieceType) {
-  return [NO_STATUS, ...(STATUSES_BY_TYPE[pieceType] ?? [])]
-}
-
-/** Mapa `meta` para `StatusPill` con los estados de ese tipo de pieza. */
-export function statusMetaFor(pieceType) {
-  const meta = {}
-  for (const key of statusOptionsFor(pieceType)) meta[key] = STATUS_STYLE[key]
-  return meta
+  return STATUS_META[status ?? NO_STATUS]?.label ?? status
 }
 
 export function isDone(status) {
@@ -142,69 +122,101 @@ export function slotsOf(campaign) {
   return Array.isArray(campaign?.slots) ? campaign.slots : []
 }
 
-/**
- * Tipos de pieza que admite un slot: las tarjetas son siempre una pieza de diseño; las
- * fechas de publicación admiten diseño, foto y reel.
- */
-export function allowedPieceTypes(slot) {
-  return slot?.kind === 'tarjeta' ? ['diseno'] : PIECE_TYPES
+/** Una fecha de publicación lleva Formato + Diseño + Audiovisual; una tarjeta solo un estado. */
+export function isTarjeta(slot) {
+  return slot?.kind === 'tarjeta'
 }
 
-/** Índice `clientId|slotKey` → piezas, ordenadas por tipo (diseño, foto, reel). */
-export function indexPieces(pieces) {
+/** Columnas de estado que usa un slot (las tarjetas son siempre una pieza de diseño). */
+export function statusFieldsFor(slot) {
+  return isTarjeta(slot) ? ['diseno_status'] : ['diseno_status', 'audiovisual_status']
+}
+
+/**
+ * Estados que cuentan como pieza en una fila: los de las columnas del slot que tienen valor
+ * y no son N/A.
+ */
+export function countedStatuses(row, slot) {
+  return statusFieldsFor(slot)
+    .map((f) => row?.[f])
+    .filter((s) => s && s !== NA_STATUS)
+}
+
+/** Índice `clientId|slotKey` → fila. */
+export function indexRows(rows) {
   const index = new Map()
-  for (const p of pieces) {
-    const key = `${p.client_id}|${p.slot_key}`
-    if (!index.has(key)) index.set(key, [])
-    index.get(key).push(p)
-  }
-  for (const list of index.values()) {
-    list.sort((a, b) => PIECE_TYPES.indexOf(a.piece_type) - PIECE_TYPES.indexOf(b.piece_type))
-  }
+  for (const r of rows) index.set(`${r.client_id}|${r.slot_key}`, r)
   return index
 }
 
-export function piecesFor(index, clientId, slotKey) {
-  return index.get(`${clientId}|${slotKey}`) ?? []
+export function rowFor(index, clientId, slotKey) {
+  return index.get(`${clientId}|${slotKey}`) ?? null
 }
 
-/** Tipos que aún se pueden agregar a una celda (los que admite el slot y no existen ya). */
-export function addableTypes(slot, existingPieces) {
-  const taken = new Set(existingPieces.map((p) => p.piece_type))
-  return allowedPieceTypes(slot).filter((t) => !taken.has(t))
+/** Estados (con valor) de todas las columnas de una cuenta, para filtrar por estado. */
+function clientStatuses(rows, slotsByKey, clientId, { counted }) {
+  const out = []
+  for (const r of rows) {
+    if (r.client_id !== clientId) continue
+    const slot = slotsByKey.get(r.slot_key)
+    if (!slot) continue
+    if (counted) out.push(...countedStatuses(r, slot))
+    else
+      out.push(
+        ...statusFieldsFor(slot)
+          .map((f) => r[f])
+          .filter(Boolean),
+      )
+  }
+  return out
+}
+
+/** ¿La cuenta tiene alguna columna en ese estado (incluido N/A)? */
+export function clientHasStatus(rows, slots, clientId, status) {
+  const slotsByKey = new Map(slots.map((s) => [s.key, s]))
+  return clientStatuses(rows, slotsByKey, clientId, { counted: false }).includes(status)
+}
+
+/** ¿La cuenta tiene alguna pieza (no N/A) sin terminar? */
+export function clientHasPending(rows, slots, clientId) {
+  const slotsByKey = new Map(slots.map((s) => [s.key, s]))
+  return clientStatuses(rows, slotsByKey, clientId, { counted: true }).some((s) => !isDone(s))
 }
 
 /** Clientes con al menos una pieza sin terminar (filtro «solo pendientes»). */
-export function clientsWithPending(clients, pieces) {
-  const pendingIds = new Set(pieces.filter((p) => !isDone(p.status)).map((p) => p.client_id))
-  return clients.filter((c) => pendingIds.has(c.id))
+export function clientsWithPending(clients, rows, slots) {
+  return clients.filter((c) => clientHasPending(rows, slots, c.id))
 }
 
 /**
- * KPIs de la temporada para las cuentas en alcance. `pctAprobado` es null si todavía no hay
- * piezas (evita mostrar 0% como si fuera avance real).
+ * KPIs de la temporada para las cuentas en alcance. Cada columna de estado con valor (que no
+ * sea N/A) es una pieza. `pctAprobado` es null si todavía no hay piezas (evita mostrar 0%
+ * como si fuera avance real).
  * @returns {{ totalPiezas, terminadas, pendientes, pctAprobado, bySlot: Array }}
  */
-export function computeTemporadaSummary(clients, pieces, slots) {
+export function computeTemporadaSummary(clients, rows, slots) {
   const ids = new Set(clients.map((c) => c.id))
-  const scoped = pieces.filter((p) => ids.has(p.client_id))
-  const terminadas = scoped.filter((p) => isDone(p.status)).length
+  const scoped = rows.filter((r) => ids.has(r.client_id))
   const bySlot = slots.map((slot) => {
-    const slotPieces = scoped.filter((p) => p.slot_key === slot.key)
-    const done = slotPieces.filter((p) => isDone(p.status)).length
+    const statuses = scoped
+      .filter((r) => r.slot_key === slot.key)
+      .flatMap((r) => countedStatuses(r, slot))
+    const done = statuses.filter(isDone).length
     return {
       key: slot.key,
       label: slot.label,
-      total: slotPieces.length,
+      total: statuses.length,
       done,
-      pct: slotPieces.length ? Math.round((done / slotPieces.length) * 100) : null,
+      pct: statuses.length ? Math.round((done / statuses.length) * 100) : null,
     }
   })
+  const totalPiezas = bySlot.reduce((n, s) => n + s.total, 0)
+  const terminadas = bySlot.reduce((n, s) => n + s.done, 0)
   return {
-    totalPiezas: scoped.length,
+    totalPiezas,
     terminadas,
-    pendientes: scoped.length - terminadas,
-    pctAprobado: scoped.length ? Math.round((terminadas / scoped.length) * 100) : null,
+    pendientes: totalPiezas - terminadas,
+    pctAprobado: totalPiezas ? Math.round((terminadas / totalPiezas) * 100) : null,
     bySlot,
   }
 }

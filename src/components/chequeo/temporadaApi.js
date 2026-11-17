@@ -27,17 +27,20 @@ export async function loadPieces(campaignId) {
 }
 
 /**
- * Crea la pieza o cambia su estado. Upsert por la unique key (campaña, cliente, slot, tipo).
- * `lineId` debe venir de `effectiveLineId(client, generalLineId)` para no chocar con RLS.
+ * Guarda una columna de la celda cliente × slot (formato, diseño o audiovisual). Upsert por
+ * la unique key (campaña, cliente, slot): crea la fila si no existe y, si existe, solo toca
+ * la columna enviada. `field` es `formato`, `diseno_status` o `audiovisual_status`; `value`
+ * null deja la columna en blanco. `lineId` debe venir de `effectiveLineId(client,
+ * generalLineId)` para no chocar con RLS.
  */
-export async function upsertPiece({
+export async function upsertCell({
   companyId,
   campaignId,
   clientId,
   lineId,
   slotKey,
-  pieceType,
-  status = null,
+  field,
+  value,
   userId,
 }) {
   return supabase
@@ -49,20 +52,14 @@ export async function upsertPiece({
         client_id: clientId,
         line_id: lineId,
         slot_key: slotKey,
-        piece_type: pieceType,
-        status: status ?? null,
+        [field]: value ?? null,
         updated_by: userId ?? null,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: 'campaign_id,client_id,slot_key,piece_type' },
+      { onConflict: 'campaign_id,client_id,slot_key' },
     )
     .select()
     .single()
-}
-
-/** Quita una pieza (el formato deja de aplicar a esa celda). */
-export async function deletePiece(pieceId) {
-  return supabase.from('seasonal_pieces').delete().eq('id', pieceId)
 }
 
 /** Asignaciones manuales de personal de una temporada (jefe, SM, diseño, audiovisual). */

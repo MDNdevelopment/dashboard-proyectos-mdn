@@ -4,16 +4,18 @@ import {
   ASSIGNMENT_LABELS,
   ASSIGNMENT_ROLES,
   indexAssignments,
-  indexPieces,
-  piecesFor,
+  indexRows,
+  isTarjeta,
   resolveAssignee,
+  rowFor,
 } from '../../../utils/temporada'
 import TemporadaCell from './TemporadaCell'
 import PersonSelect from './PersonSelect'
 
 // Columnas angostas para que quepa más información sin scroll horizontal: el cliente y el
 // personal ocupan poco; el ancho se lo llevan las fechas, que son la información principal.
-const TH = 'px-2 py-2.5 text-[12px] font-mono font-bold uppercase tracking-[0.12em] text-[#888]'
+const TH =
+  'px-2 py-2.5 text-center text-[12px] font-mono font-bold uppercase tracking-[0.12em] text-[#888]'
 const CLIENT_COL = 'w-[118px] min-w-[96px] max-w-[118px]'
 const PERSON_COL = 'w-[112px] min-w-[96px] max-w-[112px]'
 // Solo líneas verticales entre columnas (sin horizontales: la fila se resalta con hover). La columna de Cliente está fija (sticky) y en una tabla
@@ -21,6 +23,13 @@ const PERSON_COL = 'w-[112px] min-w-[96px] max-w-[112px]'
 // eso esa usa una sombra interior en vez de borde.
 const VLINE = 'border-r border-[#e8e4d8] last:border-r-0'
 const STICKY_LINE = 'shadow-[inset_-1px_0_0_#e8e4d8]'
+// Cada fecha de publicación se divide en tres subcolumnas, como la hoja.
+const SUBCOLUMNS = [
+  { field: 'formato', label: 'Formato' },
+  { field: 'diseno_status', label: 'Diseño' },
+  { field: 'audiovisual_status', label: 'Audiovisual' },
+]
+const columnsOf = (slot) => (isTarjeta(slot) ? [SUBCOLUMNS[1]] : SUBCOLUMNS)
 
 /**
  * Grilla de la temporada: una fila por cliente, una columna por slot. El personal (jefe y SM,
@@ -31,7 +40,7 @@ const STICKY_LINE = 'shadow-[inset_-1px_0_0_#e8e4d8]'
 export default function TemporadaGrid({
   lines,
   clients,
-  pieces,
+  rows,
   assignments,
   slots,
   users,
@@ -39,15 +48,14 @@ export default function TemporadaGrid({
   generalLineId,
   groupByLine,
   canManage,
-  onAdd,
-  onStatusChange,
-  onRemove,
+  onCellChange,
   onAssign,
 }) {
-  const index = indexPieces(pieces)
+  const index = indexRows(rows)
   const assignmentIndex = indexAssignments(assignments ?? [])
   const lineById = new Map(lines.map((l) => [l.id, l]))
-  const colSpan = 1 + ASSIGNMENT_ROLES.length + slots.length
+  const colSpan =
+    1 + ASSIGNMENT_ROLES.length + slots.reduce((n, slot) => n + columnsOf(slot).length, 0)
 
   const groups = groupByLine
     ? lines
@@ -71,19 +79,44 @@ export default function TemporadaGrid({
       <table className="w-full text-left border-collapse">
         <thead>
           <tr className="bg-[#faf9f5]">
-            <th className={`${TH} ${CLIENT_COL} sticky left-0 z-[2] bg-[#faf9f5] ${STICKY_LINE}`}>
+            <th
+              rowSpan={2}
+              className={`${TH} ${CLIENT_COL} sticky left-0 z-[2] bg-[#faf9f5] ${STICKY_LINE}`}
+            >
               Cliente
             </th>
             {ASSIGNMENT_ROLES.map((r) => (
-              <th key={r} className={`${TH} ${PERSON_COL} ${VLINE}`}>
+              <th key={r} rowSpan={2} className={`${TH} ${PERSON_COL} ${VLINE}`}>
                 {ASSIGNMENT_LABELS[r]}
               </th>
             ))}
-            {slots.map((slot) => (
-              <th key={slot.key} className={`${TH} ${VLINE}`}>
-                {slot.label}
-              </th>
-            ))}
+            {slots.map((slot) => {
+              const tarjeta = isTarjeta(slot)
+              return (
+                <th
+                  key={slot.key}
+                  rowSpan={tarjeta ? 2 : 1}
+                  colSpan={columnsOf(slot).length}
+                  className={`${TH} ${VLINE}`}
+                >
+                  {slot.label}
+                </th>
+              )
+            })}
+          </tr>
+          <tr className="bg-[#faf9f5]">
+            {slots
+              .filter((slot) => !isTarjeta(slot))
+              .flatMap((slot) =>
+                SUBCOLUMNS.map((col) => (
+                  <th
+                    key={`${slot.key}|${col.field}`}
+                    className={`${TH} ${VLINE} border-t border-[#e8e4d8]`}
+                  >
+                    {col.label}
+                  </th>
+                )),
+              )}
           </tr>
         </thead>
         <tbody>
@@ -124,18 +157,19 @@ export default function TemporadaGrid({
                         />
                       </td>
                     ))}
-                    {slots.map((slot) => (
-                      <td key={slot.key} className={`px-2 py-2 ${VLINE}`}>
-                        <TemporadaCell
-                          slot={slot}
-                          pieces={piecesFor(index, client.id, slot.key)}
-                          canManage={canManage}
-                          onAdd={(type) => onAdd(client, slot, type)}
-                          onStatusChange={onStatusChange}
-                          onRemove={onRemove}
-                        />
-                      </td>
-                    ))}
+                    {slots.flatMap((slot) => {
+                      const row = rowFor(index, client.id, slot.key)
+                      return columnsOf(slot).map((col) => (
+                        <td key={`${slot.key}|${col.field}`} className={`px-2 py-2 ${VLINE}`}>
+                          <TemporadaCell
+                            field={col.field}
+                            row={row}
+                            canManage={canManage}
+                            onChange={(field, value) => onCellChange(client, slot, field, value)}
+                          />
+                        </td>
+                      ))
+                    })}
                   </tr>
                 )
               })}

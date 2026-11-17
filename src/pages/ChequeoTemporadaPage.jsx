@@ -6,9 +6,10 @@ import { loadLines, loadClients, createClient } from '../components/metricas/met
 import { visibleLinesForUser } from '../utils/lineMembers'
 import { clientsForLine, effectiveLineId } from '../utils/chequeo'
 import {
-  PIECE_STATUSES,
+  SHEET_STATUSES,
   USE_MAPPI,
-  isDone,
+  clientHasPending,
+  clientHasStatus,
   computeTemporadaSummary,
   slotsOf,
   statusLabel,
@@ -17,8 +18,7 @@ import {
   loadCampaigns,
   loadPieces,
   loadAssignments,
-  upsertPiece,
-  deletePiece,
+  upsertCell,
   upsertAssignment,
   deleteAssignment,
 } from '../components/chequeo/temporadaApi'
@@ -30,8 +30,9 @@ import AddClientModal from '../components/chequeo/temporada/AddClientModal'
 const ALL_LINES = '__all__'
 
 /**
- * Chequeo de temporada (p. ej. Navidad 2026): por cliente y por fecha/tarjeta, qué piezas
- * hay (diseño, foto, reel) y en qué estado está cada una. Reemplaza la hoja de seguimiento.
+ * Chequeo de temporada (p. ej. Navidad 2026): por cliente y por fecha, el formato de la pieza
+ * y el estado de su diseño y de su audiovisual; las tarjetas llevan un solo estado.
+ * Reemplaza la hoja de seguimiento.
  */
 export default function ChequeoTemporadaPage() {
   const { userProfile, can = () => true } = useAuth()
@@ -47,7 +48,7 @@ export default function ChequeoTemporadaPage() {
   const [users, setUsers] = useState([])
   const [campaigns, setCampaigns] = useState([])
   const [campaignId, setCampaignId] = useState(null)
-  const [pieces, setPieces] = useState([])
+  const [rows, setRows] = useState([])
   const [assignments, setAssignments] = useState([])
   const [loading, setLoading] = useState(true)
   const [activeLineId, setActiveLineId] = useState(null)
@@ -94,13 +95,13 @@ export default function ChequeoTemporadaPage() {
   // Piezas de la temporada activa (se recargan al cambiar de temporada).
   useEffect(() => {
     if (!campaignId) {
-      setPieces([])
+      setRows([])
       setAssignments([])
       return
     }
     let cancelled = false
     loadPieces(campaignId).then(({ data }) => {
-      if (!cancelled) setPieces(data ?? [])
+      if (!cancelled) setRows(data ?? [])
     })
     loadAssignments(campaignId).then(({ data }) => {
       if (!cancelled) setAssignments(data ?? [])
@@ -115,7 +116,7 @@ export default function ChequeoTemporadaPage() {
   useEffect(() => {
     function onVisibilityChange() {
       if (document.visibilityState === 'visible' && campaignId) {
-        loadPieces(campaignId).then(({ data }) => setPieces(data ?? []))
+        loadPieces(campaignId).then(({ data }) => setRows(data ?? []))
         loadAssignments(campaignId).then(({ data }) => setAssignments(data ?? []))
       }
     }
@@ -134,7 +135,7 @@ export default function ChequeoTemporadaPage() {
         (payload) => {
           const row = payload.new?.id ? payload.new : payload.old
           if (payload.eventType !== 'DELETE' && row.campaign_id !== campaignId) return
-          setPieces((prev) => {
+          setRows((prev) => {
             if (payload.eventType === 'DELETE') return prev.filter((p) => p.id !== payload.old.id)
             const exists = prev.some((p) => p.id === payload.new.id)
             return exists
@@ -171,67 +172,38 @@ export default function ChequeoTemporadaPage() {
     activeLineId === ALL_LINES ? lines : lines.filter((l) => l.id === activeLineId)
   const scopedClients = scopedLines.flatMap((l) => clientsForLine(clients, l, generalLineId))
 
-  // Filtros por estado / «solo pendientes»: se aplican a las cuentas, no a las piezas, para
-  // que la fila siga mostrando todas sus piezas.
-  const piecesByClient = new Map()
-  for (const p of pieces) {
-    if (!piecesByClient.has(p.client_id)) piecesByClient.set(p.client_id, [])
-    piecesByClient.get(p.client_id).push(p)
-  }
+  // Filtros por estado / «solo pendientes»: se aplican a las cuentas, no a las celdas, para
+  // que la fila siga mostrando todas sus columnas.
   const visibleClients = scopedClients.filter((c) => {
-    const own = piecesByClient.get(c.id) ?? []
-    if (statusFilter && !own.some((p) => p.status === statusFilter)) return false
-    if (onlyPending && !own.some((p) => !isDone(p.status))) return false
+    if (statusFilter && !clientHasStatus(rows, slots, c.id, statusFilter)) return false
+    if (onlyPending && !clientHasPending(rows, slots, c.id)) return false
     return true
   })
   const hasFilters = Boolean(statusFilter) || onlyPending
-  const summary = computeTemporadaSummary(scopedClients, pieces, slots)
+  const summary = computeTemporadaSummary(scopedClients, rows, slots)
 
-  function replacePiece(saved) {
-    setPieces((prev) =>
-      prev.some((p) => p.id === saved.id)
-        ? prev.map((p) => (p.id === saved.id ? saved : p))
-        : [...prev, saved],
-    )
-  }
-
-  async function savePiece(client, slot, pieceType, status) {
+  // `field` es `formato`, `diseno_status` o `audiovisual_status`; `value` null = en blanco.
+  async function handleCellChange(client, slot, field, value) {
     setError(null)
-    const { data, error: err } = await upsertPiece({
+    const { data, error: err } = await upsertCell({
       companyId: userProfile.company_id,
       campaignId,
       clientId: client.id,
       lineId: effectiveLineId(client, generalLineId),
       slotKey: slot.key,
-      pieceType,
-      status,
+      field,
+      value,
       userId: userProfile.user_id,
     })
     if (err) {
       setError('No se pudo guardar el cambio. Intenta de nuevo.')
       return
     }
-    replacePiece(data)
-  }
-
-  const handleAdd = (client, slot, type) => savePiece(client, slot, type, null)
-
-  const handleStatusChange = (piece, status) => {
-    const client = clients.find((c) => c.id === piece.client_id)
-    const slot = slots.find((s) => s.key === piece.slot_key)
-    if (!client || !slot) return
-    // El menú usa '' para «Sin estado» (celda en blanco de la hoja): se guarda como null.
-    return savePiece(client, slot, piece.piece_type, status || null)
-  }
-
-  async function handleRemove(piece) {
-    setError(null)
-    const { error: err } = await deletePiece(piece.id)
-    if (err) {
-      setError('No se pudo quitar la pieza. Intenta de nuevo.')
-      return
-    }
-    setPieces((prev) => prev.filter((p) => p.id !== piece.id))
+    setRows((prev) =>
+      prev.some((r) => r.id === data.id)
+        ? prev.map((r) => (r.id === data.id ? data : r))
+        : [...prev, data],
+    )
   }
 
   // Personal: `value` es el id del empleado, '' = «Sin asignar» o USE_MAPPI = volver al valor
@@ -305,7 +277,7 @@ export default function ChequeoTemporadaPage() {
               {campaign?.name ?? 'Chequeo de temporada'}
             </h1>
             <p className="text-[15px] text-[#888] mt-0.5">
-              Piezas por fecha y su estado — diseño, foto y reel por cliente
+              Formato y estado de diseño y audiovisual por fecha, para cada cliente
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 self-start">
@@ -419,7 +391,7 @@ export default function ChequeoTemporadaPage() {
                   onChange={(e) => setStatusFilter(e.target.value)}
                 >
                   <option value="">Todos</option>
-                  {PIECE_STATUSES.map((s) => (
+                  {SHEET_STATUSES.map((s) => (
                     <option key={s} value={s}>
                       {statusLabel(s)}
                     </option>
@@ -441,7 +413,7 @@ export default function ChequeoTemporadaPage() {
             <TemporadaGrid
               lines={scopedLines}
               clients={visibleClients}
-              pieces={pieces}
+              rows={rows}
               assignments={assignments}
               slots={slots}
               users={users}
@@ -449,9 +421,7 @@ export default function ChequeoTemporadaPage() {
               generalLineId={generalLineId}
               groupByLine={activeLineId === ALL_LINES}
               canManage={canManage}
-              onAdd={handleAdd}
-              onStatusChange={handleStatusChange}
-              onRemove={handleRemove}
+              onCellChange={handleCellChange}
               onAssign={handleAssign}
             />
           </>
