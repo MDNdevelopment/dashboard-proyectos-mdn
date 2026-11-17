@@ -68,6 +68,27 @@ describe('ChequeoPage', () => {
     expect(screen.getByText('S1')).toBeInTheDocument()
   })
 
+  it('el botón «Chequeo de temporada» solo aparece con la capability tareas.chequeo.temporada', async () => {
+    const withCan = (can) =>
+      useAuth.mockReturnValue({
+        userProfile: { user_id: 'u1', company_id: 'co-1', access_level: 3, admin: false },
+        can,
+      })
+    withCan((key) => key === 'tareas.chequeo.temporada')
+    const { unmount } = renderPage()
+    await screen.findByText('Pepsi')
+    expect(screen.getByRole('link', { name: 'Chequeo de temporada →' })).toHaveAttribute(
+      'href',
+      '/tareas/chequeo/temporada',
+    )
+    unmount()
+
+    withCan(() => false)
+    renderPage()
+    await screen.findByText('Pepsi')
+    expect(screen.queryByRole('link', { name: 'Chequeo de temporada →' })).not.toBeInTheDocument()
+  })
+
   it('no muestra la píldora "Todas" sin nivel 4/admin ni la capability chequeo.ver_todo', async () => {
     useAuth.mockReturnValue({
       userProfile: { user_id: 'u1', company_id: 'co-1', access_level: 2, admin: false },

@@ -182,12 +182,14 @@ export default function ChequeoPage() {
               Publicaciones por semana — Publicaciones, Reels e Highlights
             </p>
           </div>
-          <Link
-            to="/tareas/chequeo/temporada"
-            className="self-start px-3 py-1.5 rounded-lg border border-[#e0ddd4] bg-white text-[14px] font-semibold text-[#555] hover:border-[#FFB800] hover:text-[#111] transition-all"
-          >
-            Chequeo de temporada →
-          </Link>
+          {can('tareas.chequeo.temporada') && (
+            <Link
+              to="/tareas/chequeo/temporada"
+              className="self-start px-3 py-1.5 rounded-lg border border-[#e0ddd4] bg-white text-[14px] font-semibold text-[#555] hover:border-[#FFB800] hover:text-[#111] transition-all"
+            >
+              Chequeo de temporada →
+            </Link>
+          )}
         </div>
 
         {loading ? (

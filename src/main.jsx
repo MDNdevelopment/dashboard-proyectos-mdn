@@ -136,7 +136,9 @@ createRoot(document.getElementById('root')).render(
               path="/tareas/chequeo/temporada"
               element={
                 <RequireModule moduleKey="tareas">
-                  <ChequeoTemporadaPage />
+                  <RequireModule moduleKey="tareas.chequeo.temporada">
+                    <ChequeoTemporadaPage />
+                  </RequireModule>
                 </RequireModule>
               }
             />

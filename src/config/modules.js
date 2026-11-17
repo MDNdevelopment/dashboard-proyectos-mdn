@@ -57,6 +57,7 @@ export const MODULES = [
       { key: 'fijas', label: 'Tareas Fijas' },
       { key: 'pautas', label: 'Pautas' },
       { key: 'chequeo', label: 'Chequeo' },
+      { key: 'chequeo.temporada', label: 'Chequeo de temporada' },
     ],
     manageActions: [
       { key: 'tareas.manage', label: 'Crear / editar / eliminar tareas' },
@@ -78,6 +79,10 @@ export const MODULES = [
       },
       { key: 'chequeo.manage', label: 'Registrar fechas de última publicación (Chequeo)' },
       { key: 'chequeo.ver_todo', label: 'Ver Chequeo de todas las líneas' },
+      {
+        key: 'chequeo.temporada.manage',
+        label: 'Editar el Chequeo de temporada (piezas y personal)',
+      },
     ],
   },
   {

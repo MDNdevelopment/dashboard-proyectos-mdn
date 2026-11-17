@@ -74,7 +74,7 @@ describe('ChequeoTemporadaPage — agregar cliente', () => {
   })
 
   it('hay un botón para volver al chequeo normal, siempre visible', async () => {
-    authWith(['chequeo.manage'])
+    authWith(['chequeo.temporada.manage'])
     renderPage()
     await screen.findByText('Pepsi')
     expect(screen.getByRole('link', { name: '← Volver al chequeo' })).toHaveAttribute(
@@ -83,15 +83,43 @@ describe('ChequeoTemporadaPage — agregar cliente', () => {
     )
   })
 
-  it('el botón solo aparece con el permiso de crear clientes', async () => {
+  it('editar la temporada exige chequeo.temporada.manage, no chequeo.manage', async () => {
+    loadPieces.mockResolvedValue({
+      data: [
+        {
+          id: 'r1',
+          client_id: 'c-1',
+          slot_key: '2026-12-24',
+          formato: 'foto',
+          diseno_status: null,
+          audiovisual_status: 'aprobado',
+        },
+      ],
+      error: null,
+    })
+    // Solo el permiso del Chequeo normal: la temporada queda de solo lectura.
     authWith(['chequeo.manage'])
+    const { unmount } = renderPage()
+    await screen.findByText('Pepsi')
+    expect(await screen.findByText('Audiovisual - Foto')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Audiovisual - Foto/ })).not.toBeInTheDocument()
+    unmount()
+
+    authWith(['chequeo.temporada.manage'])
+    renderPage()
+    await screen.findByText('Pepsi')
+    expect(await screen.findByRole('button', { name: /Audiovisual - Foto/ })).toBeInTheDocument()
+  })
+
+  it('el botón solo aparece con el permiso de crear clientes', async () => {
+    authWith(['chequeo.temporada.manage'])
     renderPage()
     await screen.findByText('Pepsi')
     expect(screen.queryByRole('button', { name: '+ Agregar cliente' })).not.toBeInTheDocument()
   })
 
   it('con el permiso, crea el cliente en MAPPI y aparece en la grilla', async () => {
-    authWith(['chequeo.manage', 'empresa.clientes.manage'])
+    authWith(['chequeo.temporada.manage', 'empresa.clientes.manage'])
     createClient.mockResolvedValue({
       data: { id: 'c-2', name: 'Hello Fitness', line_id: 'line-1', social_manager_id: null },
       error: null,
@@ -118,7 +146,7 @@ describe('ChequeoTemporadaPage — agregar cliente', () => {
   })
 
   it('si no se puede crear (p. ej. RLS), muestra el error y no agrega nada', async () => {
-    authWith(['chequeo.manage', 'empresa.clientes.manage'])
+    authWith(['chequeo.temporada.manage', 'empresa.clientes.manage'])
     createClient.mockResolvedValue({ data: null, error: { message: 'permission denied' } })
     renderPage()
     await screen.findByText('Pepsi')

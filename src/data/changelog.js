@@ -12,6 +12,7 @@ export const CHANGELOG = [
     version: '1.2.0',
     title: 'Mejoras en Campañas y Empresa',
     changes: [
+      'El acceso al «Chequeo de temporada» ahora se gestiona desde Empresa → Accesos, con dos capacidades propias: «Ver: Chequeo de temporada» (quién ve el botón y la pantalla) y «Editar el Chequeo de temporada (piezas y personal)». Quedan configuradas igual que hoy: todos con acceso a Gestión de Tareas lo ven y lo edita quien ya podía registrar fechas en el Chequeo; desde Accesos se puede cambiar cada una por separado.',
       'El «Chequeo de temporada» ahora se parece más a la hoja: cada fecha (24/12, 25/12, 31/12 y 01/01) tiene un encabezado con la fecha y debajo tres columnas, Formato (Diseño, Audiovisual - Foto o Audiovisual - Reel), Diseño y Audiovisual; las tarjetas siguen siendo una sola columna de estado. Diseño, Audiovisual y las tarjetas usan la misma lista de estados: N/A, Pendiente por redes, Enviado a diseño, En modificación, Enviado al cliente, Aprobado (verde con letras blancas) y Pendiente cliente (rojo clarito con letras rojas). Ya no hay botones «+» ni «×»: se elige directo en cada columna, y los N/A no cuentan como pendientes.',
       'En el «Chequeo de temporada» las columnas ahora van separadas por líneas verticales (sin líneas horizontales) y la fila se resalta al pasar el cursor, para leer la tabla con más facilidad.',
       'En el «Chequeo de temporada» hay un botón «Volver al chequeo» para regresar al chequeo normal de publicaciones.',
