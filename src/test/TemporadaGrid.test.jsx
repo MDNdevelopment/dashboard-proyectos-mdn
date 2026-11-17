@@ -174,16 +174,29 @@ describe('TemporadaGrid', () => {
     expect(onCellChange).toHaveBeenCalledWith(CLIENTS[0], SLOTS[0], 'audiovisual_status', 'na')
   })
 
-  it('el menú de estados ofrece N/A y los 6 estados de la hoja, en ese orden', () => {
+  it('cada columna ofrece su propia lista: Audiovisual y Diseño no son iguales', () => {
     renderGrid({ clients: [CLIENTS[0]] })
-    fireEvent.click(screen.getByRole('button', { name: /Aprobado/ }))
-    // El menú es un portal con posición fija: se distingue de las píldoras de la tabla.
-    const menu = document.body.querySelector('div[style*="position: fixed"]')
-    expect(
-      within(menu)
+    const menuOf = (pill) => {
+      fireEvent.click(pill)
+      const menu = document.body.querySelector('div[style*="position: fixed"]')
+      const labels = within(menu)
         .getAllByRole('button')
-        .map((b) => b.textContent),
-    ).toEqual([
+        .map((b) => b.textContent)
+      fireEvent.mouseDown(document.body)
+      return labels
+    }
+    // El portal es de posición fija: se distingue de las píldoras de la tabla.
+    expect(menuOf(screen.getByRole('button', { name: /Aprobado/ }))).toEqual([
+      'N/A',
+      'Pendiente por grabar',
+      'Agendado',
+      'En edición',
+      'Enviado al cliente',
+      'Aprobado',
+      'Pendiente cliente',
+      'En diseño',
+    ])
+    expect(menuOf(screen.getByRole('button', { name: /Enviado al cliente/ }))).toEqual([
       'N/A',
       'Pendiente por redes',
       'Enviado a diseño',
@@ -231,6 +244,26 @@ describe('TemporadaGrid', () => {
     const cells = within(screen.getAllByRole('row')[2]).getAllByRole('cell')
     expect(cells[0].className).toContain('shadow-[inset_-1px_0_0_#e8e4d8]')
     for (const td of cells.slice(1)) expect(td.className).toContain('border-r')
+  })
+
+  it('los grupos de columnas se intercalan con fondo amarillo suave, encabezado y celdas', () => {
+    renderGrid({ clients: [CLIENTS[0]] })
+    // 24/12 (grupo 1, con fondo) y Tarjeta navidad (grupo 2, sin fondo).
+    expect(screen.getByRole('columnheader', { name: '24/12' }).className).toContain('bg-[#fff4cf]')
+    expect(screen.getByRole('columnheader', { name: 'Formato' }).className).toContain(
+      'bg-[#fff4cf]',
+    )
+    expect(screen.getByRole('columnheader', { name: 'Tarjeta navidad' }).className).not.toContain(
+      'bg-[#fff4cf]',
+    )
+    const cells = within(screen.getAllByRole('row')[2]).getAllByRole('cell')
+    // Cliente, Jefe, SM sin fondo; las 3 de la fecha con fondo y hover; la tarjeta sin fondo.
+    for (const td of cells.slice(0, 3)) expect(td.className).not.toContain('bg-[#fffbec]')
+    for (const td of cells.slice(3, 6)) {
+      expect(td.className).toContain('bg-[#fffbec]')
+      expect(td.className).toContain('group-hover:bg-[#fff5d6]')
+    }
+    expect(cells[6].className).not.toContain('bg-[#fffbec]')
   })
 
   it('no hay líneas horizontales; la fila se sombrea con hover, también la celda fija', () => {

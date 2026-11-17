@@ -3,7 +3,7 @@ import {
   FORMATO_META,
   FORMATOS,
   NO_STATUS,
-  SHEET_STATUSES,
+  STATUSES_BY_FIELD,
   STATUS_META,
 } from '../../../utils/temporada'
 
@@ -19,7 +19,7 @@ export default function TemporadaCell({ field, row, canManage, onChange }) {
       size="sm"
       value={row?.[field] ?? NO_STATUS}
       meta={isFormato ? FORMATO_META : STATUS_META}
-      options={isFormato ? FORMATOS : SHEET_STATUSES}
+      options={isFormato ? FORMATOS : STATUSES_BY_FIELD[field]}
       editable={canManage}
       onChange={(next) => onChange(field, next || null)}
     />
