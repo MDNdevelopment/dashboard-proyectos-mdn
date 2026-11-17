@@ -29,6 +29,11 @@ const SUBCOLUMNS = [
   { field: 'diseno_status', label: 'Diseño' },
   { field: 'audiovisual_status', label: 'Audiovisual' },
 ]
+// Los grupos de columnas (cada fecha o tarjeta) se intercalan con un fondo amarillo suave para
+// distinguirlos. La celda lleva su propio fondo, así que sigue el hover de la fila con
+// `group-hover`.
+const groupHead = (i) => (i % 2 === 0 ? 'bg-[#fff4cf]' : '')
+const groupBody = (i) => (i % 2 === 0 ? 'bg-[#fffbec] group-hover:bg-[#fff5d6]' : '')
 const columnsOf = (slot) => (isTarjeta(slot) ? [SUBCOLUMNS[1]] : SUBCOLUMNS)
 
 /**
@@ -90,14 +95,14 @@ export default function TemporadaGrid({
                 {ASSIGNMENT_LABELS[r]}
               </th>
             ))}
-            {slots.map((slot) => {
+            {slots.map((slot, i) => {
               const tarjeta = isTarjeta(slot)
               return (
                 <th
                   key={slot.key}
                   rowSpan={tarjeta ? 2 : 1}
                   colSpan={columnsOf(slot).length}
-                  className={`${TH} ${VLINE}`}
+                  className={`${TH} ${VLINE} ${groupHead(i)}`}
                 >
                   {slot.label}
                 </th>
@@ -105,18 +110,18 @@ export default function TemporadaGrid({
             })}
           </tr>
           <tr className="bg-[#faf9f5]">
-            {slots
-              .filter((slot) => !isTarjeta(slot))
-              .flatMap((slot) =>
-                SUBCOLUMNS.map((col) => (
-                  <th
-                    key={`${slot.key}|${col.field}`}
-                    className={`${TH} ${VLINE} border-t border-[#e8e4d8]`}
-                  >
-                    {col.label}
-                  </th>
-                )),
-              )}
+            {slots.flatMap((slot, i) =>
+              isTarjeta(slot)
+                ? []
+                : SUBCOLUMNS.map((col) => (
+                    <th
+                      key={`${slot.key}|${col.field}`}
+                      className={`${TH} ${VLINE} border-t border-[#e8e4d8] ${groupHead(i)}`}
+                    >
+                      {col.label}
+                    </th>
+                  )),
+            )}
           </tr>
         </thead>
         <tbody>
@@ -157,10 +162,13 @@ export default function TemporadaGrid({
                         />
                       </td>
                     ))}
-                    {slots.flatMap((slot) => {
+                    {slots.flatMap((slot, i) => {
                       const row = rowFor(index, client.id, slot.key)
                       return columnsOf(slot).map((col) => (
-                        <td key={`${slot.key}|${col.field}`} className={`px-2 py-2 ${VLINE}`}>
+                        <td
+                          key={`${slot.key}|${col.field}`}
+                          className={`px-2 py-2 transition-colors ${VLINE} ${groupBody(i)}`}
+                        >
                           <TemporadaCell
                             field={col.field}
                             row={row}
