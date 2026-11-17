@@ -174,16 +174,29 @@ describe('TemporadaGrid', () => {
     expect(onCellChange).toHaveBeenCalledWith(CLIENTS[0], SLOTS[0], 'audiovisual_status', 'na')
   })
 
-  it('el menú de estados ofrece N/A y los 6 estados de la hoja, en ese orden', () => {
+  it('cada columna ofrece su propia lista: Audiovisual y Diseño no son iguales', () => {
     renderGrid({ clients: [CLIENTS[0]] })
-    fireEvent.click(screen.getByRole('button', { name: /Aprobado/ }))
-    // El menú es un portal con posición fija: se distingue de las píldoras de la tabla.
-    const menu = document.body.querySelector('div[style*="position: fixed"]')
-    expect(
-      within(menu)
+    const menuOf = (pill) => {
+      fireEvent.click(pill)
+      const menu = document.body.querySelector('div[style*="position: fixed"]')
+      const labels = within(menu)
         .getAllByRole('button')
-        .map((b) => b.textContent),
-    ).toEqual([
+        .map((b) => b.textContent)
+      fireEvent.mouseDown(document.body)
+      return labels
+    }
+    // El portal es de posición fija: se distingue de las píldoras de la tabla.
+    expect(menuOf(screen.getByRole('button', { name: /Aprobado/ }))).toEqual([
+      'N/A',
+      'Pendiente por grabar',
+      'Agendado',
+      'En edición',
+      'Enviado al cliente',
+      'Aprobado',
+      'Pendiente cliente',
+      'En diseño',
+    ])
+    expect(menuOf(screen.getByRole('button', { name: /Enviado al cliente/ }))).toEqual([
       'N/A',
       'Pendiente por redes',
       'Enviado a diseño',
