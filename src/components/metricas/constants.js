@@ -43,6 +43,13 @@ export const TAREAS_FIJAS_MODULE_START = { year: 2026, month: 9 }
 // no hay pautas que derivar, así que esos reportes conservan el valor capturado a mano.
 export const AUDIOVISUAL_MODULE_START = { year: 2026, month: 9 }
 
+// Mes desde el que «6. Nº Piezas vs Piezas editadas» (y las tarjetas mensuales de Audiovisual →
+// Datos) toman lo editado como estaba el ÚLTIMO DÍA del mes, en vez del contador vivo: así el
+// número de un mes terminado queda fijo aunque después se edite más. Antes de este mes el
+// historial de «listas» (av_pieza_listas_log) no existe o no es fiable, así que se conserva el
+// cálculo anterior.
+export const PIEZAS_FIN_DE_MES_START = { year: 2026, month: 11 }
+
 // Mes en que arranca el auto-llenado de la fila «Actualización de Plataformas» (dentro
 // de Productividad) desde la grilla semanal del módulo Chequeo (tabla
 // `publication_checks`, periodizada por mes/semana desde

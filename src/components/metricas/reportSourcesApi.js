@@ -25,8 +25,15 @@ import {
   sumPiezasVideoForLine,
   sumPiezasVideoBreakdownForLine,
   sumCnpAudiovisual,
+  usaEditadasFinDeMes,
+  finDeMesISO,
+  inicioCorteISO,
+  listasAFechaPorPauta,
+  withEditadasAFecha,
+  pendientesPrevios,
 } from '../../utils/audiovisual'
 import { cnpPieceCount, cnpPiecesDelivered } from '../cnp/constants'
+import { loadLotesListasAFecha } from '../pautas/avPautasApi'
 import { selectAllPages } from '../../lib/supabasePaginate'
 
 /** Límites [inicio, fin) de un mes en hora LOCAL — misma expresión que las funciones por línea. */
@@ -111,6 +118,13 @@ export async function loadReportSources(companyId, { year, months, lineIds }) {
     return null
   }
 
+  // Desde nov-2026 «editadas» es lo editado al último día del mes, y la línea de pendientes mira
+  // las pautas de meses anteriores (desde el corte): hay que traerlas aunque no estén en `months`.
+  // `pautasByClient` (indicador 5) y el resto siguen bucketeando solo por los meses pedidos.
+  const corteStr = inicioCorteISO()
+  const usaFinAlguno = months.some((m) => usaEditadasFinDeMes(year, m))
+  const avLowerStr = usaFinAlguno && corteStr < dateStr(rangeStart) ? corteStr : dateStr(rangeStart)
+
   const [meetingsRes, marksRes, checksRes, avRes, cnpRes, tasksRes] = await Promise.all([
     // Reuniones: fusiona countMeetingsHeldForLine + loadHeldClientIdsForLine (mismos
     // filtros, solo difieren en el post-proceso — ver meetingsApi.js).
@@ -147,12 +161,12 @@ export async function loadReportSources(companyId, { year, months, lineIds }) {
     supabase
       .from('av_pautas')
       .select(
-        'line_id, client_id, pauta_date, piezas_totales, piezas_editadas, status, formats, piezas_por_formato',
+        'id, line_id, client_id, pauta_date, deleted_at, piezas_totales, piezas_editadas, status, formats, piezas_por_formato',
       )
       .eq('company_id', companyId)
       .in('line_id', lineIds)
       .eq('status', 'realizada')
-      .gte('pauta_date', dateStr(rangeStart))
+      .gte('pauta_date', avLowerStr)
       .lt('pauta_date', dateStr(rangeEnd)),
     supabase
       .from('cnp_requests')
@@ -249,23 +263,90 @@ export async function loadReportSources(companyId, { year, months, lineIds }) {
     if (!cnpAvByLineMonth[key]) cnpAvByLineMonth[key] = []
     cnpAvByLineMonth[key].push(row)
   })
+  const avRows = avRes.data ?? []
   const avByLineMonth = {}
-  ;(avRes.data ?? []).forEach((row) => {
+  avRows.forEach((row) => {
     const m = monthForDateString(row.pauta_date ?? '')
     if (m == null) return
     const key = `${row.line_id}__${m}`
     if (!avByLineMonth[key]) avByLineMonth[key] = []
     avByLineMonth[key].push(row)
   })
+
+  // Desde nov-2026: por cada mes, lo editado al último día de ese mes (RPC sobre el historial de
+  // listas). Una llamada por mes, en paralelo. Una falla queda acotada a ese mes.
+  const finMonths = months.filter((m) => usaEditadasFinDeMes(year, m))
+  const listasByMonth = {}
+  await Promise.all(
+    finMonths.map(async (m) => {
+      const endStr = dateStr(bounds[m].end)
+      const ids = avRows
+        .filter(
+          (r) => !r.deleted_at && (r.pauta_date ?? '') >= corteStr && (r.pauta_date ?? '') < endStr,
+        )
+        .map((r) => r.id)
+      if (ids.length === 0) {
+        listasByMonth[m] = { porPauta: new Map(), error: null }
+        return
+      }
+      const { data, error } = await loadLotesListasAFecha(ids, finDeMesISO(year, m))
+      listasByMonth[m] = error
+        ? { porPauta: null, error }
+        : { porPauta: listasAFechaPorPauta(data), error: null }
+    }),
+  )
+
   lineIds.forEach((lineId) => {
     months.forEach((month) => {
-      const rows = avByLineMonth[`${lineId}__${month}`] ?? []
-      const entry = result[`${lineId}__${month}`]
-      entry.piezas = {
-        ...sumPiezasVideoForLine(rows),
-        porGrupo: sumPiezasVideoBreakdownForLine(rows),
-        cnp: sumCnpAudiovisual(cnpAvByLineMonth[`${lineId}__${month}`]),
+      const key = `${lineId}__${month}`
+      const rows = avByLineMonth[key] ?? []
+      const entry = result[key]
+      const cnp = sumCnpAudiovisual(cnpAvByLineMonth[key])
+
+      if (finMonths.includes(month)) {
+        const { porPauta, error: listasError } = listasByMonth[month]
+        if (listasError) {
+          // Sin lo editado a fin de mes no se inventa un número: el llamador conserva lo guardado.
+          entry.piezas = {
+            piezas: 0,
+            editadas: 0,
+            porGrupo: sumPiezasVideoBreakdownForLine([]),
+            cnp,
+            pendientesPrevios: null,
+            error: listasError,
+          }
+        } else {
+          const startStr = dateStr(bounds[month].start)
+          const delMes = withEditadasAFecha(
+            rows.filter((r) => !r.deleted_at),
+            porPauta,
+          )
+          const previas = withEditadasAFecha(
+            avRows.filter(
+              (r) =>
+                r.line_id === lineId &&
+                !r.deleted_at &&
+                (r.pauta_date ?? '') >= corteStr &&
+                (r.pauta_date ?? '') < startStr,
+            ),
+            porPauta,
+          )
+          entry.piezas = {
+            ...sumPiezasVideoForLine(delMes),
+            porGrupo: sumPiezasVideoBreakdownForLine(delMes),
+            cnp,
+            pendientesPrevios: pendientesPrevios(previas),
+          }
+        }
+      } else {
+        entry.piezas = {
+          ...sumPiezasVideoForLine(rows),
+          porGrupo: sumPiezasVideoBreakdownForLine(rows),
+          cnp,
+        }
       }
+
+      // «Nº Pautas» (indicador 5) no cambia: cuenta todas las pautas del mes, como siempre.
       const byClient = {}
       rows.forEach((row) => {
         if (!row.client_id) return

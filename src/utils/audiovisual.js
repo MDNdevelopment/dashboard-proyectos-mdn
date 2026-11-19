@@ -11,6 +11,7 @@
 import { cnpPieceCount, cnpPiecesDelivered } from '../components/cnp/constants'
 import { isClosed } from '../components/tareas/constants'
 import { clientIdsOf } from './rowClients'
+import { PIEZAS_FIN_DE_MES_START } from '../components/metricas/constants'
 
 export const FORMAT_KEYS = ['V', 'R', 'F']
 
@@ -934,6 +935,119 @@ export function sumPiezasVideoBreakdownForLine(pautas) {
     target.editadas += editadas
   })
   return out
+}
+
+// ─── Piezas editadas «al último día del mes» (desde PIEZAS_FIN_DE_MES_START) ───
+//
+// El contador vivo de `piezas_por_formato[c].editadas` sigue subiendo cuando se edita después de
+// terminado el mes. Desde noviembre 2026 el reporte (y Datos) toman lo editado como estaba el
+// último día del mes, leyéndolo del historial de «listas» vía la RPC `av_lotes_listas_a_fecha`.
+// Estas funciones son PURAS: reciben las filas de esa RPC y devuelven copias, sin tocar la entrada.
+
+/** ¿El mes (year, month 1-12) usa «editadas al último día del mes»? */
+export function usaEditadasFinDeMes(year, month) {
+  const s = PIEZAS_FIN_DE_MES_START
+  return year > s.year || (year === s.year && month >= s.month)
+}
+
+/**
+ * ¿El reporte de ese mes muestra la línea «pendiente de meses anteriores»? Solo desde el mes
+ * SIGUIENTE al corte: en el primer mes de la regla (nov-2026) no puede haber pendientes previos.
+ */
+export function muestraPendientesPrevios(year, month) {
+  return usaEditadasFinDeMes(year, month) && inicioMesISO(year, month) > inicioCorteISO()
+}
+
+/** Primer día del mes como 'YYYY-MM-DD' (sin pasar por Date.toISOString: no hay desfase de zona). */
+export function inicioMesISO(year, month) {
+  return `${year}-${pad(month)}-01`
+}
+
+/** Último día del mes como 'YYYY-MM-DD' (bisiestos incluidos, sin desfase de zona). */
+export function finDeMesISO(year, month) {
+  const last = new Date(year, month, 0).getDate()
+  return `${year}-${pad(month)}-${pad(last)}`
+}
+
+/** Primer día desde el que rige la regla nueva, 'YYYY-MM-DD'. */
+export function inicioCorteISO() {
+  return inicioMesISO(PIEZAS_FIN_DE_MES_START.year, PIEZAS_FIN_DE_MES_START.month)
+}
+
+/**
+ * Agrupa las filas de `av_lotes_listas_a_fecha` por pauta y formato.
+ * @param {Array<{pauta_id:string, formato:string, listas:number}>} rows
+ * @returns {Map<string, Record<string, number>>} pauta_id → { V?, R?, F? } (suma de listas)
+ */
+export function listasAFechaPorPauta(rows) {
+  const out = new Map()
+  ;(rows ?? []).forEach((r) => {
+    if (!r?.pauta_id || !r.formato) return
+    const entry = out.get(r.pauta_id) ?? {}
+    entry[r.formato] = (entry[r.formato] ?? 0) + (Number(r.listas) || 0)
+    out.set(r.pauta_id, entry)
+  })
+  return out
+}
+
+/**
+ * Copias de las pautas con lo editado como estaba en la fecha de las `listas`. Para que
+ * `sumPiezasVideoBreakdownForLine` y compañía funcionen sin cambios.
+ * - Con desglose: `piezas_por_formato[c].editadas = min(salieron, listas[c] ?? 0)` y la columna
+ *   cruda `piezas_editadas` = Σ de esos valores (como la deja el trigger).
+ * - Legacy (sin desglose): `piezas_editadas = min(piezas_totales, Σ formatos)`.
+ * `salieron`/`piezas_totales` no se tocan (siguen vivos). No muta la entrada.
+ * @param {Array} pautas
+ * @param {Map<string, Record<string, number>>} porPauta — salida de `listasAFechaPorPauta`
+ */
+export function withEditadasAFecha(pautas, porPauta) {
+  return (pautas ?? []).map((p) => {
+    const listas = porPauta?.get(p.id) ?? {}
+    if (hasFormatoBreakdown(p)) {
+      const next = {}
+      Object.entries(p.piezas_por_formato).forEach(([code, entry]) => {
+        const salieron = Math.max(0, Number(entry?.salieron) || 0)
+        next[code] = { ...entry, editadas: Math.min(salieron, listas[code] ?? 0) }
+      })
+      // `piezas_editadas` (columna cruda, suma de todos los formatos; la usa la tarjeta «piezas por
+      // línea» de Datos) también se recalcula: el trigger la deja siempre igual a Σ editadas.
+      const piezasEditadas = Object.values(next).reduce((acc, e) => acc + e.editadas, 0)
+      return { ...p, piezas_por_formato: next, piezas_editadas: piezasEditadas }
+    }
+    const total = Math.max(0, Number(p.piezas_totales) || 0)
+    const suma = Object.values(listas).reduce((acc, n) => acc + n, 0)
+    return { ...p, piezas_editadas: Math.min(total, suma) }
+  })
+}
+
+/**
+ * Copias de los lotes de cada pauta con `listas` como estaban en la fecha pedida (para Datos).
+ * Un lote que no aparece en las filas (se creó después de esa fecha) queda en 0.
+ * @param {Map<string, Array>} piezasByPauta — pauta_id → lotes
+ * @param {Array<{pieza_id:string, listas:number}>} rows — salida de la RPC
+ * @returns {Map<string, Array>}
+ */
+export function piezasByPautaAFecha(piezasByPauta, rows) {
+  const byPieza = new Map((rows ?? []).map((r) => [r.pieza_id, Number(r.listas) || 0]))
+  const out = new Map()
+  ;(piezasByPauta ?? new Map()).forEach((lotes, pautaId) => {
+    out.set(
+      pautaId,
+      lotes.map((pz) => (pz.es_lote ? { ...pz, listas: byPieza.get(pz.id) ?? 0 } : pz)),
+    )
+  })
+  return out
+}
+
+/**
+ * Lo que quedó sin editar de meses anteriores, SOLO video (V+R): línea informativa del reporte,
+ * no entra al puntaje. Recibe pautas previas ya transformadas con `withEditadasAFecha` a la fecha
+ * del reporte.
+ * @returns {{piezas:number, editadas:number, pendientes:number}}
+ */
+export function pendientesPrevios(pautasPrevias) {
+  const { piezas, editadas } = sumPiezasVideoForLine(pautasPrevias ?? [])
+  return { piezas, editadas, pendientes: Math.max(0, piezas - editadas) }
 }
 
 // ─── Checklist de piezas por editor (av_pauta_piezas) ──────────────────────

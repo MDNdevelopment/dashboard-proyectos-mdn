@@ -20,7 +20,15 @@ const MESES = [
  * `mejorSi` dice hacia dónde es bueno moverse ('sube' | 'baja' | null = neutro) para
  * colorear la flecha sin que el lector tenga que pensarlo.
  */
-export default function KpiMes({ year, month, actual, anterior, onMonthChange, onGoPendientes }) {
+export default function KpiMes({
+  year,
+  month,
+  actual,
+  anterior,
+  nota = null,
+  onMonthChange,
+  onGoPendientes,
+}) {
   const value = `${year}-${String(month).padStart(2, '0')}`
   const prev = month === 1 ? { y: year - 1, m: 12 } : { y: year, m: month - 1 }
   const kpis = [
@@ -68,6 +76,7 @@ export default function KpiMes({ year, month, actual, anterior, onMonthChange, o
             Comparado con {MESES[prev.m - 1]}
             {prev.y !== year ? ` ${prev.y}` : ''}.
           </p>
+          {nota && <p className="text-[12px] text-[#999] mt-0.5">{nota}</p>}
         </div>
         <MonthPeriodPicker value={value} onChange={onMonthChange} />
       </div>

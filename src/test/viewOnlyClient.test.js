@@ -102,6 +102,22 @@ describe('en modo "Ver como"', () => {
     expect(calls.rpc).toEqual(['users_on_vacation_today'])
   })
 
+  it('deja pasar la RPC de piezas editadas al fin de mes (solo lee) y sigue bloqueando las demás', async () => {
+    const { client, calls } = makeFakeClient()
+    setViewOnly(true)
+
+    const lectura = await client.rpc('av_lotes_listas_a_fecha', {
+      p_pauta_ids: [],
+      p_fecha: '2026-11-30',
+    })
+    expect(lectura.error).toBeNull()
+    expect(lectura.data).toBe('real')
+
+    const escritura = await client.rpc('av_pauta_piezas_borrar_todo', {})
+    expect(escritura.error?.code).toBe('VIEW_ONLY')
+    expect(calls.rpc).toEqual(['av_lotes_listas_a_fecha'])
+  })
+
   it('no contamina el builder de otras consultas al salir del modo', async () => {
     const { client, calls } = makeFakeClient()
     setViewOnly(true)
