@@ -3,7 +3,7 @@
 -- Audiovisual → Datos para que el número de un mes terminado quede fijo (ver
 -- docs/arquitectura/audiovisual.md).
 -- Depende de 20261102130000 (av_pieza_listas_log) y 20261102130200 (av_pieza_listas_a_fecha).
--- NO aplicar a producción sin confirmación del desarrollador.
+-- Aplicada a producción el 2026-11-19 (registrada como `av_lotes_listas_a_fecha`), tras un ensayo con rollback.
 --
 -- · Una fila por lote (no por pauta y formato): así la lógica de negocio vive en JS y se prueba
 --   con vitest, y Datos recibe los lotes con su `listas` reemplazado.
