@@ -93,9 +93,9 @@ describe('LineView — "Cerrar reporte" (nivel 4 / admin)', () => {
     })
 
     await user.click(screen.getByText('Cerrar reporte'))
-    expect(await screen.findByText(/Sí, cerrar permanentemente/)).toBeInTheDocument()
+    expect(await screen.findByText(/Sí, cerrar el reporte/)).toBeInTheDocument()
 
-    await user.click(screen.getByText(/Sí, cerrar permanentemente/))
+    await user.click(screen.getByText(/Sí, cerrar el reporte/))
 
     await waitFor(() => {
       expect(mockCloseReport).toHaveBeenCalledWith(
@@ -133,9 +133,9 @@ describe('LineView — "Cerrar reporte" (nivel 4 / admin)', () => {
       expect(screen.getByText('Cerrar reporte')).toBeInTheDocument()
     })
     await user.click(screen.getByText('Cerrar reporte'))
-    expect(await screen.findByText(/Sí, cerrar permanentemente/)).toBeInTheDocument()
+    expect(await screen.findByText(/Sí, cerrar el reporte/)).toBeInTheDocument()
     await user.click(screen.getByText('Cancelar'))
-    expect(screen.queryByText(/Sí, cerrar permanentemente/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Sí, cerrar el reporte/)).not.toBeInTheDocument()
     expect(mockCloseReport).not.toHaveBeenCalled()
   })
 

@@ -48,9 +48,14 @@ export default function OperacionesView({
   year,
   month,
   closed = false,
+  reopened = false,
   readOnly = false,
 }) {
   const { can = () => true } = useAuth()
+  // `closed` bloquea la edición; `derivacionCongelada` también cubre un reporte desbloqueado por un
+  // admin (`reopened`): se edita a mano, pero lo calculado no se recalcula ni se autoguarda con datos
+  // de hoy hasta que se vuelva a cerrar.
+  const derivacionCongelada = closed || reopened
   // La Meta de reuniones se recalcula sola (1 por marca de la línea, menos las "No
   // aplica") solo en el mes en curso, no cerrado, y en o después de
   // REUNIONES_META_AUTO_START. Antes de ese mes la Meta se sigue capturando a mano (ver
@@ -64,7 +69,7 @@ export default function OperacionesView({
     (year === REUNIONES_META_AUTO_START.year && month >= REUNIONES_META_AUTO_START.month)
   // Gates centralizados en buildEffectiveReport.js — única definición, compartida con el
   // camino de lectura (loadYearReportsEffective). Ver ARQUITECTURA.md §2.5.
-  const gates = effectiveReportGates(year, month, closed, today)
+  const gates = effectiveReportGates(year, month, derivacionCongelada, today)
   const { metaAutoSync, isFijasEra, isAvEra, isSolicitudesEra } = gates
   const [report, setReport] = useState(null)
   const [prevReport, setPrevReport] = useState(null)
@@ -223,7 +228,7 @@ export default function OperacionesView({
         cnpSolicitudes: cnpSolRes,
         tareasSolicitudes: tareasSolRes,
       },
-      { year, month, closed, activeLineClients, lineEmployees, now: today },
+      { year, month, closed: derivacionCongelada, activeLineClients, lineEmployees, now: today },
     )
     setReport(synced)
     resetAutosave(synced)
@@ -239,7 +244,7 @@ export default function OperacionesView({
         lineId: line.id,
         year,
         month,
-        closed,
+        closed: derivacionCongelada,
         stored: reportRes.data.data,
         effectiveData: synced,
       })
@@ -263,7 +268,17 @@ export default function OperacionesView({
       setReunionesClients(activeLineClients)
     }
     setLoading(false)
-  }, [line?.id, line?.member_user_ids, companyId, year, month, closed, metaAutoSync, resetAutosave])
+  }, [
+    line?.id,
+    line?.member_user_ids,
+    companyId,
+    year,
+    month,
+    closed,
+    reopened,
+    metaAutoSync,
+    resetAutosave,
+  ])
 
   useEffect(() => {
     load()
