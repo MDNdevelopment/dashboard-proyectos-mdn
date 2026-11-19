@@ -158,6 +158,133 @@ export function monthLabel(month) {
   return MONTH_NAMES[m - 1] ? `${MONTH_NAMES[m - 1]} ${y}` : month
 }
 
+// ── Diagrama de Gantt (vista Vigentes) ──────────────────────────────────────
+
+// Meses visibles: uno antes del actual y tres después (la mediana de una táctica es ~3 semanas).
+export const GANTT_MONTHS_BEFORE = 1
+export const GANTT_MONTHS_AFTER = 3
+
+function addMonths(month, n) {
+  const [y, m] = month.split('-').map(Number)
+  const idx = y * 12 + (m - 1) + n
+  return `${Math.floor(idx / 12)}-${String((idx % 12) + 1).padStart(2, '0')}`
+}
+
+function lastDayOf(month) {
+  const [y, m] = month.split('-').map(Number)
+  return `${month}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`
+}
+
+/**
+ * Ventana de fechas del Gantt. `offset` corre la ventana de a un mes (flechas ‹ ›).
+ * @returns {{ start: string, end: string, totalDays: number,
+ *   months: Array<{ month: string, label: string, leftPct: number, widthPct: number }> }}
+ */
+export function ganttWindow(today = todayCaracas(), offset = 0) {
+  const first = addMonths(today.slice(0, 7), offset - GANTT_MONTHS_BEFORE)
+  const last = addMonths(first, GANTT_MONTHS_BEFORE + GANTT_MONTHS_AFTER)
+  const start = `${first}-01`
+  const end = lastDayOf(last)
+  const totalDays = diffDays(start, end) + 1
+  const months = []
+  for (let mo = first; mo <= last; mo = addMonths(mo, 1)) {
+    const from = diffDays(start, `${mo}-01`)
+    const days = diffDays(`${mo}-01`, lastDayOf(mo)) + 1
+    months.push({
+      month: mo,
+      label: monthLabel(mo).split(' ')[0],
+      leftPct: (from / totalDays) * 100,
+      widthPct: (days / totalDays) * 100,
+    })
+  }
+  return { start, end, totalDays, months }
+}
+
+/** Posición (en % del ancho) de un día dentro de la ventana, o null si queda afuera. */
+export function ganttDayPct(date, win) {
+  if (!date || date < win.start || date > win.end) return null
+  return (diffDays(win.start, date) / win.totalDays) * 100
+}
+
+/**
+ * Barra de una táctica dentro de la ventana, recortada a sus bordes.
+ * Los días son inclusive: una táctica de un solo día ocupa un día de ancho.
+ * @returns {{ leftPct: number, widthPct: number, cutStart: boolean, cutEnd: boolean } | null}
+ *   null si no tiene fechas o no se cruza con la ventana.
+ */
+export function ganttBar(campaign, win) {
+  const { start_date: s, end_date: e } = campaign ?? {}
+  if (!s || !e || e < s || e < win.start || s > win.end) return null
+  const from = s < win.start ? win.start : s
+  const to = e > win.end ? win.end : e
+  return {
+    leftPct: (diffDays(win.start, from) / win.totalDays) * 100,
+    widthPct: ((diffDays(from, to) + 1) / win.totalDays) * 100,
+    cutStart: s < win.start,
+    cutEnd: e > win.end,
+  }
+}
+
+/**
+ * Tono de la barra: 'programada' (aún no empieza), el color de la pill de días si está
+ * vigente ('red' | 'yellow' | 'green') o 'done' si ya no está en marcha.
+ */
+export function ganttTone(campaign, today = todayCaracas()) {
+  if (!isVigente(campaign, today)) return 'done'
+  if (isProgramada(campaign, today)) return 'programada'
+  return daysPillTone(daysLeft(campaign, today))
+}
+
+/**
+ * Filas del Gantt: una por marca con sus tácticas dentro de la ventana.
+ * Orden: primero las marcas con vigente que vence antes; al final las sin vigente (por nombre).
+ * @param {Array} brands     — marcas a mostrar
+ * @param {Array} campaigns  — tácticas (de cualquier marca)
+ * @returns {Array<{ brand: object, bars: Array<{ campaign, bar, tone }>, nextEnd: string|null }>}
+ */
+export function ganttRows(brands, campaigns, win, today = todayCaracas()) {
+  const byClient = new Map()
+  for (const c of campaigns ?? []) {
+    if (!c?.client_id) continue
+    if (!byClient.has(c.client_id)) byClient.set(c.client_id, [])
+    byClient.get(c.client_id).push(c)
+  }
+  const rows = (brands ?? []).map((brand) => {
+    const mine = byClient.get(brand.id) ?? []
+    const vig = mine.filter((c) => isVigente(c, today)).map((c) => c.end_date)
+    const bars = mine
+      .map((campaign) => ({
+        campaign,
+        bar: ganttBar(campaign, win),
+        tone: ganttTone(campaign, today),
+      }))
+      .filter((b) => b.bar)
+      .sort((a, b) => a.campaign.start_date.localeCompare(b.campaign.start_date))
+    return { brand, bars, nextEnd: vig.length ? vig.sort()[0] : null }
+  })
+  return rows.sort((a, b) => {
+    if (a.nextEnd && b.nextEnd && a.nextEnd !== b.nextEnd) return a.nextEnd < b.nextEnd ? -1 : 1
+    if (a.nextEnd && !b.nextEnd) return -1
+    if (!a.nextEnd && b.nextEnd) return 1
+    return (a.brand.name ?? '').localeCompare(b.brand.name ?? '', 'es')
+  })
+}
+
+/** Duración inclusive en días ("del 1 al 21" = 21). null sin fechas o si el fin es anterior. */
+export function tacticDuration(campaign) {
+  const { start_date: s, end_date: e } = campaign ?? {}
+  if (!s || !e) return null
+  const d = diffDays(s, e)
+  return d >= 0 ? d + 1 : null
+}
+
+/** "21 días" / "1 día" / null. */
+export function durationLabel(campaign) {
+  const d = tacticDuration(campaign)
+  if (d == null) return null
+  return `${d} ${d === 1 ? 'día' : 'días'}`
+}
+
 /**
  * Saca el id de un link de Drive: carpeta, archivo o Google Doc.
  * Acepta /folders/<id>, /drive/u/N/folders/<id>, /file/d/<id>, /document/d/<id> y ?id=<id>.

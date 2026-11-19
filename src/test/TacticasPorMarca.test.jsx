@@ -38,9 +38,7 @@ function renderMarca(campaigns, props = {}) {
   return render(
     <TacticasPorMarca
       campaigns={campaigns}
-      brands={[brand]}
       clientId="b1"
-      onChangeClient={() => {}}
       clientsById={clientsById}
       linesById={linesById}
       usersMap={usersMap}
@@ -60,11 +58,27 @@ describe('TacticasPorMarca', () => {
     mockUpdateCampaign.mockResolvedValue({ data: null, error: null })
   })
 
-  it('sin marca elegida invita a elegir una', () => {
-    renderMarca([], { clientId: '' })
+  it('una marca fuera del alcance del usuario avisa en vez de mostrar una ficha vacía', () => {
+    renderMarca([], { clientId: 'otra' })
     expect(
-      screen.getByText('Elige una marca para ver su historial de tácticas'),
+      screen.getByText('Esta marca no está dentro de las líneas que puedes ver'),
     ).toBeInTheDocument()
+  })
+
+  it('muestra la duración de la táctica vigente y de las del historial', () => {
+    renderMarca([
+      camp(),
+      camp({
+        id: 'c2',
+        name: 'Septiembre',
+        status: 'Finalizado',
+        start_date: '2026-09-01',
+        end_date: '2026-09-21',
+      }),
+    ])
+    // 01-nov → 31-dic, ambos inclusive: 61 días.
+    expect(screen.getByText(/Duración: 61 días/)).toBeInTheDocument()
+    expect(screen.getByText('Duración: 21 días')).toBeInTheDocument()
   })
 
   it('el encabezado muestra la línea, la jefa y cuántas tácticas tiene la marca', () => {

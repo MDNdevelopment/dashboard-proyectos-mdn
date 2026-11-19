@@ -226,18 +226,14 @@ describe('AdsPage — tabs Tácticas/Ads', () => {
       expect(screen.getByRole('button', { name: 'Historial', pressed: true })).toBeInTheDocument()
     })
 
-    it('Por marca sin marca elegida invita a elegir una', async () => {
-      const user = userEvent.setup()
+    it('solo hay dos subvistas: la marca se elige en el filtro "Marca" de Vigentes', async () => {
       renderPage()
       await waitFor(() => {
         expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
       })
 
-      await user.click(screen.getByRole('button', { name: 'Por marca' }))
-
-      expect(
-        screen.getByText('Elige una marca para ver su historial de tácticas'),
-      ).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Por marca' })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Marca' })).toHaveTextContent('Todas las marcas')
     })
 
     it('una ?view= desconocida cae en Vigentes', async () => {
@@ -250,26 +246,26 @@ describe('AdsPage — tabs Tácticas/Ads', () => {
   })
 
   describe('tarjetas de resumen (Vigentes)', () => {
-    it('cuenta las tácticas vigentes y las que vencen pronto', async () => {
+    it('cuenta las tácticas vigentes y no tiene tarjetas de vencimiento', async () => {
       renderPage()
       await waitFor(() => {
         expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
       })
       const cards = screen.getByRole('region', { name: 'Resumen de tácticas' })
-      // 1 vigente (Julio); vence el 20-jul, a 5 días: no entra en "3 días" pero sí en "este mes".
+      // 1 vigente (Julio).
       expect(within(cards).getByText('Tácticas vigentes').nextElementSibling).toHaveTextContent('1')
-      expect(within(cards).getByText('Vencen en 3 días').nextElementSibling).toHaveTextContent('0')
-      expect(within(cards).getByText('Vencen este mes').nextElementSibling).toHaveTextContent('1')
+      expect(within(cards).queryByText(/Vencen/)).not.toBeInTheDocument()
     })
 
-    it('clic en "Vencen en 3 días" filtra la tabla', async () => {
+    it('"Vencen en 3 días" sigue disponible como filtro de Estado', async () => {
       const user = userEvent.setup()
       renderPage()
       await waitFor(() => {
         expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
       })
 
-      await user.click(screen.getByRole('button', { name: /Vencen en 3 días/ }))
+      // Julio vence el 20-jul, a 5 días: no entra en "3 días".
+      await user.selectOptions(screen.getByLabelText('Estado'), 'vencen3')
 
       await waitFor(() => {
         expect(screen.getByText('Sin tácticas para los filtros aplicados')).toBeInTheDocument()

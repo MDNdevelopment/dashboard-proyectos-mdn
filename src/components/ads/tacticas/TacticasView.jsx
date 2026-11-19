@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import FilterBar, { FilterField } from '../../common/FilterBar'
+import DescribedSelect from '../../common/DescribedSelect'
 import AdsList from '../AdsList'
 import TacticasAlertCards from './TacticasAlertCards'
+import TacticasGantt from './TacticasGantt'
 import TacticasPorHacer from './TacticasPorHacer'
 import TacticasVigentesTable from './TacticasVigentesTable'
 import TacticasPorMarca from './TacticasPorMarca'
@@ -20,7 +22,6 @@ import {
 
 const VIEWS = [
   { key: 'vigentes', label: 'Vigentes' },
-  { key: 'marca', label: 'Por marca' },
   { key: 'historial', label: 'Historial' },
 ]
 
@@ -32,12 +33,14 @@ const ESTADOS = [
 ]
 
 /**
- * Host de la pestaña Tácticas: historial de tácticas por marca con tres subvistas.
- * La subvista y la marca viven en la URL (`?view=vigentes|marca|historial&client=<id>`),
- * igual que `?line=`, para poder enlazar a una ficha desde otro módulo.
+ * Host de la pestaña Tácticas: historial de tácticas por marca con dos subvistas.
+ * La subvista y la marca viven en la URL (`?view=vigentes|historial&client=<id>`), igual que
+ * `?line=`, para poder enlazar a una ficha desde otro módulo. El viejo `?view=marca` se trata
+ * como Vigentes (con la marca de `?client=` elegida).
  *
- * - Vigentes: tarjetas de alerta, marcas por hacer y tabla de tácticas en marcha.
- * - Por marca: ficha con las vigentes y el historial de la marca elegida.
+ * - Vigentes: tarjetas de resumen, filtros (incluido "Marca"), Gantt, marcas por hacer y tabla
+ *   de tácticas en marcha. Con una marca elegida en el filtro, en lugar del Gantt y la tabla
+ *   se muestra su ficha (vigentes con checklist, insumo e historial).
  * - Historial: todas las tácticas (tabla con filtros).
  *
  * @param {object}   props
@@ -73,9 +76,7 @@ export default function TacticasView({
   onCreate,
 }) {
   const [searchParams, setSearchParams] = useSearchParams()
-  const view = VIEWS.some((v) => v.key === searchParams.get('view'))
-    ? searchParams.get('view')
-    : 'vigentes'
+  const view = searchParams.get('view') === 'historial' ? 'historial' : 'vigentes'
   const clientId = searchParams.get('client') ?? ''
 
   const [search, setSearch] = useState('')
@@ -99,8 +100,8 @@ export default function TacticasView({
     )
   }
 
-  const setView = (key) => patchParams({ view: key })
-  const openBrand = (id) => patchParams({ view: 'marca', client: id })
+  const setView = (key) => patchParams({ view: key === 'vigentes' ? null : key })
+  const openBrand = (id) => patchParams({ view: null, client: id })
 
   const latestMap = useMemo(() => latestByBrand(campaigns), [campaigns])
   const leadOf = (id) => leadNameOf(id, clientsById, linesById, usersMap)
@@ -114,14 +115,33 @@ export default function TacticasView({
   const stats = useMemo(() => {
     const pcts = vigentes.map((c) => completionPct(c.checklist)).filter((p) => p != null)
     return {
-      vigentes: vigentes.length,
       brandsTotal: brands.length,
-      vencen3: vigentes.filter((c) => daysLeft(c, today) <= 3).length,
-      vencenMes: vigentes.filter((c) => c.end_date.slice(0, 7) === today.slice(0, 7)).length,
+      brandsConVigente: brands.length - sinVigente.length,
+      vigentes: vigentes.length,
       sinTactica: sinVigente.length,
       avgPct: pcts.length ? Math.round(pcts.reduce((a, b) => a + b, 0) / pcts.length) : null,
     }
-  }, [vigentes, brands, sinVigente, today])
+  }, [vigentes, brands, sinVigente])
+
+  const brandOptions = useMemo(
+    () => [
+      { key: '', label: 'Todas las marcas', description: 'Tablero con todas las marcas' },
+      ...[...brands]
+        .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '', 'es'))
+        .map((b) => {
+          const n = campaigns.filter((c) => c.client_id === b.id).length
+          const hasVigente = campaigns.some((c) => c.client_id === b.id && isVigente(c, today))
+          return {
+            key: b.id,
+            label: b.name,
+            description: `${linesById.get(b.line_id)?.name ?? 'Sin línea'} · ${n} ${
+              n === 1 ? 'táctica' : 'tácticas'
+            } · ${hasVigente ? 'con táctica vigente' : 'sin táctica vigente'}`,
+          }
+        }),
+    ],
+    [brands, campaigns, linesById, today],
+  )
 
   const jefas = useMemo(
     () => [...new Set(vigentes.map((c) => leadOf(c.client_id)).filter(Boolean))].sort(),
@@ -133,28 +153,38 @@ export default function TacticasView({
     [vigentes],
   )
 
+  const q = search.toLowerCase()
+  const matchesSearch = (c) =>
+    !q ||
+    [c.name, c.client, c.objective, c.notes]
+      .filter(Boolean)
+      .some((t) => t.toLowerCase().includes(q))
+
+  // Gantt: marcas de la jefa elegida; con búsqueda, las que coinciden por nombre o por alguna
+  // de sus tácticas. Los filtros de estado y mes son de la tabla.
+  const ganttBrands = brands.filter((b) => {
+    if (jefa !== 'all' && leadOf(b.id) !== jefa) return false
+    if (!q || (b.name ?? '').toLowerCase().includes(q)) return true
+    return campaigns.some((c) => c.client_id === b.id && matchesSearch(c))
+  })
+
   const filtered = vigentes.filter((c) => {
     if (estado === 'vencen3' && daysLeft(c, today) > 3) return false
     if (estado === 'vencen_mes' && c.end_date.slice(0, 7) !== today.slice(0, 7)) return false
     if (estado === 'programadas' && !isProgramada(c, today)) return false
     if (jefa !== 'all' && leadOf(c.client_id) !== jefa) return false
     if (mes !== 'all' && c.end_date.slice(0, 7) !== mes) return false
-    if (search) {
-      const q = search.toLowerCase()
-      const hay = [c.name, c.client, c.objective, c.notes]
-        .filter(Boolean)
-        .some((t) => t.toLowerCase().includes(q))
-      if (!hay) return false
-    }
-    return true
+    return matchesSearch(c)
   })
 
-  const hasFilters = !!search || jefa !== 'all' || mes !== 'all' || estado !== 'vigentes'
+  const hasFilters =
+    !!search || !!clientId || jefa !== 'all' || mes !== 'all' || estado !== 'vigentes'
   function clearFilters() {
     setSearch('')
     setJefa('all')
     setMes('all')
     setEstado('vigentes')
+    if (clientId) patchParams({ client: null })
   }
 
   if (loading) {
@@ -189,17 +219,8 @@ export default function TacticasView({
         <>
           <TacticasAlertCards stats={stats} estado={estado} onFilter={setEstado} />
 
-          <TacticasPorHacer
-            brands={sinVigente}
-            latestByBrand={latestMap}
-            insumoClientIds={new Set(insumos.map((i) => i.handoff.client_id))}
-            canManage={canManage}
-            onCreate={onCreate}
-            onOpenBrand={openBrand}
-          />
-
-          <div className="mb-3">
-            <FilterBar cols={4} onClear={hasFilters ? clearFilters : undefined}>
+          <div className="mb-4">
+            <FilterBar cols={5} onClear={hasFilters ? clearFilters : undefined}>
               <FilterField label="Buscar">
                 <input
                   type="search"
@@ -207,6 +228,15 @@ export default function TacticasView({
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Táctica, marca, objetivo…"
                   className="input-base text-[14px] py-1.5 w-full"
+                />
+              </FilterField>
+              <FilterField label="Marca">
+                <DescribedSelect
+                  value={clientId}
+                  options={brandOptions}
+                  onChange={(id) => patchParams({ client: id })}
+                  placeholder="Todas las marcas"
+                  ariaLabel="Marca"
                 />
               </FilterField>
               <FilterField label="Jefa">
@@ -253,41 +283,58 @@ export default function TacticasView({
             </FilterBar>
           </div>
 
-          <p className="text-[13px] font-mono text-[#888] mb-2">
-            {filtered.length} {filtered.length === 1 ? 'táctica' : 'tácticas'}
-            {filtered.length !== vigentes.length && ` de ${vigentes.length}`}
-          </p>
+          {clientId ? (
+            <TacticasPorMarca
+              campaigns={campaigns}
+              clientId={clientId}
+              clientsById={clientsById}
+              linesById={linesById}
+              usersMap={usersMap}
+              today={today}
+              canManage={canManage}
+              onSelect={onSelect}
+              insumos={insumos.filter((i) => i.handoff.client_id === clientId)}
+              onDiscardInsumo={onDiscardInsumo}
+              onCreate={onCreate}
+              onUpdated={onUpdated}
+            />
+          ) : (
+            <>
+              <TacticasGantt
+                brands={ganttBrands}
+                campaigns={campaigns}
+                today={today}
+                onSelect={onSelect}
+                onOpenBrand={openBrand}
+              />
 
-          <TacticasVigentesTable
-            campaigns={filtered}
-            today={today}
-            clientsById={clientsById}
-            latestByBrand={latestMap}
-            leadOf={leadOf}
-            canManage={canManage}
-            onSelect={onSelect}
-            onOpenBrand={openBrand}
-          />
+              <TacticasPorHacer
+                brands={sinVigente}
+                latestByBrand={latestMap}
+                insumoClientIds={new Set(insumos.map((i) => i.handoff.client_id))}
+                canManage={canManage}
+                onCreate={onCreate}
+                onOpenBrand={openBrand}
+              />
+
+              <p className="text-[13px] font-mono text-[#888] mb-2">
+                {filtered.length} {filtered.length === 1 ? 'táctica' : 'tácticas'}
+                {filtered.length !== vigentes.length && ` de ${vigentes.length}`}
+              </p>
+
+              <TacticasVigentesTable
+                campaigns={filtered}
+                today={today}
+                clientsById={clientsById}
+                latestByBrand={latestMap}
+                leadOf={leadOf}
+                canManage={canManage}
+                onSelect={onSelect}
+                onOpenBrand={openBrand}
+              />
+            </>
+          )}
         </>
-      )}
-
-      {view === 'marca' && (
-        <TacticasPorMarca
-          campaigns={campaigns}
-          brands={brands}
-          clientId={clientId}
-          onChangeClient={(id) => patchParams({ client: id })}
-          clientsById={clientsById}
-          linesById={linesById}
-          usersMap={usersMap}
-          today={today}
-          canManage={canManage}
-          onSelect={onSelect}
-          insumos={insumos.filter((i) => i.handoff.client_id === clientId)}
-          onDiscardInsumo={onDiscardInsumo}
-          onCreate={onCreate}
-          onUpdated={onUpdated}
-        />
       )}
 
       {view === 'historial' && (

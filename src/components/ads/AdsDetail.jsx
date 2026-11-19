@@ -3,7 +3,7 @@ import { supabase } from '../../supabase'
 import { STATUS, STATUSES } from './constants'
 import StatusPill from '../common/StatusPill'
 import CampaignChecklist from './CampaignChecklist'
-import { completionPct, periodProgress } from '../../utils/tacticas'
+import { completionPct, durationLabel, periodProgress } from '../../utils/tacticas'
 
 export default function AdsDetail({
   campaign,
@@ -131,6 +131,14 @@ export default function AdsDetail({
               </p>
               <p className="text-[#333]">{fmt(campaign.end_date)}</p>
             </div>
+            {durationLabel(campaign) && (
+              <div>
+                <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-0.5">
+                  Duración
+                </p>
+                <p className="text-[#333]">{durationLabel(campaign)}</p>
+              </div>
+            )}
           </div>
 
           {campaign.objective && (

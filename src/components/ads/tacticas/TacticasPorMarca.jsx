@@ -1,4 +1,3 @@
-import DescribedSelect from '../../common/DescribedSelect'
 import ClientCell from '../ClientCell'
 import CampaignChecklist from '../CampaignChecklist'
 import DaysPill from './DaysPill'
@@ -9,6 +8,7 @@ import {
   closeDateOf,
   completionPct,
   daysLeft,
+  durationLabel,
   isProgramada,
   isVigente,
   latestByBrand,
@@ -20,12 +20,11 @@ import {
  * Ficha de una marca: sus tácticas vigentes arriba (con avance del período y checklist) y
  * el historial de las anteriores abajo, con el % de cumplimiento de cada una.
  * Es solo lectura salvo por tildar las acciones, que persiste en `campaigns.checklist`.
+ * La marca se elige en el filtro "Marca" de la vista Vigentes (`TacticasView`).
  *
  * @param {object}   props
  * @param {Array}    props.campaigns      — todas las tácticas visibles (de varias marcas)
- * @param {Array}    props.brands         — marcas (metric_clients) disponibles en el selector
- * @param {string}   props.clientId       — marca elegida ('' = ninguna)
- * @param {Function} props.onChangeClient — (clientId) => void
+ * @param {string}   props.clientId       — marca elegida
  * @param {Map}      props.clientsById
  * @param {Map}      props.linesById
  * @param {Map}      props.usersMap       — user_id → nombre
@@ -39,9 +38,7 @@ import {
  */
 export default function TacticasPorMarca({
   campaigns,
-  brands,
   clientId,
-  onChangeClient,
   clientsById,
   linesById,
   usersMap,
@@ -63,20 +60,6 @@ export default function TacticasPorMarca({
   const lead = leadNameOf(clientId, clientsById, linesById, usersMap)
   const line = linesById.get(client?.line_id)
 
-  const options = [...brands]
-    .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '', 'es'))
-    .map((b) => {
-      const n = campaigns.filter((c) => c.client_id === b.id).length
-      const hasVigente = campaigns.some((c) => c.client_id === b.id && isVigente(c, today))
-      return {
-        key: b.id,
-        label: b.name,
-        description: `${linesById.get(b.line_id)?.name ?? 'Sin línea'} · ${n} ${
-          n === 1 ? 'táctica' : 'tácticas'
-        } · ${hasVigente ? 'con táctica vigente' : 'sin táctica vigente'}`,
-      }
-    })
-
   async function handleChecklist(campaign, checklist) {
     onUpdated({ ...campaign, checklist }) // optimista
     const { data, error } = await updateCampaign(campaign.id, { checklist })
@@ -85,23 +68,10 @@ export default function TacticasPorMarca({
 
   return (
     <div className="space-y-5">
-      <div className="max-w-md">
-        <p className="text-[11px] font-mono font-bold tracking-[0.08em] uppercase text-[#999] mb-1">
-          Marca
-        </p>
-        <DescribedSelect
-          value={clientId}
-          options={options}
-          onChange={onChangeClient}
-          placeholder="Elige una marca…"
-          ariaLabel="Marca"
-        />
-      </div>
-
       {!client ? (
         <div className="text-center py-14 bg-white border border-[#e0ddd4] rounded-2xl">
           <p className="text-[16px] font-medium text-[#888]">
-            Elige una marca para ver su historial de tácticas
+            Esta marca no está dentro de las líneas que puedes ver
           </p>
         </div>
       ) : (
@@ -223,7 +193,8 @@ export default function TacticasPorMarca({
                       {c.name}
                     </button>
                     <p className="text-[14px] text-[#888] mt-0.5">
-                      {fmtDate(c.start_date)} → {fmtDate(c.end_date)} ·{' '}
+                      {fmtDate(c.start_date)} → {fmtDate(c.end_date)}
+                      {durationLabel(c) && ` · Duración: ${durationLabel(c)}`} ·{' '}
                       {usersMap.get(c.assignee) ?? 'Sin responsable'}
                     </p>
                   </div>
@@ -283,9 +254,16 @@ export default function TacticasPorMarca({
                     key={c.id}
                     className="flex flex-wrap items-start gap-x-5 gap-y-2 bg-white border border-[#e0ddd4] rounded-2xl px-5 py-4"
                   >
-                    <p className="flex-[0_0_170px] text-[12px] font-mono font-bold tracking-[0.08em] uppercase text-[#888] pt-1">
-                      {fmtDate(c.start_date)} – {fmtDate(c.end_date)}
-                    </p>
+                    <div className="flex-[0_0_170px] pt-1">
+                      <p className="text-[12px] font-mono font-bold tracking-[0.08em] uppercase text-[#888]">
+                        {fmtDate(c.start_date)} – {fmtDate(c.end_date)}
+                      </p>
+                      {durationLabel(c) && (
+                        <p className="text-[12px] font-mono text-[#999] mt-0.5">
+                          Duración: {durationLabel(c)}
+                        </p>
+                      )}
+                    </div>
                     <div className="flex-1 min-w-[240px]">
                       <button
                         type="button"

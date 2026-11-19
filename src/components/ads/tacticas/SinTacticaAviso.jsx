@@ -11,7 +11,7 @@ import { isVigente } from '../../../utils/tacticas'
  *
  * @param {object}   props
  * @param {string}   props.clientId   — metric_clients.id
- * @param {Function} props.onOpen     — (clientId) => void, navega a /ads?view=marca&client=<id>
+ * @param {Function} props.onOpen     — (clientId) => void, navega a /ads?client=<id>
  */
 export default function SinTacticaAviso({ clientId, onOpen }) {
   const [sinVigente, setSinVigente] = useState(false)

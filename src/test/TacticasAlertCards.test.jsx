@@ -4,23 +4,22 @@ import { vi } from 'vitest'
 import TacticasAlertCards from '../components/ads/tacticas/TacticasAlertCards'
 
 const stats = {
-  vigentes: 18,
   brandsTotal: 71,
-  vencen3: 2,
-  vencenMes: 4,
+  brandsConVigente: 18,
+  vigentes: 21,
   sinTactica: 53,
   avgPct: 64,
 }
 
 describe('TacticasAlertCards', () => {
-  it('muestra los contadores', () => {
+  it('muestra cuántas marcas hay, cuántas tácticas están vigentes y las marcas sin táctica', () => {
     render(<TacticasAlertCards stats={stats} estado="vigentes" onFilter={() => {}} />)
-    expect(screen.getByText('18')).toBeInTheDocument()
-    expect(screen.getByText(/de 71 marcas/)).toBeInTheDocument()
-    expect(screen.getByText(/cumplimiento 64%/)).toBeInTheDocument()
-    expect(screen.getByText('2')).toBeInTheDocument()
-    expect(screen.getByText('4')).toBeInTheDocument()
+    expect(screen.getByText('71')).toBeInTheDocument()
+    expect(screen.getByText('18 con táctica vigente')).toBeInTheDocument()
+    expect(screen.getByText('21')).toBeInTheDocument()
+    expect(screen.getByText(/cumplimiento promedio 64%/)).toBeInTheDocument()
     expect(screen.getByText('53')).toBeInTheDocument()
+    expect(screen.getByText('marcas por hacer')).toBeInTheDocument()
   })
 
   it('sin ninguna acción registrada no muestra el cumplimiento promedio', () => {
@@ -34,29 +33,45 @@ describe('TacticasAlertCards', () => {
     expect(screen.queryByText(/cumplimiento/)).not.toBeInTheDocument()
   })
 
-  it('las tres primeras tarjetas filtran al hacer clic', async () => {
+  it('lo que vence pronto no ocupa tarjetas (llega como notificación y se ve en el Gantt)', () => {
+    render(<TacticasAlertCards stats={stats} estado="vigentes" onFilter={() => {}} />)
+    expect(screen.queryByText(/Vencen en 3 días/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Vencen este mes/)).not.toBeInTheDocument()
+  })
+
+  it('"Tácticas vigentes" quita el filtro de estado al hacer clic', async () => {
     const user = userEvent.setup()
     const onFilter = vi.fn()
-    render(<TacticasAlertCards stats={stats} estado="vigentes" onFilter={onFilter} />)
-
-    await user.click(screen.getByRole('button', { name: /Vencen en 3 días/ }))
-    expect(onFilter).toHaveBeenLastCalledWith('vencen3')
-    await user.click(screen.getByRole('button', { name: /Vencen este mes/ }))
-    expect(onFilter).toHaveBeenLastCalledWith('vencen_mes')
+    render(<TacticasAlertCards stats={stats} estado="vencen3" onFilter={onFilter} />)
     await user.click(screen.getByRole('button', { name: /Tácticas vigentes/ }))
     expect(onFilter).toHaveBeenLastCalledWith('vigentes')
   })
 
-  it('"Sin táctica vigente" es informativa (esas marcas se listan en Por hacer)', () => {
+  it('"Marcas" y "Sin táctica vigente" son informativas', () => {
     render(<TacticasAlertCards stats={stats} estado="vigentes" onFilter={() => {}} />)
     expect(screen.queryByRole('button', { name: /Sin táctica vigente/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Marcas/ })).not.toBeInTheDocument()
   })
 
-  it('resalta la tarjeta del filtro activo', () => {
-    render(<TacticasAlertCards stats={stats} estado="vencen3" onFilter={() => {}} />)
-    expect(screen.getByRole('button', { name: /Vencen en 3 días/ }).className).toContain('ring-2')
-    expect(screen.getByRole('button', { name: /Vencen este mes/ }).className).not.toContain(
+  it('resalta "Tácticas vigentes" solo cuando no hay filtro de estado', () => {
+    const { rerender } = render(
+      <TacticasAlertCards stats={stats} estado="vigentes" onFilter={() => {}} />,
+    )
+    expect(screen.getByRole('button', { name: /Tácticas vigentes/ }).className).toContain('ring-2')
+    rerender(<TacticasAlertCards stats={stats} estado="vencen3" onFilter={() => {}} />)
+    expect(screen.getByRole('button', { name: /Tácticas vigentes/ }).className).not.toContain(
       'ring-2',
     )
+  })
+
+  it('usa el singular con una sola marca por hacer', () => {
+    render(
+      <TacticasAlertCards
+        stats={{ ...stats, sinTactica: 1 }}
+        estado="vigentes"
+        onFilter={() => {}}
+      />,
+    )
+    expect(screen.getByText('marca por hacer')).toBeInTheDocument()
   })
 })

@@ -86,7 +86,7 @@ export default function ClientFichaContent({ client, line, onClose, employees = 
           clientId={client.id}
           onOpen={(id) => {
             onClose()
-            navigate(`/ads?view=marca&client=${id}`)
+            navigate(`/ads?client=${id}`)
           }}
         />
 
