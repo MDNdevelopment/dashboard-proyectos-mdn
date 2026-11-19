@@ -44,6 +44,15 @@ import {
   salidasVinculables,
   hermanasDeSalida,
   RESOURCE_DAILY_LIMIT,
+  usaEditadasFinDeMes,
+  muestraPendientesPrevios,
+  inicioMesISO,
+  finDeMesISO,
+  inicioCorteISO,
+  listasAFechaPorPauta,
+  withEditadasAFecha,
+  piezasByPautaAFecha,
+  pendientesPrevios,
 } from '../utils/audiovisual'
 
 function pauta(overrides = {}) {
@@ -1818,5 +1827,223 @@ describe('sumCnpAudiovisual', () => {
   it('no toca el conteo de las pautas', () => {
     const pauta = { status: 'realizada', formats: ['V'], piezas_totales: 4, piezas_editadas: 2 }
     expect(sumPiezasVideoForLine([pauta])).toEqual({ piezas: 4, editadas: 2 })
+  })
+})
+
+// ─── Piezas editadas «al último día del mes» (desde noviembre 2026) ─────────
+
+describe('usaEditadasFinDeMes', () => {
+  it('rige desde noviembre 2026 y no antes', () => {
+    expect(usaEditadasFinDeMes(2026, 9)).toBe(false)
+    expect(usaEditadasFinDeMes(2026, 10)).toBe(false)
+    expect(usaEditadasFinDeMes(2026, 11)).toBe(true)
+    expect(usaEditadasFinDeMes(2026, 12)).toBe(true)
+  })
+
+  it('cruza el año: enero 2027 usa la regla, enero 2026 no', () => {
+    expect(usaEditadasFinDeMes(2027, 1)).toBe(true)
+    expect(usaEditadasFinDeMes(2026, 1)).toBe(false)
+  })
+})
+
+describe('finDeMesISO / inicioMesISO / inicioCorteISO', () => {
+  it('arma el último día de cada mes', () => {
+    expect(finDeMesISO(2026, 11)).toBe('2026-11-30')
+    expect(finDeMesISO(2026, 12)).toBe('2026-12-31')
+    expect(finDeMesISO(2027, 1)).toBe('2027-01-31')
+  })
+
+  it('maneja febrero, bisiesto y no bisiesto', () => {
+    expect(finDeMesISO(2027, 2)).toBe('2027-02-28')
+    expect(finDeMesISO(2028, 2)).toBe('2028-02-29')
+  })
+
+  it('el primer día del mes lleva ceros a la izquierda', () => {
+    expect(inicioMesISO(2027, 3)).toBe('2027-03-01')
+    expect(inicioMesISO(2026, 11)).toBe('2026-11-01')
+  })
+
+  it('el corte es el 1-nov-2026', () => {
+    expect(inicioCorteISO()).toBe('2026-11-01')
+  })
+})
+
+describe('listasAFechaPorPauta', () => {
+  it('suma las listas de los lotes de una pauta por formato', () => {
+    const m = listasAFechaPorPauta([
+      { pieza_id: 'a', pauta_id: 'p1', formato: 'V', listas: 2 },
+      { pieza_id: 'b', pauta_id: 'p1', formato: 'V', listas: 3 },
+      { pieza_id: 'c', pauta_id: 'p1', formato: 'R', listas: 1 },
+      { pieza_id: 'd', pauta_id: 'p2', formato: 'F', listas: 5 },
+    ])
+    expect(m.get('p1')).toEqual({ V: 5, R: 1 })
+    expect(m.get('p2')).toEqual({ F: 5 })
+  })
+
+  it('tolera null, vacío y filas incompletas', () => {
+    expect(listasAFechaPorPauta(null).size).toBe(0)
+    expect(listasAFechaPorPauta([{ pauta_id: 'p1' }, {}]).size).toBe(0)
+  })
+})
+
+describe('withEditadasAFecha', () => {
+  const pauta = (over = {}) => ({
+    id: 'p1',
+    status: 'realizada',
+    formats: ['V', 'R'],
+    piezas_por_formato: { V: { salieron: 4, editadas: 4 }, R: { salieron: 3, editadas: 3 } },
+    ...over,
+  })
+
+  it('reemplaza lo editado por lo que estaba listo en la fecha', () => {
+    const [out] = withEditadasAFecha([pauta()], new Map([['p1', { V: 1, R: 2 }]]))
+    expect(out.piezas_por_formato.V).toEqual({ salieron: 4, editadas: 1 })
+    expect(out.piezas_por_formato.R).toEqual({ salieron: 3, editadas: 2 })
+  })
+
+  it('no deja editadas por encima de lo que salió', () => {
+    const [out] = withEditadasAFecha([pauta()], new Map([['p1', { V: 99, R: 3 }]]))
+    expect(out.piezas_por_formato.V.editadas).toBe(4)
+  })
+
+  it('un formato sin lotes (o una pauta sin filas) queda en 0, aunque hoy diga otra cosa', () => {
+    const [sinLotes] = withEditadasAFecha([pauta()], new Map([['p1', { V: 2 }]]))
+    expect(sinLotes.piezas_por_formato.R.editadas).toBe(0)
+    const [sinFilas] = withEditadasAFecha([pauta()], new Map())
+    expect(sinFilas.piezas_por_formato.V.editadas).toBe(0)
+    expect(sinFilas.piezas_por_formato.R.editadas).toBe(0)
+  })
+
+  it('recalcula también la columna cruda piezas_editadas (Σ de formatos, video + foto)', () => {
+    const conFoto = pauta({
+      formats: ['V', 'R', 'F'],
+      piezas_totales: 17,
+      piezas_editadas: 17,
+      piezas_por_formato: {
+        V: { salieron: 4, editadas: 4 },
+        R: { salieron: 3, editadas: 3 },
+        F: { salieron: 10, editadas: 10 },
+      },
+    })
+    const [out] = withEditadasAFecha([conFoto], new Map([['p1', { V: 1, R: 2, F: 6 }]]))
+    expect(out.piezas_editadas).toBe(9)
+    // Lo que salió no se toca.
+    expect(out.piezas_totales).toBe(17)
+  })
+
+  it('no toca lo que salió (sigue vivo)', () => {
+    const [out] = withEditadasAFecha([pauta()], new Map([['p1', { V: 1, R: 1 }]]))
+    expect(out.piezas_por_formato.V.salieron).toBe(4)
+    expect(out.piezas_por_formato.R.salieron).toBe(3)
+  })
+
+  it('pauta legacy sin desglose: editadas = min(totales, Σ listas)', () => {
+    const legacy = {
+      id: 'p9',
+      status: 'realizada',
+      formats: ['V'],
+      piezas_totales: 5,
+      piezas_editadas: 5,
+    }
+    const [a] = withEditadasAFecha([legacy], new Map([['p9', { V: 2 }]]))
+    expect(a.piezas_editadas).toBe(2)
+    const [b] = withEditadasAFecha([legacy], new Map([['p9', { V: 20 }]]))
+    expect(b.piezas_editadas).toBe(5)
+  })
+
+  it('NO muta la entrada', () => {
+    const original = pauta()
+    const snapshot = JSON.parse(JSON.stringify(original))
+    withEditadasAFecha([original], new Map([['p1', { V: 0, R: 0 }]]))
+    expect(original).toEqual(snapshot)
+  })
+
+  it('alimenta sumPiezasVideoForLine sin cambiar esa función', () => {
+    const out = withEditadasAFecha([pauta()], new Map([['p1', { V: 1, R: 2 }]]))
+    expect(sumPiezasVideoForLine(out)).toEqual({ piezas: 7, editadas: 3 })
+  })
+
+  it('el desglose Video 4K / Reel también refleja la fecha', () => {
+    const out = withEditadasAFecha([pauta()], new Map([['p1', { V: 1, R: 2 }]]))
+    const g = sumPiezasVideoBreakdownForLine(out)
+    expect(g.video4k).toEqual({ piezas: 4, editadas: 1 })
+    expect(g.reel).toEqual({ piezas: 3, editadas: 2 })
+  })
+
+  it('tolera null', () => {
+    expect(withEditadasAFecha(null, null)).toEqual([])
+  })
+})
+
+describe('piezasByPautaAFecha', () => {
+  const lote = (id, over = {}) => ({
+    id,
+    es_lote: true,
+    cantidad: 5,
+    listas: 5,
+    formato: 'V',
+    ...over,
+  })
+
+  it('reemplaza listas por lo que había en la fecha', () => {
+    const m = new Map([['p1', [lote('a'), lote('b')]]])
+    const out = piezasByPautaAFecha(m, [
+      { pieza_id: 'a', listas: 2 },
+      { pieza_id: 'b', listas: 0 },
+    ])
+    expect(out.get('p1').map((l) => l.listas)).toEqual([2, 0])
+  })
+
+  it('un lote que no aparece (creado después de esa fecha) queda en 0', () => {
+    const out = piezasByPautaAFecha(new Map([['p1', [lote('a')]]]), [])
+    expect(out.get('p1')[0].listas).toBe(0)
+  })
+
+  it('no muta los lotes originales ni toca las filas que no son lote', () => {
+    const original = lote('a')
+    const suelta = { id: 's', es_lote: false, status: 'listo' }
+    const out = piezasByPautaAFecha(new Map([['p1', [original, suelta]]]), [
+      { pieza_id: 'a', listas: 1 },
+    ])
+    expect(original.listas).toBe(5)
+    expect(out.get('p1')[1]).toBe(suelta)
+  })
+
+  it('tolera null', () => {
+    expect(piezasByPautaAFecha(null, null).size).toBe(0)
+  })
+})
+
+describe('pendientesPrevios', () => {
+  it('cuenta solo video sin editar de las pautas previas', () => {
+    const previas = [
+      {
+        status: 'realizada',
+        formats: ['V', 'R', 'F'],
+        piezas_por_formato: {
+          V: { salieron: 4, editadas: 1 },
+          R: { salieron: 2, editadas: 2 },
+          F: { salieron: 10, editadas: 0 },
+        },
+      },
+    ]
+    expect(pendientesPrevios(previas)).toEqual({ piezas: 6, editadas: 3, pendientes: 3 })
+  })
+
+  it('sin pautas previas no hay pendientes', () => {
+    expect(pendientesPrevios([])).toEqual({ piezas: 0, editadas: 0, pendientes: 0 })
+    expect(pendientesPrevios(null)).toEqual({ piezas: 0, editadas: 0, pendientes: 0 })
+  })
+})
+
+describe('muestraPendientesPrevios', () => {
+  it('no aparece antes de la regla ni en su primer mes (no puede haber previos)', () => {
+    expect(muestraPendientesPrevios(2026, 10)).toBe(false)
+    expect(muestraPendientesPrevios(2026, 11)).toBe(false)
+  })
+
+  it('aparece desde el mes siguiente al corte, también al cruzar el año', () => {
+    expect(muestraPendientesPrevios(2026, 12)).toBe(true)
+    expect(muestraPendientesPrevios(2027, 1)).toBe(true)
   })
 })

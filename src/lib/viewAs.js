@@ -28,7 +28,11 @@ export const VIEW_AS_STORAGE_KEY = 'mdn_view_as_user_id'
  * RPCs de solo lectura. Todo lo que no esté aquí se bloquea en modo "Ver como"
  * (allowlist, no denylist: un RPC nuevo que escriba no debe colarse por olvido).
  */
-export const READONLY_RPCS = ['employee_score_inputs', 'users_on_vacation_today']
+export const READONLY_RPCS = [
+  'employee_score_inputs',
+  'users_on_vacation_today',
+  'av_lotes_listas_a_fecha',
+]
 
 /** @param {{ user_id?: string }|null|undefined} profile — debe ser el perfil REAL */
 export function canUseViewAs(profile) {

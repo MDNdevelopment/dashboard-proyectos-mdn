@@ -211,7 +211,14 @@ export function buildEffectiveReport(storedData, sources, ctx) {
   // → Audiovisual (av_pautas). Solo cuenta piezas de VIDEO (Video/Reel). Los CNP de
   // audiovisual (solo edición) van aparte en `piezas.cnp` con su solicitado/entregado, solo
   // para mostrarse: no se mezclan con `piezas`/`editadas` ni entran al puntaje (calcPiezas).
-  if (isAvEra && !closed) {
+  //
+  // Desde PIEZAS_FIN_DE_MES_START «editadas» ya viene como estaba el último día del mes (ver
+  // avPautasApi.countPiezasForLine / reportSourcesApi), y `pendientesPrevios` es la línea
+  // informativa de lo que sigue sin editar de meses anteriores: se guarda aquí para que un
+  // reporte cerrado la conserve, y NO entra al puntaje (calcPiezas no la lee).
+  // Si la fuente falló (`piezas.error`) se conserva lo que ya estaba guardado en vez de escribir
+  // ceros, que el cierre automático del día 5 dejaría fijos.
+  if (isAvEra && !closed && !sources.piezas?.error) {
     const piezas = sources.piezas ?? {}
     synced.piezas = {
       ...synced.piezas,
@@ -222,6 +229,7 @@ export function buildEffectiveReport(storedData, sources, ctx) {
         solicitudes: piezas.cnp?.solicitudes ?? 0,
         entregados: piezas.cnp?.entregados ?? 0,
       },
+      ...(piezas.pendientesPrevios != null ? { pendientesPrevios: piezas.pendientesPrevios } : {}),
     }
   }
 
