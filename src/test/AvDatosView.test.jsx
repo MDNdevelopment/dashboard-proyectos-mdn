@@ -1,5 +1,11 @@
-import { render, screen, fireEvent, within } from '@testing-library/react'
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react'
 import { vi } from 'vitest'
+
+const { mockLotes } = vi.hoisted(() => ({ mockLotes: vi.fn() }))
+vi.mock('../components/pautas/avPautasApi', async (importOriginal) => ({
+  ...(await importOriginal()),
+  loadLotesListasAFecha: (...a) => mockLotes(...a),
+}))
 import AvDatosView from '../components/pautas/AvDatosView'
 import { pendientesPorEditar } from '../utils/audiovisual'
 
@@ -237,5 +243,151 @@ describe('AvDatosView — videos vs fotos y panel de persona', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ver detalle de Nadia' }))
     fireEvent.click(screen.getByRole('button', { name: 'Fotos capturadas' }))
     expect(onSelectPersona).toHaveBeenCalledWith({ id: 'u2', rol: 'captura', grupo: 'foto' })
+  })
+})
+
+// ─── Desde nov-2026: en un mes terminado, lo editado al último día del mes ──
+
+describe('AvDatosView — editadas al último día del mes (nov-2026 en adelante)', () => {
+  const NOV = [
+    {
+      id: 'n1',
+      status: 'realizada',
+      line_id: 'l1',
+      pauta_date: '2026-11-10',
+      formats: ['V'],
+      recurso_ids: ['u1'],
+      grabacion_por_formato: { V: { u1: 4 } },
+      // Contador vivo: hoy dice que las 4 están editadas (columnas crudas incluidas).
+      piezas_por_formato: { V: { salieron: 4, editadas: 4 } },
+      piezas_totales: 4,
+      piezas_editadas: 4,
+      deleted_at: null,
+    },
+  ]
+  const lotes = new Map([
+    [
+      'n1',
+      [
+        {
+          id: 'lote-n1',
+          es_lote: true,
+          editor_user_id: 'u1',
+          formato: 'V',
+          cantidad: 4,
+          listas: 4,
+          status: 'listo',
+        },
+      ],
+    ],
+  ])
+  // Al 30-nov solo 1 de las 4 estaba lista.
+  const filas = [{ pieza_id: 'lote-n1', pauta_id: 'n1', formato: 'V', listas: 1 }]
+
+  beforeEach(() => {
+    mockLotes.mockReset()
+    mockLotes.mockResolvedValue({ data: filas, error: null })
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date('2026-12-15T12:00:00'))
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  const setupNov = (props = {}) =>
+    setup({
+      pautas: NOV,
+      allPautas: NOV,
+      year: 2026,
+      month: 11,
+      piezasByPauta: lotes,
+      pendientes: { porLinea: [], porPauta: new Map() },
+      ...props,
+    })
+
+  it('noviembre ya terminó: toma lo editado al 30-nov, no el contador vivo', async () => {
+    setupNov()
+    await waitFor(() => expect(kpi('% editado')).toHaveTextContent('25%'))
+    expect(mockLotes).toHaveBeenCalledWith(['n1'], '2026-11-30')
+    expect(kpi('piezas editadas')).toHaveTextContent('1')
+    expect(kpi('por editar')).toHaveTextContent('3')
+  })
+
+  it('explica que el mes quedó fijo', async () => {
+    setupNov()
+    expect(
+      await screen.findByText(/Mes terminado: lo editado se mide al último día del mes/),
+    ).toBeInTheDocument()
+  })
+
+  it('«Piezas por línea» también usa lo editado al último día del mes', async () => {
+    setupNov()
+    const row = await screen.findByRole('button', { name: 'Ver pautas de Georgina' })
+    await waitFor(() => expect(row).toHaveTextContent('1 / 4 ed.'))
+  })
+
+  it('el ranking por persona sigue en vivo (trabajo real de hoy)', async () => {
+    setupNov()
+    await waitFor(() => expect(kpi('% editado')).toHaveTextContent('25%'))
+    expect(screen.getByRole('table', { name: 'Videos 4K + Reels' })).toHaveTextContent('Diego')
+  })
+
+  it('el mes en curso no se consulta y usa el valor vivo', async () => {
+    vi.setSystemTime(new Date('2026-11-20T12:00:00'))
+    setupNov()
+    await waitFor(() => expect(kpi('% editado')).toHaveTextContent('100%'))
+    expect(mockLotes).not.toHaveBeenCalled()
+    expect(screen.queryByText(/Mes terminado/)).not.toBeInTheDocument()
+  })
+
+  it('octubre y meses anteriores no se tocan', async () => {
+    setup()
+    await waitFor(() => expect(kpi('% editado')).toHaveTextContent('85%'))
+    expect(mockLotes).not.toHaveBeenCalled()
+    expect(screen.queryByText(/Mes terminado/)).not.toBeInTheDocument()
+  })
+
+  it('el delta contra el mes anterior también usa el mes anterior congelado', async () => {
+    const DIC = [
+      {
+        ...NOV[0],
+        id: 'd1',
+        pauta_date: '2026-12-03',
+        piezas_por_formato: { V: { salieron: 4, editadas: 4 } },
+      },
+    ]
+    const lotesDic = new Map([
+      ...lotes,
+      ['d1', [{ ...lotes.get('n1')[0], id: 'lote-d1', listas: 4 }]],
+    ])
+    vi.setSystemTime(new Date('2027-01-10T12:00:00'))
+    mockLotes.mockImplementation(async (ids, fecha) => ({
+      data: ids.map((id) => ({
+        pieza_id: id === 'n1' ? 'lote-n1' : 'lote-d1',
+        pauta_id: id,
+        formato: 'V',
+        listas: fecha === '2026-11-30' ? 1 : 3,
+      })),
+      error: null,
+    }))
+    setupNov({
+      pautas: DIC,
+      allPautas: [...NOV, ...DIC],
+      year: 2026,
+      month: 12,
+      piezasByPauta: lotesDic,
+    })
+    // Diciembre 75 % (3 de 4) contra noviembre 25 % (1 de 4): +50 pts.
+    await waitFor(() => expect(kpi('% editado')).toHaveTextContent('75%'))
+    expect(kpi('% editado')).toHaveTextContent('▲ +50 pts')
+  })
+
+  it('si la consulta falla, avisa y muestra los valores actuales', async () => {
+    mockLotes.mockResolvedValue({ data: null, error: { message: 'boom' } })
+    setupNov()
+    expect(
+      await screen.findByText(/No se pudo calcular lo editado al cierre de los meses/),
+    ).toBeInTheDocument()
+    expect(kpi('% editado')).toHaveTextContent('100%')
   })
 })

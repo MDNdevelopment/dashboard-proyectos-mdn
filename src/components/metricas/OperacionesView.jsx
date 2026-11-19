@@ -27,6 +27,7 @@ import { loadAds, spentByClientInPeriod } from '../ads/campaignSpendApi'
 import { fmtUSD } from '../../utils/metricsFinance'
 import { countMeetingsHeldForLine, loadHeldClientIdsForLine } from '../reuniones/meetingsApi'
 import { countPiezasForLine, countPautasRealizadasByClient } from '../pautas/avPautasApi'
+import { usaEditadasFinDeMes, muestraPendientesPrevios, finDeMesISO } from '../../utils/audiovisual'
 import { countCnpSolicitudesForLine } from '../cnp/cnpApi'
 import { countTareasSolicitudesForLine } from '../tareas/tareasMetricsApi'
 import ReunionesClientesModal from './ReunionesClientesModal'
@@ -47,9 +48,14 @@ export default function OperacionesView({
   year,
   month,
   closed = false,
+  reopened = false,
   readOnly = false,
 }) {
   const { can = () => true } = useAuth()
+  // `closed` bloquea la edición; `derivacionCongelada` también cubre un reporte desbloqueado por un
+  // admin (`reopened`): se edita a mano, pero lo calculado no se recalcula ni se autoguarda con datos
+  // de hoy hasta que se vuelva a cerrar.
+  const derivacionCongelada = closed || reopened
   // La Meta de reuniones se recalcula sola (1 por marca de la línea, menos las "No
   // aplica") solo en el mes en curso, no cerrado, y en o después de
   // REUNIONES_META_AUTO_START. Antes de ese mes la Meta se sigue capturando a mano (ver
@@ -63,7 +69,7 @@ export default function OperacionesView({
     (year === REUNIONES_META_AUTO_START.year && month >= REUNIONES_META_AUTO_START.month)
   // Gates centralizados en buildEffectiveReport.js — única definición, compartida con el
   // camino de lectura (loadYearReportsEffective). Ver ARQUITECTURA.md §2.5.
-  const gates = effectiveReportGates(year, month, closed, today)
+  const gates = effectiveReportGates(year, month, derivacionCongelada, today)
   const { metaAutoSync, isFijasEra, isAvEra, isSolicitudesEra } = gates
   const [report, setReport] = useState(null)
   const [prevReport, setPrevReport] = useState(null)
@@ -78,6 +84,8 @@ export default function OperacionesView({
   const [error, setError] = useState(null)
   const [cliModal, setCliModal] = useState(null) // null=cerrado, objeto=cliente abierto
   const [heldClientIds, setHeldClientIds] = useState([]) // clientes con reunión realizada en el período
+  // Error de la fuente de piezas (Audiovisual): si falla, el reporte conserva lo guardado y se avisa.
+  const [piezasError, setPiezasError] = useState(null)
   const [reunionesModal, setReunionesModal] = useState(false)
   // Roster de marcas para la sección de Reuniones (picker + meta). En meses congelados
   // se deriva del propio reporte guardado, igual que crecimiento/pautas — ver `load()`.
@@ -150,6 +158,7 @@ export default function OperacionesView({
     const meetingsCount = meetingsRes?.count ?? 0
     const heldIds = heldRes?.clientIds ?? []
     setHeldClientIds(heldIds)
+    setPiezasError(piezasRes?.error ?? null)
 
     // Todos (incl. archivados) para resolver nombres en reportes guardados;
     // solo activos EN ESE MES para syncReportClients (no re-agregar archivados
@@ -219,7 +228,7 @@ export default function OperacionesView({
         cnpSolicitudes: cnpSolRes,
         tareasSolicitudes: tareasSolRes,
       },
-      { year, month, closed, activeLineClients, lineEmployees, now: today },
+      { year, month, closed: derivacionCongelada, activeLineClients, lineEmployees, now: today },
     )
     setReport(synced)
     resetAutosave(synced)
@@ -235,7 +244,7 @@ export default function OperacionesView({
         lineId: line.id,
         year,
         month,
-        closed,
+        closed: derivacionCongelada,
         stored: reportRes.data.data,
         effectiveData: synced,
       })
@@ -259,7 +268,17 @@ export default function OperacionesView({
       setReunionesClients(activeLineClients)
     }
     setLoading(false)
-  }, [line?.id, line?.member_user_ids, companyId, year, month, closed, metaAutoSync, resetAutosave])
+  }, [
+    line?.id,
+    line?.member_user_ids,
+    companyId,
+    year,
+    month,
+    closed,
+    reopened,
+    metaAutoSync,
+    resetAutosave,
+  ])
 
   useEffect(() => {
     load()
@@ -371,6 +390,16 @@ export default function OperacionesView({
   // (`calcPiezas` sigue usando report.piezas.piezas/editadas, el total combinado), solo
   // aclara la composición. Se omite si no hay desglose que mostrar (mes sin pautas, o
   // reportes de antes de que `porGrupo` existiera).
+  // Desde nov-2026 «editadas» es lo que estaba editado el ÚLTIMO DÍA del mes: ese número queda
+  // fijo aunque después se edite más. La línea de pendientes previos es solo informativa.
+  const editadasFinDeMes = isAvEra && usaEditadasFinDeMes(year, month)
+  const pendientesPrevios = muestraPendientesPrevios(year, month)
+    ? (report?.piezas?.pendientesPrevios ?? null)
+    : null
+  const finDeMesLabel = (() => {
+    const [, mm, dd] = finDeMesISO(year, month).split('-')
+    return `${dd}/${mm}`
+  })()
   const piezasPorGrupo = report?.piezas?.porGrupo
   const piezasPorGrupoResumen = (() => {
     if (!piezasPorGrupo) return null
@@ -1124,18 +1153,47 @@ export default function OperacionesView({
               }
               title={
                 isAvEra
-                  ? 'Derivado automáticamente de Audiovisual: piezas de video (Video/Reel) editadas de las pautas realizadas en el mes; no incluye foto'
+                  ? editadasFinDeMes
+                    ? 'Derivado automáticamente de Audiovisual: piezas de video (Video/Reel) de las pautas realizadas en el mes que ya estaban editadas el último día del mes (lo que se edite después no cambia este número); no incluye foto'
+                    : 'Derivado automáticamente de Audiovisual: piezas de video (Video/Reel) editadas de las pautas realizadas en el mes; no incluye foto'
                   : undefined
               }
             />
             {isAvEra && (
-              <p className="mt-1 text-[12px] font-mono text-[#888]">Derivado de Audiovisual</p>
+              <p className="mt-1 text-[12px] font-mono text-[#888]">
+                {editadasFinDeMes
+                  ? `Derivado de Audiovisual · editadas al ${finDeMesLabel}`
+                  : 'Derivado de Audiovisual'}
+              </p>
             )}
           </Field>
         </div>
         {isAvEra && piezasPorGrupoResumen && (
           <p className="text-[12px] text-[#888] bg-[#faf9f3] border border-[#e8e4d8] rounded-lg px-3 py-2 mt-3">
             {piezasPorGrupoResumen}
+          </p>
+        )}
+        {isAvEra && piezasError && (
+          <p
+            role="alert"
+            className="text-[12.5px] text-[#8a4b00] bg-[#fff6e0] border border-[#f0d9a0] rounded-lg px-3 py-2 mt-3"
+          >
+            No se pudieron calcular las piezas de Audiovisual en este momento; se muestra el último
+            valor guardado.
+          </p>
+        )}
+        {/* Lo que sigue sin editar de meses anteriores (grabado desde nov-2026): solo informativo,
+            NO entra al puntaje ni se suma a este mes. */}
+        {isAvEra && pendientesPrevios && (
+          <p className="text-[12.5px] text-[#555] bg-[#f3f7fb] border border-[#d6e3f1] rounded-lg px-3 py-2 mt-3">
+            <span className="font-semibold">Pendientes de meses anteriores</span> (grabados desde
+            nov 2026):{' '}
+            {pendientesPrevios.pendientes === 0
+              ? 'ninguno'
+              : `${pendientesPrevios.pendientes} ${
+                  pendientesPrevios.pendientes === 1 ? 'video' : 'videos'
+                } sin editar`}{' '}
+            al {finDeMesLabel} · solo informativo, no afecta el puntaje
           </p>
         )}
         {/* Los CNP de audiovisual son pedidos de solo edición: se muestran aparte de las pautas,

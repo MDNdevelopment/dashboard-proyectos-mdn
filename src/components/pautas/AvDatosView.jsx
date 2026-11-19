@@ -10,13 +10,22 @@ import {
   rankingFotos,
   rankingVideos,
   resumenMes,
+  piezasByPautaAFecha,
+  withEditadasAFecha,
+  listasAFechaPorPauta,
 } from '../../utils/audiovisual'
+import { useListasFinDeMes, ymKey } from '../../hooks/useListasFinDeMes'
 
 /**
  * Vista Datos: conclusiones del mes (KPIs con delta vs. mes anterior), pendientes por
  * editar (línea × formato → Lista filtrada), rankings de Fotos y de Videos (4K + Reel, con
  * CNP en editadas) y piezas por línea (alimenta el indicador «6» de Reportes). `pautas` ya
  * viene acotada al mes; `allPautas` trae todo el alcance para calcular el mes anterior.
+ *
+ * Desde nov-2026, en un mes TERMINADO las tarjetas (KPIs, Fotos vs. Videos y piezas por línea)
+ * toman lo editado como estaba el último día del mes (hook `useListasFinDeMes`), igual que el
+ * reporte: el número no cambia aunque después se edite más. El mes en curso, los meses anteriores a
+ * noviembre, los rankings por persona y los pendientes siguen en vivo.
  */
 export default function AvDatosView({
   pautas,
@@ -35,13 +44,28 @@ export default function AvDatosView({
   onSelectPersona,
 }) {
   const [persona, setPersona] = useState(null)
-  const actual = resumenMes(allPautas, piezasByPauta, { year, month })
   const prev = month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 }
-  const anterior = resumenMes(allPautas, piezasByPauta, prev)
+  const { rowsByMonth, error: listasError } = useListasFinDeMes({ pautas: allPautas, year, month })
+  // Lotes con `listas` al último día de ese mes si ya está resuelto; si no, el valor vivo.
+  const piezasDe = (y, m) => {
+    const rows = rowsByMonth[ymKey(y, m)]
+    return rows ? piezasByPautaAFecha(piezasByPauta, rows) : piezasByPauta
+  }
+  const actual = resumenMes(allPautas, piezasDe(year, month), { year, month })
+  const anterior = resumenMes(allPautas, piezasDe(prev.year, prev.month), prev)
+  const mesCongelado = !!rowsByMonth[ymKey(year, month)]
+  const nota = listasError
+    ? 'No se pudo calcular lo editado al cierre de los meses; se muestran los valores actuales.'
+    : mesCongelado
+      ? 'Mes terminado: lo editado se mide al último día del mes y no cambia después.'
+      : null
   const perf = aggregateResourcePerformance(pautas, usersById, piezasByPauta, cnpAv)
   const fotos = rankingFotos(perf)
   const videos = rankingVideos(perf)
-  const byLine = aggregatePiezasByLine(pautas, lines, generalLineId).filter(
+  const pautasPiezas = mesCongelado
+    ? withEditadasAFecha(pautas, listasAFechaPorPauta(rowsByMonth[ymKey(year, month)]))
+    : pautas
+  const byLine = aggregatePiezasByLine(pautasPiezas, lines, generalLineId).filter(
     (l) => l.totales || l.editadas,
   )
   const realizadasPorLinea = (lineId) =>
@@ -54,6 +78,7 @@ export default function AvDatosView({
         month={month}
         actual={actual}
         anterior={anterior}
+        nota={nota}
         onMonthChange={onMonthChange}
         onGoPendientes={() => onSelectPendiente({ lineId: null, formato: null })}
       />

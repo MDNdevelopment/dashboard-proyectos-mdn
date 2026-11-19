@@ -15,6 +15,7 @@ import { employeeActiveInMonth } from '../../utils/employeeInMonth'
 import { initMetricReport } from '../../utils/initMetricReport'
 import { pruneCarryForward } from '../../utils/pruneCarryForward'
 import { selectAllPages } from '../../lib/supabasePaginate'
+import { isDerivationFrozen } from '../../utils/reportPeriod'
 
 // ─── Líneas ───────────────────────────────────────────────────────────────────
 
@@ -52,7 +53,28 @@ export async function updateLine(lineId, updates) {
   return supabase.from('metric_lines').update(updates).eq('id', lineId).select().single()
 }
 
+/**
+ * Elimina una línea. Sus reportes se borran en cascada, pero un reporte CERRADO no se puede
+ * eliminar (trigger en la base), así que antes se comprueba y se avisa con un mensaje claro: un
+ * admin tiene que desbloquear esos reportes primero.
+ */
 export async function deleteLine(lineId) {
+  const { count, error: countError } = await supabase
+    .from('metric_reports')
+    .select('id', { count: 'exact', head: true })
+    .eq('line_id', lineId)
+    .not('closed_at', 'is', null)
+  if (countError) return { data: null, error: countError }
+  if ((count ?? 0) > 0) {
+    return {
+      data: null,
+      error: {
+        message: `No se puede eliminar la línea: tiene ${count} ${
+          count === 1 ? 'reporte cerrado' : 'reportes cerrados'
+        }. Un administrador debe desbloquearlos antes.`,
+      },
+    }
+  }
   return supabase.from('metric_lines').delete().eq('id', lineId)
 }
 
@@ -412,7 +434,7 @@ export async function loadYearReportsEffective(
   const allEmployees = employeesRes.data ?? []
 
   const rows = reportsRes.data ?? []
-  const hotRows = rows.filter((r) => needsSourcesFor(r.year, r.month, !!r.closed_at, now))
+  const hotRows = rows.filter((r) => needsSourcesFor(r.year, r.month, isDerivationFrozen(r), now))
   const { data: sourcesByKey } = await loadReportSources(companyId, {
     year,
     months: [...new Set(hotRows.map((r) => r.month))],
@@ -421,7 +443,8 @@ export async function loadYearReportsEffective(
 
   const toPersist = []
   const effectiveRows = rows.map((row) => {
-    const closed = !!row.closed_at
+    // Cerrado O desbloqueado por un admin: no se recalcula ni se autoguarda con datos de hoy.
+    const closed = isDerivationFrozen(row)
     if (!needsSourcesFor(row.year, row.month, closed, now)) return row
 
     const line = linesById.get(row.line_id)
@@ -562,10 +585,10 @@ export async function saveReportKeys(
 }
 
 /**
- * Cierra permanentemente el reporte de una línea/mes: Operaciones y Finanzas quedan de
- * solo lectura para siempre (bloqueado también a nivel de base por un trigger — ver
- * migración 20260721000000_metric_reports_close.sql). No existe función de reapertura:
- * el cierre es irreversible por diseño.
+ * Cierra el reporte de una línea/mes: Operaciones y Finanzas quedan de solo lectura y la base lo
+ * protege (no se puede editar, eliminar ni vaciar — migraciones 20260715185715 y
+ * 20261120110000_reportes_cerrados_inmutables). Solo un admin puede desbloquearlo después, con
+ * `unlockReport`; también sirve para volver a cerrar un reporte desbloqueado.
  * @returns {{ data, error }}
  */
 export async function closeReport(lineId, year, month, userId) {
@@ -577,6 +600,23 @@ export async function closeReport(lineId, year, month, userId) {
     .eq('month', month)
     .select()
     .single()
+}
+
+/**
+ * Desbloquea un reporte cerrado (solo admin, con motivo): RPC `unlock_metric_report`. El reporte
+ * vuelve a ser editable pero sin tocar sus datos, y queda registrado quién lo desbloqueó y por qué.
+ * Mientras esté desbloqueado (`reopened_at`) la app no recalcula ni autoguarda lo derivado con
+ * datos de hoy (ver isDerivationFrozen). No es una RPC de solo lectura: el modo «Ver como» la
+ * bloquea.
+ * @returns {{ data, error }}
+ */
+export async function unlockReport(lineId, year, month, reason) {
+  return supabase.rpc('unlock_metric_report', {
+    p_line_id: lineId,
+    p_year: year,
+    p_month: month,
+    p_reason: reason,
+  })
 }
 
 /** Forma mínima válida de un reporte vacío (cuando aún no existe el del mes). */
@@ -804,7 +844,8 @@ export async function cancelPendingLineMove(clientId) {
  * Quita a una cuenta de los reportes ya guardados de los meses POSTERIORES al mes de su
  * fin de contrato (por definición, ahí no debe haber rastro). Deja intactos:
  *  - el mes de fin y anteriores (el último mes cuenta completo),
- *  - los reportes CERRADOS (`closed_at` no nulo; inmutables por trigger en la base).
+ *  - los reportes CERRADOS (`closed_at` no nulo; inmutables por trigger en la base),
+ *  - los DESBLOQUEADOS por un admin (`reopened_at`): siguen congelados, no se reescriben solos.
  * Escanea todas las líneas de la empresa (la cuenta pudo haberse movido de línea).
  *
  * @param {string} companyId
@@ -823,6 +864,7 @@ export async function cleanupClientAfterContractEnd(companyId, clientId, contrac
     .select('line_id, year, month, data, closed_at')
     .eq('company_id', companyId)
     .is('closed_at', null)
+    .is('reopened_at', null) // un reporte desbloqueado sigue congelado: no se reescribe solo
   if (error) return { data: null, error }
 
   const posterior = (r) => r.year > ey || (r.year === ey && r.month > em)
@@ -956,20 +998,36 @@ export async function importMetrics(companyId, payload) {
     if (ce) return { error: `Error importando clientes: ${ce.message}` }
   }
 
-  // Upsert reportes
+  // Upsert reportes. Un reporte cerrado no se puede reescribir: esos meses se omiten (y se
+  // cuenta cuántos) en vez de perder todo el lote, y el archivo nunca puede traer campos de cierre.
+  let omitidosCerrados = 0
   if (payload.reports.length > 0) {
-    const { error: re } = await supabase.from('metric_reports').upsert(
-      payload.reports.map((r) => ({
-        ...r,
-        company_id: companyId,
-        updated_at: new Date().toISOString(),
-      })),
-      { onConflict: 'line_id,year,month' },
+    const { data: cerrados, error: cerradosError } = await supabase
+      .from('metric_reports')
+      .select('line_id, year, month')
+      .eq('company_id', companyId)
+      .not('closed_at', 'is', null)
+    if (cerradosError) return { error: `Error importando reportes: ${cerradosError.message}` }
+    const cerradosKeys = new Set((cerrados ?? []).map((r) => `${r.line_id}__${r.year}__${r.month}`))
+    const importables = payload.reports.filter(
+      (r) => !cerradosKeys.has(`${r.line_id}__${r.year}__${r.month}`),
     )
-    if (re) return { error: `Error importando reportes: ${re.message}` }
+    omitidosCerrados = payload.reports.length - importables.length
+
+    if (importables.length > 0) {
+      const { error: re } = await supabase.from('metric_reports').upsert(
+        importables.map((r) => {
+          // eslint-disable-next-line no-unused-vars
+          const { closed_at, closed_by, closed_auto, reopened_at, reopened_by, ...resto } = r
+          return { ...resto, company_id: companyId, updated_at: new Date().toISOString() }
+        }),
+        { onConflict: 'line_id,year,month' },
+      )
+      if (re) return { error: `Error importando reportes: ${re.message}` }
+    }
   }
 
-  return { success: true }
+  return { success: true, omitidosCerrados }
 }
 
 // ─── Monitor de uso ─────────────────────────────────────────────────────────

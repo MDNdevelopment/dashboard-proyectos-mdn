@@ -284,6 +284,76 @@ describe('buildEffectiveReport — gate Audiovisual (piezas y pautas)', () => {
     expect(result.piezas.editadas).toBe(5)
     expect(result.pautas.items[0].realizadas).toBe(9)
   })
+
+  describe('editadas al último día del mes (desde nov-2026)', () => {
+    const NOV_CTX = { ...HOT_CTX, year: 2026, month: 11, now: new Date(2026, 10, 15) }
+    const DIC_CTX = { ...HOT_CTX, year: 2026, month: 12, now: new Date(2026, 11, 15) }
+    const pend = { piezas: 5, editadas: 2, pendientes: 3 }
+
+    it('guarda pendientesPrevios junto al resto de piezas', () => {
+      const result = buildEffectiveReport(
+        baseStored(),
+        { piezas: { piezas: 4, editadas: 1, porGrupo: null, pendientesPrevios: pend } },
+        DIC_CTX,
+      )
+      expect(result.piezas.pendientesPrevios).toEqual(pend)
+      expect(result.piezas.piezas).toBe(4)
+      expect(result.piezas.editadas).toBe(1)
+    })
+
+    it('antes de la regla (sin pendientesPrevios) no agrega esa clave', () => {
+      const result = buildEffectiveReport(
+        baseStored(),
+        { piezas: { piezas: 6, editadas: 5, porGrupo: null } },
+        HOT_CTX,
+      )
+      expect(result.piezas).not.toHaveProperty('pendientesPrevios')
+    })
+
+    it('si la fuente falló, conserva lo guardado en vez de escribir ceros', () => {
+      const stored = baseStored()
+      stored.piezas = { piezas: 7, editadas: 4, pendientesPrevios: pend }
+      const result = buildEffectiveReport(
+        stored,
+        { piezas: { piezas: 0, editadas: 0, error: { message: 'boom' } } },
+        DIC_CTX,
+      )
+      expect(result.piezas).toEqual(stored.piezas)
+    })
+
+    it('un error en piezas no impide derivar el resto de Audiovisual (pautas)', () => {
+      const result = buildEffectiveReport(
+        baseStored(),
+        { piezas: { error: { message: 'boom' } }, pautasByClient: { c1: 9 } },
+        NOV_CTX,
+      )
+      expect(result.pautas.items[0].realizadas).toBe(9)
+    })
+
+    it('un reporte cerrado conserva piezas y pendientesPrevios guardados', () => {
+      const stored = baseStored()
+      stored.piezas = { piezas: 7, editadas: 4, pendientesPrevios: pend }
+      const result = buildEffectiveReport(
+        stored,
+        {
+          piezas: {
+            piezas: 99,
+            editadas: 99,
+            pendientesPrevios: { piezas: 9, editadas: 9, pendientes: 0 },
+          },
+        },
+        { ...DIC_CTX, closed: true },
+      )
+      expect(result.piezas).toEqual(stored.piezas)
+    })
+
+    it('pendientesPrevios no cambia el puntaje: calcPiezas solo lee piezas y editadas', async () => {
+      const { calcPiezas } = await import('../utils/metricsScore')
+      const sin = { piezas: 4, editadas: 2 }
+      const con = { ...sin, pendientesPrevios: pend }
+      expect(calcPiezas(con)).toBe(calcPiezas(sin))
+    })
+  })
 })
 
 describe('buildEffectiveReport — gate de Solicitudes', () => {

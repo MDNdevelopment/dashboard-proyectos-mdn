@@ -38,7 +38,7 @@ Reportes mensuales ponderados (100 pts) por línea operativa: reuniones, product
 { reuniones:{realizadas,meta,comentario,justificativos:{[clienteId]:'no_aplica'|'reprogramado_cliente'|'no_cumplio'}},
   productividad:{tareas:[{nombre,realizado,meta}]},
   crecimiento:{items:[{clienteId,seguidoresGanados,seguidoresGanadosPrev,seguidoresActuales,seguidoresBase,meta}]},
-  solicitudes:{solicitudes,editadas}, pautas:{items:[{clienteId,realizadas,meta}]}, piezas:{piezas,editadas,porGrupo,cnp:{solicitudes,entregados}},
+  solicitudes:{solicitudes,editadas}, pautas:{items:[{clienteId,realizadas,meta}]}, piezas:{piezas,editadas,porGrupo,cnp:{solicitudes,entregados},pendientesPrevios?:{piezas,editadas,pendientes}},
   finanzas:{ingresos:[],gastosOperativos:[],sueldos:[],otrosGastos:[]}, incompleto?:boolean }
 ```
 - `crecimiento.items`: `seguidoresGanados` (mes actual, editable, se compara contra `meta`); `seguidoresGanadosPrev` (ganados del periodo anterior, línea base, solo informativo, no puntúa); `seguidoresActuales` (totales al cierre, editable); `seguidoresBase` (totales del periodo anterior; tras bootstrap = `seguidoresActuales` del mes previo vía `loadPrevReport`).
@@ -64,7 +64,7 @@ Reportes mensuales ponderados (100 pts) por línea operativa: reuniones, product
 ## Reglas de negocio / cálculos
 
 ### Score (100 pts, 6 indicadores)
-`reuniones` 20 · `productividad` 20 · `crecimiento` 20 · `pautas` 20 · `solicitudes` 10 · `piezas` 10. `piezas` se puntúa solo con las pautas (`calcPiezas`: `editadas / piezas × 10`, solo video); `piezas.cnp` (CNP de audiovisual, solo edición) se guarda y se muestra aparte pero NO puntúa. Pesos en `constants.js` (`INDICATORS`); lógica en `src/utils/metricsScore.js` (`calcTotal`, `calcReuniones`, `monthLineScore`). No existe indicador `feedback`.
+`reuniones` 20 · `productividad` 20 · `crecimiento` 20 · `pautas` 20 · `solicitudes` 10 · `piezas` 10. `piezas` se puntúa solo con las pautas (`calcPiezas`: `editadas / piezas × 10`, solo video); `piezas.cnp` (CNP de audiovisual, solo edición) se guarda y se muestra aparte pero NO puntúa. Desde nov-2026 `editadas` es lo editado al último día del mes (número fijo una vez terminado el mes; ver `audiovisual.md`) y `piezas.pendientesPrevios` (video grabado desde nov-2026 y aún sin editar de meses anteriores) se guarda y se muestra aparte, solo informativo: tampoco puntúa. Si la fuente de piezas falla (`sources.piezas.error`), `buildEffectiveReport` conserva lo guardado en vez de escribir ceros. Pesos en `constants.js` (`INDICATORS`); lógica en `src/utils/metricsScore.js` (`calcTotal`, `calcReuniones`, `monthLineScore`). No existe indicador `feedback`.
 - `calcReuniones`: si la meta derivada es 0 (línea sin marcas o todas "No aplica") puntúa 20/20.
 - Crecimiento: cumplimiento por cliente `seguidoresGanados/meta×100`.
 
@@ -80,14 +80,14 @@ Reportes mensuales ponderados (100 pts) por línea operativa: reuniones, product
 - `pruneCarryForward` (`src/utils/pruneCarryForward.js`): se aplica al resultado de `initMetricReport` en ambas vistas; descarta filas heredadas cuyo empleado no cumple `employeeActiveInMonth` o cliente no cumple `clientInMonth` para ese mes. Solo mira fechas de baja (nunca `metric_line_members`), seguro en meses pasados. Nunca sobre reportes guardados. Las filas de sueldo ligadas a empleado se pueden borrar a mano en `FinanzasView`.
 - Solo `OperacionesView` materializa un mes sin fila (`initMetricReport`+`pruneCarryForward`), y solo al primer cambio del usuario (autoguardado), nunca por abrirla.
 - Sin botón de guardar: `OperacionesView` y `FinanzasView` se guardan solas con `useAutosave` (`src/hooks/useAutosave.js`, debounce 1 s; 1,5 s en Finanzas). Solo guarda tras un cambio (`reset(base)` fija la base al cargar), fuerza lo pendiente al cambiar de mes/línea, desmontar u ocultar la pestaña, serializa los guardados y, si falla, deja el estado en error con «Reintentar». El indicador fijo es `AutosaveStatus` (`data-testid="autosave-status"`; «Solo lectura» en cerrado/readOnly).
-- Escritura por claves: `saveReportKeys` (`metricsApi.js`) lee la fila vigente y mezcla solo las claves que cambiaron (Operaciones: toda clave menos `finanzas`; Finanzas: `finanzas`; auto-guardado al cargar: operativas con `keepFreshJustificativos`), y rechaza reportes cerrados. Evita que una vista con copia vieja pise lo guardado por otra. `upsertReport` queda para cierre y limpiezas.
+- Escritura por claves: `saveReportKeys` (`metricsApi.js`) lee la fila vigente y mezcla solo las claves que cambiaron (Operaciones: toda clave menos `finanzas`; Finanzas: `finanzas`; auto-guardado al cargar: operativas con `keepFreshJustificativos`), y rechaza reportes cerrados (`closed_at`). Evita que una vista con copia vieja pise lo guardado por otra. `upsertReport` queda para cierre y limpiezas.
 - Al autoguardar Finanzas, un usuario privilegiado también actualiza `users.monthly_salary` con los sueldos editados (`pickSalaryUpdates`, montos > 0 que difieran del maestro).
 
 ### Reconciliación y congelamiento
 - `syncReportClients.js` reconcilia cartera actual en crecimiento/pautas, ingresos y sueldos:
   - Ingresos ← `metric_clients.monthly_fee` (sembrar-y-editar: valores conservados por `clienteId`; clientes fuera de línea descartados; filas manuales `clienteId==null` conservadas).
   - Sueldos ← `users.monthly_salary` filtrado por `metric_lines.member_user_ids` (conservados por `empleadoId`; quien sale del team se descarta; manuales `empleadoId==null` conservadas). Nómina no se toca al mover cuentas.
-- `isReportFrozen(year, month, closed)` (`src/utils/reportPeriod.js`): true si el mes es estrictamente anterior al en curso o está cerrado → se muestra el `data` guardado sin reconciliar. El snapshot es la única fuente de verdad histórica.
+- `isReportFrozen(year, month, closed)` (`src/utils/reportPeriod.js`): true si el mes es estrictamente anterior al en curso o está cerrado (o desbloqueado, `isDerivationFrozen`) → se muestra el `data` guardado sin reconciliar. El snapshot es la única fuente de verdad histórica.
 - Mes en curso / sin guardar reconcilia contra roster del mes: `clientInMonth` (usa `contract_end ?? deleted_at`, respeta `baja_incluye_mes`) / `employeeActiveInMonth` (baja posterior al inicio del mes = activo ese mes).
 
 ### Reuniones
@@ -120,10 +120,11 @@ Reportes mensuales ponderados (100 pts) por línea operativa: reuniones, product
 
 ### Cierre de reporte
 - Nivel 4/admin (`reportes.close`) o jefa de línea cierran desde `LineView.jsx` (botón junto al selector y en Resumen, modal de confirmación). Texto: "Marcar reporte como listo" (jefa) / "Cerrar reporte" (capability).
-- Irreversible: no hay reapertura en la app.
 - Cerrado → `OperacionesView`/`FinanzasView` reciben `closed` y envuelven el form en `<fieldset disabled>` (comparten fila, ambos botones Guardar bloqueados). Badge "Reporte cerrado" o "Cerrado automáticamente" (si `closed_auto`, con fecha).
-- Garantía real: trigger `metric_reports_prevent_closed_edit` (`prevent_closed_report_edit()`) rechaza todo `UPDATE` si `closed_at` no es null.
-- Cierre automático: cron `enqueue-metric-report-closures` (pg_cron, 07:30 Caracas, `enqueue_metric_report_closures()`), líneas no-generales. Días 1-4: recordatorio in-app `report_close_reminder` a la jefa con días restantes. Día 5: cierra incondicionalmente el mes anterior tal cual (crea fila vacía si no existe), `closed_auto = true`, notifica `report_autoclosed` a jefa + nivel ≥4. Sin heurística de completitud (solo fechas). Por-línea `BEGIN/EXCEPTION`, observable en `notif_cron_runs`. Cerrar antes del día 5 saca la línea de los avisos.
+- Inmutable en la base (`20261120110000_reportes_cerrados_inmutables.sql`): un reporte con `closed_at` no se puede editar (`prevent_closed_report_edit`), eliminar (`prevent_closed_report_delete`, incluye el cascade al borrar una línea), crear ya cerrado desde la app (`prevent_closed_report_insert`, solo con `auth.uid()` nulo: cron/servicio) ni vaciar (`prevent_report_truncate` + `TRUNCATE` revocado). `deleteLine` avisa antes si la línea tiene reportes cerrados. `importMetrics` ignora los campos de cierre y omite los meses ya cerrados (avisa cuántos). `move_client_line_reports` avisa con un mensaje claro si el mes de origen o destino está cerrado. Cualquier migración de datos que haga `UPDATE`/`DELETE` masivo sobre `metric_reports` debe excluir los cerrados (`where closed_at is null`).
+- Desbloqueo (solo admin, `users.admin`; no es capability): botón «Desbloquear» en `LineView` (oculto en «Ver como») → `unlockReport` → RPC `unlock_metric_report(line, year, month, motivo)` (`security definer`; motivo ≥ 10 caracteres; misma empresa). Deja una fila en `metric_report_unlocks` (append-only, lectura solo admin, con copia de `data`), pone `closed_at/by = null` y `reopened_at/by`; **no toca `data`**: el trigger solo acepta ese cambio si lo hace la RPC (marca `app.report_unlock` de la transacción) un admin y `data` queda idéntica.
+- Desbloqueado (`reopened_at` y `closed_at` nulo): badge «Reporte desbloqueado», se editan a mano los campos manuales, pero lo derivado sigue **congelado** (`isDerivationFrozen`, `reportPeriod.js`: no se recalcula ni se autoguarda con datos de hoy; `OperacionesView`/`FinanzasView` reciben `reopened`; `cleanupClientAfterContractEnd` tampoco lo toca). El botón pasa a «Cerrar de nuevo»; al cerrar se limpian `reopened_*`.
+- Cierre automático: la función `enqueue_metric_report_closures()` (cron `enqueue-metric-report-closures`, pg_cron 07:30 Caracas) existe pero el autocierre del día 5 está **apagado** (`v_autoclose_enabled := false`, `20260904000000`): los meses se cierran a mano. Los recordatorios in-app `report_close_reminder` a la jefa (días 1-4) siguen su lógica. Si se reactivara, inserta filas ya cerradas con `auth.uid()` nulo (permitido por el trigger de INSERT), `closed_auto = true`.
 - Frontend: `reportClosure.js` (lógica pura, `now` inyectable); `useReportCloseReminder.js` + `ReportCloseReminderModal.jsx` (modal al iniciar sesión días 1-5, persistencia por fecha en `localStorage` vía `reportReminder.js`, montado en `AppLayout.jsx` tras `WhatsNewModal`); `notificationFormat.js` (`entity_type: 'metric_report'`, deep-link `/reportes/linea/:id?tab=operaciones&year=&month=`).
 
 ### Mover cuenta de línea
@@ -136,7 +137,7 @@ Reportes mensuales ponderados (100 pts) por línea operativa: reuniones, product
 
 ### Fin de contrato
 - Editable en `ClientModal` (también archivados). Mes de fin cuenta completo; desde el siguiente la marca no aparece.
-- Al guardar uno nuevo, `cleanupClientAfterContractEnd` (`metricsApi.js` + `src/utils/stripClientFromReport.js`) quita la marca de reportes guardados posteriores (todas las líneas), respetando los cerrados.
+- Al guardar uno nuevo, `cleanupClientAfterContractEnd` (`metricsApi.js` + `src/utils/stripClientFromReport.js`) quita la marca de reportes guardados posteriores (todas las líneas), respetando los cerrados y los desbloqueados.
 
 ## UX
 - `EmployeeInfoModal` (clic en empleado en Resumen o fila de Sueldos): foto `w-24 h-24`, nombre, cargo, dpto, email, teléfono, fechas, línea, `positions.position_description` y funciones (`positions.position_functions jsonb[]`) en bullets.

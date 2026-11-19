@@ -9,6 +9,13 @@ import {
   sumPiezasVideoForLine,
   sumPiezasVideoBreakdownForLine,
   sumCnpAudiovisual,
+  usaEditadasFinDeMes,
+  inicioMesISO,
+  finDeMesISO,
+  inicioCorteISO,
+  listasAFechaPorPauta,
+  withEditadasAFecha,
+  pendientesPrevios,
 } from '../../utils/audiovisual'
 import { selectAllPages } from '../../lib/supabasePaginate'
 
@@ -35,6 +42,21 @@ export async function loadPautas(companyId) {
 }
 
 /**
+ * Unidades listas de cada lote (`av_pauta_piezas`) de esas pautas como estaban al terminar el día
+ * `fecha` ('YYYY-MM-DD', hora de Caracas), leídas del historial append-only de listas
+ * (`av_pieza_listas_log`) vía la RPC `av_lotes_listas_a_fecha`. Una fecha futura devuelve el valor
+ * vivo; un lote creado después de `fecha` queda en 0. Única llamada a esa RPC: la usan el reporte
+ * (countPiezasForLine / reportSourcesApi) y Audiovisual → Datos (useListasFinDeMes).
+ * @param {string[]} pautaIds
+ * @param {string} fecha
+ * @returns {Promise<{data: Array<{pieza_id:string,pauta_id:string,formato:string,listas:number}>|null, error: any}>}
+ */
+export async function loadLotesListasAFecha(pautaIds, fecha) {
+  if (!pautaIds?.length) return { data: [], error: null }
+  return supabase.rpc('av_lotes_listas_a_fecha', { p_pauta_ids: pautaIds, p_fecha: fecha })
+}
+
+/**
  * Suma piezas de VIDEO (Video/Reel, excluye Foto) de las pautas 'realizada' de una línea
  * en un mes/año dado — usado por Reportes → Operaciones para sembrar el indicador «6. Nº
  * Piezas vs Piezas editadas» desde AUDIOVISUAL_MODULE_START. `piezas`/`editadas` es el
@@ -45,21 +67,34 @@ export async function loadPautas(companyId) {
  * Devuelve además `cnp` ({solicitudes, entregados}): los CNP de audiovisual de la línea
  * solicitados en el mes (`created_at`, como el indicador de Solicitudes). Son pedidos de solo
  * edición y van como fuente aparte — NO se suman a `piezas`/`editadas` de las pautas.
+ *
+ * Desde PIEZAS_FIN_DE_MES_START (nov-2026) «editadas» es lo que estaba editado el ÚLTIMO DÍA del
+ * mes (RPC `av_lotes_listas_a_fecha`, que lee el historial de listas), así el número de un mes
+ * terminado queda fijo aunque después se edite más. En ese caso devuelve también
+ * `pendientesPrevios` ({piezas, editadas, pendientes}): lo grabado desde nov-2026 en meses
+ * anteriores y aún sin editar a esa misma fecha — solo informativo, no entra al puntaje. Las
+ * pautas en la Papelera (`deleted_at`) no cuentan con la regla nueva. Antes de nov-2026 el
+ * cálculo es el de siempre (contador vivo) y `pendientesPrevios` es null.
+ * Si la RPC falla devuelve `error` (sin caer al contador vivo: el llamador conserva lo guardado).
  */
 export async function countPiezasForLine(companyId, lineId, { month, year }) {
-  const monthStart = new Date(year, month - 1, 1)
-  const monthEnd = new Date(year, month, 1)
-  const toISODate = (d) => d.toISOString().slice(0, 10)
+  const usaFin = usaEditadasFinDeMes(year, month)
+  const startISO = inicioMesISO(year, month)
+  const endISO = month === 12 ? inicioMesISO(year + 1, 1) : inicioMesISO(year, month + 1)
+  // Con la regla nueva también se traen las pautas previas (desde el corte) para los pendientes.
+  const lowerISO = usaFin && inicioCorteISO() < startISO ? inicioCorteISO() : startISO
 
   const [{ data, error }, { data: cnpData, error: cnpError }] = await Promise.all([
     supabase
       .from('av_pautas')
-      .select('piezas_totales, piezas_editadas, status, formats, piezas_por_formato')
+      .select(
+        'id, pauta_date, deleted_at, piezas_totales, piezas_editadas, status, formats, piezas_por_formato',
+      )
       .eq('company_id', companyId)
       .eq('line_id', lineId)
       .eq('status', 'realizada')
-      .gte('pauta_date', toISODate(monthStart))
-      .lt('pauta_date', toISODate(monthEnd)),
+      .gte('pauta_date', lowerISO)
+      .lt('pauta_date', endISO),
     supabase
       .from('cnp_requests')
       .select('status, pieces')
@@ -67,25 +102,43 @@ export async function countPiezasForLine(companyId, lineId, { month, year }) {
       .eq('line_id', lineId)
       .eq('is_audiovisual', true)
       .is('deleted_at', null)
-      .gte('created_at', toISODate(monthStart))
-      .lt('created_at', toISODate(monthEnd)),
+      .gte('created_at', startISO)
+      .lt('created_at', endISO),
   ])
 
+  const emptyResult = (err) => ({
+    piezas: 0,
+    editadas: 0,
+    porGrupo: sumPiezasVideoBreakdownForLine([]),
+    cnp: sumCnpAudiovisual([]),
+    pendientesPrevios: null,
+    error: err,
+  })
+
   const err = error ?? cnpError
-  if (err) {
-    return {
-      piezas: 0,
-      editadas: 0,
-      porGrupo: sumPiezasVideoBreakdownForLine([]),
-      cnp: sumCnpAudiovisual([]),
-      error: err,
-    }
+  if (err) return emptyResult(err)
+
+  let rows = data ?? []
+  if (usaFin) rows = rows.filter((r) => !r.deleted_at)
+  let delMes = rows.filter((r) => (r.pauta_date ?? '') >= startISO)
+  let previas = usaFin ? rows.filter((r) => (r.pauta_date ?? '') < startISO) : []
+
+  if (usaFin && rows.length > 0) {
+    const { data: listasRows, error: rpcError } = await loadLotesListasAFecha(
+      rows.map((r) => r.id),
+      finDeMesISO(year, month),
+    )
+    if (rpcError) return emptyResult(rpcError)
+    const porPauta = listasAFechaPorPauta(listasRows)
+    delMes = withEditadasAFecha(delMes, porPauta)
+    previas = withEditadasAFecha(previas, porPauta)
   }
-  const rows = data ?? []
+
   return {
-    ...sumPiezasVideoForLine(rows),
-    porGrupo: sumPiezasVideoBreakdownForLine(rows),
+    ...sumPiezasVideoForLine(delMes),
+    porGrupo: sumPiezasVideoBreakdownForLine(delMes),
     cnp: sumCnpAudiovisual(cnpData),
+    pendientesPrevios: usaFin ? pendientesPrevios(previas) : null,
     error: null,
   }
 }

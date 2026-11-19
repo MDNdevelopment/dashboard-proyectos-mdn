@@ -109,7 +109,16 @@ export default function MetricasPage() {
         return
       }
       await fetchLines()
-      showToast('Importación completada.')
+      const omitidos = result.omitidosCerrados ?? 0
+      showToast(
+        omitidos > 0
+          ? `Importación completada. ${omitidos} ${
+              omitidos === 1
+                ? 'reporte cerrado no se importó'
+                : 'reportes cerrados no se importaron'
+            }.`
+          : 'Importación completada.',
+      )
     } catch {
       showToast('El archivo no es válido.', 'error')
     }

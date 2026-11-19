@@ -7,7 +7,7 @@
  */
 import { describe, it, expect, vi } from 'vitest'
 
-const { mockMeetings, mockFixedTaskMarks, mockChecks, mockAvPautas, mockCnp, mockTasks } =
+const { mockMeetings, mockFixedTaskMarks, mockChecks, mockAvPautas, mockCnp, mockTasks, mockRpc } =
   vi.hoisted(() => ({
     mockMeetings: vi.fn(() => ({ data: [], error: null })),
     mockFixedTaskMarks: vi.fn(() => ({ data: [], error: null })),
@@ -15,6 +15,7 @@ const { mockMeetings, mockFixedTaskMarks, mockChecks, mockAvPautas, mockCnp, moc
     mockAvPautas: vi.fn(() => ({ data: [], error: null })),
     mockCnp: vi.fn(() => ({ data: [], error: null })),
     mockTasks: vi.fn(() => ({ data: [], error: null })),
+    mockRpc: vi.fn(),
   }))
 
 function chainable(getResult) {
@@ -43,6 +44,7 @@ function chainable(getResult) {
 
 vi.mock('../supabase', () => ({
   supabase: {
+    rpc: (...args) => mockRpc(...args),
     from: vi.fn((table) => {
       if (table === 'meetings') return chainable(mockMeetings)
       if (table === 'fixed_task_marks') return chainable(mockFixedTaskMarks)
@@ -64,6 +66,8 @@ function resetMocks() {
   mockAvPautas.mockReturnValue({ data: [], error: null })
   mockCnp.mockReturnValue({ data: [], error: null })
   mockTasks.mockReturnValue({ data: [], error: null })
+  mockRpc.mockReset()
+  mockRpc.mockResolvedValue({ data: [], error: null })
 }
 
 // Fechas a mitad de mes para que la comparación local/UTC no dependa de la zona
@@ -355,5 +359,222 @@ describe('loadReportSources', () => {
     mockCnp.mockReturnValue({ data: null, error: { message: 'boom' } })
     const { error } = await loadReportSources('co1', { year: 2026, months: [8], lineIds: ['A'] })
     expect(error).toEqual({ message: 'boom' })
+  })
+})
+
+// ─── Piezas: lo editado al último día del mes (desde noviembre 2026) ────────
+
+describe('loadReportSources — editadas al último día del mes', () => {
+  const pauta = (id, line_id, pauta_date, salieron, over = {}) => ({
+    id,
+    line_id,
+    client_id: `c-${id}`,
+    pauta_date,
+    deleted_at: null,
+    status: 'realizada',
+    formats: ['V'],
+    piezas_totales: salieron,
+    piezas_editadas: salieron,
+    // Contador vivo: hoy dice que todo está editado.
+    piezas_por_formato: { V: { salieron, editadas: salieron } },
+    ...over,
+  })
+  const lote = (pauta_id, listas) => ({
+    pieza_id: `${pauta_id}-lote`,
+    pauta_id,
+    formato: 'V',
+    listas,
+  })
+  // La RPC responde según la fecha pedida: { '2026-11-30': [...], '2026-12-31': [...] }.
+  const rpcPorFecha = (porFecha) =>
+    mockRpc.mockImplementation(async (_fn, { p_fecha }) => ({
+      data: porFecha[p_fecha] ?? [],
+      error: null,
+    }))
+  const run = (months, lineIds = ['A'], year = 2026) =>
+    loadReportSources('co1', { year, months, lineIds })
+
+  it('noviembre: editadas sale del historial al 30-nov, no del contador vivo', async () => {
+    resetMocks()
+    mockAvPautas.mockReturnValue({ data: [pauta('p1', 'A', '2026-11-05', 4)], error: null })
+    rpcPorFecha({ '2026-11-30': [lote('p1', 1)] })
+
+    const { data, error } = await run([11])
+
+    expect(error).toBeNull()
+    expect(mockRpc).toHaveBeenCalledTimes(1)
+    expect(mockRpc).toHaveBeenCalledWith('av_lotes_listas_a_fecha', {
+      p_pauta_ids: ['p1'],
+      p_fecha: '2026-11-30',
+    })
+    expect(data['A__11'].piezas.piezas).toBe(4)
+    expect(data['A__11'].piezas.editadas).toBe(1)
+    expect(data['A__11'].piezas.pendientesPrevios).toEqual({
+      piezas: 0,
+      editadas: 0,
+      pendientes: 0,
+    })
+  })
+
+  it('noviembre y diciembre: una llamada por mes, cada una a su último día', async () => {
+    resetMocks()
+    mockAvPautas.mockReturnValue({
+      data: [pauta('nov', 'A', '2026-11-20', 5), pauta('dic', 'A', '2026-12-03', 4)],
+      error: null,
+    })
+    rpcPorFecha({
+      '2026-11-30': [lote('nov', 1)],
+      '2026-12-31': [lote('nov', 3), lote('dic', 2)],
+    })
+
+    const { data } = await run([11, 12])
+
+    expect(mockRpc).toHaveBeenCalledTimes(2)
+    const fechas = mockRpc.mock.calls.map((c) => c[1].p_fecha).sort()
+    expect(fechas).toEqual(['2026-11-30', '2026-12-31'])
+    // Noviembre queda como estaba al 30-nov (1 de 5), aunque en diciembre se editaron más.
+    expect(data['A__11'].piezas).toMatchObject({ piezas: 5, editadas: 1 })
+    // Diciembre cuenta solo lo grabado en diciembre…
+    expect(data['A__12'].piezas).toMatchObject({ piezas: 4, editadas: 2 })
+    // …y lo de noviembre sin editar al 31-dic va aparte, solo informativo.
+    expect(data['A__12'].piezas.pendientesPrevios).toEqual({
+      piezas: 5,
+      editadas: 3,
+      pendientes: 2,
+    })
+  })
+
+  it('la llamada de noviembre no manda las pautas de diciembre', async () => {
+    resetMocks()
+    mockAvPautas.mockReturnValue({
+      data: [pauta('nov', 'A', '2026-11-20', 5), pauta('dic', 'A', '2026-12-03', 4)],
+      error: null,
+    })
+    await run([11, 12])
+    const nov = mockRpc.mock.calls.find((c) => c[1].p_fecha === '2026-11-30')[1]
+    const dic = mockRpc.mock.calls.find((c) => c[1].p_fecha === '2026-12-31')[1]
+    expect(nov.p_pauta_ids).toEqual(['nov'])
+    expect([...dic.p_pauta_ids].sort()).toEqual(['dic', 'nov'])
+  })
+
+  it('pidiendo solo diciembre igual trae las pautas de noviembre (límite inferior = 1-nov)', async () => {
+    resetMocks()
+    mockAvPautas.mockReturnValue({ data: [pauta('nov', 'A', '2026-11-20', 5)], error: null })
+    rpcPorFecha({ '2026-12-31': [lote('nov', 2)] })
+
+    const { data } = await run([12])
+    const { supabase } = await import('../supabase')
+    const i = supabase.from.mock.calls.map((c) => c[0]).lastIndexOf('av_pautas')
+    expect(supabase.from.mock.results[i].value.gte.mock.calls[0]).toEqual([
+      'pauta_date',
+      '2026-11-01',
+    ])
+
+    expect(data['A__12'].piezas).toMatchObject({ piezas: 0, editadas: 0 })
+    expect(data['A__12'].piezas.pendientesPrevios).toEqual({
+      piezas: 5,
+      editadas: 2,
+      pendientes: 3,
+    })
+  })
+
+  it('«Nº Pautas» (indicador 5) no cambia: las previas no cuentan y las de la Papelera sí', async () => {
+    resetMocks()
+    mockAvPautas.mockReturnValue({
+      data: [
+        pauta('nov', 'A', '2026-11-20', 5),
+        pauta('dic1', 'A', '2026-12-03', 4),
+        pauta('dic2', 'A', '2026-12-04', 2, { deleted_at: '2026-12-05T00:00:00Z' }),
+      ],
+      error: null,
+    })
+    const { data } = await run([12])
+    expect(data['A__12'].pautasByClient).toEqual({ 'c-dic1': 1, 'c-dic2': 1 })
+  })
+
+  it('las pautas de la Papelera no cuentan en piezas ni se mandan a la RPC', async () => {
+    resetMocks()
+    mockAvPautas.mockReturnValue({
+      data: [
+        pauta('p1', 'A', '2026-11-05', 4),
+        pauta('p2', 'A', '2026-11-06', 9, { deleted_at: '2026-11-10T00:00:00Z' }),
+      ],
+      error: null,
+    })
+    rpcPorFecha({ '2026-11-30': [lote('p1', 4)] })
+    const { data } = await run([11])
+    expect(data['A__11'].piezas.piezas).toBe(4)
+    expect(mockRpc.mock.calls[0][1].p_pauta_ids).toEqual(['p1'])
+  })
+
+  it('separa por línea: los pendientes de una línea no se mezclan con los de otra', async () => {
+    resetMocks()
+    mockAvPautas.mockReturnValue({
+      data: [pauta('nA', 'A', '2026-11-20', 5), pauta('nB', 'B', '2026-11-21', 8)],
+      error: null,
+    })
+    rpcPorFecha({ '2026-12-31': [lote('nA', 5), lote('nB', 2)] })
+    const { data } = await run([12], ['A', 'B'])
+    expect(data['A__12'].piezas.pendientesPrevios.pendientes).toBe(0)
+    expect(data['B__12'].piezas.pendientesPrevios.pendientes).toBe(6)
+  })
+
+  it('si la RPC falla en un mes, solo ese mes lleva el error (sin error global)', async () => {
+    resetMocks()
+    mockAvPautas.mockReturnValue({
+      data: [pauta('nov', 'A', '2026-11-20', 5), pauta('dic', 'A', '2026-12-03', 4)],
+      error: null,
+    })
+    mockRpc.mockImplementation(async (_fn, { p_fecha }) =>
+      p_fecha === '2026-12-31'
+        ? { data: null, error: { message: 'boom' } }
+        : { data: [lote('nov', 2)], error: null },
+    )
+    const { data, error } = await run([11, 12])
+    expect(error).toBeNull()
+    expect(data['A__11'].piezas.error).toBeUndefined()
+    expect(data['A__11'].piezas.editadas).toBe(2)
+    expect(data['A__12'].piezas.error).toEqual({ message: 'boom' })
+    expect(data['A__12'].piezas.pendientesPrevios).toBeNull()
+  })
+
+  it('sin pautas no llama a la RPC', async () => {
+    resetMocks()
+    const { data } = await run([11])
+    expect(mockRpc).not.toHaveBeenCalled()
+    expect(data['A__11'].piezas.piezas).toBe(0)
+  })
+
+  it('meses anteriores a noviembre: sin RPC y con la forma de siempre (contador vivo)', async () => {
+    resetMocks()
+    mockAvPautas.mockReturnValue({ data: [pauta('p1', 'A', '2026-10-10', 6)], error: null })
+    const { data } = await run([10])
+    expect(mockRpc).not.toHaveBeenCalled()
+    expect(data['A__10'].piezas.editadas).toBe(6)
+    expect(data['A__10'].piezas).not.toHaveProperty('pendientesPrevios')
+  })
+
+  it('octubre y noviembre juntos: solo noviembre usa la regla nueva', async () => {
+    resetMocks()
+    mockAvPautas.mockReturnValue({
+      data: [pauta('oct', 'A', '2026-10-10', 6), pauta('nov', 'A', '2026-11-10', 4)],
+      error: null,
+    })
+    rpcPorFecha({ '2026-11-30': [lote('nov', 1)] })
+    const { data } = await run([10, 11])
+    expect(mockRpc).toHaveBeenCalledTimes(1)
+    expect(data['A__10'].piezas.editadas).toBe(6)
+    expect(data['A__11'].piezas.editadas).toBe(1)
+    // Octubre no entra a los pendientes: la regla cuenta solo lo grabado desde noviembre.
+    expect(data['A__11'].piezas.pendientesPrevios.piezas).toBe(0)
+  })
+
+  it('enero 2027 cruza el año: fecha 2027-01-31 y trae desde el 1-nov-2026', async () => {
+    resetMocks()
+    mockAvPautas.mockReturnValue({ data: [pauta('nov', 'A', '2026-11-20', 3)], error: null })
+    rpcPorFecha({ '2027-01-31': [lote('nov', 3)] })
+    const { data } = await run([1], ['A'], 2027)
+    expect(mockRpc.mock.calls[0][1].p_fecha).toBe('2027-01-31')
+    expect(data['A__1'].piezas.pendientesPrevios).toEqual({ piezas: 3, editadas: 3, pendientes: 0 })
   })
 })

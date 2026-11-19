@@ -60,6 +60,7 @@ const mockCountPiezasForLine = vi.fn()
 const mockCountPautasRealizadasByClient = vi.fn()
 const mockCountCnpSolicitudesForLine = vi.fn()
 const mockCountTareasSolicitudesForLine = vi.fn()
+const mockMaybeAutoPersist = vi.fn()
 
 vi.mock('../components/metricas/metricsApi', () => ({
   loadReport: (...a) => mockLoadReport(...a),
@@ -78,7 +79,7 @@ vi.mock('../components/metricas/metricsApi', () => ({
     'feedback',
   ],
   loadFixedTaskMarks: (...a) => mockLoadFixedTaskMarks(...a),
-  maybeAutoPersistEffectiveReport: vi.fn().mockResolvedValue(undefined),
+  maybeAutoPersistEffectiveReport: (...a) => mockMaybeAutoPersist(...a),
 }))
 
 vi.mock('../components/chequeo/chequeoApi', () => ({
@@ -475,6 +476,50 @@ describe('OperacionesView — reporte cerrado (prop "closed")', () => {
     })
     expect(screen.queryByText('Guardar reporte')).not.toBeInTheDocument()
     expect(screen.getByTestId('autosave-status')).toHaveTextContent('Solo lectura')
+  })
+})
+
+describe('OperacionesView — reporte desbloqueado por un admin (prop "reopened")', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockMaybeAutoPersist.mockResolvedValue(undefined)
+    mockLoadPrevReport.mockResolvedValue({ data: null, error: null })
+    mockLoadClients.mockResolvedValue({ data: MOCK_CLIENTS, error: null })
+    mockLoadCompanyEmployees.mockResolvedValue({ data: [], error: null })
+    mockUpsertReport.mockResolvedValue({ data: null, error: null })
+    mockLoadAds.mockResolvedValue({ data: [], error: null })
+    mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: [], error: null })
+    mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
+    mockCountMeetingsHeldForLine.mockResolvedValue({ count: 999, error: null })
+  })
+
+  it('los campos manuales quedan editables (no está cerrado)', async () => {
+    renderView({ month: 7, reopened: true })
+    await waitFor(() => {
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
+    })
+    expect(screen.getByTestId('autosave-status')).not.toHaveTextContent('Solo lectura')
+    const inputs = [...document.querySelectorAll('input[type="number"]')]
+    expect(inputs.some((i) => !i.disabled)).toBe(true)
+  })
+
+  it('conserva "realizadas" guardado sin recalcular con las reuniones de hoy', async () => {
+    renderView({ month: 7, reopened: true })
+    await waitFor(() => {
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
+    })
+    expect(document.querySelectorAll('input[type="number"]')[0].value).toBe('10')
+  })
+
+  it('no autoguarda lo calculado con datos de hoy', async () => {
+    renderView({ month: 7, reopened: true })
+    await waitFor(() => {
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
+    })
+    expect(mockMaybeAutoPersist).toHaveBeenCalledWith(
+      'co-1',
+      expect.objectContaining({ closed: true }),
+    )
   })
 })
 

@@ -5,7 +5,7 @@ import LineHubView from './LineHubView'
 import OperacionesView from './OperacionesView'
 import FinanzasView from './FinanzasView'
 import { userCanWriteLineReports } from '../../utils/lineMembers'
-import { loadReport, closeReport } from './metricsApi'
+import { loadReport, closeReport, unlockReport } from './metricsApi'
 
 const MONTHS = [
   'Enero',
@@ -33,13 +33,16 @@ const YEARS = Array.from({ length: 4 }, (_, i) => CURRENT_YEAR - i)
 const VALID_TABS = ['hub', 'operaciones', 'finanzas']
 
 export default function LineView({ line, companyId, onLinesChange }) {
-  const { can = () => true, userProfile } = useAuth()
+  const { can = () => true, userProfile, isViewingAs = false } = useAuth()
   // La jefa de línea (metric_line_members.is_lead) puede marcar su propio
   // reporte como listo y cerrarlo, aunque no tenga la capability reportes.close.
   const isLead = !!userProfile?.user_id && line.lead_user_id === userProfile.user_id
   // Ver una línea ajena (reportes.ver_todo) es solo lectura: la RLS tampoco deja escribir.
   const canWrite = userCanWriteLineReports(userProfile, line)
   const canClose = canWrite && (can('reportes.close') || isLead)
+  // Desbloquear un reporte cerrado es solo para administradores (`users.admin`), no una capability
+  // configurable; en «Ver como» no se ofrece (la escritura está bloqueada).
+  const canUnlock = userProfile?.admin === true && !isViewingAs
 
   // sub-tab, mes y año viven en la URL para sobrevivir a F5 y remounts.
   const [searchParams, setSearchParams] = useSearchParams()
@@ -79,6 +82,10 @@ export default function LineView({ line, companyId, onLinesChange }) {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [closing, setClosing] = useState(false)
   const [closeError, setCloseError] = useState(null)
+  const [unlockOpen, setUnlockOpen] = useState(false)
+  const [unlockReason, setUnlockReason] = useState('')
+  const [unlocking, setUnlocking] = useState(false)
+  const [unlockError, setUnlockError] = useState(null)
 
   const loadMeta = useCallback(async () => {
     if (!line?.id) return
@@ -93,6 +100,9 @@ export default function LineView({ line, companyId, onLinesChange }) {
   }, [loadMeta, subView])
 
   const isClosed = !!reportMeta?.closed_at
+  // Desbloqueado por un admin: editable a mano, pero lo calculado sigue congelado hasta volver a cerrarlo.
+  const isReopened = !isClosed && !!reportMeta?.reopened_at
+  const UNLOCK_MIN_REASON = 10
 
   async function handleConfirmClose() {
     setClosing(true)
@@ -109,6 +119,20 @@ export default function LineView({ line, companyId, onLinesChange }) {
     }
     setReportMeta(data)
     setConfirmOpen(false)
+  }
+
+  async function handleConfirmUnlock() {
+    setUnlocking(true)
+    setUnlockError(null)
+    const { data, error } = await unlockReport(line.id, year, month, unlockReason.trim())
+    setUnlocking(false)
+    if (error) {
+      setUnlockError(error.message)
+      return
+    }
+    setReportMeta(data)
+    setUnlockOpen(false)
+    setUnlockReason('')
   }
 
   return (
@@ -214,19 +238,43 @@ export default function LineView({ line, companyId, onLinesChange }) {
               </svg>
               {reportMeta?.closed_auto ? 'Cerrado automáticamente' : 'Reporte cerrado'}
             </span>
-          ) : (
-            canClose && (
-              <button
-                type="button"
-                onClick={() => {
-                  setCloseError(null)
-                  setConfirmOpen(true)
-                }}
-                className="text-[13px] font-semibold text-[#888] hover:text-red-600 transition-colors"
-              >
-                {isLead ? 'Marcar reporte como listo' : 'Cerrar reporte'}
-              </button>
-            )
+          ) : isReopened ? (
+            <span
+              className="flex items-center gap-1.5 text-[12px] font-mono font-bold uppercase tracking-[0.08em] text-[#8a4b00] bg-[#fff6e0] border border-[#f0d9a0] rounded-full px-3 py-1"
+              title={`Desbloqueado el ${new Date(reportMeta.reopened_at).toLocaleDateString()}. Lo calculado sigue congelado hasta que lo cierres de nuevo.`}
+            >
+              Reporte desbloqueado
+            </span>
+          ) : null}
+          {/* Cerrar (o cerrar de nuevo un reporte desbloqueado): el badge de «desbloqueado» y este
+              botón conviven, por eso van fuera del ternario de los badges. */}
+          {!isClosed && canClose && (
+            <button
+              type="button"
+              onClick={() => {
+                setCloseError(null)
+                setConfirmOpen(true)
+              }}
+              className="text-[13px] font-semibold text-[#888] hover:text-red-600 transition-colors"
+            >
+              {isReopened
+                ? 'Cerrar de nuevo'
+                : isLead
+                  ? 'Marcar reporte como listo'
+                  : 'Cerrar reporte'}
+            </button>
+          )}
+          {isClosed && canUnlock && (
+            <button
+              type="button"
+              onClick={() => {
+                setUnlockError(null)
+                setUnlockOpen(true)
+              }}
+              className="text-[13px] font-semibold text-[#888] hover:text-[#111] transition-colors"
+            >
+              Desbloquear
+            </button>
           )}
         </div>
       </div>
@@ -240,6 +288,7 @@ export default function LineView({ line, companyId, onLinesChange }) {
           year={year}
           month={month}
           closed={isClosed}
+          reopened={isReopened}
           readOnly={!canWrite}
         />
       )}
@@ -250,6 +299,7 @@ export default function LineView({ line, companyId, onLinesChange }) {
           year={year}
           month={month}
           closed={isClosed}
+          reopened={isReopened}
           readOnly={!canWrite}
         />
       )}
@@ -261,8 +311,8 @@ export default function LineView({ line, companyId, onLinesChange }) {
               ¿Cerrar el reporte de {line.name} · {MONTHS[month - 1]} {year}?
             </p>
             <p className="text-[13px] text-[#888]">
-              Esta acción es permanente: ni Operaciones ni Finanzas de este mes podrán volver a
-              editarse, y no hay forma de reabrirlo desde la app.
+              Una vez cerrado, ni Operaciones ni Finanzas de este mes podrán editarse ni borrarse.
+              Solo un administrador podrá desbloquearlo después, indicando el motivo.
             </p>
             {closeError && (
               <p className="text-[13px] text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
@@ -284,7 +334,61 @@ export default function LineView({ line, companyId, onLinesChange }) {
                 disabled={closing}
                 className="px-4 py-2 rounded-xl text-[14px] font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-60"
               >
-                {closing ? 'Cerrando...' : 'Sí, cerrar permanentemente'}
+                {closing ? 'Cerrando...' : 'Sí, cerrar el reporte'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {unlockOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl border border-[#e0ddd4] p-6 max-w-sm w-full space-y-4">
+            <p className="text-[16px] font-bold text-[#111]">
+              ¿Desbloquear el reporte de {line.name} · {MONTHS[month - 1]} {year}?
+            </p>
+            <p className="text-[13px] text-[#888]">
+              El reporte volverá a ser editable. Lo que se calcula solo (reuniones, piezas,
+              solicitudes…) seguirá congelado hasta que lo cierres de nuevo. Quedará registrado
+              quién lo desbloqueó y por qué.
+            </p>
+            <label className="block text-[12px] font-mono font-bold uppercase tracking-[0.08em] text-[#888]">
+              Motivo
+              <textarea
+                value={unlockReason}
+                onChange={(e) => setUnlockReason(e.target.value)}
+                rows={3}
+                placeholder="Qué hay que corregir y por qué (mínimo 10 caracteres)"
+                className="input-base w-full mt-1 normal-case font-sans font-normal text-[14px] tracking-normal"
+              />
+            </label>
+            {unlockError && (
+              <p
+                role="alert"
+                className="text-[13px] text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2"
+              >
+                {unlockError}
+              </p>
+            )}
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setUnlockOpen(false)
+                  setUnlockReason('')
+                }}
+                disabled={unlocking}
+                className="px-4 py-2 rounded-xl text-[14px] font-semibold text-[#666] hover:bg-[#f5f3eb] transition-colors disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmUnlock}
+                disabled={unlocking || unlockReason.trim().length < UNLOCK_MIN_REASON}
+                className="px-4 py-2 rounded-xl text-[14px] font-semibold bg-[#111] text-white hover:bg-[#222] transition-colors disabled:opacity-60"
+              >
+                {unlocking ? 'Desbloqueando...' : 'Sí, desbloquear'}
               </button>
             </div>
           </div>

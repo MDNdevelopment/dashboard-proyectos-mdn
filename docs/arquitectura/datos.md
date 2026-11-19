@@ -33,7 +33,10 @@ Catálogo del estado actual. Leyenda FK: `──→` FK declarada · `··→` r
 - `loadClientPrivate(clientId)`/`upsertClientPrivate(clientId, fields)` (`metricsApi.js`); solo `ClientModal.jsx`.
 
 ### `metric_reports`
-- Un reporte por `(line_id, year, month)` (único). FK `line_id→metric_lines` CASCADE. `data jsonb` (ver 3.4). Cierre: `closed_at`/`closed_by`/`closed_auto` (manual o automático; §2.5 "Cierre de reporte").
+- Un reporte por `(line_id, year, month)` (único). FK `line_id→metric_lines` CASCADE. `data jsonb` (ver 3.4). Cierre: `closed_at`/`closed_by`/`closed_auto` (manual o automático; §2.5 "Cierre de reporte"). Desbloqueo por admin: `reopened_at`/`reopened_by` (solo mientras esté desbloqueado). Un reporte cerrado no se puede editar, eliminar (tampoco por el cascade de `metric_lines`) ni vaciar la tabla: triggers de la migración `20261120110000`.
+
+### `metric_report_unlocks`
+- Auditoría append-only de desbloqueos: `report_id` (sin FK), `company_id, line_id, year, month, unlocked_by, reason, prev_closed_at/by/auto, data_snapshot jsonb, created_at`. RLS: solo `select` para admin de la empresa; escribe únicamente la RPC `unlock_metric_report`; triggers rechazan UPDATE/DELETE/TRUNCATE.
 
 ### `metric_client_line_moves`
 - Auditoría de movimientos de cuenta entre líneas: `company_id, client_id→metric_clients CASCADE, from_line_id/to_line_id→metric_lines (SET NULL), effective_date, split_old/split_new numeric, created_by`.
@@ -90,7 +93,8 @@ Catálogo del estado actual. Leyenda FK: `──→` FK declarada · `··→` r
 - `nombre` puede ir vacío: "Video #1", "Reel #2" se derivan en cliente (`piezaOrdinals`/`piezaDisplayName`, `utils/audiovisual.js`), nunca se persisten.
 - Trigger `av_pauta_piezas_sync_counters` (AFTER INSERT/UPDATE/DELETE) → `av_pautas.piezas_editadas` = piezas con `status='listo'`.
 - `fecha_entrega date` (null = sin fecha: lote anterior a la regla o aún no llenada): se llena a mano y la valida `av_pauta_piezas_guard_fecha_entrega` (ver `audiovisual.md`).
-- `av_pieza_listas_log(pieza_id, pauta_id, company_id, formato, editor_user_id, listas, origen, at)`: historia append-only de `listas`; solo la escribe un trigger. Alimenta el score de edición a tiempo.
+- `av_pieza_listas_log(pieza_id, pauta_id, company_id, formato, editor_user_id, listas, origen, at)`: historia append-only de `listas`; solo la escribe un trigger. Alimenta el score de edición a tiempo y las piezas editadas «al último día del mes» (Reportes y Audiovisual → Datos).
+- Funciones de lectura sobre ese historial: `av_pieza_listas_a_fecha(pieza, fecha) → int` (último valor hasta el fin de ese día en hora de Caracas; `NULL` si no hay historia) y `av_lotes_listas_a_fecha(pauta_ids uuid[], fecha date) → (pieza_id, pauta_id, formato, listas)` (una fila por lote, `NULL`⇒0, security definer filtrado por la empresa de `auth.uid()`; solo `authenticated`/`service_role`). Ver `audiovisual.md`.
 - RLS: SELECT autenticados; escritura `user_can('audiovisual.coordina') OR (auth.uid()::text = any(av_pautas.recurso_ids) de la pauta referenciada)`. Realtime.
 
 ### `external_resources`

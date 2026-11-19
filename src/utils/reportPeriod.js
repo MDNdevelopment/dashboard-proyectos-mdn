@@ -22,3 +22,16 @@ export function isReportFrozen(year, month, closed, now = new Date()) {
   const m = now.getUTCMonth() + 1
   return year < y || (year === y && month < m)
 }
+
+/**
+ * ¿Hay que tratar el reporte como congelado a efectos de DERIVACIÓN (recalcular indicadores desde
+ * las fuentes y autoguardarlos)? Sí si está cerrado, y también si un admin lo desbloqueó
+ * (`reopened_at`): un reporte desbloqueado se edita a mano, pero no se reescribe solo con datos de
+ * hoy hasta que se vuelva a cerrar. La edición (`fieldset`/autoguardado manual) solo mira
+ * `closed_at`.
+ * @param {{closed_at?: string|null, reopened_at?: string|null}|null|undefined} row
+ * @returns {boolean}
+ */
+export function isDerivationFrozen(row) {
+  return !!(row?.closed_at || row?.reopened_at)
+}
