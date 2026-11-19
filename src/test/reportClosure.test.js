@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   CLOSURE_DAY,
+  REMINDER_START_DAY,
   closurePeriod,
   isClosureWindow,
   daysLeftToClose,
@@ -20,9 +21,18 @@ describe('reportClosure', () => {
   })
 
   describe('isClosureWindow', () => {
-    it('true del día 1 al CLOSURE_DAY', () => {
-      expect(isClosureWindow(new Date(Date.UTC(2026, 8, 1)))).toBe(true)
+    it('true del día REMINDER_START_DAY al CLOSURE_DAY', () => {
+      expect(isClosureWindow(new Date(Date.UTC(2026, 8, REMINDER_START_DAY)))).toBe(true)
       expect(isClosureWindow(new Date(Date.UTC(2026, 8, CLOSURE_DAY)))).toBe(true)
+    })
+
+    it('false antes de empezar los avisos (día 1 al 9) y después del cierre', () => {
+      expect(isClosureWindow(new Date(Date.UTC(2026, 8, 1)))).toBe(false)
+      expect(isClosureWindow(new Date(Date.UTC(2026, 8, REMINDER_START_DAY - 1)))).toBe(false)
+    })
+
+    it('el cierre es el día 15', () => {
+      expect(CLOSURE_DAY).toBe(15)
     })
 
     it('false fuera de la ventana', () => {
@@ -32,8 +42,10 @@ describe('reportClosure', () => {
   })
 
   describe('daysLeftToClose', () => {
-    it('día 1 → CLOSURE_DAY - 1', () => {
-      expect(daysLeftToClose(new Date(Date.UTC(2026, 8, 1)))).toBe(CLOSURE_DAY - 1)
+    it('primer día de avisos → CLOSURE_DAY - REMINDER_START_DAY', () => {
+      expect(daysLeftToClose(new Date(Date.UTC(2026, 8, REMINDER_START_DAY)))).toBe(
+        CLOSURE_DAY - REMINDER_START_DAY,
+      )
     })
 
     it('día del cierre → 0', () => {
@@ -78,7 +90,7 @@ describe('reportClosure', () => {
   })
 
   describe('shouldShowClosureReminder', () => {
-    const now = new Date(Date.UTC(2026, 8, 3))
+    const now = new Date(Date.UTC(2026, 8, 12))
     const pending = [{ id: 'l1' }]
 
     it('false fuera de la ventana de avisos', () => {
@@ -87,7 +99,7 @@ describe('reportClosure', () => {
     })
 
     it('false si ya se vio hoy', () => {
-      expect(shouldShowClosureReminder({ pending, seenDate: '2026-09-03', now })).toBe(false)
+      expect(shouldShowClosureReminder({ pending, seenDate: '2026-09-12', now })).toBe(false)
     })
 
     it('false sin pendientes', () => {
@@ -95,7 +107,7 @@ describe('reportClosure', () => {
     })
 
     it('true dentro de la ventana, con pendientes y sin ver hoy', () => {
-      expect(shouldShowClosureReminder({ pending, seenDate: '2026-09-02', now })).toBe(true)
+      expect(shouldShowClosureReminder({ pending, seenDate: '2026-09-11', now })).toBe(true)
       expect(shouldShowClosureReminder({ pending, seenDate: null, now })).toBe(true)
     })
   })
