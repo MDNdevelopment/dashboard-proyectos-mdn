@@ -1,9 +1,10 @@
 /**
- * Tests de AdsPage: tabs internas "Tácticas" / "Ads" y selector de periodo compartido.
+ * Tests de AdsPage: tabs internas "Tácticas" / "Ads". El selector de periodo es solo de Ads;
+ * Tácticas es un historial por marca con subvistas Vigentes / Por marca / Historial (?view=).
  * AdsSpendView se mockea como stub (tiene sus propios tests en AdsSpendView.test.jsx);
  * aquí solo verificamos que el tab lo monta y le pasa companyId/periodo/canManage.
  */
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { forwardRef, useImperativeHandle } from 'react'
 import { MemoryRouter } from 'react-router-dom'
@@ -68,6 +69,12 @@ vi.mock('../supabase', () => ({
   },
 }))
 
+vi.mock('../components/ads/tacticas/tacticasApi', () => ({
+  loadPendingHandoffs: vi.fn().mockResolvedValue({ data: [], error: null }),
+  updateHandoff: vi.fn().mockResolvedValue({ data: {}, error: null }),
+  updateCampaign: vi.fn().mockResolvedValue({ data: null, error: null }),
+}))
+
 vi.mock('../components/metricas/metricsApi', () => ({
   loadClients: vi.fn().mockResolvedValue({ data: [], error: null }),
   loadLines: vi.fn().mockResolvedValue({ data: [], error: null }),
@@ -92,7 +99,7 @@ vi.mock('../context/AuthContext', () => ({
 import { useAuth } from '../context/AuthContext'
 import AdsPage from '../pages/AdsPage'
 
-function renderPage() {
+function renderPage(route = '/ads') {
   useAuth.mockReturnValue({
     // admin ⇒ canViewAll ⇒ arranca en "Todos" y no aplica filtro de línea, así estos
     // tests (período/estado, no scoping) ven todas las tácticas.
@@ -100,7 +107,7 @@ function renderPage() {
     can: () => true,
   })
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[route]}>
       <AdsPage />
     </MemoryRouter>,
   )
@@ -119,13 +126,28 @@ describe('AdsPage — tabs Tácticas/Ads', () => {
     vi.useRealTimers()
   })
 
-  it('por defecto muestra la tab Tácticas con la tabla de campañas del periodo actual', async () => {
+  it('por defecto muestra la tab Tácticas, en la subvista Vigentes', async () => {
     renderPage()
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Tácticas' })).toBeInTheDocument()
     })
     expect(screen.getByRole('button', { name: 'Ads' })).toBeInTheDocument()
     expect(screen.queryByTestId('ads-spend-view-stub')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Vigentes', pressed: true })).toBeInTheDocument()
+    // "Táctica Julio" está Pendiente y vence el 20-jul (hoy es 15-jul): vigente.
+    await waitFor(() => {
+      expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
+    })
+  })
+
+  it('la subvista Vigentes no lista las tácticas ya vencidas', async () => {
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
+    })
+    // Junio vencía el 10-jun y Cruzada el 5-jul: ya no están en marcha.
+    expect(screen.queryByText('Táctica Junio')).not.toBeInTheDocument()
+    expect(screen.queryByText('Táctica Cruzada')).not.toBeInTheDocument()
   })
 
   it('cambiar a la tab Ads oculta Tácticas y monta AdsSpendView con las props correctas', async () => {
@@ -140,122 +162,133 @@ describe('AdsPage — tabs Tácticas/Ads', () => {
     expect(screen.getByTestId('ads-spend-view-stub')).toBeInTheDocument()
     expect(screen.getByTestId('ads-spend-view-stub').textContent).toContain('company:co-1')
     expect(screen.getByTestId('ads-spend-view-stub').textContent).toContain('canManage:true')
-    // Botón "Nueva campaña" solo pertenece a la tab Tácticas
-    expect(screen.queryByRole('button', { name: 'Nueva campaña' })).not.toBeInTheDocument()
+    // Botón "Nueva táctica" solo pertenece a la tab Tácticas
+    expect(screen.queryByRole('button', { name: 'Nueva táctica' })).not.toBeInTheDocument()
   })
 
-  it('en la tab Ads, "Nuevo Ad" aparece en el header (misma ubicación que "Nueva campaña") y abre la creación', async () => {
+  it('en la tab Ads, "Nuevo Ad" aparece en el header (misma ubicación que "Nueva táctica") y abre la creación', async () => {
     const user = userEvent.setup()
     renderPage()
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Ads' })).toBeInTheDocument()
     })
 
-    // En Tácticas el botón del header es "Nueva campaña"
-    expect(screen.getByRole('button', { name: 'Nueva campaña' })).toBeInTheDocument()
+    // En Tácticas el botón del header es "Nueva táctica"
+    expect(screen.getByRole('button', { name: 'Nueva táctica' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Nuevo Ad' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Ads' }))
 
     // En Ads el botón del header cambia a "Nuevo Ad" (misma posición)
-    expect(screen.queryByRole('button', { name: 'Nueva campaña' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Nueva táctica' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Nuevo Ad' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Nuevo Ad' }))
     expect(mockOpenCreate).toHaveBeenCalled()
   })
 
-  it('el selector de periodo filtra las tácticas mostradas', async () => {
+  it('el selector de período es solo de la tab Ads', async () => {
     const user = userEvent.setup()
     renderPage()
     await waitFor(() => {
       expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
     })
-    expect(screen.queryByText('Táctica Junio')).not.toBeInTheDocument()
+    // Tácticas es un historial por marca: no se filtra por mes.
+    expect(screen.queryByText('Período')).not.toBeInTheDocument()
 
-    // Cambiar el mes a Junio (6)
-    const monthSelect = screen.getAllByRole('combobox')[0]
-    await user.selectOptions(monthSelect, '6')
-
-    await waitFor(() => {
-      expect(screen.getByText('Táctica Junio')).toBeInTheDocument()
-    })
-    expect(screen.queryByText('Táctica Julio')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Ads' }))
+    expect(screen.getByText('Período')).toBeInTheDocument()
+    expect(screen.getByTestId('ads-spend-view-stub').textContent).toContain('periodo:7/2026')
   })
 
-  describe('cards de resumen (Tácticas)', () => {
-    it('ya no muestra la card "Pendientes"', async () => {
-      renderPage()
-      await waitFor(() => {
-        expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
-      })
-      expect(screen.queryByText('Pendientes')).not.toBeInTheDocument()
-    })
-
-    it('clic en "Total tácticas" resetea los filtros', async () => {
+  describe('subvistas de Tácticas', () => {
+    it('Historial lista todas las tácticas, estén vigentes o no', async () => {
       const user = userEvent.setup()
       renderPage()
       await waitFor(() => {
         expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
       })
 
-      await user.type(
-        screen.getByPlaceholderText('Buscar táctica, cliente, responsable...'),
-        'Cruzada',
-      )
-      expect(screen.queryByText('Táctica Julio')).not.toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Historial' }))
 
-      await user.click(screen.getByText('Total tácticas', { selector: 'p' }))
       await waitFor(() => {
-        expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
+        expect(screen.getByText('Táctica Junio')).toBeInTheDocument()
       })
-    })
-
-    it('clic en "En Curso" filtra la tabla a tácticas En Curso', async () => {
-      const user = userEvent.setup()
-      renderPage()
-      await waitFor(() => {
-        expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
-      })
-      expect(screen.getByText('Táctica Cruzada')).toBeInTheDocument()
-
-      await user.click(screen.getByText('En Curso', { selector: 'p' }))
-      expect(screen.queryByText('Táctica Julio')).not.toBeInTheDocument()
-      expect(screen.getByText('Táctica Cruzada')).toBeInTheDocument()
-    })
-
-    it('clic en "Completadas" filtra la tabla a tácticas Finalizado', async () => {
-      const user = userEvent.setup()
-      renderPage()
-      await waitFor(() => {
-        expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
-      })
-
-      await user.click(screen.getByText('Completadas', { selector: 'p' }))
-      await waitFor(() => {
-        expect(screen.getByText('Sin resultados para los filtros aplicados')).toBeInTheDocument()
-      })
-    })
-  })
-
-  it('una táctica cuyo rango cruza dos meses aparece en ambos periodos', async () => {
-    const user = userEvent.setup()
-    renderPage()
-
-    // Período por defecto (julio): la táctica cruzada (jun 25 -> jul 5) debe verse
-    await waitFor(() => {
       expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
+      expect(screen.getByText('Táctica Cruzada')).toBeInTheDocument()
     })
-    expect(screen.getByText('Táctica Cruzada')).toBeInTheDocument()
 
-    // Cambiar a junio: sigue apareciendo, y la de julio ya no
-    const monthSelect = screen.getAllByRole('combobox')[0]
-    await user.selectOptions(monthSelect, '6')
-
-    await waitFor(() => {
-      expect(screen.getByText('Táctica Junio')).toBeInTheDocument()
+    it('la subvista vive en la URL: ?view=historial abre el Historial directamente', async () => {
+      renderPage('/ads?view=historial')
+      await waitFor(() => {
+        expect(screen.getByText('Táctica Junio')).toBeInTheDocument()
+      })
+      expect(screen.getByRole('button', { name: 'Historial', pressed: true })).toBeInTheDocument()
     })
-    expect(screen.getByText('Táctica Cruzada')).toBeInTheDocument()
-    expect(screen.queryByText('Táctica Julio')).not.toBeInTheDocument()
+
+    it('Por marca sin marca elegida invita a elegir una', async () => {
+      const user = userEvent.setup()
+      renderPage()
+      await waitFor(() => {
+        expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
+      })
+
+      await user.click(screen.getByRole('button', { name: 'Por marca' }))
+
+      expect(
+        screen.getByText('Elige una marca para ver su historial de tácticas'),
+      ).toBeInTheDocument()
+    })
+
+    it('una ?view= desconocida cae en Vigentes', async () => {
+      renderPage('/ads?view=cualquier-cosa')
+      await waitFor(() => {
+        expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
+      })
+      expect(screen.getByRole('button', { name: 'Vigentes', pressed: true })).toBeInTheDocument()
+    })
+  })
+
+  describe('tarjetas de resumen (Vigentes)', () => {
+    it('cuenta las tácticas vigentes y las que vencen pronto', async () => {
+      renderPage()
+      await waitFor(() => {
+        expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
+      })
+      const cards = screen.getByRole('region', { name: 'Resumen de tácticas' })
+      // 1 vigente (Julio); vence el 20-jul, a 5 días: no entra en "3 días" pero sí en "este mes".
+      expect(within(cards).getByText('Tácticas vigentes').nextElementSibling).toHaveTextContent('1')
+      expect(within(cards).getByText('Vencen en 3 días').nextElementSibling).toHaveTextContent('0')
+      expect(within(cards).getByText('Vencen este mes').nextElementSibling).toHaveTextContent('1')
+    })
+
+    it('clic en "Vencen en 3 días" filtra la tabla', async () => {
+      const user = userEvent.setup()
+      renderPage()
+      await waitFor(() => {
+        expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
+      })
+
+      await user.click(screen.getByRole('button', { name: /Vencen en 3 días/ }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Sin tácticas para los filtros aplicados')).toBeInTheDocument()
+      })
+    })
+  })
+
+  describe('deep-link desde una notificación', () => {
+    it('?campaignId=<id> abre el detalle de esa táctica', async () => {
+      renderPage('/ads?campaignId=camp-1')
+      expect(await screen.findByRole('heading', { name: 'Táctica Julio' })).toBeInTheDocument()
+    })
+
+    it('un campaignId que no existe no abre nada ni rompe la página', async () => {
+      renderPage('/ads?campaignId=no-existe')
+      await waitFor(() => {
+        expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
+      })
+      expect(screen.queryByRole('heading', { name: 'Táctica Julio' })).not.toBeInTheDocument()
+    })
   })
 })

@@ -1,5 +1,5 @@
 /**
- * Tests del formulario de campañas (AdsForm).
+ * Tests del formulario de tácticas (AdsForm).
  *
  * Cambios reflejados en este archivo respecto a la versión anterior:
  * - El campo CLIENTE ahora es un <select> (desplegable de metric_clients), no un <input>.
@@ -13,11 +13,16 @@ import { vi } from 'vitest'
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
-const { mockInvoke, mockInsert, mockUpdate } = vi.hoisted(() => ({
-  mockInvoke: vi.fn().mockResolvedValue({ data: null, error: null }),
-  mockInsert: vi.fn(),
-  mockUpdate: vi.fn(),
-}))
+const { mockInvoke, mockInsert, mockUpdate, mockInsertPayload, mockUpdatePayload } = vi.hoisted(
+  () => ({
+    mockInvoke: vi.fn().mockResolvedValue({ data: null, error: null }),
+    mockInsert: vi.fn(),
+    mockUpdate: vi.fn(),
+    // Capturan lo que se manda a insert()/update(), para verificar el payload.
+    mockInsertPayload: vi.fn(),
+    mockUpdatePayload: vi.fn(),
+  }),
+)
 
 vi.mock('../supabase', () => ({
   supabase: {
@@ -51,18 +56,20 @@ vi.mock('../supabase', () => ({
       }
       if (table === 'campaigns') {
         return {
-          insert: vi.fn(() => ({
-            select: vi.fn(() => ({
-              single: mockInsert,
-            })),
-          })),
-          update: vi.fn(() => ({
-            eq: vi.fn(() => ({
-              select: vi.fn(() => ({
-                single: mockUpdate,
+          insert: vi.fn((payload) => {
+            mockInsertPayload(payload)
+            return { select: vi.fn(() => ({ single: mockInsert })) }
+          }),
+          update: vi.fn((payload) => {
+            mockUpdatePayload(payload)
+            return {
+              eq: vi.fn(() => ({
+                select: vi.fn(() => ({
+                  single: mockUpdate,
+                })),
               })),
-            })),
-          })),
+            }
+          }),
         }
       }
       return {}
@@ -243,9 +250,9 @@ describe('AdsForm — cliente y responsable', () => {
     await waitFor(() => screen.getByRole('option', { name: 'Banco Exterior' }))
 
     // Rellenar campos obligatorios
-    await user.type(screen.getByPlaceholderText('Nombre de la táctica o campaña'), 'Campaña Test')
+    await user.type(screen.getByPlaceholderText('Nombre de la táctica'), 'Campaña Test')
 
-    // Seleccionar cliente por select (todos los combobox: [0] Cliente, luego Prioridad, Estado)
+    // Seleccionar cliente por select (todos los combobox: [0] Cliente, luego Estado)
     const selects = screen.getAllByRole('combobox')
     const clientSelect = selects.find((s) =>
       Array.from(s.options ?? []).some((o) => o.text === '— Seleccionar cliente —'),
@@ -257,7 +264,7 @@ describe('AdsForm — cliente y responsable', () => {
     await user.type(dateInputs[0], '01/06/2026')
     await user.type(dateInputs[1], '30/06/2026')
 
-    await user.click(screen.getByRole('button', { name: 'Crear campaña' }))
+    await user.click(screen.getByRole('button', { name: 'Crear táctica' }))
 
     await waitFor(() => {
       expect(mockInsert).toHaveBeenCalledWith()
@@ -279,7 +286,7 @@ describe('AdsForm — cliente y responsable', () => {
     await waitFor(() => screen.getByText('Asignar responsable...'))
 
     // Táctica
-    await user.type(screen.getByPlaceholderText('Nombre de la táctica o campaña'), 'Campaña Test')
+    await user.type(screen.getByPlaceholderText('Nombre de la táctica'), 'Campaña Test')
 
     // Cliente
     const selects = screen.getAllByRole('combobox')
@@ -298,7 +305,7 @@ describe('AdsForm — cliente y responsable', () => {
     await user.type(dateInputs[0], '01/06/2026')
     await user.type(dateInputs[1], '30/06/2026')
 
-    await user.click(screen.getByRole('button', { name: 'Crear campaña' }))
+    await user.click(screen.getByRole('button', { name: 'Crear táctica' }))
 
     await waitFor(() => {
       expect(mockInvoke).toHaveBeenCalledWith('notify-campaign-assignee', {
@@ -338,5 +345,123 @@ describe('AdsForm — cliente y responsable', () => {
       expect(mockUpdate).toHaveBeenCalled()
     })
     expect(mockInvoke).not.toHaveBeenCalled()
+  })
+})
+
+describe('AdsForm — objetivo, link de Drive y marca precargada', () => {
+  beforeEach(() => {
+    useAuth.mockReturnValue({ userProfile })
+    vi.clearAllMocks()
+    mockInsert.mockResolvedValue({ data: { id: 'new-id', name: 'T' }, error: null })
+  })
+
+  // Rellena lo mínimo para poder crear: nombre, marca y fechas.
+  async function fillRequired(user, { pickClient = true } = {}) {
+    await waitFor(() => screen.getByRole('option', { name: 'Banco Exterior' }))
+    await user.type(screen.getByPlaceholderText('Nombre de la táctica'), 'Plan Q4')
+    if (pickClient) {
+      const clientSelect = screen
+        .getAllByRole('combobox')
+        .find((s) => Array.from(s.options ?? []).some((o) => o.text === '— Seleccionar cliente —'))
+      await user.selectOptions(clientSelect, 'c-1')
+    }
+    const dateInputs = screen.getAllByPlaceholderText('dd/mm/aaaa')
+    await user.type(dateInputs[0], '01/11/2026')
+    await user.type(dateInputs[1], '31/12/2026')
+  }
+
+  it('ya no ofrece el campo Prioridad', async () => {
+    renderForm()
+    await waitFor(() => screen.getByRole('option', { name: 'Banco Exterior' }))
+    expect(screen.queryByText('Prioridad')).not.toBeInTheDocument()
+  })
+
+  it('guarda el objetivo general y el link de Drive al crear', async () => {
+    const user = userEvent.setup()
+    renderForm()
+    await fillRequired(user)
+
+    await user.type(screen.getByLabelText('Objetivo general'), '  Posicionar la marca  ')
+    await user.type(
+      screen.getByLabelText('Link carpeta Drive'),
+      'https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOpQrStUvWxYz012345',
+    )
+    await user.click(screen.getByRole('button', { name: 'Crear táctica' }))
+
+    await waitFor(() => expect(mockInsertPayload).toHaveBeenCalled())
+    expect(mockInsertPayload.mock.calls[0][0]).toMatchObject({
+      objective: 'Posicionar la marca',
+      drive_url: 'https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOpQrStUvWxYz012345',
+      client_id: 'c-1',
+      created_by: 'creator-uuid',
+    })
+    // La prioridad ya no se manda: queda el default de la base.
+    expect(mockInsertPayload.mock.calls[0][0]).not.toHaveProperty('priority')
+  })
+
+  it('objetivo y link vacíos se guardan como null', async () => {
+    const user = userEvent.setup()
+    renderForm()
+    await fillRequired(user)
+
+    await user.click(screen.getByRole('button', { name: 'Crear táctica' }))
+
+    await waitFor(() => expect(mockInsertPayload).toHaveBeenCalled())
+    expect(mockInsertPayload.mock.calls[0][0]).toMatchObject({ objective: null, drive_url: null })
+  })
+
+  it('un link que no es de Drive muestra el error y bloquea el guardado', async () => {
+    const user = userEvent.setup()
+    renderForm()
+    await fillRequired(user)
+
+    await user.type(screen.getByLabelText('Link carpeta Drive'), 'https://example.com/carpeta')
+
+    expect(screen.getByText(/no parece ser de Google Drive/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Crear táctica' })).toBeDisabled()
+    expect(mockInsertPayload).not.toHaveBeenCalled()
+  })
+
+  it('precarga la marca cuando se crea desde "Por hacer"', async () => {
+    const user = userEvent.setup()
+    renderForm({ prefill: { client_id: 'c-1', client: 'Banco Exterior' } })
+    await waitFor(() => screen.getByRole('option', { name: 'Banco Exterior' }))
+
+    // Con la marca ya elegida, basta nombre y fechas para poder crear.
+    await user.type(screen.getByPlaceholderText('Nombre de la táctica'), 'Plan Q1')
+    const dateInputs = screen.getAllByPlaceholderText('dd/mm/aaaa')
+    await user.type(dateInputs[0], '01/01/2027')
+    await user.type(dateInputs[1], '31/03/2027')
+    await user.click(screen.getByRole('button', { name: 'Crear táctica' }))
+
+    await waitFor(() => expect(mockInsertPayload).toHaveBeenCalled())
+    expect(mockInsertPayload.mock.calls[0][0]).toMatchObject({
+      client_id: 'c-1',
+      client: 'Banco Exterior',
+    })
+  })
+
+  it('al editar, carga el objetivo y el link existentes', async () => {
+    renderForm({
+      campaign: {
+        id: 'x',
+        name: 'Plan',
+        client: 'Banco Exterior',
+        client_id: 'c-1',
+        assignee: 'u1',
+        start_date: '2026-06-01',
+        end_date: '2026-06-30',
+        status: 'Pendiente',
+        notes: '',
+        objective: 'Subir ventas',
+        drive_url: 'https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOpQrStUvWxYz012345',
+      },
+    })
+    await waitFor(() => screen.getByRole('option', { name: 'Banco Exterior' }))
+
+    expect(screen.getByLabelText('Objetivo general')).toHaveValue('Subir ventas')
+    expect(screen.getByLabelText('Link carpeta Drive')).toHaveValue(
+      'https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOpQrStUvWxYz012345',
+    )
   })
 })

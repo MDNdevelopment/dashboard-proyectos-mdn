@@ -1,4 +1,5 @@
 import { checklistProgress } from '../tareas/taskChecklist'
+import { groupByMonth, monthLabel } from '../../utils/tacticas'
 
 /**
  * Checklist de "acciones" de una Táctica (campaigns.checklist, jsonb).
@@ -9,7 +10,9 @@ import { checklistProgress } from '../tareas/taskChecklist'
  * Solo para Tácticas — los Ads (paid_campaigns) no lo usan.
  *
  * @param {object}   props
- * @param {Array}    props.value      — ítems { id, title, done }
+ * @param {Array}    props.value      — ítems { id, title, done, month?, carried_from? }
+ *                                      `month` ('YYYY-MM') agrupa las acciones por mes;
+ *                                      `carried_from` solo pinta un badge.
  * @param {Function} props.onChange   — (nextArray) => void
  * @param {boolean}  props.canManage  — permite tildar/destildar las acciones (avanza el %)
  * @param {boolean}  props.editable   — permite agregar/editar texto/eliminar acciones
@@ -41,6 +44,74 @@ export default function CampaignChecklist({
     onChange(items.filter((it) => it.id !== id))
   }
 
+  const hasMonths = items.some((it) => it?.month)
+
+  function renderItem(it) {
+    return (
+      <li key={it.id} className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          checked={!!it.done}
+          disabled={!canManage}
+          onChange={(e) => patchItem(it.id, { done: e.target.checked })}
+          aria-label={`Completar ${it.title || 'acción'}`}
+          className="h-4 w-4 rounded border-[#e0ddd4] accent-[#FFB800] flex-shrink-0"
+        />
+        {editable ? (
+          <input
+            type="text"
+            value={it.title}
+            onChange={(e) => patchItem(it.id, { title: e.target.value })}
+            placeholder="Descripción de la acción"
+            className={`input-base flex-1 py-1 text-[14px] ${it.done ? 'line-through text-[#999]' : ''}`}
+          />
+        ) : (
+          <span
+            className={`flex-1 text-[14px] ${it.done ? 'line-through text-[#999]' : 'text-[#333]'}`}
+          >
+            {it.title || '—'}
+          </span>
+        )}
+        {it.carried_from && (
+          <span
+            title="Pendiente de la táctica anterior"
+            className="flex-shrink-0 text-[10.5px] font-mono font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-[#e3f2fd] text-[#1565c0]"
+          >
+            Arrastrada
+          </span>
+        )}
+        {editable && (
+          <input
+            type="month"
+            value={it.month ?? ''}
+            onChange={(e) => patchItem(it.id, { month: e.target.value })}
+            aria-label={`Mes de ${it.title || 'la acción'}`}
+            className="input-base py-1 text-[13px] w-[140px] flex-shrink-0"
+          />
+        )}
+        {editable && (
+          <button
+            type="button"
+            onClick={() => removeItem(it.id)}
+            title="Eliminar acción"
+            className="p-1 rounded-lg text-[#999] hover:text-red-600 hover:bg-red-50 transition-all flex-shrink-0"
+          >
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+            >
+              <path d="M2 2l12 12M14 2L2 14" strokeLinecap="round" />
+            </svg>
+          </button>
+        )}
+      </li>
+    )
+  }
+
   const labelClass = 'block text-[13px] font-mono font-bold tracking-widest uppercase text-[#888]'
 
   return (
@@ -66,55 +137,19 @@ export default function CampaignChecklist({
         <p className="text-[13px] text-[#bbb] mb-2">
           {editable ? 'Sin acciones. Agrega los pasos de esta táctica.' : 'Sin acciones.'}
         </p>
-      ) : (
-        <ul className="flex flex-col gap-1.5 mb-2">
-          {items.map((it) => (
-            <li key={it.id} className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={!!it.done}
-                disabled={!canManage}
-                onChange={(e) => patchItem(it.id, { done: e.target.checked })}
-                aria-label={`Completar ${it.title || 'acción'}`}
-                className="h-4 w-4 rounded border-[#e0ddd4] accent-[#FFB800] flex-shrink-0"
-              />
-              {editable ? (
-                <input
-                  type="text"
-                  value={it.title}
-                  onChange={(e) => patchItem(it.id, { title: e.target.value })}
-                  placeholder="Descripción de la acción"
-                  className={`input-base flex-1 py-1 text-[14px] ${it.done ? 'line-through text-[#999]' : ''}`}
-                />
-              ) : (
-                <span
-                  className={`flex-1 text-[14px] ${it.done ? 'line-through text-[#999]' : 'text-[#333]'}`}
-                >
-                  {it.title || '—'}
-                </span>
-              )}
-              {editable && (
-                <button
-                  type="button"
-                  onClick={() => removeItem(it.id)}
-                  title="Eliminar acción"
-                  className="p-1 rounded-lg text-[#999] hover:text-red-600 hover:bg-red-50 transition-all flex-shrink-0"
-                >
-                  <svg
-                    width="13"
-                    height="13"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                  >
-                    <path d="M2 2l12 12M14 2L2 14" strokeLinecap="round" />
-                  </svg>
-                </button>
-              )}
-            </li>
+      ) : hasMonths ? (
+        <div className="flex flex-col gap-3 mb-2">
+          {groupByMonth(items).map((g) => (
+            <div key={g.month || 'sin-mes'}>
+              <p className="text-[12px] font-mono font-bold tracking-[0.08em] uppercase text-[#999] mb-1">
+                {monthLabel(g.month)}
+              </p>
+              <ul className="flex flex-col gap-1.5">{g.items.map(renderItem)}</ul>
+            </div>
           ))}
-        </ul>
+        </div>
+      ) : (
+        <ul className="flex flex-col gap-1.5 mb-2">{items.map(renderItem)}</ul>
       )}
 
       {editable && (

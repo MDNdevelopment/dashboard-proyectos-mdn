@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { supabase } from '../../supabase'
-import { STATUS, STATUSES, PRIORITY } from './constants'
+import { STATUS, STATUSES } from './constants'
 import StatusPill from '../common/StatusPill'
 import CampaignChecklist from './CampaignChecklist'
+import { completionPct, periodProgress } from '../../utils/tacticas'
 
 export default function AdsDetail({
   campaign,
@@ -16,7 +17,8 @@ export default function AdsDetail({
   const [confirming, setConfirming] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
-  const priority = PRIORITY[campaign.priority]
+  const pct = completionPct(campaign.checklist)
+  const progress = periodProgress(campaign)
 
   async function handleStatusChange(nextStatus) {
     const { data, error } = await supabase
@@ -79,10 +81,11 @@ export default function AdsDetail({
                 editable={canManage}
                 onChange={handleStatusChange}
               />
-              <span className="flex items-center gap-1.5 text-[13px] font-mono font-semibold text-[#555]">
-                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${priority?.dot}`} />
-                {campaign.priority}
-              </span>
+              {pct != null && (
+                <span className="text-[13px] font-mono font-semibold text-[#555]">
+                  Cumplimiento {pct}%
+                </span>
+              )}
             </div>
           </div>
           <button onClick={onClose} className="text-[#999] hover:text-[#111] transition-colors p-1">
@@ -129,6 +132,39 @@ export default function AdsDetail({
               <p className="text-[#333]">{fmt(campaign.end_date)}</p>
             </div>
           </div>
+
+          {campaign.objective && (
+            <div className="mb-4">
+              <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-1.5">
+                Objetivo general
+              </p>
+              <p className="text-[15px] text-[#444] whitespace-pre-wrap leading-relaxed">
+                {campaign.objective}
+              </p>
+            </div>
+          )}
+
+          <div className="mb-4">
+            <div
+              role="img"
+              aria-label={`Avance del período: ${progress}%`}
+              className="h-1.5 bg-[#f0ede3] rounded-full overflow-hidden"
+            >
+              <div className="h-full bg-[#111]" style={{ width: `${progress}%` }} />
+            </div>
+            <p className="text-[12.5px] text-[#999] mt-1">Avance del período: {progress}%</p>
+          </div>
+
+          {campaign.drive_url && (
+            <a
+              href={campaign.drive_url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-block mb-4 text-[14px] font-semibold px-3 py-1.5 rounded-lg bg-[#FFB800] text-[#111] hover:bg-[#e6a600] transition-colors"
+            >
+              Abrir carpeta de Drive
+            </a>
+          )}
 
           {campaign.notes && (
             <div className="mb-4">

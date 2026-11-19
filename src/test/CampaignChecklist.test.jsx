@@ -77,3 +77,83 @@ describe('CampaignChecklist', () => {
     expect(onChangeSpy).toHaveBeenCalledWith([{ id: 'a', title: 'Solo tildar', done: true }])
   })
 })
+
+describe('CampaignChecklist — agrupado por mes y badges', () => {
+  const ITEMS = [
+    { id: 'a', title: 'Reel de diciembre', done: false, month: '2026-12' },
+    { id: 'b', title: 'Carrusel de noviembre', done: true, month: '2026-11' },
+    { id: 'c', title: 'Acción sin mes', done: false },
+  ]
+
+  it('sin meses sigue siendo una lista plana, sin encabezados', () => {
+    render(
+      <Harness
+        initial={[
+          { id: 'a', title: 'Uno', done: false },
+          { id: 'b', title: 'Dos', done: false },
+        ]}
+        editable={false}
+      />,
+    )
+    expect(screen.queryByText('Sin mes')).not.toBeInTheDocument()
+    expect(screen.queryByText(/2026/)).not.toBeInTheDocument()
+  })
+
+  it('con meses agrupa por mes en orden cronológico y deja las acciones sin mes al final', () => {
+    render(<Harness initial={ITEMS} editable={false} />)
+
+    const headings = screen.getAllByText(/^(Noviembre 2026|Diciembre 2026|Sin mes)$/)
+    expect(headings.map((h) => h.textContent)).toEqual([
+      'Noviembre 2026',
+      'Diciembre 2026',
+      'Sin mes',
+    ])
+    expect(screen.getByText('Carrusel de noviembre')).toBeInTheDocument()
+  })
+
+  it('el progreso cuenta todas las acciones, estén en el mes que estén', () => {
+    render(<Harness initial={ITEMS} editable={false} />)
+    expect(screen.getByText('Acciones (1/3)')).toBeInTheDocument()
+    expect(screen.getByText('33%')).toBeInTheDocument()
+  })
+
+  it('tildar una acción agrupada persiste el cambio', async () => {
+    const user = userEvent.setup()
+    const spy = vi.fn()
+    render(<Harness initial={ITEMS} editable={false} onChangeSpy={spy} />)
+
+    await user.click(screen.getByRole('checkbox', { name: 'Completar Reel de diciembre' }))
+
+    const next = spy.mock.calls.at(-1)[0]
+    expect(next.find((i) => i.id === 'a')).toMatchObject({ done: true, month: '2026-12' })
+  })
+
+  it('marca con un badge las acciones arrastradas de la táctica anterior', () => {
+    render(
+      <Harness
+        initial={[
+          { id: 'b', title: 'Pendiente anterior', done: false, carried_from: 'camp-0' },
+          { id: 'c', title: 'Manual', done: false },
+        ]}
+        editable={false}
+      />,
+    )
+    expect(screen.getAllByText('Arrastrada')).toHaveLength(1)
+  })
+
+  it('al editar permite elegir el mes de cada acción', async () => {
+    const user = userEvent.setup()
+    const spy = vi.fn()
+    render(<Harness initial={[{ id: 'a', title: 'Reel', done: false }]} onChangeSpy={spy} />)
+
+    const month = screen.getByLabelText('Mes de Reel')
+    await user.type(month, '2026-12')
+
+    expect(spy.mock.calls.at(-1)[0][0]).toMatchObject({ id: 'a', month: '2026-12' })
+  })
+
+  it('en modo solo lectura no ofrece el selector de mes', () => {
+    render(<Harness initial={[{ id: 'a', title: 'Reel', done: false }]} editable={false} />)
+    expect(screen.queryByLabelText('Mes de Reel')).not.toBeInTheDocument()
+  })
+})

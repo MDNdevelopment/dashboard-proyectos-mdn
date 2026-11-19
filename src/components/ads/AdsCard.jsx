@@ -1,15 +1,14 @@
-import { STATUS, STATUSES, PRIORITY } from './constants'
+import { STATUS, STATUSES } from './constants'
 import StatusPill from '../common/StatusPill'
 import ClientCell from './ClientCell'
-import { fmtDate, dateColor, inPeriod } from './campaignSpendApi'
-import { checklistProgress } from '../tareas/taskChecklist'
+import { fmtDate, dateColor } from './campaignSpendApi'
+import { checklistCounts, completionPct } from '../../utils/tacticas'
 
 export default function AdsCard({
   campaign,
   canManage,
   usersMap,
   clientsById,
-  periodo,
   onSelect,
   onStatusChange,
   onEdit,
@@ -20,12 +19,9 @@ export default function AdsCard({
   onInlineEditChange,
   onInlineEditSave,
 }) {
-  const priority = PRIORITY[campaign.priority]
-  // La táctica se ve en este período por su rango, pero no empezó en él (spansPeriod en AdsPage).
-  const esContinua = periodo && !inPeriod(campaign.start_date, periodo)
-
   const isInlineEditing = inlineEditId === campaign.id
-  const { done: checkDone, total: checkTotal } = checklistProgress(campaign.checklist)
+  const { done: checkDone, total: checkTotal } = checklistCounts(campaign.checklist)
+  const pct = completionPct(campaign.checklist)
 
   return (
     <tr
@@ -104,11 +100,6 @@ export default function AdsCard({
       {/* Start date */}
       <td className="px-3 py-2.5 text-[14px] text-[#555] whitespace-nowrap">
         {fmtDate(campaign.start_date)}
-        {esContinua && (
-          <span className="block text-[11px] font-mono font-semibold text-[#c99400] mt-0.5">
-            Táctica continua
-          </span>
-        )}
       </td>
 
       {/* End date */}
@@ -116,12 +107,26 @@ export default function AdsCard({
         {fmtDate(campaign.end_date)}
       </td>
 
-      {/* Priority */}
-      <td className="px-3 py-2.5 whitespace-nowrap">
-        <span className="flex items-center gap-1.5 text-[13px] font-mono font-semibold text-[#555]">
-          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${priority?.dot ?? 'bg-[#bbb]'}`} />
-          {campaign.priority}
-        </span>
+      {/* Cumplimiento: % de acciones hechas (— si no hay checklist) */}
+      <td className="px-3 py-2.5 text-[13px] font-mono font-semibold text-[#555] whitespace-nowrap">
+        {pct == null ? <span className="text-[#bbb]">—</span> : `${pct}%`}
+      </td>
+
+      {/* Drive */}
+      <td className="px-3 py-2.5 text-[14px] whitespace-nowrap">
+        {campaign.drive_url ? (
+          <a
+            href={campaign.drive_url}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="font-semibold text-[#111] underline decoration-[#FFB800] underline-offset-2"
+          >
+            Carpeta
+          </a>
+        ) : (
+          <span className="text-[#bbb]">—</span>
+        )}
       </td>
 
       {/* Status */}

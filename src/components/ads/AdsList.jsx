@@ -1,7 +1,9 @@
-import { useState, forwardRef, useImperativeHandle } from 'react'
+import { useState } from 'react'
 import { supabase } from '../../supabase'
 import AdsCard from './AdsCard'
-import { STATUSES, PRIORITIES } from './constants'
+import FilterBar, { FilterField } from '../common/FilterBar'
+import { STATUSES } from './constants'
+import { completionPct } from '../../utils/tacticas'
 
 const COLUMNS = [
   { key: 'client', label: 'Cliente', sortable: true },
@@ -9,31 +11,29 @@ const COLUMNS = [
   { key: 'assignee', label: 'Responsable', sortable: true },
   { key: 'start_date', label: 'Inicio', sortable: true },
   { key: 'end_date', label: 'Fecha fin', sortable: true },
-  { key: 'priority', label: 'Prioridad', sortable: true },
+  { key: 'cumplimiento', label: 'Cumplimiento', sortable: true },
+  { key: 'drive_url', label: 'Drive', sortable: false },
   { key: 'status', label: 'Estado', sortable: true },
   { key: 'actions', label: '', sortable: false },
 ]
 
-const PRIORITY_ORDER = { Alta: 0, Media: 1, Baja: 2 }
-
-const AdsList = forwardRef(function AdsList(
-  {
-    campaigns,
-    loading,
-    canManage,
-    usersMap,
-    clientsById,
-    periodo,
-    onSelect,
-    onUpdated,
-    onDeleted,
-    onEdit,
-  },
-  ref,
-) {
+/**
+ * Vista "Historial" de Tácticas: todas las tácticas de las marcas en alcance, con búsqueda,
+ * filtros por estado y cliente, orden por columna, edición inline del nombre y borrado.
+ */
+export default function AdsList({
+  campaigns,
+  loading,
+  canManage,
+  usersMap,
+  clientsById,
+  onSelect,
+  onUpdated,
+  onDeleted,
+  onEdit,
+}) {
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
-  const [filterPriority, setFilterPriority] = useState('all')
   const [filterClient, setFilterClient] = useState('all')
   const [sortKey, setSortKey] = useState('start_date')
   const [sortAsc, setSortAsc] = useState(false)
@@ -45,7 +45,6 @@ const AdsList = forwardRef(function AdsList(
 
   const filtered = campaigns.filter((c) => {
     if (filterStatus !== 'all' && c.status !== filterStatus) return false
-    if (filterPriority !== 'all' && c.priority !== filterPriority) return false
     if (filterClient !== 'all' && c.client !== filterClient) return false
     if (search) {
       const q = search.toLowerCase()
@@ -54,6 +53,7 @@ const AdsList = forwardRef(function AdsList(
         !c.name?.toLowerCase().includes(q) &&
         !c.client?.toLowerCase().includes(q) &&
         !resolvedName.toLowerCase().includes(q) &&
+        !c.objective?.toLowerCase().includes(q) &&
         !c.notes?.toLowerCase().includes(q)
       )
         return false
@@ -62,13 +62,9 @@ const AdsList = forwardRef(function AdsList(
   })
 
   const sorted = [...filtered].sort((a, b) => {
-    let va = a[sortKey] ?? ''
-    let vb = b[sortKey] ?? ''
-    if (sortKey === 'priority') {
-      va = PRIORITY_ORDER[a.priority] ?? 99
-      vb = PRIORITY_ORDER[b.priority] ?? 99
-      return sortAsc ? va - vb : vb - va
-    }
+    // Sin checklist (null) no es lo mismo que 0 %: se manda al final al ordenar de mayor a menor.
+    let va = sortKey === 'cumplimiento' ? (completionPct(a.checklist) ?? -1) : (a[sortKey] ?? '')
+    let vb = sortKey === 'cumplimiento' ? (completionPct(b.checklist) ?? -1) : (b[sortKey] ?? '')
     if (typeof va === 'string') va = va.toLowerCase()
     if (typeof vb === 'string') vb = vb.toLowerCase()
     if (va < vb) return sortAsc ? -1 : 1
@@ -84,17 +80,12 @@ const AdsList = forwardRef(function AdsList(
     }
   }
 
+  const hasFilters = !!search || filterStatus !== 'all' || filterClient !== 'all'
   function clearFilters() {
     setSearch('')
     setFilterStatus('all')
-    setFilterPriority('all')
     setFilterClient('all')
   }
-
-  useImperativeHandle(ref, () => ({
-    clearFilters,
-    setFilterStatus,
-  }))
 
   async function handleStatusChange(id, nextStatus) {
     const { data, error } = await supabase
@@ -155,64 +146,46 @@ const AdsList = forwardRef(function AdsList(
 
   return (
     <div>
-      {/* Toolbar */}
-      <div className="flex flex-wrap gap-2 mb-3">
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar táctica, cliente, responsable..."
-          className="input-base text-[14px] py-1.5 flex-1 min-w-[160px] sm:min-w-[200px]"
-        />
-        <div className="flex gap-2">
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="input-base text-[14px] py-1.5"
-          >
-            <option value="all">Todos los estados</option>
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-          <select
-            value={filterPriority}
-            onChange={(e) => setFilterPriority(e.target.value)}
-            className="input-base text-[14px] py-1.5"
-          >
-            <option value="all">Todas las prioridades</option>
-            {PRIORITIES.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
-          <select
-            value={filterClient}
-            onChange={(e) => setFilterClient(e.target.value)}
-            className="input-base text-[14px] py-1.5"
-          >
-            <option value="all">Todos los clientes</option>
-            {clients.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </div>
-        {(search ||
-          filterStatus !== 'all' ||
-          filterPriority !== 'all' ||
-          filterClient !== 'all') && (
-          <button
-            onClick={clearFilters}
-            className="px-3 py-1.5 rounded-lg border border-[#e0ddd4] text-[14px] font-medium text-[#555] hover:bg-[#f5f3eb] transition-colors"
-          >
-            Limpiar
-          </button>
-        )}
+      <div className="mb-3">
+        <FilterBar cols={3} onClear={hasFilters ? clearFilters : undefined}>
+          <FilterField label="Buscar">
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Táctica, cliente, responsable…"
+              className="input-base text-[14px] py-1.5 w-full"
+            />
+          </FilterField>
+          <FilterField label="Estado">
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="input-base text-[14px] py-1.5 w-full"
+            >
+              <option value="all">Todos los estados</option>
+              {STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </FilterField>
+          <FilterField label="Cliente">
+            <select
+              value={filterClient}
+              onChange={(e) => setFilterClient(e.target.value)}
+              className="input-base text-[14px] py-1.5 w-full"
+            >
+              <option value="all">Todos los clientes</option>
+              {clients.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </FilterField>
+        </FilterBar>
       </div>
 
       {/* Count */}
@@ -225,7 +198,7 @@ const AdsList = forwardRef(function AdsList(
         <div className="text-center py-16">
           <p className="text-[16px] font-medium text-[#888]">
             {campaigns.length === 0
-              ? 'No hay campañas aún'
+              ? 'No hay tácticas aún'
               : 'Sin resultados para los filtros aplicados'}
           </p>
         </div>
@@ -256,7 +229,6 @@ const AdsList = forwardRef(function AdsList(
                   canManage={canManage}
                   usersMap={usersMap}
                   clientsById={clientsById}
-                  periodo={periodo}
                   onSelect={onSelect}
                   onStatusChange={handleStatusChange}
                   onEdit={onEdit}
@@ -280,7 +252,7 @@ const AdsList = forwardRef(function AdsList(
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-black/30">
           <div className="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full">
-            <p className="text-[17px] font-semibold text-[#111] mb-1">¿Eliminar campaña?</p>
+            <p className="text-[17px] font-semibold text-[#111] mb-1">¿Eliminar táctica?</p>
             <p className="text-[15px] text-[#666] mb-5">
               Se eliminará <span className="font-semibold">&ldquo;{confirmDelete.name}&rdquo;</span>{' '}
               de forma permanente.
@@ -304,6 +276,4 @@ const AdsList = forwardRef(function AdsList(
       )}
     </div>
   )
-})
-
-export default AdsList
+}

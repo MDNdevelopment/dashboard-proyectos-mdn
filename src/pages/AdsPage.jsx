@@ -1,14 +1,14 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../supabase'
 import { useAuth } from '../context/AuthContext'
-import AdsStats from '../components/ads/AdsStats'
-import AdsList from '../components/ads/AdsList'
+import TacticasView from '../components/ads/tacticas/TacticasView'
+import { loadPendingHandoffs, updateHandoff } from '../components/ads/tacticas/tacticasApi'
+import { handoffContent } from '../utils/tacticas'
 import AdsForm from '../components/ads/AdsForm'
 import AdsDetail from '../components/ads/AdsDetail'
 import AdsSpendView from '../components/ads/AdsSpendView'
 import { loadClients, loadLines } from '../components/metricas/metricsApi'
-import { spansPeriod } from '../components/ads/campaignSpendApi'
 import { MONTHS } from '../components/metricas/constants'
 
 // Sentinela de "ver todas las líneas" (capability ads.ver_todo), igual que ALL_TEAMS en TareasPage.
@@ -38,10 +38,12 @@ export default function AdsPage() {
   const [usersMap, setUsersMap] = useState(new Map())
   const [clientsById, setClientsById] = useState(new Map())
   const [lines, setLines] = useState([]) // solo las líneas visibles para el usuario
+  const [allLines, setAllLines] = useState([]) // todas: la jefa de una marca puede ser de otra línea
+  const [createPrefill, setCreatePrefill] = useState(null) // marca precargada al crear una táctica
+  const [handoffs, setHandoffs] = useState([]) // insumos pendientes (campaign_handoffs)
   // Línea activa: id de línea | ALL_LINES | null. Persistida en la URL (?line=), igual que Tareas.
   const [activeLineId, setActiveLineId] = useState(() => searchParams.get('line') ?? null)
   const adsSpendViewRef = useRef(null)
-  const adsListRef = useRef(null)
 
   // Control de acceso config-driven — sin reglas configuradas: abierto a todos.
   const canManage = can('ads.manage')
@@ -66,19 +68,62 @@ export default function AdsPage() {
     )
   }
 
-  // La línea se deriva del cliente (campaigns/paid_campaigns no guardan line_id).
-  function matchesLine(clientId) {
-    if (lineScope === null) return true
-    return clientsById.get(clientId)?.line_id === lineScope
-  }
+  // Tácticas dentro del alcance de línea. La línea se deriva del cliente (campaigns no guarda
+  // line_id). La pestaña Tácticas ya no se filtra por período: es un historial por marca, y lo
+  // vigente se decide por estado + fecha de fin.
+  const filteredCampaigns = useMemo(
+    () =>
+      campaigns.filter(
+        (c) => lineScope === null || clientsById.get(c.client_id)?.line_id === lineScope,
+      ),
+    [campaigns, clientsById, lineScope],
+  )
 
-  const filteredCampaigns = campaigns.filter(
-    (c) => spansPeriod(c.start_date, c.end_date, periodo) && matchesLine(c.client_id),
+  const linesById = useMemo(() => new Map(allLines.map((l) => [l.id, l])), [allLines])
+
+  // Marcas activas dentro del alcance de línea (base de "sin táctica vigente" y del selector).
+  const brands = useMemo(
+    () =>
+      [...clientsById.values()].filter(
+        (c) => !c.deleted_at && (lineScope === null || c.line_id === lineScope),
+      ),
+    [clientsById, lineScope],
+  )
+
+  // Insumo = táctica cerrada que deja algo para la siguiente. Su contenido se lee EN VIVO del
+  // checklist de la táctica de origen (no es una copia). Sin acciones registradas no hay insumo.
+  const insumos = useMemo(
+    () =>
+      handoffs
+        .map((handoff) => {
+          const source = campaigns.find((c) => c.id === handoff.source_campaign_id)
+          return source ? { handoff, source, content: handoffContent(source) } : null
+        })
+        .filter((i) => i && i.content.total > 0),
+    [handoffs, campaigns],
   )
 
   useEffect(() => {
     fetchCampaigns()
+    fetchHandoffs()
   }, [])
+
+  // Deep-link desde una notificación (`/ads?campaignId=<id>`): abre el detalle y limpia el parámetro
+  // para que no se vuelva a abrir al cerrarlo.
+  const campaignIdParam = searchParams.get('campaignId')
+  useEffect(() => {
+    if (!campaignIdParam || loading) return
+    const target = campaigns.find((c) => c.id === campaignIdParam)
+    if (target) setSelectedCampaign(target)
+    setSearchParams(
+      (prev) => {
+        const p = new URLSearchParams(prev)
+        p.delete('campaignId')
+        return p
+      },
+      { replace: true },
+    )
+  }, [campaignIdParam, loading, campaigns, setSearchParams])
 
   useEffect(() => {
     if (!userProfile?.company_id) return
@@ -105,6 +150,7 @@ export default function AdsPage() {
     if (!userProfile?.company_id) return
     loadLines(userProfile.company_id).then(({ data }) => {
       const all = data ?? []
+      setAllLines(all)
       const visible = canViewAll
         ? all
         : all.filter((l) => l.member_user_ids?.includes(userProfile.user_id))
@@ -125,11 +171,34 @@ export default function AdsPage() {
     setLoading(false)
   }
 
+  async function fetchHandoffs() {
+    const { data } = await loadPendingHandoffs()
+    setHandoffs(data ?? [])
+  }
+
+  async function handleDiscardInsumo(handoff) {
+    const { error } = await updateHandoff(handoff.id, { status: 'descartado' })
+    if (!error) setHandoffs((prev) => prev.filter((h) => h.id !== handoff.id))
+  }
+
+  function handleInsumosUsed(ids) {
+    setHandoffs((prev) => prev.filter((h) => !ids.includes(h.id)))
+  }
+
+  function openCreate(clientId) {
+    const c = typeof clientId === 'string' ? clientsById.get(clientId) : null
+    setCreatePrefill(c ? { client_id: c.id, client: c.name } : null)
+    setShowCreateForm(true)
+  }
+
   function handleCreated(campaign) {
     setCampaigns((prev) => [campaign, ...prev])
   }
 
   function handleUpdated(updated) {
+    // Al cerrar una táctica, un trigger de la base crea su insumo: hay que volver a pedirlo.
+    const before = campaigns.find((c) => c.id === updated.id)
+    if (updated.status === 'Finalizado' && before?.status !== 'Finalizado') fetchHandoffs()
     setCampaigns((prev) => prev.map((c) => (c.id === updated.id ? updated : c)))
     if (selectedCampaign?.id === updated.id) setSelectedCampaign(updated)
   }
@@ -163,7 +232,7 @@ export default function AdsPage() {
             {canManage &&
               (tab === 'tacticas' ? (
                 <button
-                  onClick={() => setShowCreateForm(true)}
+                  onClick={() => openCreate()}
                   className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#111] text-white text-[15px] font-bold px-4 py-2.5 rounded-xl hover:bg-[#222] transition-colors"
                 >
                   <svg
@@ -176,7 +245,7 @@ export default function AdsPage() {
                   >
                     <path d="M6 1v10M1 6h10" strokeLinecap="round" />
                   </svg>
-                  Nueva campaña
+                  Nueva táctica
                 </button>
               ) : (
                 <button
@@ -214,34 +283,36 @@ export default function AdsPage() {
               ))}
             </div>
 
-            {/* Selector mes/año — aplica a ambas tabs */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-[12px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] mr-1">
-                Período
-              </span>
-              <select
-                value={periodo.month}
-                onChange={(e) => setPeriodo((p) => ({ ...p, month: Number(e.target.value) }))}
-                className="text-[13.5px] border border-[#e0ddd4] rounded-lg px-2 py-1.5 bg-white text-[#333] focus:outline-none focus:border-[#FFB800]"
-              >
-                {MONTHS.map((name, i) => (
-                  <option key={i + 1} value={i + 1}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={periodo.year}
-                onChange={(e) => setPeriodo((p) => ({ ...p, year: Number(e.target.value) }))}
-                className="text-[13.5px] border border-[#e0ddd4] rounded-lg px-2 py-1.5 bg-white text-[#333] focus:outline-none focus:border-[#FFB800]"
-              >
-                {YEARS.map((y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Selector mes/año — solo la pestaña Ads (las Tácticas son un historial por marca) */}
+            {tab === 'ads' && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-[12px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] mr-1">
+                  Período
+                </span>
+                <select
+                  value={periodo.month}
+                  onChange={(e) => setPeriodo((p) => ({ ...p, month: Number(e.target.value) }))}
+                  className="text-[13.5px] border border-[#e0ddd4] rounded-lg px-2 py-1.5 bg-white text-[#333] focus:outline-none focus:border-[#FFB800]"
+                >
+                  {MONTHS.map((name, i) => (
+                    <option key={i + 1} value={i + 1}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={periodo.year}
+                  onChange={(e) => setPeriodo((p) => ({ ...p, year: Number(e.target.value) }))}
+                  className="text-[13.5px] border border-[#e0ddd4] rounded-lg px-2 py-1.5 bg-white text-[#333] focus:outline-none focus:border-[#FFB800]"
+                >
+                  {YEARS.map((y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           {/* Selector de línea (pills) — mismo patrón que Tareas. Nivel 4/admin ve "Todos";
@@ -277,27 +348,22 @@ export default function AdsPage() {
           )}
 
           {tab === 'tacticas' ? (
-            <>
-              <AdsStats
-                campaigns={filteredCampaigns}
-                onResetFilters={() => adsListRef.current?.clearFilters()}
-                onFilterStatus={(status) => adsListRef.current?.setFilterStatus(status)}
-              />
-
-              <AdsList
-                ref={adsListRef}
-                campaigns={filteredCampaigns}
-                loading={loading}
-                canManage={canManage}
-                usersMap={usersMap}
-                clientsById={clientsById}
-                periodo={periodo}
-                onSelect={setSelectedCampaign}
-                onUpdated={handleUpdated}
-                onDeleted={handleDeleted}
-                onEdit={(campaign) => setEditingCampaign(campaign)}
-              />
-            </>
+            <TacticasView
+              campaigns={filteredCampaigns}
+              brands={brands}
+              clientsById={clientsById}
+              linesById={linesById}
+              usersMap={usersMap}
+              loading={loading}
+              canManage={canManage}
+              onSelect={setSelectedCampaign}
+              onEdit={(campaign) => setEditingCampaign(campaign)}
+              onUpdated={handleUpdated}
+              onDeleted={handleDeleted}
+              insumos={insumos}
+              onDiscardInsumo={handleDiscardInsumo}
+              onCreate={openCreate}
+            />
           ) : (
             <AdsSpendView
               ref={adsSpendViewRef}
@@ -313,6 +379,9 @@ export default function AdsPage() {
       {showCreateForm && (
         <AdsForm
           campaign={null}
+          prefill={createPrefill}
+          insumos={insumos}
+          onInsumosUsed={handleInsumosUsed}
           onClose={() => setShowCreateForm(false)}
           onCreated={handleCreated}
           onUpdated={handleUpdated}
