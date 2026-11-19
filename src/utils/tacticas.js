@@ -158,116 +158,46 @@ export function monthLabel(month) {
   return MONTH_NAMES[m - 1] ? `${MONTH_NAMES[m - 1]} ${y}` : month
 }
 
-// ── Diagrama de Gantt (vista Vigentes) ──────────────────────────────────────
+// ── Cobertura de marcas (torta de la vista Vigentes) ─────────────────────────
 
-// Meses visibles: uno antes del actual y tres después (la mediana de una táctica es ~3 semanas).
-export const GANTT_MONTHS_BEFORE = 1
-export const GANTT_MONTHS_AFTER = 3
-
-function addMonths(month, n) {
-  const [y, m] = month.split('-').map(Number)
-  const idx = y * 12 + (m - 1) + n
-  return `${Math.floor(idx / 12)}-${String((idx % 12) + 1).padStart(2, '0')}`
-}
-
-function lastDayOf(month) {
-  const [y, m] = month.split('-').map(Number)
-  return `${month}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`
-}
+/** Grupos de la torta, en el orden en que se dibujan. */
+export const COVERAGE_GROUPS = ['red', 'yellow', 'green', 'none']
 
 /**
- * Ventana de fechas del Gantt. `offset` corre la ventana de a un mes (flechas ‹ ›).
- * @returns {{ start: string, end: string, totalDays: number,
- *   months: Array<{ month: string, label: string, leftPct: number, widthPct: number }> }}
+ * Agrupa las marcas según su táctica vigente que vence primero:
+ * 'red' (≤ 3 días o vence hoy), 'yellow' (≤ 10), 'green' (más de 10) o 'none' (sin vigente).
+ * Una marca con solo una táctica programada cuenta como cubierta, con el tono de su fin.
+ * Dentro de cada grupo: primero las que vencen antes; las sin táctica, por nombre.
+ *
+ * @returns {{ red: Row[], yellow: Row[], green: Row[], none: Row[] }}
+ *   Row = { brand, campaign (la vigente que vence primero | null), days, progress, programada }
  */
-export function ganttWindow(today = todayCaracas(), offset = 0) {
-  const first = addMonths(today.slice(0, 7), offset - GANTT_MONTHS_BEFORE)
-  const last = addMonths(first, GANTT_MONTHS_BEFORE + GANTT_MONTHS_AFTER)
-  const start = `${first}-01`
-  const end = lastDayOf(last)
-  const totalDays = diffDays(start, end) + 1
-  const months = []
-  for (let mo = first; mo <= last; mo = addMonths(mo, 1)) {
-    const from = diffDays(start, `${mo}-01`)
-    const days = diffDays(`${mo}-01`, lastDayOf(mo)) + 1
-    months.push({
-      month: mo,
-      label: monthLabel(mo).split(' ')[0],
-      leftPct: (from / totalDays) * 100,
-      widthPct: (days / totalDays) * 100,
+export function brandCoverage(brands, campaigns, today = todayCaracas()) {
+  const soonest = new Map()
+  for (const c of campaigns ?? []) {
+    if (!c?.client_id || !isVigente(c, today)) continue
+    const prev = soonest.get(c.client_id)
+    if (!prev || c.end_date < prev.end_date) soonest.set(c.client_id, c)
+  }
+  const groups = { red: [], yellow: [], green: [], none: [] }
+  for (const brand of brands ?? []) {
+    const campaign = soonest.get(brand.id) ?? null
+    if (!campaign) {
+      groups.none.push({ brand, campaign: null, days: null, progress: 0, programada: false })
+      continue
+    }
+    const days = daysLeft(campaign, today)
+    groups[daysPillTone(days)].push({
+      brand,
+      campaign,
+      days,
+      progress: periodProgress(campaign, today),
+      programada: isProgramada(campaign, today),
     })
   }
-  return { start, end, totalDays, months }
-}
-
-/** Posición (en % del ancho) de un día dentro de la ventana, o null si queda afuera. */
-export function ganttDayPct(date, win) {
-  if (!date || date < win.start || date > win.end) return null
-  return (diffDays(win.start, date) / win.totalDays) * 100
-}
-
-/**
- * Barra de una táctica dentro de la ventana, recortada a sus bordes.
- * Los días son inclusive: una táctica de un solo día ocupa un día de ancho.
- * @returns {{ leftPct: number, widthPct: number, cutStart: boolean, cutEnd: boolean } | null}
- *   null si no tiene fechas o no se cruza con la ventana.
- */
-export function ganttBar(campaign, win) {
-  const { start_date: s, end_date: e } = campaign ?? {}
-  if (!s || !e || e < s || e < win.start || s > win.end) return null
-  const from = s < win.start ? win.start : s
-  const to = e > win.end ? win.end : e
-  return {
-    leftPct: (diffDays(win.start, from) / win.totalDays) * 100,
-    widthPct: ((diffDays(from, to) + 1) / win.totalDays) * 100,
-    cutStart: s < win.start,
-    cutEnd: e > win.end,
-  }
-}
-
-/**
- * Tono de la barra: 'programada' (aún no empieza), el color de la pill de días si está
- * vigente ('red' | 'yellow' | 'green') o 'done' si ya no está en marcha.
- */
-export function ganttTone(campaign, today = todayCaracas()) {
-  if (!isVigente(campaign, today)) return 'done'
-  if (isProgramada(campaign, today)) return 'programada'
-  return daysPillTone(daysLeft(campaign, today))
-}
-
-/**
- * Filas del Gantt: una por marca con sus tácticas dentro de la ventana.
- * Orden: primero las marcas con vigente que vence antes; al final las sin vigente (por nombre).
- * @param {Array} brands     — marcas a mostrar
- * @param {Array} campaigns  — tácticas (de cualquier marca)
- * @returns {Array<{ brand: object, bars: Array<{ campaign, bar, tone }>, nextEnd: string|null }>}
- */
-export function ganttRows(brands, campaigns, win, today = todayCaracas()) {
-  const byClient = new Map()
-  for (const c of campaigns ?? []) {
-    if (!c?.client_id) continue
-    if (!byClient.has(c.client_id)) byClient.set(c.client_id, [])
-    byClient.get(c.client_id).push(c)
-  }
-  const rows = (brands ?? []).map((brand) => {
-    const mine = byClient.get(brand.id) ?? []
-    const vig = mine.filter((c) => isVigente(c, today)).map((c) => c.end_date)
-    const bars = mine
-      .map((campaign) => ({
-        campaign,
-        bar: ganttBar(campaign, win),
-        tone: ganttTone(campaign, today),
-      }))
-      .filter((b) => b.bar)
-      .sort((a, b) => a.campaign.start_date.localeCompare(b.campaign.start_date))
-    return { brand, bars, nextEnd: vig.length ? vig.sort()[0] : null }
-  })
-  return rows.sort((a, b) => {
-    if (a.nextEnd && b.nextEnd && a.nextEnd !== b.nextEnd) return a.nextEnd < b.nextEnd ? -1 : 1
-    if (a.nextEnd && !b.nextEnd) return -1
-    if (!a.nextEnd && b.nextEnd) return 1
-    return (a.brand.name ?? '').localeCompare(b.brand.name ?? '', 'es')
-  })
+  for (const key of ['red', 'yellow', 'green']) groups[key].sort((x, y) => x.days - y.days)
+  groups.none.sort((x, y) => (x.brand.name ?? '').localeCompare(y.brand.name ?? '', 'es'))
+  return groups
 }
 
 /** Duración inclusive en días ("del 1 al 21" = 21). null sin fechas o si el fin es anterior. */

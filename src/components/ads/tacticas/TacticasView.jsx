@@ -3,8 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import FilterBar, { FilterField } from '../../common/FilterBar'
 import DescribedSelect from '../../common/DescribedSelect'
 import AdsList from '../AdsList'
-import TacticasAlertCards from './TacticasAlertCards'
-import TacticasGantt from './TacticasGantt'
+import TacticasTorta from './TacticasTorta'
 import TacticasPorHacer from './TacticasPorHacer'
 import TacticasVigentesTable from './TacticasVigentesTable'
 import TacticasPorMarca from './TacticasPorMarca'
@@ -38,9 +37,9 @@ const ESTADOS = [
  * `?line=`, para poder enlazar a una ficha desde otro módulo. El viejo `?view=marca` se trata
  * como Vigentes (con la marca de `?client=` elegida).
  *
- * - Vigentes: tarjetas de resumen, filtros (incluido "Marca"), Gantt, marcas por hacer y tabla
- *   de tácticas en marcha. Con una marca elegida en el filtro, en lugar del Gantt y la tabla
- *   se muestra su ficha (vigentes con checklist, insumo e historial).
+ * - Vigentes: torta de cobertura de marcas (`TacticasTorta`), marcas por hacer y, debajo, los
+ *   filtros (incluido "Marca") con la tabla de tácticas en marcha. Con una marca elegida en el
+ *   filtro se muestran solo los filtros y su ficha (vigentes con checklist, insumo e historial).
  * - Historial: todas las tácticas (tabla con filtros).
  *
  * @param {object}   props
@@ -160,14 +159,6 @@ export default function TacticasView({
       .filter(Boolean)
       .some((t) => t.toLowerCase().includes(q))
 
-  // Gantt: marcas de la jefa elegida; con búsqueda, las que coinciden por nombre o por alguna
-  // de sus tácticas. Los filtros de estado y mes son de la tabla.
-  const ganttBrands = brands.filter((b) => {
-    if (jefa !== 'all' && leadOf(b.id) !== jefa) return false
-    if (!q || (b.name ?? '').toLowerCase().includes(q)) return true
-    return campaigns.some((c) => c.client_id === b.id && matchesSearch(c))
-  })
-
   const filtered = vigentes.filter((c) => {
     if (estado === 'vencen3' && daysLeft(c, today) > 3) return false
     if (estado === 'vencen_mes' && c.end_date.slice(0, 7) !== today.slice(0, 7)) return false
@@ -217,7 +208,32 @@ export default function TacticasView({
 
       {view === 'vigentes' && (
         <>
-          <TacticasAlertCards stats={stats} estado={estado} onFilter={setEstado} />
+          {!clientId && (
+            <>
+              <TacticasTorta
+                brands={brands}
+                campaigns={campaigns}
+                today={today}
+                stats={stats}
+                clientsById={clientsById}
+                linesById={linesById}
+                usersMap={usersMap}
+                canManage={canManage}
+                onSelect={onSelect}
+                onCreate={onCreate}
+                onOpenBrand={openBrand}
+              />
+
+              <TacticasPorHacer
+                brands={sinVigente}
+                latestByBrand={latestMap}
+                insumoClientIds={new Set(insumos.map((i) => i.handoff.client_id))}
+                canManage={canManage}
+                onCreate={onCreate}
+                onOpenBrand={openBrand}
+              />
+            </>
+          )}
 
           <div className="mb-4">
             <FilterBar cols={5} onClear={hasFilters ? clearFilters : undefined}>
@@ -300,23 +316,6 @@ export default function TacticasView({
             />
           ) : (
             <>
-              <TacticasGantt
-                brands={ganttBrands}
-                campaigns={campaigns}
-                today={today}
-                onSelect={onSelect}
-                onOpenBrand={openBrand}
-              />
-
-              <TacticasPorHacer
-                brands={sinVigente}
-                latestByBrand={latestMap}
-                insumoClientIds={new Set(insumos.map((i) => i.handoff.client_id))}
-                canManage={canManage}
-                onCreate={onCreate}
-                onOpenBrand={openBrand}
-              />
-
               <p className="text-[13px] font-mono text-[#888] mb-2">
                 {filtered.length} {filtered.length === 1 ? 'táctica' : 'tácticas'}
                 {filtered.length !== vigentes.length && ` de ${vigentes.length}`}

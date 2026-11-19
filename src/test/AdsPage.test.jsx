@@ -245,16 +245,16 @@ describe('AdsPage — tabs Tácticas/Ads', () => {
     })
   })
 
-  describe('tarjetas de resumen (Vigentes)', () => {
-    it('cuenta las tácticas vigentes y no tiene tarjetas de vencimiento', async () => {
+  describe('resumen (Vigentes)', () => {
+    it('la torta cuenta las tácticas vigentes y no hay tarjetas de vencimiento', async () => {
       renderPage()
       await waitFor(() => {
         expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
       })
-      const cards = screen.getByRole('region', { name: 'Resumen de tácticas' })
+      const resumen = screen.getByRole('region', { name: 'Resumen de tácticas' })
       // 1 vigente (Julio).
-      expect(within(cards).getByText('Tácticas vigentes').nextElementSibling).toHaveTextContent('1')
-      expect(within(cards).queryByText(/Vencen/)).not.toBeInTheDocument()
+      expect(resumen).toHaveTextContent('1 táctica vigente')
+      expect(within(resumen).queryByRole('button', { name: /Vencen/ })).not.toBeInTheDocument()
     })
 
     it('"Vencen en 3 días" sigue disponible como filtro de Estado', async () => {

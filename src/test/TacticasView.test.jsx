@@ -106,17 +106,34 @@ describe('TacticasView', () => {
     expect(screen.queryByText('Plan viejo Flexmed')).not.toBeInTheDocument()
   })
 
-  it('las tarjetas resumen cuentan marcas, tácticas vigentes, marcas por hacer y cumplimiento promedio', () => {
+  it('la torta resume marcas, tácticas vigentes y cumplimiento promedio', () => {
     renderView()
-    const cards = screen.getByRole('region', { name: 'Resumen de tácticas' })
-    expect(within(cards).getByText('Marcas').nextElementSibling).toHaveTextContent('3')
-    expect(within(cards).getByText('2 con táctica vigente')).toBeInTheDocument()
-    expect(within(cards).getByText('Tácticas vigentes').nextElementSibling).toHaveTextContent('2')
-    expect(within(cards).getByText('cumplimiento promedio 100%')).toBeInTheDocument()
-    // Flexmed no tiene ninguna vigente.
-    expect(within(cards).getByText('Sin táctica vigente').nextElementSibling).toHaveTextContent('1')
-    // Lo que vence pronto llega como notificación: no tiene tarjeta.
-    expect(within(cards).queryByText(/Vencen/)).not.toBeInTheDocument()
+    const resumen = screen.getByRole('region', { name: 'Resumen de tácticas' })
+    expect(resumen).toHaveTextContent('3 marcas · 2 tácticas vigentes · cumplimiento promedio 100%')
+    expect(
+      within(resumen).getByRole('img', { name: '2 de 3 marcas con táctica vigente' }),
+    ).toBeInTheDocument()
+    // RE/MAX vence en 2 días (urgente), Capitas en 42 (al día) y Flexmed no tiene vigente.
+    expect(within(resumen).getByRole('button', { name: /Urgente/ })).toHaveTextContent('1')
+    expect(within(resumen).getByRole('button', { name: /Por vencer/ })).toBeDisabled()
+    expect(within(resumen).getByRole('button', { name: /Al día/ })).toHaveTextContent('1')
+    expect(within(resumen).getByRole('button', { name: /Sin táctica/ })).toHaveTextContent('1')
+  })
+
+  it('la torta abre la táctica de una marca y, sin táctica, el formulario para cargarla', async () => {
+    const user = userEvent.setup()
+    const onSelect = vi.fn()
+    const onCreate = vi.fn()
+    renderView({ onSelect, onCreate })
+    const resumen = screen.getByRole('region', { name: 'Resumen de tácticas' })
+
+    // Arranca en el grupo más urgente con marcas: Urgente (RE/MAX).
+    await user.click(within(resumen).getByRole('button', { name: /^RE\/MAX/ }))
+    expect(onSelect).toHaveBeenCalledWith(campaigns[0])
+
+    await user.click(within(resumen).getByRole('button', { name: /Sin táctica/ }))
+    await user.click(within(resumen).getByRole('button', { name: /^Flexmed/ }))
+    expect(onCreate).toHaveBeenCalledWith('b3')
   })
 
   it('"Por hacer" lista las marcas sin táctica vigente y abre el formulario con la marca', async () => {
@@ -188,7 +205,7 @@ describe('TacticasView', () => {
     expect(screen.getByRole('button', { name: 'Marca' })).toHaveTextContent('Todas las marcas')
   })
 
-  it('elegir una marca en el filtro muestra su ficha en lugar del Gantt y la tabla', async () => {
+  it('elegir una marca en el filtro muestra solo su ficha (sin torta, por hacer ni tabla)', async () => {
     const user = userEvent.setup()
     renderView()
     await user.click(screen.getByRole('button', { name: 'Marca' }))
@@ -196,9 +213,8 @@ describe('TacticasView', () => {
 
     expect(screen.getByRole('heading', { name: /Capitas/ })).toBeInTheDocument()
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
-    expect(
-      screen.queryByRole('region', { name: 'Diagrama de tácticas por marca' }),
-    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Resumen de tácticas' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: /Por hacer/ })).not.toBeInTheDocument()
 
     // "Limpiar" vuelve al tablero.
     await user.click(screen.getByRole('button', { name: 'Limpiar' }))
@@ -225,25 +241,14 @@ describe('TacticasView', () => {
     expect(screen.getByRole('heading', { name: /Flexmed/ })).toBeInTheDocument()
   })
 
-  it('el Gantt muestra una fila por marca y abre el detalle al hacer clic en una barra', async () => {
-    const user = userEvent.setup()
-    const onSelect = vi.fn()
-    renderView({ onSelect })
-    const gantt = screen.getByRole('region', { name: 'Diagrama de tácticas por marca' })
-    expect(within(gantt).getAllByRole('listitem')).toHaveLength(3)
-
-    await user.click(within(gantt).getByRole('button', { name: /^Plan RE\/MAX:/ }))
-    expect(onSelect).toHaveBeenCalledWith(campaigns[0])
-  })
-
-  it('el Gantt respeta el filtro de jefa', async () => {
-    const user = userEvent.setup()
+  it('la torta va primero y los filtros quedan junto a la tabla que filtran', () => {
     renderView()
-    await user.selectOptions(screen.getByLabelText('Jefa'), 'Daniellys')
-    const gantt = screen.getByRole('region', { name: 'Diagrama de tácticas por marca' })
-    // Capitas y Flexmed son de la línea de Daniellys.
-    expect(within(gantt).getAllByRole('listitem')).toHaveLength(2)
-    expect(within(gantt).queryByRole('button', { name: 'RE/MAX' })).not.toBeInTheDocument()
+    const resumen = screen.getByRole('region', { name: 'Resumen de tácticas' })
+    const buscar = screen.getByLabelText('Buscar')
+    const tabla = screen.getByRole('table')
+    const FOLLOWING = Node.DOCUMENT_POSITION_FOLLOWING
+    expect(resumen.compareDocumentPosition(buscar) & FOLLOWING).toBeTruthy()
+    expect(buscar.compareDocumentPosition(tabla) & FOLLOWING).toBeTruthy()
   })
 
   it('Historial muestra todas las tácticas, incluidas las finalizadas', async () => {
@@ -260,8 +265,8 @@ describe('TacticasView', () => {
     renderView({
       campaigns: [...campaigns, camp({ id: 'huerfana', client: 'X', client_id: null })],
     })
-    const cards = screen.getByRole('region', { name: 'Resumen de tácticas' })
-    expect(within(cards).getByText('Sin táctica vigente').nextElementSibling).toHaveTextContent('1')
+    const resumen = screen.getByRole('region', { name: 'Resumen de tácticas' })
+    expect(within(resumen).getByRole('button', { name: /Sin táctica/ })).toHaveTextContent('1')
   })
 
   it('una táctica programada cubre a la marca: no entra en "por hacer"', () => {
