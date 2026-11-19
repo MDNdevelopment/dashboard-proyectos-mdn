@@ -71,6 +71,7 @@ export default function FinanzasView({
   year,
   month,
   closed = false,
+  reopened = false,
   readOnly = false,
 }) {
   const { can = () => true, userProfile } = useAuth()
@@ -187,7 +188,8 @@ export default function FinanzasView({
     // Un mes ya pasado (o cerrado) es de solo lectura: se muestra tal cual se guardó,
     // sin reconciliar contra el roster actual (que puede tener altas/bajas posteriores
     // a ese mes). Ver utils/reportPeriod.js.
-    const frozen = isReportFrozen(year, month, closed)
+    // Un reporte desbloqueado por un admin (`reopened`) sigue congelado: no se reconcilia con el roster de hoy.
+    const frozen = isReportFrozen(year, month, closed || reopened)
 
     if (reportRes.data) {
       const d = reportRes.data.data
@@ -207,7 +209,7 @@ export default function FinanzasView({
       resetAutosave(synced)
     }
     setLoading(false)
-  }, [line?.id, line?.member_user_ids, companyId, year, month, closed, resetAutosave])
+  }, [line?.id, line?.member_user_ids, companyId, year, month, closed, reopened, resetAutosave])
 
   useEffect(() => {
     load()

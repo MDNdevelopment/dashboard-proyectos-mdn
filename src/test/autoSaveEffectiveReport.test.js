@@ -129,6 +129,28 @@ describe('loadYearReportsEffective', () => {
     expect(mockUpsert).not.toHaveBeenCalled()
   })
 
+  it('un reporte DESBLOQUEADO por un admin tampoco se recalcula ni se auto-guarda con datos de hoy', async () => {
+    const row = hotRow('l-reabierto', { reopened_at: '2026-11-19T12:00:00Z' })
+    mockReportsSelect.mockReturnValue({ data: [row], error: null })
+
+    const { data } = await loadYearReportsEffective('co1', 2026, { autoSave: true, now: NOW })
+
+    // Sale con lo guardado (realizadas = 1), no con lo que dicen las fuentes de hoy (7).
+    expect(data[0].data).toEqual(row.data)
+    expect(data[0].data.reuniones.realizadas).toBe(1)
+    expect(mockUpsert).not.toHaveBeenCalled()
+  })
+
+  it('un reporte desbloqueado no pide las fuentes derivadas', async () => {
+    const row = hotRow('l-reabierto-2', { reopened_at: '2026-11-19T12:00:00Z' })
+    mockReportsSelect.mockReturnValue({ data: [row], error: null })
+
+    await loadYearReportsEffective('co1', 2026, { now: NOW })
+
+    const llamadas = loadReportSources.mock.calls
+    expect(llamadas.every(([, params]) => !params.lineIds.includes('l-reabierto-2'))).toBe(true)
+  })
+
   it('deriva reuniones.realizadas de las fuentes en un reporte abierto', async () => {
     const row = hotRow('l2')
     mockReportsSelect.mockReturnValue({ data: [row], error: null })

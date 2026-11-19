@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { isReportFrozen } from '../utils/reportPeriod'
+import { isReportFrozen, isDerivationFrozen } from '../utils/reportPeriod'
 
 const NOW = new Date('2026-07-17T12:00:00Z')
 
@@ -24,5 +24,29 @@ describe('isReportFrozen', () => {
   it('un reporte cerrado está congelado sin importar el mes', () => {
     expect(isReportFrozen(2026, 7, true, NOW)).toBe(true)
     expect(isReportFrozen(2026, 8, true, NOW)).toBe(true)
+  })
+})
+
+describe('isDerivationFrozen', () => {
+  it('un reporte cerrado está congelado para derivar', () => {
+    expect(isDerivationFrozen({ closed_at: '2026-10-05T00:00:00Z', reopened_at: null })).toBe(true)
+  })
+
+  it('un reporte desbloqueado por un admin también: se edita a mano pero no se recalcula solo', () => {
+    expect(isDerivationFrozen({ closed_at: null, reopened_at: '2026-11-19T12:00:00Z' })).toBe(true)
+  })
+
+  it('un reporte abierto que nunca se desbloqueó no lo está', () => {
+    expect(isDerivationFrozen({ closed_at: null, reopened_at: null })).toBe(false)
+    expect(isDerivationFrozen({})).toBe(false)
+  })
+
+  it('tolera null y undefined (reporte que aún no existe)', () => {
+    expect(isDerivationFrozen(null)).toBe(false)
+    expect(isDerivationFrozen(undefined)).toBe(false)
+  })
+
+  it('al volver a cerrarlo sigue congelado (closed_at lleno y reopened_at limpio)', () => {
+    expect(isDerivationFrozen({ closed_at: '2026-11-20T00:00:00Z', reopened_at: null })).toBe(true)
   })
 })
