@@ -254,3 +254,154 @@ describe('OperacionesView — "6. Nº Piezas vs Piezas editadas"', () => {
     expect(screen.getByDisplayValue('9')).toBeInTheDocument()
   })
 })
+
+describe('OperacionesView — piezas editadas al último día del mes (desde nov-2026)', () => {
+  const pend = (pendientes) => ({ piezas: pendientes + 2, editadas: 2, pendientes })
+  const fuente = (over = {}) => ({
+    piezas: 20,
+    editadas: 6,
+    porGrupo: {
+      video4k: { piezas: 20, editadas: 6 },
+      reel: { piezas: 0, editadas: 0 },
+      sinDesglose: { piezas: 0, editadas: 0 },
+    },
+    cnp: { solicitudes: 0, entregados: 0 },
+    pendientesPrevios: pend(3),
+    error: null,
+    ...over,
+  })
+  const cargar = async (month, { closed = false } = {}) => {
+    renderView({ month, closed })
+    await waitFor(() => {
+      expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
+    })
+    return screen.getByText('6. Nº Piezas vs Piezas editadas').closest('div.space-y-3')
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockLoadReport.mockResolvedValue({ data: { data: makeReportData() }, error: null })
+    mockLoadPrevReport.mockResolvedValue({ data: null, error: null })
+    mockLoadClients.mockResolvedValue({ data: MOCK_CLIENTS, error: null })
+    mockLoadCompanyEmployees.mockResolvedValue({ data: [], error: null })
+    mockUpsertReport.mockResolvedValue({ data: null, error: null })
+    mockLoadAds.mockResolvedValue({ data: [], error: null })
+    mockCountMeetingsHeldForLine.mockResolvedValue({ count: 0, error: null })
+    mockLoadHeldClientIdsForLine.mockResolvedValue({ clientIds: [], error: null })
+    mockLoadFixedTaskMarks.mockResolvedValue({ data: [], error: null })
+    mockCountPautasRealizadasByClient.mockResolvedValue({ byClient: {}, error: null })
+    mockLoadChecks.mockResolvedValue({ data: [], error: null })
+    mockCountCnpSolicitudesForLine.mockResolvedValue({ solicitudes: 0, entregados: 0, error: null })
+    mockCountTareasSolicitudesForLine.mockResolvedValue({
+      solicitudes: 0,
+      entregados: 0,
+      error: null,
+    })
+    mockCountPiezasForLine.mockResolvedValue(fuente())
+  })
+
+  it('noviembre: dice que lo editado es al último día del mes', async () => {
+    const section = await cargar(11)
+    expect(
+      within(section).getByText('Derivado de Audiovisual · editadas al 30/11'),
+    ).toBeInTheDocument()
+    const editadas = within(section).getByDisplayValue('6')
+    expect(editadas).toBeDisabled()
+    expect(editadas.getAttribute('title')).toMatch(/último día del mes/)
+  })
+
+  it('septiembre y octubre siguen como antes (sin la leyenda de fin de mes)', async () => {
+    for (const month of [9, 10]) {
+      const { unmount } = render(
+        <OperacionesView line={LINE} companyId="co-1" year={2026} month={month} />,
+      )
+      await waitFor(() => {
+        expect(screen.getByTestId('autosave-status')).toBeInTheDocument()
+      })
+      expect(screen.queryByText(/editadas al \d\d\/\d\d/)).not.toBeInTheDocument()
+      unmount()
+    }
+  })
+
+  it('noviembre NO muestra la línea de pendientes (es el primer mes de la regla)', async () => {
+    const section = await cargar(11)
+    expect(within(section).queryByText(/Pendientes de meses anteriores/)).not.toBeInTheDocument()
+  })
+
+  it('diciembre muestra la línea aparte, medida al 31/12 y solo informativa', async () => {
+    const section = await cargar(12)
+    const linea = within(section)
+      .getByText(/Pendientes de meses anteriores/)
+      .closest('p')
+    expect(linea).toHaveTextContent('3 videos sin editar al 31/12')
+    expect(linea).toHaveTextContent('solo informativo, no afecta el puntaje')
+  })
+
+  it('usa el singular con 1 video y dice «ninguno» con 0', async () => {
+    mockCountPiezasForLine.mockResolvedValue(fuente({ pendientesPrevios: pend(1) }))
+    const uno = await cargar(12)
+    expect(
+      within(uno)
+        .getByText(/Pendientes de meses anteriores/)
+        .closest('p'),
+    ).toHaveTextContent('1 video sin editar')
+  })
+
+  it('con 0 pendientes lo dice en vez de mostrar un número', async () => {
+    mockCountPiezasForLine.mockResolvedValue(fuente({ pendientesPrevios: pend(0) }))
+    const section = await cargar(12)
+    expect(
+      within(section)
+        .getByText(/Pendientes de meses anteriores/)
+        .closest('p'),
+    ).toHaveTextContent('ninguno')
+  })
+
+  it('los pendientes previos no se suman a las piezas del mes', async () => {
+    const section = await cargar(12)
+    expect(
+      within(section)
+        .getAllByRole('spinbutton')
+        .map((i) => i.value),
+    ).toEqual(['20', '6'])
+  })
+
+  it('si la fuente falla, avisa y conserva lo guardado en vez de poner ceros', async () => {
+    mockCountPiezasForLine.mockResolvedValue({
+      piezas: 0,
+      editadas: 0,
+      porGrupo: null,
+      pendientesPrevios: null,
+      error: { message: 'boom' },
+    })
+    const section = await cargar(12)
+    expect(within(section).getByRole('alert')).toHaveTextContent(
+      /se muestra el último valor guardado/,
+    )
+    // makeReportData() guarda 12 y 9.
+    expect(within(section).getByDisplayValue('12')).toBeInTheDocument()
+    expect(within(section).getByDisplayValue('9')).toBeInTheDocument()
+  })
+
+  it('sin error no muestra el aviso', async () => {
+    const section = await cargar(12)
+    expect(within(section).queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('reporte cerrado: conserva lo guardado, incluida la línea de pendientes', async () => {
+    const data = makeReportData()
+    data.piezas = { piezas: 15, editadas: 11, pendientesPrevios: pend(7) }
+    mockLoadReport.mockResolvedValue({ data: { data }, error: null })
+    mockCountPiezasForLine.mockResolvedValue(fuente({ pendientesPrevios: pend(99) }))
+
+    const section = await cargar(12, { closed: true })
+
+    expect(within(section).getByDisplayValue('15')).toBeInTheDocument()
+    expect(within(section).getByDisplayValue('11')).toBeInTheDocument()
+    expect(
+      within(section)
+        .getByText(/Pendientes de meses anteriores/)
+        .closest('p'),
+    ).toHaveTextContent('7 videos sin editar')
+  })
+})
