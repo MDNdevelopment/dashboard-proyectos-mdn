@@ -2,14 +2,16 @@
  * Lógica pura de fechas para el cierre automático de reportes mensuales
  * (ver ARQUITECTURA.md §2.5). El reporte del mes anterior se cierra solo el
  * día `CLOSURE_DAY` del mes en curso (cron `enqueue-metric-report-closures`);
- * entre el día 1 y ese día las jefas de línea reciben un aviso diario.
+ * entre el día 10 y ese día las jefas de línea reciben un aviso diario.
  *
  * Todo acá es puro y recibe `now` inyectable — mismo estilo que
  * `isReportFrozen` en `reportPeriod.js` — para poder testear cruces de año y
  * casos borde sin mockear el reloj.
  */
 
-export const CLOSURE_DAY = 5
+export const CLOSURE_DAY = 15
+/** Primer día del mes en que se avisa a la jefa (del día 10 al 14; el 15 se cierra). */
+export const REMINDER_START_DAY = 10
 
 /** Periodo que se está por cerrar: el mes calendario anterior a `now`. */
 export function closurePeriod(now = new Date()) {
@@ -19,10 +21,10 @@ export function closurePeriod(now = new Date()) {
   return { year: y, month: m - 1 }
 }
 
-/** true si hoy es día 1..CLOSURE_DAY (ventana de avisos/cierre). */
+/** true si hoy es día REMINDER_START_DAY..CLOSURE_DAY (ventana de avisos/cierre). */
 export function isClosureWindow(now = new Date()) {
   const day = now.getUTCDate()
-  return day >= 1 && day <= CLOSURE_DAY
+  return day >= REMINDER_START_DAY && day <= CLOSURE_DAY
 }
 
 /** Días que faltan para el cierre automático. 0 el mismo día del cierre. */

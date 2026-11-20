@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
+import { CLOSURE_DAY } from '../utils/reportClosure'
 
 const MONTHS = [
   'Enero',
@@ -18,7 +19,7 @@ const MONTHS = [
 
 /**
  * Modal de recordatorio de cierre de reportes: se muestra a las jefas de
- * línea del día 1 al 5 del mes mientras tengan el reporte del mes anterior
+ * línea del día 10 al 15 del mes mientras tengan el reporte del mes anterior
  * sin cerrar. Ver `src/hooks/useReportCloseReminder.js`.
  */
 export default function ReportCloseReminderModal({ show, pending, period, daysLeft, onClose }) {
@@ -41,7 +42,9 @@ export default function ReportCloseReminderModal({ show, pending, period, daysLe
 
   const monthLabel = MONTHS[period.month - 1]
   const title =
-    daysLeft === 0 ? 'Tu reporte cierra hoy' : `Tu reporte de ${monthLabel} cierra el día 5`
+    daysLeft === 0
+      ? 'Tu reporte cierra hoy'
+      : `Tu reporte de ${monthLabel} cierra el día ${CLOSURE_DAY}`
 
   return (
     <div
