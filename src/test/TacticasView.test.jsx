@@ -6,6 +6,7 @@ import { vi } from 'vitest'
 vi.mock('../supabase', () => ({ supabase: { from: vi.fn() } }))
 
 import TacticasView from '../components/ads/tacticas/TacticasView'
+import { VENCEN_SEEN_KEY } from '../components/ads/tacticas/TacticasVencenModal'
 
 const brands = [
   { id: 'b1', name: 'RE/MAX', logo_url: null, line_id: 'l1' },
@@ -37,13 +38,13 @@ const camp = (over = {}) => ({
 })
 
 const campaigns = [
-  camp(), // vence en 2 días → rojo, "vencen en 3 días"
+  camp(), // vence en 2 días → urgente
   camp({
     id: 'c2',
     name: 'Plan Capitas',
     client: 'Capitas',
     client_id: 'b2',
-    end_date: '2026-12-31',
+    end_date: '2026-12-31', // al día
     checklist: [
       { id: '1', title: 'a', done: true },
       { id: '2', title: 'b', done: true },
@@ -82,209 +83,309 @@ function renderView(props = {}, route = '/ads') {
   )
 }
 
+const bodyRows = () => screen.getAllByRole('row').slice(1)
+const legend = () => screen.getByRole('group', { name: 'Grupos' })
+
 describe('TacticasView', () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.setSystemTime(new Date('2026-11-19T12:00:00'))
+    // El aviso "vencen pronto" sale una vez por sesión: aquí ya se vio, salvo en sus tests.
+    window.sessionStorage.setItem(VENCEN_SEEN_KEY, '1')
   })
   afterEach(() => {
     vi.useRealTimers()
+    window.sessionStorage.clear()
   })
 
   it('mientras carga muestra un spinner y ninguna subvista', () => {
     const { container } = renderView({ loading: true })
     expect(container.querySelector('.animate-spin')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Vigentes' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Dashboard' })).not.toBeInTheDocument()
   })
 
-  it('Vigentes lista solo las tácticas en marcha, con la más urgente primero', () => {
+  it('tiene dos subvistas, Dashboard y Base, y abre en el Dashboard', () => {
     renderView()
-    const rows = screen.getAllByRole('row').slice(1)
-    expect(rows).toHaveLength(2)
-    expect(rows[0]).toHaveTextContent('Plan RE/MAX')
-    expect(rows[1]).toHaveTextContent('Plan Capitas')
-    expect(screen.queryByText('Plan viejo Flexmed')).not.toBeInTheDocument()
-  })
-
-  it('la torta resume marcas, tácticas vigentes y cumplimiento promedio', () => {
-    renderView()
-    const resumen = screen.getByRole('region', { name: 'Resumen de tácticas' })
-    expect(resumen).toHaveTextContent('3 marcas · 2 tácticas vigentes · cumplimiento promedio 100%')
+    const group = screen.getByRole('group', { name: 'Vista de tácticas' })
     expect(
-      within(resumen).getByRole('img', { name: '2 de 3 marcas con táctica vigente' }),
-    ).toBeInTheDocument()
-    // RE/MAX vence en 2 días (urgente), Capitas en 42 (al día) y Flexmed no tiene vigente.
-    expect(within(resumen).getByRole('button', { name: /Urgente/ })).toHaveTextContent('1')
-    expect(within(resumen).getByRole('button', { name: /Por vencer/ })).toBeDisabled()
-    expect(within(resumen).getByRole('button', { name: /Al día/ })).toHaveTextContent('1')
-    expect(within(resumen).getByRole('button', { name: /Sin táctica/ })).toHaveTextContent('1')
+      within(group)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['Dashboard', 'Base'])
+    expect(screen.getByRole('button', { name: 'Dashboard', pressed: true })).toBeInTheDocument()
   })
 
-  it('la torta abre la táctica de una marca y, sin táctica, el formulario para cargarla', async () => {
-    const user = userEvent.setup()
-    const onSelect = vi.fn()
-    const onCreate = vi.fn()
-    renderView({ onSelect, onCreate })
-    const resumen = screen.getByRole('region', { name: 'Resumen de tácticas' })
-
-    // Arranca en el grupo más urgente con marcas: Urgente (RE/MAX).
-    await user.click(within(resumen).getByRole('button', { name: /^RE\/MAX/ }))
-    expect(onSelect).toHaveBeenCalledWith(campaigns[0])
-
-    await user.click(within(resumen).getByRole('button', { name: /Sin táctica/ }))
-    await user.click(within(resumen).getByRole('button', { name: /^Flexmed/ }))
-    expect(onCreate).toHaveBeenCalledWith('b3')
-  })
-
-  it('"Por hacer" lista las marcas sin táctica vigente y abre el formulario con la marca', async () => {
-    const user = userEvent.setup()
-    const onCreate = vi.fn()
-    renderView({ onCreate })
-
-    const porHacer = screen.getByRole('region', { name: /Por hacer/ })
-    expect(within(porHacer).getByText('Flexmed')).toBeInTheDocument()
-    expect(within(porHacer).queryByText('RE/MAX')).not.toBeInTheDocument()
-
-    await user.click(within(porHacer).getByRole('button', { name: 'Cargar táctica de Flexmed' }))
-    expect(onCreate).toHaveBeenCalledWith('b3')
-  })
-
-  it('filtra por jefa, derivada de la línea de la marca', async () => {
-    const user = userEvent.setup()
-    renderView()
-    await user.selectOptions(screen.getByLabelText('Jefa'), 'Daniellys')
-
-    const rows = screen.getAllByRole('row').slice(1)
-    expect(rows).toHaveLength(1)
-    expect(rows[0]).toHaveTextContent('Plan Capitas')
-  })
-
-  it('filtra por búsqueda de texto', async () => {
-    const user = userEvent.setup()
-    renderView()
-    await user.type(screen.getByLabelText('Buscar'), 'capitas')
-
-    expect(screen.getByText('1 táctica de 2')).toBeInTheDocument()
-    expect(screen.queryByText('Plan RE/MAX')).not.toBeInTheDocument()
-  })
-
-  it('filtra por "Vencen en 3 días" desde el filtro Estado y "Limpiar" restablece', async () => {
-    const user = userEvent.setup()
-    renderView()
-    await user.selectOptions(screen.getByLabelText('Estado'), 'vencen3')
-
-    expect(screen.getAllByRole('row').slice(1)).toHaveLength(1)
-
-    await user.click(screen.getByRole('button', { name: 'Limpiar' }))
-    expect(screen.getAllByRole('row').slice(1)).toHaveLength(2)
-  })
-
-  it('filtra por mes de vencimiento', async () => {
-    const user = userEvent.setup()
-    renderView()
-    await user.selectOptions(screen.getByLabelText('Vence en'), '2026-12')
-
-    const rows = screen.getAllByRole('row').slice(1)
-    expect(rows).toHaveLength(1)
-    expect(rows[0]).toHaveTextContent('Plan Capitas')
-  })
-
-  it('el filtro "Vencen este mes" deja solo las que vencen en el mes en curso', async () => {
-    const user = userEvent.setup()
-    renderView()
-    await user.selectOptions(screen.getByLabelText('Estado'), 'vencen_mes')
-
-    const rows = screen.getAllByRole('row').slice(1)
-    expect(rows).toHaveLength(1)
-    expect(rows[0]).toHaveTextContent('Plan RE/MAX')
-  })
-
-  it('ya no hay pestaña "Por marca": la marca es un filtro de Vigentes', () => {
-    renderView()
-    expect(screen.queryByRole('button', { name: 'Por marca' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Marca' })).toHaveTextContent('Todas las marcas')
-  })
-
-  it('elegir una marca en el filtro muestra solo su ficha (sin torta, por hacer ni tabla)', async () => {
-    const user = userEvent.setup()
-    renderView()
-    await user.click(screen.getByRole('button', { name: 'Marca' }))
-    await user.click(screen.getByRole('option', { name: /Capitas/ }))
-
-    expect(screen.getByRole('heading', { name: /Capitas/ })).toBeInTheDocument()
-    expect(screen.queryByRole('table')).not.toBeInTheDocument()
-    expect(screen.queryByRole('region', { name: 'Resumen de tácticas' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('region', { name: /Por hacer/ })).not.toBeInTheDocument()
-
-    // "Limpiar" vuelve al tablero.
-    await user.click(screen.getByRole('button', { name: 'Limpiar' }))
-    expect(screen.getByRole('table')).toBeInTheDocument()
-  })
-
-  it('clic en una marca de la tabla la elige en el filtro y abre su ficha', async () => {
-    const user = userEvent.setup()
-    renderView()
-    await user.click(screen.getByRole('button', { name: 'Ver ficha de Capitas' }))
-
-    expect(screen.getByRole('button', { name: 'Marca' })).toHaveTextContent('Capitas')
-    expect(screen.getByRole('heading', { name: /Capitas/ })).toBeInTheDocument()
-  })
-
-  it('la ficha se abre directo desde la URL con ?client= (y con el viejo ?view=marca)', () => {
-    const { unmount } = renderView({}, '/ads?client=b3')
-    expect(screen.getByRole('heading', { name: /Flexmed/ })).toBeInTheDocument()
-    // Flexmed no tiene vigente: avisa.
-    expect(screen.getByRole('alert')).toHaveTextContent('Sin táctica vigente')
-    unmount()
-
-    renderView({}, '/ads?view=marca&client=b3')
-    expect(screen.getByRole('heading', { name: /Flexmed/ })).toBeInTheDocument()
-  })
-
-  it('la torta va primero y los filtros quedan junto a la tabla que filtran', () => {
-    renderView()
-    const resumen = screen.getByRole('region', { name: 'Resumen de tácticas' })
-    const buscar = screen.getByLabelText('Buscar')
-    const tabla = screen.getByRole('table')
-    const FOLLOWING = Node.DOCUMENT_POSITION_FOLLOWING
-    expect(resumen.compareDocumentPosition(buscar) & FOLLOWING).toBeTruthy()
-    expect(buscar.compareDocumentPosition(tabla) & FOLLOWING).toBeTruthy()
-  })
-
-  it('Historial muestra todas las tácticas, incluidas las finalizadas', async () => {
-    const user = userEvent.setup()
-    renderView()
-    await user.click(screen.getByRole('button', { name: 'Historial' }))
-
-    expect(screen.getByText('Plan viejo Flexmed')).toBeInTheDocument()
-    expect(screen.getByText('Plan RE/MAX')).toBeInTheDocument()
-    expect(screen.getByText('Plan Capitas')).toBeInTheDocument()
-  })
-
-  it('las tácticas sin marca no cuentan para "marcas por hacer"', () => {
-    renderView({
-      campaigns: [...campaigns, camp({ id: 'huerfana', client: 'X', client_id: null })],
+  describe('Dashboard', () => {
+    it('muestra la torta, las tortas por team y la tarjeta Por hacer, sin filtros ni tabla', () => {
+      renderView()
+      expect(screen.getByRole('region', { name: 'Resumen de tácticas' })).toBeInTheDocument()
+      expect(screen.getByRole('group', { name: 'Team Línea A' })).toBeInTheDocument()
+      expect(screen.getByRole('group', { name: 'Team Línea B' })).toBeInTheDocument()
+      expect(screen.getByRole('region', { name: 'Por hacer' })).toBeInTheDocument()
+      expect(screen.queryByRole('table')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Estado')).not.toBeInTheDocument()
     })
-    const resumen = screen.getByRole('region', { name: 'Resumen de tácticas' })
-    expect(within(resumen).getByRole('button', { name: /Sin táctica/ })).toHaveTextContent('1')
+
+    it('la torta resume marcas, tácticas vigentes y cumplimiento promedio', () => {
+      renderView()
+      const resumen = screen.getByRole('region', { name: 'Resumen de tácticas' })
+      expect(resumen).toHaveTextContent(
+        '3 marcas · 2 tácticas vigentes · cumplimiento promedio 100%',
+      )
+      expect(
+        within(resumen).getByRole('img', { name: '2 de 3 marcas con táctica vigente' }),
+      ).toBeInTheDocument()
+      // RE/MAX vence en 2 días (urgente), Capitas en 42 (al día) y Flexmed no tiene vigente.
+      expect(within(legend()).getByRole('button', { name: /Urgente/ })).toHaveTextContent('1')
+      expect(within(legend()).getByRole('button', { name: /Por vencer/ })).toBeDisabled()
+      expect(within(legend()).getByRole('button', { name: /Al día/ })).toHaveTextContent('1')
+      expect(within(legend()).getByRole('button', { name: /Sin táctica/ })).toHaveTextContent('1')
+    })
+
+    it('clic en "Urgente" abre Base filtrada por urgentes', async () => {
+      const user = userEvent.setup()
+      renderView()
+      await user.click(within(legend()).getByRole('button', { name: /Urgente/ }))
+
+      expect(screen.getByRole('button', { name: 'Base', pressed: true })).toBeInTheDocument()
+      expect(screen.getByLabelText('Estado')).toHaveValue('urgentes')
+      expect(bodyRows()).toHaveLength(1)
+      expect(bodyRows()[0]).toHaveTextContent('Plan RE/MAX')
+    })
+
+    it('clic en "Sin táctica" abre Base con la lista de marcas sin táctica', async () => {
+      const user = userEvent.setup()
+      renderView()
+      await user.click(within(legend()).getByRole('button', { name: /Sin táctica/ }))
+
+      expect(screen.getByLabelText('Estado')).toHaveValue('sin_tactica')
+      expect(bodyRows()).toHaveLength(1)
+      expect(bodyRows()[0]).toHaveTextContent('Flexmed')
+    })
+
+    it('clic en un team elige ese team en las pills de línea y abre Base', async () => {
+      const user = userEvent.setup()
+      const onSelectLine = vi.fn()
+      renderView({ onSelectLine })
+      await user.click(screen.getByRole('button', { name: 'Al día de Línea B: 1' }))
+
+      expect(onSelectLine).toHaveBeenCalledWith('l2', { view: 'base' })
+    })
+
+    it('la tarjeta Por hacer muestra los logos; clic en uno abre su ficha', async () => {
+      const user = userEvent.setup()
+      renderView()
+      const porHacer = screen.getByRole('region', { name: 'Por hacer' })
+      expect(within(porHacer).queryByRole('button', { name: /RE\/MAX/ })).not.toBeInTheDocument()
+
+      await user.click(within(porHacer).getByRole('button', { name: 'Ver ficha de Flexmed' }))
+      expect(screen.getByRole('dialog', { name: 'Ficha de Flexmed' })).toBeInTheDocument()
+    })
+
+    it('"Ver en Base" de Por hacer abre Base con el Estado "Sin táctica"', async () => {
+      const user = userEvent.setup()
+      renderView()
+      const porHacer = screen.getByRole('region', { name: 'Por hacer' })
+      await user.click(within(porHacer).getByRole('button', { name: 'Ver en Base' }))
+
+      expect(screen.getByRole('button', { name: 'Base', pressed: true })).toBeInTheDocument()
+      expect(screen.getByLabelText('Estado')).toHaveValue('sin_tactica')
+    })
+
+    it('las tácticas sin marca no cuentan para "Sin táctica"', () => {
+      renderView({
+        campaigns: [...campaigns, camp({ id: 'huerfana', client: 'X', client_id: null })],
+      })
+      expect(within(legend()).getByRole('button', { name: /Sin táctica/ })).toHaveTextContent('1')
+    })
+
+    it('una táctica programada cubre a la marca: no entra en Por hacer', () => {
+      renderView({
+        campaigns: [
+          ...campaigns,
+          camp({
+            id: 'prog',
+            name: 'Plan 2027',
+            client: 'Flexmed',
+            client_id: 'b3',
+            status: 'Pendiente',
+            start_date: '2027-01-01',
+            end_date: '2027-03-31',
+          }),
+        ],
+      })
+      expect(screen.queryByRole('region', { name: 'Por hacer' })).not.toBeInTheDocument()
+    })
   })
 
-  it('una táctica programada cubre a la marca: no entra en "por hacer"', () => {
-    renderView({
-      campaigns: [
-        ...campaigns,
-        camp({
-          id: 'prog',
-          name: 'Plan 2027',
-          client: 'Flexmed',
-          client_id: 'b3',
-          status: 'Pendiente',
-          start_date: '2027-01-01',
-          end_date: '2027-03-31',
-        }),
-      ],
+  describe('aviso "vencen pronto"', () => {
+    beforeEach(() => window.sessionStorage.removeItem(VENCEN_SEEN_KEY))
+
+    it('al entrar al Dashboard muestra las tácticas que vencen en ≤ 10 días', () => {
+      renderView()
+      const aviso = screen.getByRole('dialog', { name: '1 táctica vence en 10 días o menos' })
+      expect(within(aviso).getByText('Plan RE/MAX')).toBeInTheDocument()
+      expect(within(aviso).getByText('2 días')).toBeInTheDocument()
+      expect(within(aviso).queryByText('Plan Capitas')).not.toBeInTheDocument()
     })
-    expect(screen.queryByRole('region', { name: /Por hacer/ })).not.toBeInTheDocument()
+
+    it('"Ver urgentes en Base" cierra el aviso y abre Base filtrada', async () => {
+      const user = userEvent.setup()
+      renderView()
+      await user.click(screen.getByRole('button', { name: 'Ver urgentes en Base (1)' }))
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(screen.getByLabelText('Estado')).toHaveValue('urgentes')
+      expect(bodyRows()).toHaveLength(1)
+    })
+
+    it('clic en una táctica del aviso abre su detalle', async () => {
+      const user = userEvent.setup()
+      const onSelect = vi.fn()
+      renderView({ onSelect })
+      await user.click(screen.getByText('Plan RE/MAX'))
+      expect(onSelect).toHaveBeenCalledWith(campaigns[0])
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+
+    it('se muestra una sola vez por sesión', async () => {
+      const user = userEvent.setup()
+      const { unmount } = renderView()
+      await user.click(screen.getByRole('button', { name: 'Cerrar aviso' }))
+      unmount()
+
+      renderView()
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+
+    it('no sale en Base, ni si nada vence pronto', () => {
+      const { unmount } = renderView({}, '/ads?view=base')
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      unmount()
+
+      renderView({ campaigns: campaigns.slice(1) })
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('Base', () => {
+    it('abre con ?view=base (y con el viejo ?view=historial) y lista todas las tácticas', () => {
+      const { unmount } = renderView({}, '/ads?view=base')
+      expect(screen.getByRole('button', { name: 'Base', pressed: true })).toBeInTheDocument()
+      expect(bodyRows()).toHaveLength(3)
+      expect(screen.getByText('Plan viejo Flexmed')).toBeInTheDocument()
+      expect(screen.queryByRole('region', { name: 'Resumen de tácticas' })).not.toBeInTheDocument()
+      unmount()
+
+      renderView({}, '/ads?view=historial')
+      expect(screen.getByRole('button', { name: 'Base', pressed: true })).toBeInTheDocument()
+    })
+
+    it('solo filtra por búsqueda, marca y estado (sin Jefa ni "Vence en")', () => {
+      renderView({}, '/ads?view=base')
+      expect(screen.getByLabelText('Buscar')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Marca' })).toBeInTheDocument()
+      expect(screen.getByLabelText('Estado')).toHaveValue('todas')
+      expect(screen.queryByLabelText('Jefa')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Vence en')).not.toBeInTheDocument()
+      expect(screen.getByText('3 tácticas')).toBeInTheDocument()
+    })
+
+    it('filtra por estado: al día, urgentes y finalizadas', async () => {
+      const user = userEvent.setup()
+      renderView({}, '/ads?view=base')
+
+      await user.selectOptions(screen.getByLabelText('Estado'), 'al_dia')
+      expect(bodyRows()).toHaveLength(1)
+      expect(bodyRows()[0]).toHaveTextContent('Plan Capitas')
+      expect(screen.getByText('1 de 3 tácticas')).toBeInTheDocument()
+
+      await user.selectOptions(screen.getByLabelText('Estado'), 'urgentes')
+      expect(bodyRows()[0]).toHaveTextContent('Plan RE/MAX')
+
+      await user.selectOptions(screen.getByLabelText('Estado'), 'finalizadas')
+      expect(bodyRows()).toHaveLength(1)
+      expect(bodyRows()[0]).toHaveTextContent('Plan viejo Flexmed')
+    })
+
+    it('"Sin táctica" cambia la tabla a una fila por marca, con "Cargar táctica"', async () => {
+      const user = userEvent.setup()
+      const onCreate = vi.fn()
+      renderView({ onCreate }, '/ads?view=base')
+      await user.selectOptions(screen.getByLabelText('Estado'), 'sin_tactica')
+
+      expect(screen.getByText('1 marca sin táctica')).toBeInTheDocument()
+      expect(bodyRows()).toHaveLength(1)
+      expect(bodyRows()[0]).toHaveTextContent('Flexmed')
+      expect(bodyRows()[0]).toHaveTextContent('Plan viejo Flexmed')
+
+      await user.click(screen.getByRole('button', { name: 'Cargar táctica de Flexmed' }))
+      expect(onCreate).toHaveBeenCalledWith('b3')
+    })
+
+    it('la búsqueda también encuentra por jefa', async () => {
+      const user = userEvent.setup()
+      renderView({}, '/ads?view=base')
+      await user.type(screen.getByLabelText('Buscar'), 'daniellys')
+
+      expect(bodyRows()).toHaveLength(2)
+      expect(screen.queryByText('Plan RE/MAX')).not.toBeInTheDocument()
+    })
+
+    it('filtra por marca y "Limpiar" restablece todos los filtros', async () => {
+      const user = userEvent.setup()
+      renderView({}, '/ads?view=base')
+      await user.click(screen.getByRole('button', { name: 'Marca' }))
+      await user.click(screen.getByRole('option', { name: /Capitas/ }))
+
+      expect(bodyRows()).toHaveLength(1)
+      // Elegir la marca filtra, no abre la ficha.
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'Limpiar' }))
+      expect(bodyRows()).toHaveLength(3)
+    })
+
+    it('sin coincidencias muestra el estado vacío con "Limpiar filtros"', async () => {
+      const user = userEvent.setup()
+      renderView({}, '/ads?view=base')
+      await user.type(screen.getByLabelText('Buscar'), 'zzz')
+
+      expect(screen.getByText('No hay tácticas con esos filtros')).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
+      expect(bodyRows()).toHaveLength(3)
+    })
+  })
+
+  describe('ficha de la marca (ventana emergente)', () => {
+    it('clic en una marca de la tabla abre su ficha en una ventana', async () => {
+      const user = userEvent.setup()
+      renderView({}, '/ads?view=base')
+      await user.click(screen.getByRole('button', { name: 'Ver ficha de Capitas' }))
+
+      const dialog = screen.getByRole('dialog', { name: 'Ficha de Capitas' })
+      expect(within(dialog).getByRole('heading', { name: /Capitas/ })).toBeInTheDocument()
+      // La tabla sigue detrás.
+      expect(screen.getByRole('table')).toBeInTheDocument()
+    })
+
+    it('se abre directo desde la URL con ?client= y se cierra con la X', async () => {
+      const user = userEvent.setup()
+      renderView({}, '/ads?client=b3')
+      const dialog = screen.getByRole('dialog', { name: 'Ficha de Flexmed' })
+      // Flexmed no tiene vigente: avisa.
+      expect(within(dialog).getByRole('alert')).toHaveTextContent('Sin táctica vigente')
+
+      await user.click(screen.getByRole('button', { name: 'Cerrar ficha' }))
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+
+    it('Escape cierra la ficha', async () => {
+      const user = userEvent.setup()
+      renderView({}, '/ads?client=b3')
+      await user.keyboard('{Escape}')
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
   })
 
   describe('insumos', () => {
@@ -309,10 +410,12 @@ describe('TacticasView', () => {
       },
     ]
 
-    it('"Por hacer" marca con "Con insumo" a la marca que lo tiene', () => {
+    it('la tarjeta Por hacer marca a la marca que tiene insumo', () => {
       renderView({ insumos })
-      const porHacer = screen.getByRole('region', { name: /Por hacer/ })
-      expect(within(porHacer).getByText('Con insumo')).toBeInTheDocument()
+      const porHacer = screen.getByRole('region', { name: 'Por hacer' })
+      expect(
+        within(porHacer).getByRole('button', { name: 'Ver ficha de Flexmed (con insumo)' }),
+      ).toBeInTheDocument()
     })
 
     it('la ficha de esa marca muestra su insumo', () => {

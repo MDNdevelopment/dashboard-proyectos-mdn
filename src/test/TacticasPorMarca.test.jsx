@@ -110,13 +110,13 @@ describe('TacticasPorMarca', () => {
     expect(screen.getByText('Aún no hay tácticas anteriores.')).toBeInTheDocument()
   })
 
-  it('la táctica vigente muestra objetivo, responsable, días y la carpeta de Drive', () => {
+  it('la táctica vigente muestra objetivo, días y el documento de Drive (sin responsable)', () => {
     renderMarca([camp({ objective: 'Posicionar la marca', drive_url: FOLDER })])
     const sec = screen.getByRole('region', { name: /Táctica vigente: Tácticas noviembre/ })
     expect(within(sec).getByText('Posicionar la marca')).toBeInTheDocument()
-    expect(within(sec).getByText(/Carlos López/)).toBeInTheDocument()
+    expect(within(sec).queryByText(/Carlos López/)).not.toBeInTheDocument()
     expect(within(sec).getByText('42 días')).toBeInTheDocument()
-    const link = within(sec).getByRole('link', { name: 'Abrir carpeta' })
+    const link = within(sec).getByRole('link', { name: 'Abrir documento' })
     expect(link).toHaveAttribute('href', FOLDER)
     expect(link).toHaveAttribute('target', '_blank')
   })
@@ -194,7 +194,7 @@ describe('TacticasPorMarca', () => {
       }),
     ])
     const hist = screen.getByRole('region', { name: 'Historial de tácticas' })
-    const link = within(hist).getByRole('link', { name: 'Carpeta' })
+    const link = within(hist).getByRole('link', { name: 'Documento' })
     expect(link).toHaveAttribute('href', FOLDER)
     expect(link).toHaveAttribute('target', '_blank')
   })
@@ -356,5 +356,32 @@ describe('TacticasPorMarca', () => {
       renderMarca([source])
       expect(screen.queryByText('Insumo para la siguiente táctica')).not.toBeInTheDocument()
     })
+  })
+})
+
+describe('TacticasPorMarca — carpeta de la marca y Sin fecha', () => {
+  const MARCA = 'https://drive.google.com/drive/folders/1ZyXwVuTsRqPoNmLkJiHgFeDcBa98765'
+
+  it('el encabezado trae el botón "Carpeta de la marca"', () => {
+    renderMarca([camp({ drive_folder_url: MARCA })])
+    const link = screen.getByRole('link', { name: 'Carpeta de la marca' })
+    expect(link).toHaveAttribute('href', MARCA)
+    expect(link).toHaveAttribute('target', '_blank')
+  })
+
+  it('sin carpeta cargada no muestra el botón', () => {
+    renderMarca([camp()])
+    expect(screen.queryByRole('link', { name: 'Carpeta de la marca' })).not.toBeInTheDocument()
+  })
+
+  it('una táctica sin fecha va arriba del historial con la etiqueta "Sin fecha"', () => {
+    renderMarca([
+      camp({ id: 'old', name: 'Anterior', status: 'Finalizado', end_date: '2026-10-31' }),
+      camp({ id: 'nf', name: 'Por fechar', status: 'Pendiente', start_date: null, end_date: null }),
+    ])
+    const hist = screen.getByRole('region', { name: 'Historial de tácticas' })
+    const items = within(hist).getAllByRole('article')
+    expect(items[0]).toHaveTextContent('Por fechar')
+    expect(items[0]).toHaveTextContent('Sin fecha')
   })
 })

@@ -17,11 +17,6 @@ const linesById = new Map([
   ['l1', { id: 'l1', name: 'Team Sabrina', lead_user_id: 'u1' }],
   ['l2', { id: 'l2', name: 'Team Bianca', lead_user_id: 'u2' }],
 ])
-const clientsById = new Map(brands.map((b) => [b.id, b]))
-const usersMap = new Map([
-  ['u1', 'Sabrina'],
-  ['u2', 'Bianca'],
-])
 
 const camp = (over = {}) => ({
   id: 'c1',
@@ -49,13 +44,8 @@ function renderTorta(props = {}) {
       campaigns={campaigns}
       today={TODAY}
       stats={{ vigentes: 3, avgPct: 40 }}
-      clientsById={clientsById}
       linesById={linesById}
-      usersMap={usersMap}
-      canManage
-      onSelect={() => {}}
-      onCreate={() => {}}
-      onOpenBrand={() => {}}
+      onGoToBase={() => {}}
       {...props}
     />,
   )
@@ -116,96 +106,128 @@ describe('TacticasTorta', () => {
     expect(resumen).toHaveTextContent('5 marcas · 3 tácticas vigentes · cumplimiento promedio 40%')
     expect(
       screen.getByRole('img', { name: '3 de 5 marcas con táctica vigente' }),
-    ).toHaveTextContent('3/5')
-  })
-
-  it('la leyenda cuenta cada grupo y arranca en el más urgente', () => {
-    renderTorta()
-    const grupos = screen.getByRole('group', { name: 'Grupos' })
-    expect(within(grupos).getByRole('button', { name: /Urgente/ })).toHaveTextContent('1')
-    expect(within(grupos).getByRole('button', { name: /Por vencer/ })).toHaveTextContent('1')
-    expect(within(grupos).getByRole('button', { name: /Al día/ })).toHaveTextContent('1')
-    expect(within(grupos).getByRole('button', { name: /Sin táctica/ })).toHaveTextContent('2')
-    expect(within(grupos).getByRole('button', { name: /Urgente/ })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
-    expect(screen.getByRole('button', { name: /^Urgentísima/ })).toHaveTextContent('2 días')
-  })
-
-  it('cada marca muestra su táctica, línea y jefa, y abre la táctica al hacer clic', async () => {
-    const user = userEvent.setup()
-    const onSelect = vi.fn()
-    renderTorta({ onSelect })
-    const row = screen.getByRole('button', { name: /^Urgentísima/ })
-    expect(row).toHaveTextContent('Plan urgente · Team Sabrina · Jefa: Sabrina')
-    await user.click(row)
-    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'c1' }))
-  })
-
-  it('clic en la leyenda cambia el grupo de la lista', async () => {
-    const user = userEvent.setup()
-    renderTorta()
-    await user.click(screen.getByRole('button', { name: /Al día/ }))
-    expect(screen.getByRole('button', { name: /^Tranquila/ })).toHaveTextContent('42 días')
-    expect(screen.queryByRole('button', { name: /^Urgentísima/ })).not.toBeInTheDocument()
-  })
-
-  it('clic en una porción de la torta también elige el grupo', async () => {
-    const user = userEvent.setup()
-    const { container } = renderTorta()
-    const yellow = container.querySelector('path[fill="#FFB800"]')
-    await user.click(yellow)
-    expect(screen.getByRole('button', { name: /Por vencer/ })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
-    expect(screen.getByRole('button', { name: /^Por Vencer/ })).toBeInTheDocument()
-  })
-
-  it('una marca sin táctica abre el formulario para cargarla (con ads.manage)', async () => {
-    const user = userEvent.setup()
-    const onCreate = vi.fn()
-    renderTorta({ onCreate })
-    await user.click(screen.getByRole('button', { name: /Sin táctica/ }))
-    const row = screen.getByRole('button', { name: /^Alfa Sin Nada/ })
-    expect(row).toHaveTextContent('Cargar')
-    await user.click(row)
-    expect(onCreate).toHaveBeenCalledWith('b5')
-  })
-
-  it('sin ads.manage, una marca sin táctica abre su ficha', async () => {
-    const user = userEvent.setup()
-    const onOpenBrand = vi.fn()
-    const onCreate = vi.fn()
-    renderTorta({ canManage: false, onOpenBrand, onCreate })
-    await user.click(screen.getByRole('button', { name: /Sin táctica/ }))
-    await user.click(screen.getByRole('button', { name: /^Alfa Sin Nada/ }))
-    expect(onOpenBrand).toHaveBeenCalledWith('b5')
-    expect(onCreate).not.toHaveBeenCalled()
-  })
-
-  it('un grupo vacío no se puede elegir', () => {
-    renderTorta({ campaigns: [] })
-    const grupos = screen.getByRole('group', { name: 'Grupos' })
-    expect(within(grupos).getByRole('button', { name: /Urgente/ })).toBeDisabled()
-    // Sin ninguna vigente, arranca en "Sin táctica".
-    expect(within(grupos).getByRole('button', { name: /Sin táctica/ })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
-    expect(
-      screen.getByRole('img', { name: '0 de 5 marcas con táctica vigente' }),
     ).toBeInTheDocument()
   })
 
-  it('una programada se rotula como tal', async () => {
+  it('la leyenda va en orden Al día, Sin táctica, Por vencer, Urgente, con su conteo', () => {
+    renderTorta()
+    const legend = screen.getByRole('group', { name: 'Grupos' })
+    const items = within(legend).getAllByRole('button')
+    expect(items.map((b) => b.textContent)).toEqual([
+      'Al día1',
+      'Sin táctica2',
+      'Por vencer1',
+      'Urgente1',
+    ])
+  })
+
+  it('ya no lista las marcas al lado de la torta: esa lista vive en Base', () => {
+    renderTorta()
+    expect(screen.queryByText('Urgentísima')).not.toBeInTheDocument()
+    expect(screen.queryByText('Plan urgente')).not.toBeInTheDocument()
+  })
+
+  it('clic en la leyenda lleva a Base con el estado de ese grupo', async () => {
     const user = userEvent.setup()
-    renderTorta({
-      campaigns: [camp({ client_id: 'b3', start_date: '2026-12-01', end_date: '2027-01-31' })],
+    const onGoToBase = vi.fn()
+    renderTorta({ onGoToBase })
+    const legend = screen.getByRole('group', { name: 'Grupos' })
+
+    await user.click(within(legend).getByRole('button', { name: /Urgente/ }))
+    expect(onGoToBase).toHaveBeenLastCalledWith('urgentes')
+    await user.click(within(legend).getByRole('button', { name: /Sin táctica/ }))
+    expect(onGoToBase).toHaveBeenLastCalledWith('sin_tactica')
+    await user.click(within(legend).getByRole('button', { name: /Al día/ }))
+    expect(onGoToBase).toHaveBeenLastCalledWith('al_dia')
+    await user.click(within(legend).getByRole('button', { name: /Por vencer/ }))
+    expect(onGoToBase).toHaveBeenLastCalledWith('por_vencer')
+  })
+
+  it('clic en una porción de la torta también lleva a Base', async () => {
+    const user = userEvent.setup()
+    const onGoToBase = vi.fn()
+    const { container } = renderTorta({ onGoToBase })
+    const big = screen.getByRole('img', { name: '3 de 5 marcas con táctica vigente' })
+    const urgente = [...big.querySelectorAll('path')].find(
+      (p) => p.querySelector('title')?.textContent === 'Urgente: 1',
+    )
+    expect(container).toContainElement(urgente)
+    await user.click(urgente)
+    expect(onGoToBase).toHaveBeenCalledWith('urgentes')
+  })
+
+  it('un grupo vacío no se puede elegir', () => {
+    renderTorta({ campaigns: campaigns.filter((c) => c.id !== 'c1') })
+    const legend = screen.getByRole('group', { name: 'Grupos' })
+    expect(within(legend).getByRole('button', { name: /Urgente/ })).toBeDisabled()
+  })
+
+  describe('una torta chica por team', () => {
+    it('muestra cada team con sus marcas cubiertas', () => {
+      renderTorta()
+      const sabrina = screen.getByRole('group', { name: 'Team Team Sabrina' })
+      expect(
+        within(sabrina).getByRole('img', {
+          name: 'Team Sabrina: 2 de 2 marcas con táctica vigente',
+        }),
+      ).toBeInTheDocument()
+      const bianca = screen.getByRole('group', { name: 'Team Team Bianca' })
+      expect(
+        within(bianca).getByRole('img', { name: 'Team Bianca: 1 de 3 marcas con táctica vigente' }),
+      ).toBeInTheDocument()
+      expect(
+        within(bianca).getByRole('button', { name: 'Sin táctica de Team Bianca: 2' }),
+      ).toBeInTheDocument()
     })
-    await user.click(screen.getByRole('button', { name: /Al día/ }))
-    expect(screen.getByRole('button', { name: /^Tranquila/ })).toHaveTextContent('Programada')
+
+    it('clic en un color del team lleva a Base con ese estado y ese team', async () => {
+      const user = userEvent.setup()
+      const onGoToBase = vi.fn()
+      renderTorta({ onGoToBase })
+      await user.click(screen.getByRole('button', { name: 'Sin táctica de Team Bianca: 2' }))
+      expect(onGoToBase).toHaveBeenCalledWith('sin_tactica', 'l2')
+    })
+
+    it('clic en el nombre del team lleva a Base con todas sus tácticas', async () => {
+      const user = userEvent.setup()
+      const onGoToBase = vi.fn()
+      renderTorta({ onGoToBase })
+      await user.click(screen.getByRole('button', { name: 'Ver tácticas de Team Sabrina en Base' }))
+      expect(onGoToBase).toHaveBeenCalledWith('todas', 'l1')
+    })
+
+    it('con un solo team no repite la torta chica', () => {
+      renderTorta({ brands: brands.filter((b) => b.line_id === 'l1') })
+      expect(screen.queryByText('Por team')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('filtrado por un team', () => {
+    // Team Bianca: Tranquila al día y dos marcas sin táctica.
+    const soloBianca = () => renderTorta({ brands: brands.filter((b) => b.line_id === 'l2') })
+
+    it('abre la leyenda en tarjetas grandes con el nombre del team, conteo y %', () => {
+      soloBianca()
+      expect(screen.getByText('Team Team Bianca')).toBeInTheDocument()
+      const cards = within(screen.getByRole('group', { name: 'Grupos' })).getAllByRole('button')
+      expect(cards).toHaveLength(4)
+      expect(cards[0]).toHaveTextContent('Al día')
+      expect(cards[0]).toHaveTextContent('1marca · 33%')
+      expect(cards[1]).toHaveTextContent('Sin táctica')
+      expect(cards[1]).toHaveTextContent('2marcas · 67%')
+      expect(cards[1]).toHaveTextContent('Ver en Base')
+    })
+
+    it('las tarjetas vacías se deshabilitan y las otras llevan a Base', async () => {
+      const user = userEvent.setup()
+      const onGoToBase = vi.fn()
+      renderTorta({ brands: brands.filter((b) => b.line_id === 'l2'), onGoToBase })
+      const grupos = screen.getByRole('group', { name: 'Grupos' })
+      expect(within(grupos).getByRole('button', { name: /Urgente/ })).toBeDisabled()
+
+      await user.click(within(grupos).getByRole('button', { name: /Sin táctica/ }))
+      expect(onGoToBase).toHaveBeenCalledWith('sin_tactica')
+    })
   })
 
   it('sin marcas avisa en vez de dibujar una torta vacía', () => {

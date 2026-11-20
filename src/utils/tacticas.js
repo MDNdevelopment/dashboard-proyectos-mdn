@@ -41,6 +41,98 @@ export function isProgramada(campaign, today = todayCaracas()) {
   return isVigente(campaign, today) && !!campaign.start_date && campaign.start_date > today
 }
 
+/**
+ * En marcha pero con la fecha de fin ya pasada. El cron de cierre las pasa a Finalizado cada
+ * noche, así que solo deberían verse unas horas (o si el cron falla).
+ */
+export function isVencidaSinCerrar(campaign, today = todayCaracas()) {
+  if (!campaign?.end_date) return false
+  return ACTIVE_STATUSES.includes(campaign.status) && campaign.end_date < today
+}
+
+/**
+ * Opciones del filtro Estado de la vista Base: las mismas que los grupos de la torta del
+ * Dashboard, para que cada clic en un color caiga en su opción. `sin_tactica` no filtra
+ * tácticas: cambia la tabla a una fila por marca sin táctica vigente (ver `TacticasBase`).
+ */
+export const ESTADOS_BASE = [
+  { key: 'todas', label: 'Todas' },
+  { key: 'al_dia', label: 'Al día' },
+  { key: 'por_vencer', label: 'Por vencer' },
+  { key: 'urgentes', label: 'Urgentes' },
+  { key: 'sin_tactica', label: 'Sin táctica' },
+  { key: 'finalizadas', label: 'Finalizadas' },
+  { key: 'sin_fecha', label: 'Sin fecha' },
+]
+
+/** Táctica cargada sin inicio o sin fin: queda "Sin fecha" hasta que se le ponga. */
+export function isSinFecha(campaign) {
+  return !campaign?.start_date || !campaign?.end_date
+}
+
+/** Grupo de la torta (`COVERAGE_GROUPS`) → opción del filtro Estado de Base. */
+export const ESTADO_OF_GROUP = {
+  green: 'al_dia',
+  none: 'sin_tactica',
+  yellow: 'por_vencer',
+  red: 'urgentes',
+}
+
+/**
+ * ¿La táctica entra en la opción `estado` del filtro Estado de Base? Al día / Por vencer /
+ * Urgentes son las vigentes según los días que les quedan (mismos umbrales que la torta).
+ */
+export function matchesEstado(campaign, estado, today = todayCaracas()) {
+  const tone = () => daysPillTone(daysLeft(campaign, today))
+  switch (estado) {
+    case 'al_dia':
+      return isVigente(campaign, today) && tone() === 'green'
+    case 'por_vencer':
+      return isVigente(campaign, today) && tone() === 'yellow'
+    case 'urgentes':
+      return isVigente(campaign, today) && tone() === 'red'
+    case 'finalizadas':
+      return campaign.status === 'Finalizado'
+    case 'sin_fecha':
+      return isSinFecha(campaign)
+    default:
+      return true
+  }
+}
+
+/** Vigentes que vencen en ≤ 10 días (aviso del Dashboard), la que vence antes primero. */
+export function vencenPronto(campaigns, today = todayCaracas()) {
+  return (campaigns ?? [])
+    .filter((c) => isVigente(c, today) && daysLeft(c, today) <= DAYS_YELLOW)
+    .sort((a, b) => a.end_date.localeCompare(b.end_date))
+}
+
+/**
+ * Agrupa las marcas por línea (team) para las mini tortas del Dashboard, en el orden de las
+ * líneas por nombre; las marcas sin línea van al final en "Sin línea" (`lineId: null`).
+ *
+ * @returns {Array<{ lineId: string|null, name: string, brands: Array }>}
+ */
+export function brandsByLine(brands, linesById) {
+  const map = new Map()
+  for (const b of brands ?? []) {
+    const id = b.line_id && linesById?.has(b.line_id) ? b.line_id : null
+    if (!map.has(id)) map.set(id, [])
+    map.get(id).push(b)
+  }
+  return [...map.entries()]
+    .map(([lineId, list]) => ({
+      lineId,
+      name: lineId ? (linesById.get(lineId)?.name ?? 'Sin nombre') : 'Sin línea',
+      brands: list,
+    }))
+    .sort((a, b) => {
+      if (!a.lineId) return 1
+      if (!b.lineId) return -1
+      return a.name.localeCompare(b.name, 'es')
+    })
+}
+
 /** Días que le quedan a la táctica (0 = vence hoy, negativo = ya venció). null sin fecha. */
 export function daysLeft(campaign, today = todayCaracas()) {
   if (!campaign?.end_date) return null
@@ -160,8 +252,8 @@ export function monthLabel(month) {
 
 // ── Cobertura de marcas (torta de la vista Vigentes) ─────────────────────────
 
-/** Grupos de la torta, en el orden en que se dibujan. */
-export const COVERAGE_GROUPS = ['red', 'yellow', 'green', 'none']
+/** Grupos de la torta, en el orden en que se dibujan y se listan: Al día, Sin táctica, Por vencer, Urgente. */
+export const COVERAGE_GROUPS = ['green', 'none', 'yellow', 'red']
 
 /**
  * Agrupa las marcas según su táctica vigente que vence primero:

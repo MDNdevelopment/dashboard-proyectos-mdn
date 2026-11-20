@@ -20,7 +20,7 @@ import {
  * Ficha de una marca: sus tácticas vigentes arriba (con avance del período y checklist) y
  * el historial de las anteriores abajo, con el % de cumplimiento de cada una.
  * Es solo lectura salvo por tildar las acciones, que persiste en `campaigns.checklist`.
- * La marca se elige en el filtro "Marca" de la vista Vigentes (`TacticasView`).
+ * Se abre en una ventana emergente (`TacticasMarcaModal`) al hacer clic en una marca.
  *
  * @param {object}   props
  * @param {Array}    props.campaigns      — todas las tácticas visibles (de varias marcas)
@@ -51,9 +51,12 @@ export default function TacticasPorMarca({
   onUpdated,
 }) {
   const client = clientsById.get(clientId)
+  // Más nueva primero; las sin fecha (por fechar) arriba de todo.
   const mine = campaigns
     .filter((c) => c.client_id === clientId)
-    .sort((a, b) => `${b.start_date}`.localeCompare(`${a.start_date}`))
+    .sort((a, b) => `${b.start_date ?? '9999'}`.localeCompare(`${a.start_date ?? '9999'}`))
+  // La carpeta de la marca es la misma en todas sus tácticas: se toma la de la más reciente.
+  const folderUrl = mine.find((c) => c.drive_folder_url)?.drive_folder_url ?? null
   const vigentes = mine.filter((c) => isVigente(c, today))
   const historial = mine.filter((c) => !isVigente(c, today))
   const lastId = latestByBrand(mine).get(clientId)?.id
@@ -87,15 +90,27 @@ export default function TacticasPorMarca({
                 {mine.length === 1 ? 'táctica registrada' : 'tácticas registradas'}
               </p>
             </div>
-            {canManage && (
-              <button
-                type="button"
-                onClick={() => onCreate(clientId)}
-                className="text-[14px] font-bold px-3.5 py-2 rounded-xl bg-[#111] text-white hover:bg-[#222] transition-colors"
-              >
-                + Nueva táctica
-              </button>
-            )}
+            <div className="flex flex-wrap items-center gap-2">
+              {folderUrl && (
+                <a
+                  href={folderUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[14px] font-semibold px-3.5 py-2 rounded-xl border border-[#e0ddd4] bg-white text-[#111] hover:border-[#FFB800] transition-colors"
+                >
+                  Carpeta de la marca
+                </a>
+              )}
+              {canManage && (
+                <button
+                  type="button"
+                  onClick={() => onCreate(clientId)}
+                  className="text-[14px] font-bold px-3.5 py-2 rounded-xl bg-[#111] text-white hover:bg-[#222] transition-colors"
+                >
+                  + Nueva táctica
+                </button>
+              )}
+            </div>
           </header>
 
           {vigentes.length === 0 && (
@@ -194,8 +209,7 @@ export default function TacticasPorMarca({
                     </button>
                     <p className="text-[14px] text-[#888] mt-0.5">
                       {fmtDate(c.start_date)} → {fmtDate(c.end_date)}
-                      {durationLabel(c) && ` · Duración: ${durationLabel(c)}`} ·{' '}
-                      {usersMap.get(c.assignee) ?? 'Sin responsable'}
+                      {durationLabel(c) && ` · Duración: ${durationLabel(c)}`}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -207,7 +221,7 @@ export default function TacticasPorMarca({
                         rel="noreferrer"
                         className="text-[14px] font-semibold px-3 py-1.5 rounded-lg bg-[#FFB800] text-[#111] hover:bg-[#e6a600] transition-colors"
                       >
-                        Abrir carpeta
+                        Abrir documento
                       </a>
                     ) : (
                       c.id === lastId &&
@@ -255,9 +269,15 @@ export default function TacticasPorMarca({
                     className="flex flex-wrap items-start gap-x-5 gap-y-2 bg-white border border-[#e0ddd4] rounded-2xl px-5 py-4"
                   >
                     <div className="flex-[0_0_170px] pt-1">
-                      <p className="text-[12px] font-mono font-bold tracking-[0.08em] uppercase text-[#888]">
-                        {fmtDate(c.start_date)} – {fmtDate(c.end_date)}
-                      </p>
+                      {c.start_date && c.end_date ? (
+                        <p className="text-[12px] font-mono font-bold tracking-[0.08em] uppercase text-[#888]">
+                          {fmtDate(c.start_date)} – {fmtDate(c.end_date)}
+                        </p>
+                      ) : (
+                        <span className="inline-block text-[11.5px] font-mono font-bold uppercase tracking-wide px-2 py-0.5 rounded bg-[#f5f3eb] border border-[#e0ddd4] text-[#666]">
+                          Sin fecha
+                        </span>
+                      )}
                       {durationLabel(c) && (
                         <p className="text-[12px] font-mono text-[#999] mt-0.5">
                           Duración: {durationLabel(c)}
@@ -293,7 +313,7 @@ export default function TacticasPorMarca({
                           rel="noreferrer"
                           className="font-semibold text-[#111] underline decoration-[#FFB800] underline-offset-2"
                         >
-                          Carpeta
+                          Documento
                         </a>
                       ) : (
                         c.id === lastId &&

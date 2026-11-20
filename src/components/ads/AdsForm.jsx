@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef } from 'react'
 import { supabase } from '../../supabase'
 import { useAuth } from '../../context/AuthContext'
 import { STATUSES } from './constants'
-import UserPickerSingle from '../tareas/UserPickerSingle'
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import { useScopedClients } from '../../hooks/useScopedClients'
 import DateInput from '../common/DateInput'
@@ -15,6 +14,9 @@ import { updateHandoff } from './tacticas/tacticasApi'
  * `prefill` ({ client_id, client }) precarga la marca al crear desde "Por hacer" o la ficha.
  * `insumos` ([{ handoff, source, content }]): insumos pendientes; al crear para una marca con
  * insumo se ofrece arrastrar sus acciones pendientes. `onInsumosUsed(ids)` avisa cuáles se usaron.
+ * `jefaOf(clientId)` → `{ id, name } | null`: la táctica no tiene un responsable que se elija;
+ * al crearla se asigna a la jefa del team de la marca. Al editar se conserva la que tenía.
+ * Las fechas son opcionales ("Sin fecha"), pero si se pone una hay que poner las dos.
  */
 export default function AdsForm({
   campaign,
@@ -24,6 +26,7 @@ export default function AdsForm({
   onClose,
   onCreated,
   onUpdated,
+  jefaOf = () => null,
 }) {
   const { userProfile } = useAuth()
   const isEdit = campaign != null
@@ -37,6 +40,7 @@ export default function AdsForm({
     assignee: campaign?.assignee ?? '',
     objective: campaign?.objective ?? '',
     drive_url: campaign?.drive_url ?? '',
+    drive_folder_url: campaign?.drive_folder_url ?? '',
     status: campaign?.status ?? 'Pendiente',
     notes: campaign?.notes ?? '',
     checklist: campaign?.checklist ?? [],
@@ -50,33 +54,13 @@ export default function AdsForm({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
 
-  const [users, setUsers] = useState([])
-  const [loadingUsers, setLoadingUsers] = useState(true)
-
   const { clients, loading: loadingClients } = useScopedClients(
     userProfile?.company_id,
     userProfile,
     campaign?.client_id,
   )
 
-  // Cargar usuarios con avatar/nivel (necesario para UserPickerSingle)
-  useEffect(() => {
-    if (!userProfile?.company_id) {
-      setLoadingUsers(false)
-      return
-    }
-    supabase
-      .from('users')
-      .select(
-        'user_id, first_name, last_name, avatar_url, access_level, deleted_at, position:positions(position_name)',
-      )
-      .eq('company_id', userProfile.company_id)
-      .order('first_name')
-      .then(({ data }) => {
-        setUsers(data ?? [])
-        setLoadingUsers(false)
-      })
-  }, [userProfile?.company_id])
+  const jefa = fields.client_id ? jefaOf(fields.client_id) : null
 
   function set(key, val) {
     setFields((prev) => ({ ...prev, [key]: val }))
@@ -127,22 +111,35 @@ export default function AdsForm({
     })
   }
 
-  // El link de Drive es opcional, pero si viene tiene que ser un link de Drive/Docs reconocible.
+  // Los links de Drive son opcionales, pero si vienen tienen que ser de Drive/Docs reconocibles.
   const driveUrl = normalizeDriveUrl(fields.drive_url)
   const driveInvalid = driveUrl !== null && parseDriveId(driveUrl) === null
+  const folderUrl = normalizeDriveUrl(fields.drive_folder_url)
+  const folderInvalid = folderUrl !== null && parseDriveId(folderUrl) === null
+
+  // Sin fecha está permitido (se agrega después), pero una sola fecha no.
+  const halfDated = !fields.start_date !== !fields.end_date
+  const datesReversed =
+    !!fields.start_date && !!fields.end_date && fields.end_date < fields.start_date
+  const datesInvalid = halfDated || datesReversed
 
   async function handleSubmit(e) {
     e.preventDefault()
-    if (!fields.name.trim() || !fields.client_id || !fields.start_date || !fields.end_date) return
-    if (driveInvalid) return
+    if (!fields.name.trim() || !fields.client_id) return
+    if (driveInvalid || folderInvalid || datesInvalid) return
     setSubmitting(true)
     setError(null)
 
     const payload = {
       ...fields,
+      start_date: fields.start_date || null,
+      end_date: fields.end_date || null,
       objective: fields.objective.trim() || null,
       drive_url: driveUrl,
+      drive_folder_url: folderUrl,
     }
+    // Al crear, la táctica es de la jefa del team de la marca (no hay responsable que elegir).
+    if (!isEdit) payload.assignee = jefa?.id ?? ''
 
     if (isEdit) {
       const { data, error: err } = await supabase
@@ -185,10 +182,11 @@ export default function AdsForm({
       }
       onCreated(data)
       onClose()
+      if (!payload.assignee) return
       supabase.functions
         .invoke('notify-campaign-assignee', {
           body: {
-            assignee_id: fields.assignee,
+            assignee_id: payload.assignee,
             campaign_name: fields.name,
             created_by_name: `${userProfile.first_name} ${userProfile.last_name}`,
           },
@@ -240,7 +238,6 @@ export default function AdsForm({
                 className="w-full"
                 value={fields.start_date}
                 onChange={(v) => set('start_date', v)}
-                required
               />
             </div>
 
@@ -251,9 +248,19 @@ export default function AdsForm({
                 className="w-full"
                 value={fields.end_date}
                 onChange={(v) => set('end_date', v)}
-                required
               />
             </div>
+            <p
+              className={`col-span-1 sm:col-span-2 -mt-2 text-[12.5px] ${
+                datesInvalid ? 'text-red-600' : 'text-[#999]'
+              }`}
+            >
+              {halfDated
+                ? 'Pon las dos fechas, o ninguna si todavía no las sabes.'
+                : datesReversed
+                  ? 'La fecha fin no puede ser anterior al inicio.'
+                  : 'Si todavía no tiene fechas, déjalas vacías: queda como «Sin fecha» y se agregan después.'}
+            </p>
 
             {/* Táctica — full width */}
             <div className="col-span-1 sm:col-span-2">
@@ -306,19 +313,16 @@ export default function AdsForm({
               )}
             </div>
 
-            {/* Responsable — UserPickerSingle */}
+            {/* Jefa del team: sale de la línea de la marca, no se elige */}
             <div>
-              <label className={labelClass}>Responsable</label>
-              {loadingUsers ? (
-                <div className="input-base w-full text-[#bbb] text-[14.5px]">Cargando…</div>
-              ) : (
-                <UserPickerSingle
-                  users={users}
-                  selectedId={fields.assignee || null}
-                  onChange={(id) => set('assignee', id ?? '')}
-                  placeholder="Asignar responsable..."
-                />
-              )}
+              <p className={labelClass}>Jefa del team</p>
+              <div className="input-base w-full text-[14.5px] bg-[#faf9f5] text-[#555]">
+                {!fields.client_id ? (
+                  <span className="text-[#bbb]">Elige la marca</span>
+                ) : (
+                  (jefa?.name ?? <span className="text-[#bbb]">La marca no tiene team</span>)
+                )}
+              </div>
             </div>
 
             {/* Status */}
@@ -352,10 +356,10 @@ export default function AdsForm({
               />
             </div>
 
-            {/* Link a la carpeta de Drive — full width */}
+            {/* Link al documento de la táctica en Drive — full width */}
             <div className="col-span-1 sm:col-span-2">
               <label className={labelClass} htmlFor="tactica-drive">
-                Link carpeta Drive
+                Documento de la táctica (Drive)
               </label>
               <input
                 id="tactica-drive"
@@ -367,11 +371,35 @@ export default function AdsForm({
               />
               {driveInvalid ? (
                 <p className="mt-1 text-[12.5px] text-red-600">
-                  Ese link no parece ser de Google Drive. Pega el de la carpeta de la táctica.
+                  Ese link no parece ser de Google Drive. Pega el del documento de la táctica.
                 </p>
               ) : (
                 <p className="mt-1 text-[12.5px] text-[#999]">
-                  Carpeta con el PDF y el editable de la táctica. El detalle vive en el Drive.
+                  El deck, PDF o carpeta de la táctica. El detalle vive en el Drive.
+                </p>
+              )}
+            </div>
+
+            {/* Link a la carpeta de la marca en TÁCTICAS MDN — full width */}
+            <div className="col-span-1 sm:col-span-2">
+              <label className={labelClass} htmlFor="tactica-carpeta">
+                Carpeta de la marca (Drive)
+              </label>
+              <input
+                id="tactica-carpeta"
+                type="url"
+                className="input-base w-full"
+                placeholder="https://drive.google.com/drive/folders/…"
+                value={fields.drive_folder_url}
+                onChange={(e) => set('drive_folder_url', e.target.value)}
+              />
+              {folderInvalid ? (
+                <p className="mt-1 text-[12.5px] text-red-600">
+                  Ese link no parece ser de Google Drive. Pega el de la carpeta de la marca.
+                </p>
+              ) : (
+                <p className="mt-1 text-[12.5px] text-[#999]">
+                  La carpeta de la marca en TÁCTICAS MDN, con su brief y todas sus tácticas.
                 </p>
               )}
             </div>
@@ -447,9 +475,9 @@ export default function AdsForm({
               submitting ||
               !fields.name.trim() ||
               !fields.client_id ||
-              !fields.start_date ||
-              !fields.end_date ||
-              driveInvalid
+              datesInvalid ||
+              driveInvalid ||
+              folderInvalid
             }
             className="flex-1 py-2.5 rounded-xl bg-[#111] text-white text-[15px] font-bold hover:bg-[#222] transition-colors disabled:opacity-50"
           >

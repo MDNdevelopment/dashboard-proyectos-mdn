@@ -18,6 +18,12 @@ import {
   closeDateOf,
   handoffContent,
   carryOverItem,
+  isVencidaSinCerrar,
+  matchesEstado,
+  ESTADOS_BASE,
+  ESTADO_OF_GROUP,
+  vencenPronto,
+  brandsByLine,
 } from '../utils/tacticas'
 
 const TODAY = '2026-11-19'
@@ -395,5 +401,122 @@ describe('carryOverItem', () => {
     const original = { id: 'a', title: 'Reel', done: false, month: '2026-09' }
     carryOverItem(original, 'src-1')
     expect(original).toEqual({ id: 'a', title: 'Reel', done: false, month: '2026-09' })
+  })
+})
+
+describe('isVencidaSinCerrar', () => {
+  it('en marcha con la fecha de fin pasada', () => {
+    expect(isVencidaSinCerrar(camp({ status: 'En Curso', end_date: '2026-11-18' }), TODAY)).toBe(
+      true,
+    )
+    expect(isVencidaSinCerrar(camp({ status: 'Pendiente', end_date: '2026-11-18' }), TODAY)).toBe(
+      true,
+    )
+  })
+
+  it('no lo es si vence hoy, si ya se cerró o si no tiene fecha', () => {
+    expect(isVencidaSinCerrar(camp({ status: 'En Curso', end_date: TODAY }), TODAY)).toBe(false)
+    expect(isVencidaSinCerrar(camp({ status: 'Finalizado', end_date: '2026-11-01' }), TODAY)).toBe(
+      false,
+    )
+    expect(isVencidaSinCerrar(camp({ end_date: null }), TODAY)).toBe(false)
+  })
+})
+
+describe('matchesEstado (filtro Estado de Base)', () => {
+  const urgente = camp({ status: 'En Curso', start_date: '2026-11-01', end_date: '2026-11-21' }) // 2 días
+  const porVencer = camp({ status: 'En Curso', start_date: '2026-11-01', end_date: '2026-11-27' }) // 8 días
+  const lejana = camp({ status: 'En Curso', start_date: '2026-11-01', end_date: '2026-12-31' })
+  const programada = camp({ status: 'Pendiente', start_date: '2026-12-01', end_date: '2026-12-31' })
+  const cerrada = camp({ status: 'Finalizado', start_date: '2026-09-01', end_date: '2026-10-31' })
+  const colgada = camp({ status: 'Pendiente', start_date: '2026-10-01', end_date: '2026-11-10' })
+  const all = { urgente, porVencer, lejana, programada, cerrada, colgada }
+  const pick = (estado) =>
+    Object.entries(all)
+      .filter(([, c]) => matchesEstado(c, estado, TODAY))
+      .map(([k]) => k)
+
+  it('"todas" deja pasar todo', () => {
+    expect(pick('todas')).toEqual(Object.keys(all))
+  })
+
+  it('Al día / Por vencer / Urgentes son las vigentes según los días que quedan', () => {
+    expect(pick('al_dia')).toEqual(['lejana', 'programada'])
+    expect(pick('por_vencer')).toEqual(['porVencer'])
+    expect(pick('urgentes')).toEqual(['urgente'])
+  })
+
+  it('una vencida sin cerrar no es urgente: ya no está vigente', () => {
+    expect(matchesEstado(colgada, 'urgentes', TODAY)).toBe(false)
+  })
+
+  it('finalizadas por estado guardado', () => {
+    expect(pick('finalizadas')).toEqual(['cerrada'])
+  })
+
+  it('"sin_fecha" son las que no tienen inicio o fin; no entran en ningún grupo de días', () => {
+    const nf = camp({ status: 'Pendiente', start_date: null, end_date: null })
+    expect(matchesEstado(nf, 'sin_fecha', TODAY)).toBe(true)
+    expect(matchesEstado(urgente, 'sin_fecha', TODAY)).toBe(false)
+    for (const e of ['al_dia', 'por_vencer', 'urgentes', 'finalizadas']) {
+      expect(matchesEstado(nf, e, TODAY)).toBe(false)
+    }
+    expect(isVigente(nf, TODAY)).toBe(false)
+  })
+
+  it('las opciones son los grupos de la torta más Todas, Finalizadas y Sin fecha', () => {
+    expect(ESTADOS_BASE.map((e) => e.key)).toEqual([
+      'todas',
+      'al_dia',
+      'por_vencer',
+      'urgentes',
+      'sin_tactica',
+      'finalizadas',
+      'sin_fecha',
+    ])
+    expect(Object.values(ESTADO_OF_GROUP).sort()).toEqual(
+      ['al_dia', 'por_vencer', 'sin_tactica', 'urgentes'].sort(),
+    )
+  })
+})
+
+describe('vencenPronto', () => {
+  it('vigentes que vencen en ≤ 10 días, la que vence antes primero', () => {
+    const list = vencenPronto(
+      [
+        camp({ id: 'ocho', end_date: '2026-11-27' }),
+        camp({ id: 'dos', end_date: '2026-11-21' }),
+        camp({ id: 'lejos', end_date: '2026-12-31' }),
+        camp({ id: 'cerrada', status: 'Finalizado', end_date: '2026-11-20' }),
+      ],
+      TODAY,
+    )
+    expect(list.map((c) => c.id)).toEqual(['dos', 'ocho'])
+  })
+})
+
+describe('brandsByLine', () => {
+  const linesById = new Map([
+    ['l1', { id: 'l1', name: 'Sabrina' }],
+    ['l2', { id: 'l2', name: 'Bianca' }],
+  ])
+
+  it('agrupa por línea, ordena por nombre y deja "Sin línea" al final', () => {
+    const teams = brandsByLine(
+      [
+        { id: 'a', line_id: 'l1' },
+        { id: 'b', line_id: null },
+        { id: 'c', line_id: 'l2' },
+        { id: 'd', line_id: 'l1' },
+        { id: 'e', line_id: 'borrada' },
+      ],
+      linesById,
+    )
+    expect(teams.map((t) => [t.name, t.brands.map((b) => b.id)])).toEqual([
+      ['Bianca', ['c']],
+      ['Sabrina', ['a', 'd']],
+      ['Sin línea', ['b', 'e']],
+    ])
+    expect(teams.at(-1).lineId).toBeNull()
   })
 })

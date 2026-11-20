@@ -42,7 +42,7 @@ function renderDetail(props = {}) {
   return render(
     <AdsDetail
       campaign={CAMPAIGN}
-      usersMap={new Map([['u1', 'Ana García']])}
+      jefaName="Ana García"
       onClose={() => {}}
       onUpdated={() => {}}
       onDeleted={() => {}}
@@ -107,9 +107,9 @@ describe('AdsDetail — objetivo, Drive, avance y cumplimiento', () => {
     expect(screen.queryByText('Objetivo general')).not.toBeInTheDocument()
   })
 
-  it('el botón de Drive abre la carpeta en una pestaña nueva', () => {
+  it('el botón «Abrir documento» abre el Drive en una pestaña nueva', () => {
     renderDetail({ campaign: { ...CAMPAIGN, drive_url: FOLDER } })
-    const link = screen.getByRole('link', { name: 'Abrir carpeta de Drive' })
+    const link = screen.getByRole('link', { name: 'Abrir documento' })
     expect(link).toHaveAttribute('href', FOLDER)
     expect(link).toHaveAttribute('target', '_blank')
     expect(link).toHaveAttribute('rel', expect.stringContaining('noreferrer'))
@@ -117,7 +117,7 @@ describe('AdsDetail — objetivo, Drive, avance y cumplimiento', () => {
 
   it('sin link de Drive no muestra el botón', () => {
     renderDetail()
-    expect(screen.queryByRole('link', { name: 'Abrir carpeta de Drive' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Abrir documento' })).not.toBeInTheDocument()
   })
 
   it('muestra el % de cumplimiento solo si hay acciones', () => {
@@ -141,5 +141,42 @@ describe('AdsDetail — objetivo, Drive, avance y cumplimiento', () => {
     renderDetail({ campaign: { ...CAMPAIGN, start_date: '2020-01-01', end_date: '2020-01-31' } })
     // Período ya terminado: 100 %.
     expect(screen.getByRole('img', { name: 'Avance del período: 100%' })).toBeInTheDocument()
+  })
+})
+
+describe('AdsDetail — jefa, Sin fecha y carpeta de la marca', () => {
+  const MARCA = 'https://drive.google.com/drive/folders/1ZyXwVuTsRqPoNmLkJiHgFeDcBa98765'
+
+  it('muestra la jefa del team en lugar de un responsable', () => {
+    renderDetail()
+    expect(screen.getByText('Jefa del team')).toBeInTheDocument()
+    expect(screen.getByText('Ana García')).toBeInTheDocument()
+    expect(screen.queryByText('Responsable')).not.toBeInTheDocument()
+  })
+
+  it('una táctica sin fechas dice "Sin fecha" y "Agregar fecha" abre el formulario', async () => {
+    const user = userEvent.setup()
+    const onEdit = vi.fn()
+    renderDetail({ campaign: { ...CAMPAIGN, start_date: null, end_date: null }, onEdit })
+
+    expect(screen.getByText('Sin fecha')).toBeInTheDocument()
+    expect(screen.queryByText('Fecha inicio')).not.toBeInTheDocument()
+    expect(screen.queryByRole('img', { name: /Avance del período/ })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Agregar fecha' }))
+    expect(onEdit).toHaveBeenCalled()
+  })
+
+  it('sin ads.manage no ofrece "Agregar fecha"', () => {
+    renderDetail({ campaign: { ...CAMPAIGN, start_date: null, end_date: null }, canManage: false })
+    expect(screen.getByText('Sin fecha')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Agregar fecha' })).not.toBeInTheDocument()
+  })
+
+  it('el botón "Carpeta de la marca" abre la carpeta en una pestaña nueva', () => {
+    renderDetail({ campaign: { ...CAMPAIGN, drive_folder_url: MARCA } })
+    const link = screen.getByRole('link', { name: 'Carpeta de la marca' })
+    expect(link).toHaveAttribute('href', MARCA)
+    expect(link).toHaveAttribute('target', '_blank')
   })
 })

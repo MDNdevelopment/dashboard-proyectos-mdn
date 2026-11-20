@@ -56,12 +56,15 @@ export default function AdsPage() {
   const lineScope =
     activeLineId === ALL_LINES ? null : activeLineId ? activeLineId : canViewAll ? null : '__none__'
 
-  function selectLine(id) {
+  // `extra`: otros parámetros a escribir en la MISMA actualización de la URL (p. ej. el team
+  // de una torta chica del Dashboard de Tácticas lleva también `view=base`).
+  function selectLine(id, extra = {}) {
     setActiveLineId(id)
     setSearchParams(
       (prev) => {
         const p = new URLSearchParams(prev)
         p.set('line', id)
+        for (const [k, v] of Object.entries(extra)) p.set(k, v)
         return p
       },
       { replace: true },
@@ -80,6 +83,12 @@ export default function AdsPage() {
   )
 
   const linesById = useMemo(() => new Map(allLines.map((l) => [l.id, l])), [allLines])
+
+  // La táctica no tiene un responsable que se elija: es de la jefa del team de la marca.
+  function jefaOf(clientId) {
+    const leadId = linesById.get(clientsById.get(clientId)?.line_id)?.lead_user_id
+    return leadId ? { id: leadId, name: usersMap.get(leadId) ?? null } : null
+  }
 
   // Marcas activas dentro del alcance de línea (base de "sin táctica vigente" y del selector).
   const brands = useMemo(
@@ -363,6 +372,7 @@ export default function AdsPage() {
               insumos={insumos}
               onDiscardInsumo={handleDiscardInsumo}
               onCreate={openCreate}
+              onSelectLine={selectLine}
             />
           ) : (
             <AdsSpendView
@@ -385,6 +395,7 @@ export default function AdsPage() {
           onClose={() => setShowCreateForm(false)}
           onCreated={handleCreated}
           onUpdated={handleUpdated}
+          jefaOf={jefaOf}
         />
       )}
 
@@ -394,13 +405,14 @@ export default function AdsPage() {
           onClose={() => setEditingCampaign(null)}
           onCreated={handleCreated}
           onUpdated={handleUpdated}
+          jefaOf={jefaOf}
         />
       )}
 
       {selectedCampaign && (
         <AdsDetail
           campaign={selectedCampaign}
-          usersMap={usersMap}
+          jefaName={jefaOf(selectedCampaign.client_id)?.name ?? null}
           onClose={() => setSelectedCampaign(null)}
           onUpdated={handleUpdated}
           onDeleted={handleDeleted}

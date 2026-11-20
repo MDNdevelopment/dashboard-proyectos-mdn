@@ -5,9 +5,14 @@ import StatusPill from '../common/StatusPill'
 import CampaignChecklist from './CampaignChecklist'
 import { completionPct, durationLabel, periodProgress } from '../../utils/tacticas'
 
+/**
+ * Detalle de una táctica (solo lectura; el estado y las acciones se tildan aquí).
+ * No hay responsable que se elija: se muestra la jefa del team de la marca (`jefaName`).
+ * Una táctica sin fechas se rotula "Sin fecha" y ofrece "Agregar fecha" (abre el formulario).
+ */
 export default function AdsDetail({
   campaign,
-  usersMap,
+  jefaName = null,
   onClose,
   onUpdated,
   onDeleted,
@@ -19,6 +24,7 @@ export default function AdsDetail({
 
   const pct = completionPct(campaign.checklist)
   const progress = periodProgress(campaign)
+  const sinFecha = !campaign.start_date || !campaign.end_date
 
   async function handleStatusChange(nextStatus) {
     const { data, error } = await supabase
@@ -113,24 +119,42 @@ export default function AdsDetail({
             </div>
             <div>
               <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-0.5">
-                Responsable
+                Jefa del team
               </p>
-              <p className="text-[#333] font-medium">
-                {usersMap?.get(campaign.assignee) ?? campaign.assignee ?? '—'}
-              </p>
+              <p className="text-[#333] font-medium">{jefaName ?? '—'}</p>
             </div>
-            <div>
-              <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-0.5">
-                Fecha inicio
-              </p>
-              <p className="text-[#333]">{fmt(campaign.start_date)}</p>
-            </div>
-            <div>
-              <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-0.5">
-                Fecha fin
-              </p>
-              <p className="text-[#333]">{fmt(campaign.end_date)}</p>
-            </div>
+            {sinFecha ? (
+              <div className="col-span-1 sm:col-span-2 flex flex-wrap items-center gap-3 rounded-xl bg-[#f5f3eb] px-3 py-2.5">
+                <span className="text-[12px] font-mono font-bold uppercase tracking-wide px-2 py-0.5 rounded bg-white border border-[#e0ddd4] text-[#666]">
+                  Sin fecha
+                </span>
+                <span className="text-[14px] text-[#666]">Todavía no tiene inicio ni fin.</span>
+                {canManage && (
+                  <button
+                    type="button"
+                    onClick={onEdit}
+                    className="ml-auto text-[13.5px] font-bold px-3 py-1.5 rounded-lg bg-[#FFB800] text-[#111] hover:bg-[#e6a600] transition-colors"
+                  >
+                    Agregar fecha
+                  </button>
+                )}
+              </div>
+            ) : (
+              <>
+                <div>
+                  <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-0.5">
+                    Fecha inicio
+                  </p>
+                  <p className="text-[#333]">{fmt(campaign.start_date)}</p>
+                </div>
+                <div>
+                  <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-0.5">
+                    Fecha fin
+                  </p>
+                  <p className="text-[#333]">{fmt(campaign.end_date)}</p>
+                </div>
+              </>
+            )}
             {durationLabel(campaign) && (
               <div>
                 <p className="font-mono font-bold uppercase tracking-widest text-[#888] text-[12px] mb-0.5">
@@ -152,26 +176,42 @@ export default function AdsDetail({
             </div>
           )}
 
-          <div className="mb-4">
-            <div
-              role="img"
-              aria-label={`Avance del período: ${progress}%`}
-              className="h-1.5 bg-[#f0ede3] rounded-full overflow-hidden"
-            >
-              <div className="h-full bg-[#111]" style={{ width: `${progress}%` }} />
+          {!sinFecha && (
+            <div className="mb-4">
+              <div
+                role="img"
+                aria-label={`Avance del período: ${progress}%`}
+                className="h-1.5 bg-[#f0ede3] rounded-full overflow-hidden"
+              >
+                <div className="h-full bg-[#111]" style={{ width: `${progress}%` }} />
+              </div>
+              <p className="text-[12.5px] text-[#999] mt-1">Avance del período: {progress}%</p>
             </div>
-            <p className="text-[12.5px] text-[#999] mt-1">Avance del período: {progress}%</p>
-          </div>
+          )}
 
-          {campaign.drive_url && (
-            <a
-              href={campaign.drive_url}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-block mb-4 text-[14px] font-semibold px-3 py-1.5 rounded-lg bg-[#FFB800] text-[#111] hover:bg-[#e6a600] transition-colors"
-            >
-              Abrir carpeta de Drive
-            </a>
+          {(campaign.drive_url || campaign.drive_folder_url) && (
+            <div className="flex flex-wrap gap-2 mb-4">
+              {campaign.drive_url && (
+                <a
+                  href={campaign.drive_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[14px] font-semibold px-3 py-1.5 rounded-lg bg-[#FFB800] text-[#111] hover:bg-[#e6a600] transition-colors"
+                >
+                  Abrir documento
+                </a>
+              )}
+              {campaign.drive_folder_url && (
+                <a
+                  href={campaign.drive_folder_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[14px] font-semibold px-3 py-1.5 rounded-lg border border-[#e0ddd4] bg-white text-[#111] hover:border-[#FFB800] transition-colors"
+                >
+                  Carpeta de la marca
+                </a>
+              )}
+            </div>
           )}
 
           {campaign.notes && (

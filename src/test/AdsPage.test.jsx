@@ -1,6 +1,6 @@
 /**
  * Tests de AdsPage: tabs internas "Tácticas" / "Ads". El selector de periodo es solo de Ads;
- * Tácticas es un historial por marca con subvistas Vigentes / Por marca / Historial (?view=).
+ * Tácticas tiene dos subvistas, como Tareas: Dashboard y Base (?view=base).
  * AdsSpendView se mockea como stub (tiene sus propios tests en AdsSpendView.test.jsx);
  * aquí solo verificamos que el tab lo monta y le pasa companyId/periodo/canManage.
  */
@@ -98,6 +98,7 @@ vi.mock('../context/AuthContext', () => ({
 
 import { useAuth } from '../context/AuthContext'
 import AdsPage from '../pages/AdsPage'
+import { VENCEN_SEEN_KEY } from '../components/ads/tacticas/TacticasVencenModal'
 
 function renderPage(route = '/ads') {
   useAuth.mockReturnValue({
@@ -121,33 +122,30 @@ describe('AdsPage — tabs Tácticas/Ads', () => {
     // sistema y se rompe cada vez que deja de ser julio.
     vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.setSystemTime(new Date('2026-07-15T12:00:00'))
+    // El aviso "vencen pronto" del Dashboard sale una vez por sesión: aquí ya se vio.
+    window.sessionStorage.setItem(VENCEN_SEEN_KEY, '1')
   })
   afterEach(() => {
     vi.useRealTimers()
+    window.sessionStorage.clear()
   })
 
-  it('por defecto muestra la tab Tácticas, en la subvista Vigentes', async () => {
+  const waitDashboard = () =>
+    waitFor(() => {
+      expect(screen.getByRole('region', { name: 'Resumen de tácticas' })).toBeInTheDocument()
+    })
+
+  it('por defecto muestra la tab Tácticas, en el Dashboard', async () => {
     renderPage()
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Tácticas' })).toBeInTheDocument()
     })
     expect(screen.getByRole('button', { name: 'Ads' })).toBeInTheDocument()
     expect(screen.queryByTestId('ads-spend-view-stub')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Vigentes', pressed: true })).toBeInTheDocument()
-    // "Táctica Julio" está Pendiente y vence el 20-jul (hoy es 15-jul): vigente.
-    await waitFor(() => {
-      expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
-    })
-  })
-
-  it('la subvista Vigentes no lista las tácticas ya vencidas', async () => {
-    renderPage()
-    await waitFor(() => {
-      expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
-    })
-    // Junio vencía el 10-jun y Cruzada el 5-jul: ya no están en marcha.
-    expect(screen.queryByText('Táctica Junio')).not.toBeInTheDocument()
-    expect(screen.queryByText('Táctica Cruzada')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Dashboard', pressed: true })).toBeInTheDocument()
+    await waitDashboard()
+    // El Dashboard no tiene la tabla de tácticas: esa vive en Base.
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
   })
 
   it('cambiar a la tab Ads oculta Tácticas y monta AdsSpendView con las props correctas', async () => {
@@ -190,9 +188,7 @@ describe('AdsPage — tabs Tácticas/Ads', () => {
   it('el selector de período es solo de la tab Ads', async () => {
     const user = userEvent.setup()
     renderPage()
-    await waitFor(() => {
-      expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
-    })
+    await waitDashboard()
     // Tácticas es un historial por marca: no se filtra por mes.
     expect(screen.queryByText('Período')).not.toBeInTheDocument()
 
@@ -202,14 +198,12 @@ describe('AdsPage — tabs Tácticas/Ads', () => {
   })
 
   describe('subvistas de Tácticas', () => {
-    it('Historial lista todas las tácticas, estén vigentes o no', async () => {
+    it('Base lista todas las tácticas, estén vigentes o no', async () => {
       const user = userEvent.setup()
       renderPage()
-      await waitFor(() => {
-        expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
-      })
+      await waitDashboard()
 
-      await user.click(screen.getByRole('button', { name: 'Historial' }))
+      await user.click(screen.getByRole('button', { name: 'Base' }))
 
       await waitFor(() => {
         expect(screen.getByText('Táctica Junio')).toBeInTheDocument()
@@ -218,58 +212,62 @@ describe('AdsPage — tabs Tácticas/Ads', () => {
       expect(screen.getByText('Táctica Cruzada')).toBeInTheDocument()
     })
 
-    it('la subvista vive en la URL: ?view=historial abre el Historial directamente', async () => {
+    it('la subvista vive en la URL: ?view=base abre Base directamente', async () => {
+      renderPage('/ads?view=base')
+      await waitFor(() => {
+        expect(screen.getByText('Táctica Junio')).toBeInTheDocument()
+      })
+      expect(screen.getByRole('button', { name: 'Base', pressed: true })).toBeInTheDocument()
+    })
+
+    it('el viejo ?view=historial abre Base', async () => {
       renderPage('/ads?view=historial')
       await waitFor(() => {
         expect(screen.getByText('Táctica Junio')).toBeInTheDocument()
       })
-      expect(screen.getByRole('button', { name: 'Historial', pressed: true })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Base', pressed: true })).toBeInTheDocument()
     })
 
-    it('solo hay dos subvistas: la marca se elige en el filtro "Marca" de Vigentes', async () => {
-      renderPage()
-      await waitFor(() => {
-        expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
-      })
-
-      expect(screen.queryByRole('button', { name: 'Por marca' })).not.toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Marca' })).toHaveTextContent('Todas las marcas')
-    })
-
-    it('una ?view= desconocida cae en Vigentes', async () => {
+    it('una ?view= desconocida cae en el Dashboard', async () => {
       renderPage('/ads?view=cualquier-cosa')
-      await waitFor(() => {
-        expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
-      })
-      expect(screen.getByRole('button', { name: 'Vigentes', pressed: true })).toBeInTheDocument()
+      await waitDashboard()
+      expect(screen.getByRole('button', { name: 'Dashboard', pressed: true })).toBeInTheDocument()
     })
   })
 
-  describe('resumen (Vigentes)', () => {
+  describe('Dashboard y filtros de Base', () => {
     it('la torta cuenta las tácticas vigentes y no hay tarjetas de vencimiento', async () => {
       renderPage()
-      await waitFor(() => {
-        expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
-      })
+      await waitDashboard()
       const resumen = screen.getByRole('region', { name: 'Resumen de tácticas' })
       // 1 vigente (Julio).
       expect(resumen).toHaveTextContent('1 táctica vigente')
       expect(within(resumen).queryByRole('button', { name: /Vencen/ })).not.toBeInTheDocument()
     })
 
-    it('"Vencen en 3 días" sigue disponible como filtro de Estado', async () => {
+    it('el filtro Estado de Base usa los grupos de la torta', async () => {
       const user = userEvent.setup()
-      renderPage()
+      renderPage('/ads?view=base')
       await waitFor(() => {
         expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
       })
 
-      // Julio vence el 20-jul, a 5 días: no entra en "3 días".
-      await user.selectOptions(screen.getByLabelText('Estado'), 'vencen3')
-
+      // Julio vence el 20-jul, a 5 días: es "Por vencer", no "Urgentes".
+      await user.selectOptions(screen.getByLabelText('Estado'), 'urgentes')
       await waitFor(() => {
-        expect(screen.getByText('Sin tácticas para los filtros aplicados')).toBeInTheDocument()
+        expect(screen.getByText('No hay tácticas con esos filtros')).toBeInTheDocument()
       })
+
+      await user.selectOptions(screen.getByLabelText('Estado'), 'por_vencer')
+      expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
+    })
+
+    it('el aviso "vencen pronto" sale al entrar al Dashboard', async () => {
+      window.sessionStorage.removeItem(VENCEN_SEEN_KEY)
+      renderPage()
+      expect(
+        await screen.findByRole('dialog', { name: '1 táctica vence en 10 días o menos' }),
+      ).toBeInTheDocument()
     })
   })
 
@@ -281,9 +279,7 @@ describe('AdsPage — tabs Tácticas/Ads', () => {
 
     it('un campaignId que no existe no abre nada ni rompe la página', async () => {
       renderPage('/ads?campaignId=no-existe')
-      await waitFor(() => {
-        expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
-      })
+      await waitDashboard()
       expect(screen.queryByRole('heading', { name: 'Táctica Julio' })).not.toBeInTheDocument()
     })
   })

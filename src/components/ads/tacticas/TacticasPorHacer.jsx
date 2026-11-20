@@ -1,97 +1,103 @@
-import { useState } from 'react'
-import ClientCell from '../ClientCell'
-import { fmtDate } from '../campaignSpendApi'
-
-const COLLAPSED_COUNT = 6
+const MAX_LOGOS = 24
 
 /**
- * Fila de "marcas por hacer": las que no tienen ninguna táctica vigente ni programada.
- * Muestra cuándo terminó la última (si hubo) y, con `ads.manage`, un atajo para cargar
- * la siguiente con la marca ya elegida.
+ * Tarjeta "Por hacer" del Dashboard: las marcas sin táctica vigente ni programada, resumidas
+ * en sus logos. Clic en un logo abre la ficha de la marca; "Ver en Base" abre la lista completa
+ * (Estado "Sin táctica"), donde está el atajo para cargar cada táctica.
  *
  * @param {object}   props
- * @param {Array}    props.brands        — clientes (metric_clients) sin táctica vigente
- * @param {Map}      props.latestByBrand — client_id → última táctica de la marca
- * @param {Set}      props.insumoClientIds — marcas que tienen un insumo pendiente de la táctica anterior
- * @param {boolean}  props.canManage
- * @param {Function} props.onCreate      — (clientId) => void, abre el formulario con la marca
- * @param {Function} props.onOpenBrand   — (clientId) => void, abre la ficha de la marca
+ * @param {Array}    props.brands          — clientes (metric_clients) sin táctica vigente
+ * @param {Set}      props.insumoClientIds — marcas con insumo pendiente de la táctica anterior
+ * @param {Function} props.onOpenBrand     — (clientId) => void, abre la ficha de la marca
+ * @param {Function} props.onViewInBase    — () => void, abre Base con el Estado "Sin táctica"
  */
 export default function TacticasPorHacer({
   brands,
-  latestByBrand,
   insumoClientIds = new Set(),
-  canManage,
-  onCreate,
   onOpenBrand,
+  onViewInBase,
 }) {
-  const [expanded, setExpanded] = useState(false)
   if (brands.length === 0) return null
 
   const sorted = [...brands].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '', 'es'))
-  const visible = expanded ? sorted : sorted.slice(0, COLLAPSED_COUNT)
+  const visible = sorted.slice(0, MAX_LOGOS)
+  const rest = sorted.length - visible.length
 
   return (
     <section
-      aria-labelledby="tacticas-por-hacer"
-      className="bg-white border border-[#e0ddd4] rounded-2xl p-4 mb-5"
+      aria-label="Por hacer"
+      className="bg-white border border-[#e0ddd4] rounded-2xl p-5 mb-5"
     >
-      <div className="flex items-center justify-between gap-3 mb-3">
-        <h2 id="tacticas-por-hacer" className="text-[16px] font-bold text-[#111]">
-          Por hacer · {brands.length} {brands.length === 1 ? 'marca' : 'marcas'} sin táctica vigente
-        </h2>
-        {brands.length > COLLAPSED_COUNT && (
-          <button
-            type="button"
-            onClick={() => setExpanded((v) => !v)}
-            className="text-[13.5px] font-semibold text-[#555] hover:text-[#111]"
-          >
-            {expanded ? 'Ver menos' : `Ver las ${brands.length}`}
-          </button>
-        )}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div>
+          <p className="text-[12px] font-mono font-bold tracking-[0.14em] uppercase text-[#888]">
+            Por hacer
+          </p>
+          <h2 className="text-[18px] font-bold text-[#111]">
+            {brands.length} {brands.length === 1 ? 'marca' : 'marcas'} sin táctica vigente
+          </h2>
+        </div>
+        <button
+          type="button"
+          onClick={onViewInBase}
+          className="text-[14px] font-bold px-3.5 py-2 rounded-xl bg-[#111] text-white hover:bg-[#222] transition-colors"
+        >
+          Ver en Base
+        </button>
       </div>
 
-      <ul className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+      <ul className="flex flex-wrap gap-2.5">
         {visible.map((b) => {
-          const last = latestByBrand.get(b.id)
+          const insumo = insumoClientIds.has(b.id)
           return (
-            <li
-              key={b.id}
-              className="flex items-center justify-between gap-2 border border-[#f0ede3] rounded-xl px-3 py-2"
-            >
-              <div className="min-w-0">
-                <button
-                  type="button"
-                  onClick={() => onOpenBrand(b.id)}
-                  className="text-[14px] font-semibold text-[#111] hover:underline text-left"
-                >
-                  <ClientCell name={b.name} logoUrl={b.logo_url} />
-                </button>
-                <p className="text-[12.5px] text-[#888] mt-0.5 truncate">
-                  {last
-                    ? `Última terminó el ${fmtDate(last.end_date)}`
-                    : 'Sin tácticas registradas'}
-                </p>
-                {insumoClientIds.has(b.id) && (
-                  <span className="inline-block mt-1 text-[11px] font-mono font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-[#e3f2fd] text-[#1565c0]">
-                    Con insumo
+            <li key={b.id}>
+              <button
+                type="button"
+                onClick={() => onOpenBrand(b.id)}
+                title={insumo ? `${b.name} · con insumo` : b.name}
+                aria-label={`Ver ficha de ${b.name}${insumo ? ' (con insumo)' : ''}`}
+                className="relative block rounded-full ring-2 ring-white hover:ring-[#FFB800] transition-shadow"
+              >
+                {b.logo_url ? (
+                  <img
+                    src={b.logo_url}
+                    alt=""
+                    className="w-11 h-11 rounded-full object-cover border border-[#e0ddd4]"
+                  />
+                ) : (
+                  <span className="w-11 h-11 rounded-full bg-[#f0ede3] border border-[#e0ddd4] flex items-center justify-center text-[15px] font-bold text-[#999] uppercase">
+                    {b.name?.[0]}
                   </span>
                 )}
-              </div>
-              {canManage && (
-                <button
-                  type="button"
-                  onClick={() => onCreate(b.id)}
-                  aria-label={`Cargar táctica de ${b.name}`}
-                  className="flex-shrink-0 text-[13px] font-semibold px-2.5 py-1 rounded-lg bg-[#FFB800] text-[#111] hover:bg-[#e6a600] transition-colors"
-                >
-                  Cargar táctica
-                </button>
-              )}
+                {insumo && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-[#1565c0] ring-2 ring-white"
+                  />
+                )}
+              </button>
             </li>
           )
         })}
+        {rest > 0 && (
+          <li>
+            <button
+              type="button"
+              onClick={onViewInBase}
+              aria-label={`Ver las ${rest} marcas restantes en Base`}
+              className="w-11 h-11 rounded-full bg-[#111] text-white text-[13px] font-mono font-bold flex items-center justify-center hover:bg-[#222]"
+            >
+              +{rest}
+            </button>
+          </li>
+        )}
       </ul>
+      {sorted.some((b) => insumoClientIds.has(b.id)) && (
+        <p className="flex items-center gap-1.5 text-[12.5px] text-[#888] mt-3">
+          <span aria-hidden="true" className="w-2.5 h-2.5 rounded-full bg-[#1565c0]" />
+          Con insumo de la táctica anterior
+        </p>
+      )}
     </section>
   )
 }

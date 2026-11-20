@@ -14,10 +14,8 @@ function renderPorHacer(props = {}) {
   return render(
     <TacticasPorHacer
       brands={brands(3)}
-      latestByBrand={new Map()}
-      canManage
-      onCreate={() => {}}
       onOpenBrand={() => {}}
+      onViewInBase={() => {}}
       {...props}
     />,
   )
@@ -29,75 +27,79 @@ describe('TacticasPorHacer', () => {
     expect(container).toBeEmptyDOMElement()
   })
 
-  it('cuenta las marcas pendientes y las lista por orden alfabético', () => {
-    renderPorHacer({
-      brands: [
-        { id: 'z', name: 'Zeta', logo_url: null },
-        { id: 'a', name: 'Alfa', logo_url: null },
-      ],
-    })
-    expect(screen.getByText(/Por hacer · 2 marcas sin táctica vigente/)).toBeInTheDocument()
-    const items = screen.getAllByRole('listitem')
-    expect(items[0]).toHaveTextContent('Alfa')
-    expect(items[1]).toHaveTextContent('Zeta')
+  it('cuenta las marcas sin táctica y muestra un logo por marca, en orden alfabético', () => {
+    renderPorHacer({ brands: [...brands(3)].reverse() })
+    expect(
+      screen.getByRole('heading', { name: '3 marcas sin táctica vigente' }),
+    ).toBeInTheDocument()
+    const logos = screen.getAllByRole('button', { name: /^Ver ficha de/ })
+    expect(logos.map((b) => b.getAttribute('aria-label'))).toEqual([
+      'Ver ficha de Marca 00',
+      'Ver ficha de Marca 01',
+      'Ver ficha de Marca 02',
+    ])
   })
 
   it('usa singular con una sola marca', () => {
     renderPorHacer({ brands: brands(1) })
-    expect(screen.getByText(/Por hacer · 1 marca sin táctica vigente/)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '1 marca sin táctica vigente' })).toBeInTheDocument()
   })
 
-  it('indica cuándo terminó la última táctica, o que no hay ninguna', () => {
-    renderPorHacer({
-      brands: brands(2),
-      latestByBrand: new Map([['b0', { id: 'x', end_date: '2026-10-15' }]]),
-    })
-    expect(screen.getByText(/Última terminó el/)).toBeInTheDocument()
-    expect(screen.getByText('Sin tácticas registradas')).toBeInTheDocument()
-  })
-
-  it('"Cargar táctica" abre el formulario con esa marca', async () => {
-    const user = userEvent.setup()
-    const onCreate = vi.fn()
-    renderPorHacer({ onCreate })
-    await user.click(screen.getByRole('button', { name: 'Cargar táctica de Marca 01' }))
-    expect(onCreate).toHaveBeenCalledWith('b1')
-  })
-
-  it('sin ads.manage no ofrece cargar táctica', () => {
-    renderPorHacer({ canManage: false })
+  it('es solo una tarjeta: sin listas ni botones para cargar táctica', () => {
+    renderPorHacer()
     expect(screen.queryByRole('button', { name: /Cargar táctica/ })).not.toBeInTheDocument()
+    expect(screen.queryByText(/terminó/)).not.toBeInTheDocument()
   })
 
-  it('clic en la marca abre su ficha', async () => {
+  it('muestra el logo si la marca lo tiene y la inicial si no', () => {
+    const { container } = renderPorHacer({
+      brands: [
+        { id: 'a', name: 'Alfa', logo_url: 'https://cdn.example.com/alfa.png' },
+        { id: 'b', name: 'Beta', logo_url: null },
+      ],
+    })
+    expect(container.querySelector('img')).toHaveAttribute(
+      'src',
+      'https://cdn.example.com/alfa.png',
+    )
+    expect(screen.getByText('B')).toBeInTheDocument()
+  })
+
+  it('clic en un logo abre la ficha de la marca', async () => {
     const user = userEvent.setup()
     const onOpenBrand = vi.fn()
     renderPorHacer({ onOpenBrand })
-    await user.click(screen.getByText('Marca 02'))
-    expect(onOpenBrand).toHaveBeenCalledWith('b2')
+    await user.click(screen.getByRole('button', { name: 'Ver ficha de Marca 01' }))
+    expect(onOpenBrand).toHaveBeenCalledWith('b1')
   })
 
-  it('con muchas marcas muestra solo las primeras y permite ver todas', async () => {
+  it('"Ver en Base" lleva a la lista completa', async () => {
     const user = userEvent.setup()
-    renderPorHacer({ brands: brands(10) })
-    expect(screen.getAllByRole('listitem')).toHaveLength(6)
-
-    await user.click(screen.getByRole('button', { name: 'Ver las 10' }))
-    expect(screen.getAllByRole('listitem')).toHaveLength(10)
-
-    await user.click(screen.getByRole('button', { name: 'Ver menos' }))
-    expect(screen.getAllByRole('listitem')).toHaveLength(6)
+    const onViewInBase = vi.fn()
+    renderPorHacer({ onViewInBase })
+    await user.click(screen.getByRole('button', { name: 'Ver en Base' }))
+    expect(onViewInBase).toHaveBeenCalled()
   })
 
-  it('marca con "Con insumo" las marcas que tienen un insumo pendiente', () => {
-    renderPorHacer({ brands: brands(3), insumoClientIds: new Set(['b1']) })
-    expect(screen.getAllByText('Con insumo')).toHaveLength(1)
-    expect(screen.getByText('Marca 01').closest('li')).toHaveTextContent('Con insumo')
-    expect(screen.getByText('Marca 00').closest('li')).not.toHaveTextContent('Con insumo')
+  it('con muchas marcas muestra los primeros logos y un "+N" que lleva a Base', async () => {
+    const user = userEvent.setup()
+    const onViewInBase = vi.fn()
+    renderPorHacer({ brands: brands(30), onViewInBase })
+    expect(screen.getAllByRole('button', { name: /^Ver ficha de/ })).toHaveLength(24)
+    await user.click(screen.getByRole('button', { name: 'Ver las 6 marcas restantes en Base' }))
+    expect(onViewInBase).toHaveBeenCalled()
   })
 
-  it('sin insumos no muestra ningún badge', () => {
+  it('marca las que tienen un insumo pendiente', () => {
+    renderPorHacer({ insumoClientIds: new Set(['b1']) })
+    expect(
+      screen.getByRole('button', { name: 'Ver ficha de Marca 01 (con insumo)' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Con insumo de la táctica anterior')).toBeInTheDocument()
+  })
+
+  it('sin insumos no muestra la leyenda de insumo', () => {
     renderPorHacer()
-    expect(screen.queryByText('Con insumo')).not.toBeInTheDocument()
+    expect(screen.queryByText('Con insumo de la táctica anterior')).not.toBeInTheDocument()
   })
 })
