@@ -1,5 +1,5 @@
 // `dot` es la clase Tailwind literal usada por <StatusPill> (src/components/common/StatusPill.jsx)
-// para el punto de color del badge/menú — mismo patrón que ya usaba PRIORITY.
+// para el punto de color del badge/menú.
 // NOTA: 'Descartado' se mantiene en STATUS (meta) pero NO en STATUSES (seleccionables): ya no se
 // puede elegir al crear/editar/filtrar, pero las filas históricas en 'Descartado' se siguen
 // renderizando con su color (StatusPill lee el color desde STATUS[value]).
@@ -25,16 +25,9 @@ export const STATUS = {
   },
 }
 
-export const PRIORITY = {
-  Alta: { label: 'Alta', dot: 'bg-[#ef4444]', text: 'text-[#b91c1c]' },
-  Media: { label: 'Media', dot: 'bg-[#f59e0b]', text: 'text-[#92400e]' },
-  Baja: { label: 'Baja', dot: 'bg-[#9ca3af]', text: 'text-[#555]' },
-}
-
 // Estados seleccionables (crear/editar/filtrar). 'Descartado' quedó como legacy: sigue en STATUS
 // (para renderizar filas viejas) pero fuera de esta lista, así que ya no se puede elegir.
 export const STATUSES = ['Pendiente', 'En Curso', 'Finalizado']
-export const PRIORITIES = ['Alta', 'Media', 'Baja']
 
 export const OBJECTIVES = [
   'Tráfico al perfil',

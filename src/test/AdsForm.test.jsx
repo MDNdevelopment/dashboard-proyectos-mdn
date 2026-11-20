@@ -1,9 +1,9 @@
 /**
- * Tests del formulario de campañas (AdsForm).
+ * Tests del formulario de tácticas (AdsForm).
  *
  * Cambios reflejados en este archivo respecto a la versión anterior:
  * - El campo CLIENTE ahora es un <select> (desplegable de metric_clients), no un <input>.
- * - El campo RESPONSABLE ahora usa UserPickerSingle (picker bonito), no un <select> nativo.
+ * - No hay campo RESPONSABLE: la táctica es de la jefa del team de la marca (`jefaOf`).
  * - Se agrega vi.mock de metricsApi para loadClients.
  * - El payload de insert incluye client_id y client (nombre denormalizado).
  */
@@ -13,11 +13,16 @@ import { vi } from 'vitest'
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
-const { mockInvoke, mockInsert, mockUpdate } = vi.hoisted(() => ({
-  mockInvoke: vi.fn().mockResolvedValue({ data: null, error: null }),
-  mockInsert: vi.fn(),
-  mockUpdate: vi.fn(),
-}))
+const { mockInvoke, mockInsert, mockUpdate, mockInsertPayload, mockUpdatePayload } = vi.hoisted(
+  () => ({
+    mockInvoke: vi.fn().mockResolvedValue({ data: null, error: null }),
+    mockInsert: vi.fn(),
+    mockUpdate: vi.fn(),
+    // Capturan lo que se manda a insert()/update(), para verificar el payload.
+    mockInsertPayload: vi.fn(),
+    mockUpdatePayload: vi.fn(),
+  }),
+)
 
 vi.mock('../supabase', () => ({
   supabase: {
@@ -51,18 +56,20 @@ vi.mock('../supabase', () => ({
       }
       if (table === 'campaigns') {
         return {
-          insert: vi.fn(() => ({
-            select: vi.fn(() => ({
-              single: mockInsert,
-            })),
-          })),
-          update: vi.fn(() => ({
-            eq: vi.fn(() => ({
-              select: vi.fn(() => ({
-                single: mockUpdate,
+          insert: vi.fn((payload) => {
+            mockInsertPayload(payload)
+            return { select: vi.fn(() => ({ single: mockInsert })) }
+          }),
+          update: vi.fn((payload) => {
+            mockUpdatePayload(payload)
+            return {
+              eq: vi.fn(() => ({
+                select: vi.fn(() => ({
+                  single: mockUpdate,
+                })),
               })),
-            })),
-          })),
+            }
+          }),
         }
       }
       return {}
@@ -199,37 +206,28 @@ describe('AdsForm — cliente y responsable', () => {
     expect(screen.queryByRole('option', { name: 'Pepsi' })).not.toBeInTheDocument()
   })
 
-  // ── Campo Responsable ────────────────────────────────────────────────────────
+  // ── Jefa del team (no hay responsable que elegir) ────────────────────────────
 
-  it('ya NO existe el <select id="assignee"> nativo de responsable', async () => {
-    renderForm()
-    // Esperamos a que el componente cargue usuarios
-    await waitFor(() => {
-      // El picker bonito muestra "Asignar responsable..." como placeholder visible
-      expect(screen.getByText('Asignar responsable...')).toBeInTheDocument()
-    })
-    expect(screen.queryByRole('combobox', { name: /responsable/i })).not.toBeInTheDocument()
-  })
+  const jefaOf = (clientId) =>
+    clientId === 'c-1' ? { id: 'jefa-1', name: 'Bianca Rodríguez' } : null
 
-  it('el selector de responsable muestra el placeholder del picker bonito', async () => {
-    renderForm()
-    await waitFor(() => {
-      expect(screen.getByText('Asignar responsable...')).toBeInTheDocument()
-    })
-  })
-
-  it('al abrir el picker de responsable se muestran los usuarios de la empresa', async () => {
+  it('no hay selector de responsable: muestra la jefa del team de la marca elegida', async () => {
     const user = userEvent.setup()
-    renderForm()
-    await waitFor(() => screen.getByText('Asignar responsable...'))
+    renderForm({ jefaOf })
+    await waitFor(() => screen.getByRole('option', { name: 'Banco Exterior' }))
 
-    // Abrir el picker
-    await user.click(screen.getByText('Asignar responsable...'))
+    expect(screen.queryByText('Responsable')).not.toBeInTheDocument()
+    expect(screen.queryByText('Asignar responsable...')).not.toBeInTheDocument()
+    expect(screen.getByText('Elige la marca')).toBeInTheDocument()
 
-    await waitFor(() => {
-      expect(screen.getByText('Ana García')).toBeInTheDocument()
-      expect(screen.getByText('Carlos López')).toBeInTheDocument()
-    })
+    const clientSelect = screen
+      .getAllByRole('combobox')
+      .find((s) => Array.from(s.options ?? []).some((o) => o.text === '— Seleccionar cliente —'))
+    await user.selectOptions(clientSelect, 'c-1')
+    expect(screen.getByText('Bianca Rodríguez')).toBeInTheDocument()
+
+    await user.selectOptions(clientSelect, 'c-2')
+    expect(screen.getByText('La marca no tiene team')).toBeInTheDocument()
   })
 
   // ── Payload de insert ────────────────────────────────────────────────────────
@@ -243,9 +241,9 @@ describe('AdsForm — cliente y responsable', () => {
     await waitFor(() => screen.getByRole('option', { name: 'Banco Exterior' }))
 
     // Rellenar campos obligatorios
-    await user.type(screen.getByPlaceholderText('Nombre de la táctica o campaña'), 'Campaña Test')
+    await user.type(screen.getByPlaceholderText('Nombre de la táctica'), 'Campaña Test')
 
-    // Seleccionar cliente por select (todos los combobox: [0] Cliente, luego Prioridad, Estado)
+    // Seleccionar cliente por select (todos los combobox: [0] Cliente, luego Estado)
     const selects = screen.getAllByRole('combobox')
     const clientSelect = selects.find((s) =>
       Array.from(s.options ?? []).some((o) => o.text === '— Seleccionar cliente —'),
@@ -257,7 +255,7 @@ describe('AdsForm — cliente y responsable', () => {
     await user.type(dateInputs[0], '01/06/2026')
     await user.type(dateInputs[1], '30/06/2026')
 
-    await user.click(screen.getByRole('button', { name: 'Crear campaña' }))
+    await user.click(screen.getByRole('button', { name: 'Crear táctica' }))
 
     await waitFor(() => {
       expect(mockInsert).toHaveBeenCalledWith()
@@ -270,45 +268,50 @@ describe('AdsForm — cliente y responsable', () => {
 
   // ── Edge Function ────────────────────────────────────────────────────────────
 
-  it('llama a notify-campaign-assignee al crear con el user_id del responsable', async () => {
+  it('al crear asigna la táctica a la jefa del team y le avisa', async () => {
     const user = userEvent.setup()
-    renderForm()
-
-    // Esperar que carguen clientes y usuarios
+    renderForm({ jefaOf })
     await waitFor(() => screen.getByRole('option', { name: 'Banco Exterior' }))
-    await waitFor(() => screen.getByText('Asignar responsable...'))
 
-    // Táctica
-    await user.type(screen.getByPlaceholderText('Nombre de la táctica o campaña'), 'Campaña Test')
-
-    // Cliente
-    const selects = screen.getAllByRole('combobox')
-    const clientSelect = selects.find((s) =>
-      Array.from(s.options ?? []).some((o) => o.text === '— Seleccionar cliente —'),
-    )
+    await user.type(screen.getByPlaceholderText('Nombre de la táctica'), 'Campaña Test')
+    const clientSelect = screen
+      .getAllByRole('combobox')
+      .find((s) => Array.from(s.options ?? []).some((o) => o.text === '— Seleccionar cliente —'))
     await user.selectOptions(clientSelect, 'c-1')
-
-    // Responsable: abrir picker y seleccionar "Ana García"
-    await user.click(screen.getByText('Asignar responsable...'))
-    await waitFor(() => screen.getByText('Ana García'))
-    await user.click(screen.getByText('Ana García'))
-
-    // Fechas
     const dateInputs = screen.getAllByPlaceholderText('dd/mm/aaaa')
     await user.type(dateInputs[0], '01/06/2026')
     await user.type(dateInputs[1], '30/06/2026')
 
-    await user.click(screen.getByRole('button', { name: 'Crear campaña' }))
+    await user.click(screen.getByRole('button', { name: 'Crear táctica' }))
 
+    await waitFor(() => expect(mockInsertPayload).toHaveBeenCalled())
+    expect(mockInsertPayload.mock.calls[0][0]).toMatchObject({ assignee: 'jefa-1' })
     await waitFor(() => {
       expect(mockInvoke).toHaveBeenCalledWith('notify-campaign-assignee', {
         body: {
-          assignee_id: 'u1',
+          assignee_id: 'jefa-1',
           campaign_name: 'Campaña Test',
           created_by_name: 'Juan Pérez',
         },
       })
     })
+  })
+
+  it('una marca sin team se crea sin asignar y no manda aviso', async () => {
+    const user = userEvent.setup()
+    renderForm({ jefaOf })
+    await waitFor(() => screen.getByRole('option', { name: 'Pepsi' }))
+
+    await user.type(screen.getByPlaceholderText('Nombre de la táctica'), 'Plan Pepsi')
+    const clientSelect = screen
+      .getAllByRole('combobox')
+      .find((s) => Array.from(s.options ?? []).some((o) => o.text === '— Seleccionar cliente —'))
+    await user.selectOptions(clientSelect, 'c-2')
+    await user.click(screen.getByRole('button', { name: 'Crear táctica' }))
+
+    await waitFor(() => expect(mockInsertPayload).toHaveBeenCalled())
+    expect(mockInsertPayload.mock.calls[0][0]).toMatchObject({ assignee: '' })
+    expect(mockInvoke).not.toHaveBeenCalled()
   })
 
   it('NO llama a la Edge Function al editar', async () => {
@@ -326,11 +329,9 @@ describe('AdsForm — cliente y responsable', () => {
       notes: '',
     }
     mockUpdate.mockResolvedValue({ data: campaign, error: null })
-    renderForm({ campaign })
+    renderForm({ campaign, jefaOf })
 
-    // Esperar a que carguen clientes y usuarios
     await waitFor(() => screen.getByRole('option', { name: 'Banco Exterior' }))
-    await waitFor(() => screen.getByText('Carlos López'))
 
     await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
 
@@ -338,5 +339,203 @@ describe('AdsForm — cliente y responsable', () => {
       expect(mockUpdate).toHaveBeenCalled()
     })
     expect(mockInvoke).not.toHaveBeenCalled()
+    // Editar no cambia a quién estaba asignada la táctica.
+    expect(mockUpdatePayload.mock.calls[0][0]).toMatchObject({ assignee: 'u2' })
+  })
+})
+
+describe('AdsForm — objetivo, link de Drive y marca precargada', () => {
+  beforeEach(() => {
+    useAuth.mockReturnValue({ userProfile })
+    vi.clearAllMocks()
+    mockInsert.mockResolvedValue({ data: { id: 'new-id', name: 'T' }, error: null })
+  })
+
+  // Rellena lo mínimo para poder crear: nombre, marca y fechas.
+  async function fillRequired(user, { pickClient = true } = {}) {
+    await waitFor(() => screen.getByRole('option', { name: 'Banco Exterior' }))
+    await user.type(screen.getByPlaceholderText('Nombre de la táctica'), 'Plan Q4')
+    if (pickClient) {
+      const clientSelect = screen
+        .getAllByRole('combobox')
+        .find((s) => Array.from(s.options ?? []).some((o) => o.text === '— Seleccionar cliente —'))
+      await user.selectOptions(clientSelect, 'c-1')
+    }
+    const dateInputs = screen.getAllByPlaceholderText('dd/mm/aaaa')
+    await user.type(dateInputs[0], '01/11/2026')
+    await user.type(dateInputs[1], '31/12/2026')
+  }
+
+  it('ya no ofrece el campo Prioridad', async () => {
+    renderForm()
+    await waitFor(() => screen.getByRole('option', { name: 'Banco Exterior' }))
+    expect(screen.queryByText('Prioridad')).not.toBeInTheDocument()
+  })
+
+  it('guarda el objetivo general y el link de Drive al crear', async () => {
+    const user = userEvent.setup()
+    renderForm()
+    await fillRequired(user)
+
+    await user.type(screen.getByLabelText('Objetivo general'), '  Posicionar la marca  ')
+    await user.type(
+      screen.getByLabelText('Documento de la táctica (Drive)'),
+      'https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOpQrStUvWxYz012345',
+    )
+    await user.type(
+      screen.getByLabelText('Carpeta de la marca (Drive)'),
+      'https://drive.google.com/drive/folders/1ZyXwVuTsRqPoNmLkJiHgFeDcBa98765',
+    )
+    await user.click(screen.getByRole('button', { name: 'Crear táctica' }))
+
+    await waitFor(() => expect(mockInsertPayload).toHaveBeenCalled())
+    expect(mockInsertPayload.mock.calls[0][0]).toMatchObject({
+      objective: 'Posicionar la marca',
+      drive_url: 'https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOpQrStUvWxYz012345',
+      drive_folder_url: 'https://drive.google.com/drive/folders/1ZyXwVuTsRqPoNmLkJiHgFeDcBa98765',
+      client_id: 'c-1',
+      created_by: 'creator-uuid',
+    })
+    // La prioridad ya no se manda: queda el default de la base.
+    expect(mockInsertPayload.mock.calls[0][0]).not.toHaveProperty('priority')
+  })
+
+  it('objetivo y link vacíos se guardan como null', async () => {
+    const user = userEvent.setup()
+    renderForm()
+    await fillRequired(user)
+
+    await user.click(screen.getByRole('button', { name: 'Crear táctica' }))
+
+    await waitFor(() => expect(mockInsertPayload).toHaveBeenCalled())
+    expect(mockInsertPayload.mock.calls[0][0]).toMatchObject({
+      objective: null,
+      drive_url: null,
+      drive_folder_url: null,
+    })
+  })
+
+  it('un link que no es de Drive muestra el error y bloquea el guardado', async () => {
+    const user = userEvent.setup()
+    renderForm()
+    await fillRequired(user)
+
+    await user.type(
+      screen.getByLabelText('Documento de la táctica (Drive)'),
+      'https://example.com/carpeta',
+    )
+
+    expect(screen.getByText(/no parece ser de Google Drive/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Crear táctica' })).toBeDisabled()
+    expect(mockInsertPayload).not.toHaveBeenCalled()
+  })
+
+  it('la carpeta de la marca también tiene que ser un link de Drive', async () => {
+    const user = userEvent.setup()
+    renderForm()
+    await fillRequired(user)
+
+    await user.type(
+      screen.getByLabelText('Carpeta de la marca (Drive)'),
+      'https://example.com/marca',
+    )
+    expect(screen.getByText(/Pega el de la carpeta de la marca/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Crear táctica' })).toBeDisabled()
+  })
+
+  describe('Sin fecha', () => {
+    async function fillWithoutDates(user) {
+      await waitFor(() => screen.getByRole('option', { name: 'Banco Exterior' }))
+      await user.type(screen.getByPlaceholderText('Nombre de la táctica'), 'Plan por fechar')
+      const clientSelect = screen
+        .getAllByRole('combobox')
+        .find((s) => Array.from(s.options ?? []).some((o) => o.text === '— Seleccionar cliente —'))
+      await user.selectOptions(clientSelect, 'c-1')
+    }
+
+    it('se puede crear sin fechas: quedan vacías (Sin fecha)', async () => {
+      const user = userEvent.setup()
+      renderForm()
+      await fillWithoutDates(user)
+      expect(screen.getByText(/queda como «Sin fecha»/)).toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'Crear táctica' }))
+      await waitFor(() => expect(mockInsertPayload).toHaveBeenCalled())
+      expect(mockInsertPayload.mock.calls[0][0]).toMatchObject({
+        start_date: null,
+        end_date: null,
+      })
+    })
+
+    it('con una sola fecha no deja guardar', async () => {
+      const user = userEvent.setup()
+      renderForm()
+      await fillWithoutDates(user)
+      await user.type(screen.getAllByPlaceholderText('dd/mm/aaaa')[0], '01/11/2026')
+
+      expect(
+        screen.getByText('Pon las dos fechas, o ninguna si todavía no las sabes.'),
+      ).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Crear táctica' })).toBeDisabled()
+    })
+
+    it('la fecha fin no puede ser anterior al inicio', async () => {
+      const user = userEvent.setup()
+      renderForm()
+      await fillWithoutDates(user)
+      const dateInputs = screen.getAllByPlaceholderText('dd/mm/aaaa')
+      await user.type(dateInputs[0], '30/11/2026')
+      await user.type(dateInputs[1], '01/11/2026')
+
+      expect(screen.getByText('La fecha fin no puede ser anterior al inicio.')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Crear táctica' })).toBeDisabled()
+    })
+  })
+
+  it('precarga la marca cuando se crea desde "Por hacer"', async () => {
+    const user = userEvent.setup()
+    renderForm({ prefill: { client_id: 'c-1', client: 'Banco Exterior' } })
+    await waitFor(() => screen.getByRole('option', { name: 'Banco Exterior' }))
+
+    // Con la marca ya elegida, basta nombre y fechas para poder crear.
+    await user.type(screen.getByPlaceholderText('Nombre de la táctica'), 'Plan Q1')
+    const dateInputs = screen.getAllByPlaceholderText('dd/mm/aaaa')
+    await user.type(dateInputs[0], '01/01/2027')
+    await user.type(dateInputs[1], '31/03/2027')
+    await user.click(screen.getByRole('button', { name: 'Crear táctica' }))
+
+    await waitFor(() => expect(mockInsertPayload).toHaveBeenCalled())
+    expect(mockInsertPayload.mock.calls[0][0]).toMatchObject({
+      client_id: 'c-1',
+      client: 'Banco Exterior',
+    })
+  })
+
+  it('al editar, carga el objetivo y el link existentes', async () => {
+    renderForm({
+      campaign: {
+        id: 'x',
+        name: 'Plan',
+        client: 'Banco Exterior',
+        client_id: 'c-1',
+        assignee: 'u1',
+        start_date: '2026-06-01',
+        end_date: '2026-06-30',
+        status: 'Pendiente',
+        notes: '',
+        objective: 'Subir ventas',
+        drive_url: 'https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOpQrStUvWxYz012345',
+        drive_folder_url: 'https://drive.google.com/drive/folders/1ZyXwVuTsRqPoNmLkJiHgFeDcBa98765',
+      },
+    })
+    await waitFor(() => screen.getByRole('option', { name: 'Banco Exterior' }))
+
+    expect(screen.getByLabelText('Objetivo general')).toHaveValue('Subir ventas')
+    expect(screen.getByLabelText('Documento de la táctica (Drive)')).toHaveValue(
+      'https://drive.google.com/drive/folders/1AbCdEfGhIjKlMnOpQrStUvWxYz012345',
+    )
+    expect(screen.getByLabelText('Carpeta de la marca (Drive)')).toHaveValue(
+      'https://drive.google.com/drive/folders/1ZyXwVuTsRqPoNmLkJiHgFeDcBa98765',
+    )
   })
 })

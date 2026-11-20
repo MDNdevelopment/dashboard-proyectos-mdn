@@ -334,6 +334,108 @@ describe('calcCampanas', () => {
   })
 })
 
+describe('calcCampanas — tácticas orgánicas al cierre', () => {
+  // Fecha YYYY-MM-DD en el mes evaluado desplazado `offset` meses (day 0 = último día del mes anterior).
+  const iso = (offset, day) => {
+    const d = new Date(Date.UTC(YEAR, MONTH - 1 + offset, day))
+    return d.toISOString().slice(0, 10)
+  }
+  const items = (done, total) =>
+    Array.from({ length: total }, (_, i) => ({ id: `i${i}`, title: `a${i}`, done: i < done }))
+  const tactica = (over = {}) => ({
+    assignee: USER,
+    status: 'Finalizado',
+    created_at: `${iso(0, 1)}T10:00:00Z`,
+    end_date: iso(0, 20),
+    closed_at: `${iso(0, 20)}T15:00:00Z`,
+    checklist: items(1, 2),
+    ...over,
+  })
+  const run = (campaigns, paidCampaigns = []) =>
+    calcCampanas({ userId: USER, monthIdx: MONTH_IDX, paidCampaigns, campaigns })
+
+  it('el % es el de acciones cumplidas de la táctica cerrada en el mes', () => {
+    const r = run([tactica({ checklist: items(3, 4) })])
+    expect(r.aplica).toBe(true)
+    expect(r.pct).toBeCloseTo(0.75)
+    expect(r.detalle.misOrganicas).toBe(1)
+  })
+
+  it('promedia varias tácticas', () => {
+    const r = run([tactica({ checklist: items(2, 2) }), tactica({ checklist: items(0, 2) })])
+    expect(r.pct).toBeCloseTo(0.5)
+  })
+
+  it('cuenta una táctica creada hace meses que cierra este mes', () => {
+    const r = run([tactica({ created_at: `${iso(-3, 5)}T10:00:00Z` })])
+    expect(r.aplica).toBe(true)
+  })
+
+  it('NO cuenta una táctica creada este mes que cierra en otro', () => {
+    const r = run([tactica({ end_date: iso(1, 20), closed_at: `${iso(1, 20)}T15:00:00Z` })])
+    expect(r.aplica).toBe(false)
+  })
+
+  it('NO cuenta una táctica que sigue en marcha (aún no cierra)', () => {
+    expect(run([tactica({ status: 'En Curso', closed_at: null })]).aplica).toBe(false)
+    expect(run([tactica({ status: 'Pendiente', closed_at: null })]).aplica).toBe(false)
+  })
+
+  it('una táctica sin checklist no cuenta como 0 %: queda fuera del promedio', () => {
+    const sola = run([tactica({ checklist: [] })])
+    expect(sola.aplica).toBe(false)
+
+    const mezcla = run([tactica({ checklist: items(2, 2) }), tactica({ checklist: [] })])
+    expect(mezcla.pct).toBeCloseTo(1)
+    expect(mezcla.detalle.misOrganicas).toBe(1)
+  })
+
+  it('el cierre automático del día siguiente al fin no la pasa al mes siguiente', () => {
+    // Vence el último día del mes; el cron la finaliza el día 1 del siguiente.
+    const r = run([tactica({ end_date: iso(1, 0), closed_at: `${iso(1, 1)}T11:00:00Z` })])
+    expect(r.aplica).toBe(true)
+  })
+
+  it('una táctica cerrada antes de tiempo cuenta en el mes en que se cerró', () => {
+    const r = run([tactica({ end_date: iso(2, 10), closed_at: `${iso(0, 15)}T15:00:00Z` })])
+    expect(r.aplica).toBe(true)
+  })
+
+  it('NO cuenta una táctica ya cerrada en un mes anterior', () => {
+    const r = run([tactica({ end_date: iso(-1, 10), closed_at: `${iso(-1, 10)}T15:00:00Z` })])
+    expect(r.aplica).toBe(false)
+  })
+
+  it('NO cuenta las tácticas de otro responsable', () => {
+    expect(run([tactica({ assignee: 'otro' })]).aplica).toBe(false)
+  })
+
+  it('sin closed_at (filas anteriores) se fecha por su fecha de fin', () => {
+    expect(run([tactica({ closed_at: null })]).aplica).toBe(true)
+    expect(run([tactica({ closed_at: null, end_date: iso(-1, 10) })]).aplica).toBe(false)
+  })
+
+  it('con pagadas y orgánicas, cada mitad pesa 50 %', () => {
+    const paid = [
+      {
+        responsable_id: USER,
+        status: 'Finalizado',
+        results_pending: false,
+        updated_at: `${iso(0, 10)}T00:00:00Z`,
+      },
+    ]
+    const r = run([tactica({ checklist: items(1, 2) })], paid)
+    // pagadas 100 % × 0.5 + orgánicas 50 % × 0.5
+    expect(r.pct).toBeCloseTo(0.75)
+    expect(r.unidades).toBe(2)
+  })
+
+  it('solo orgánicas: ellas se llevan todo el peso', () => {
+    const r = run([tactica({ checklist: items(1, 4) })])
+    expect(r.pct).toBeCloseTo(0.25)
+  })
+})
+
 describe('calcChequeo', () => {
   it('no aplica sin cuentas como social manager', () => {
     expect(calcChequeo({ userId: USER, monthIdx: MONTH_IDX, checks: [], clients: [] }).aplica).toBe(

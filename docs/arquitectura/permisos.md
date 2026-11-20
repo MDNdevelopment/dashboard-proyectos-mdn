@@ -67,7 +67,7 @@ Gotcha: el seed `20260706000002` nunca se aplicó en prod; los defaults de prod 
 - Desbloquear un reporte cerrado: **solo `users.admin`** (no es capability; se valida en la RPC `unlock_metric_report` con `is_company_admin()` y empresa, no solo en la UI). Pide motivo y queda auditado en `metric_report_unlocks`.
 - `reportes.ver_todo` — ver los reportes de todas las líneas, solo lectura (amplía solo el SELECT de `metric_reports`) — prod: usuario Andrea Garcia (Administración); sin fila quedaría abierta a todos.
 - `monitor_uso` — módulo Monitor de uso (§2.5bis) — `min_level 4`.
-- `ads.manage` — crear/editar/eliminar campañas (RLS de `campaigns` y `paid_campaigns`) — prod: cargos 47/61/6/49/42, `min_level 4` o usuario Luis Fernando González (`20261117140000_ads_ver_todo_y_rls_campaigns.sql`).
+- `ads.manage` — crear/editar/eliminar campañas (RLS de `campaigns`, `paid_campaigns` y `campaign_handoffs`) — prod: cargos 47/61/6/49/42, `min_level 4` o usuario Luis Fernando González (`20261117140000_ads_ver_todo_y_rls_campaigns.sql`).
 - `ads.ver_todo` — ver las campañas de todas las líneas — prod: `min_level 4` + usuarios Juan Pedro Sierra, Andrea Garcia, Luis Fernando González.
 - `proyectos.manage` — crear/editar/eliminar proyectos (RLS `projects`).
 - `leads` — módulo Leads — `min_level 3`.

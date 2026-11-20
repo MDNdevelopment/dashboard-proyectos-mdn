@@ -42,6 +42,9 @@ describe('notifIcon', () => {
     expect(notifIcon('campaign_autoclosed')).toBe('✅')
     expect(notifIcon('ad_autoclosed')).toBe('✅')
   })
+  it('returns ⏳ for campaign_due_soon', () => {
+    expect(notifIcon('campaign_due_soon')).toBe('⏳')
+  })
   it('returns 🎬 for av_pauta_solicitada, 📅 for av_pauta_programada, ⏰ for av_agenda_reminder', () => {
     expect(notifIcon('av_pauta_solicitada')).toBe('🎬')
     expect(notifIcon('av_pauta_programada')).toBe('📅')
@@ -79,6 +82,9 @@ describe('notifLabel', () => {
   })
   it('returns human-readable label for meeting_reminder_hour', () => {
     expect(notifLabel('meeting_reminder_hour')).toBe('Recordatorio de reunión')
+  })
+  it('returns human-readable label for campaign_due_soon', () => {
+    expect(notifLabel('campaign_due_soon')).toBe('Táctica por vencer')
   })
   it('returns human-readable label for campaign_autoclosed', () => {
     expect(notifLabel('campaign_autoclosed')).toBe('Campaña finalizada')
@@ -177,6 +183,18 @@ describe('notifRoute', () => {
       notifRoute({ type: 'campaign_autoclosed', entity_type: 'campaign', entity_id: 'k1' }),
     ).toBe('/ads')
     expect(notifRoute({ type: 'ad_autoclosed', entity_type: 'ad', entity_id: 'a1' })).toBe('/ads')
+  })
+
+  it('routes campaign_due_soon to /ads?campaignId=<id> (abre el detalle de la táctica)', () => {
+    expect(
+      notifRoute({ type: 'campaign_due_soon', entity_type: 'campaign', entity_id: 'k1' }),
+    ).toBe('/ads?campaignId=k1')
+  })
+
+  it('campaign_due_soon sin entity_id cae en /ads', () => {
+    expect(
+      notifRoute({ type: 'campaign_due_soon', entity_type: 'campaign', entity_id: null }),
+    ).toBe('/ads')
   })
 
   it('routes av_pauta_* types to /tareas/pautas?pautaId=<id> (deeplink al detalle de la pauta)', () => {

@@ -55,7 +55,7 @@
 - Fechas de ítems de checklist recortadas a `[request_date, due_date]` por trigger `trg_a_clamp_checklist_item_dates`.
 - Trigger `trg_notify_checklist_assignees` inserta en `notifications` tipo `checklist_item_assigned` (diff OLD→NEW por id de ítem).
 - Badge de estado rápido en `BaseView.jsx`: botón → dropdown en portal (`createPortal`) que cambia estado sin abrir modal (lógica en `taskStatus.js`).
-- Orden por columna en `BaseView.jsx` (Cliente/Tarea/Estatus/Responsable/Apoyo/Solicitud/Entrega) y en `CnpBaseView.jsx` de CNP (Cliente/Título/Piezas/Responsable/Impreso/Solicitado/Estado): `sortKey`/`sortAsc`, `SortIcon`; copia local por archivo (igual que `LeadsTable.jsx`/`AdsList.jsx`, sin componente compartido). Default: más reciente primero (`request_date`/`created_at` desc). Estatus/Estado ordena por posición en `ESTADOS`; Impreso: sin-impresión < pendiente < aprobado; Cliente/Responsable/Apoyo por nombre resuelto, no id.
+- Orden por columna en `BaseView.jsx` (Cliente/Tarea/Estatus/Responsable/Apoyo/Solicitud/Entrega) y en `CnpBaseView.jsx` de CNP (Cliente/Título/Piezas/Responsable/Impreso/Solicitado/Estado): `sortKey`/`sortAsc`, `SortIcon`; copia local por archivo (igual que `LeadsTable.jsx`/`TacticasBaseTable.jsx`, sin componente compartido). Default: más reciente primero (`request_date`/`created_at` desc). Estatus/Estado ordena por posición en `ESTADOS`; Impreso: sin-impresión < pendiente < aprobado; Cliente/Responsable/Apoyo por nombre resuelto, no id.
 - Mover una marca de línea (`reassign_client_open_tasks`, §2.5) solo arrastra tareas de esa única marca (`cardinality(client_ids) <= 1`); las compartidas no se mueven.
 
 ## Gotchas
