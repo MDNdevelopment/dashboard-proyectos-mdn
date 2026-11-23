@@ -26,6 +26,7 @@ export function notifIcon(type) {
     meeting_reminder_day: '📅',
     meeting_reminder_hour: '⏰',
     campaign_autoclosed: '✅',
+    campaign_due_soon: '⏳',
     ad_autoclosed: '✅',
     av_pauta_solicitada: '🎬',
     av_pauta_programada: '📅',
@@ -57,6 +58,7 @@ export function notifLabel(type) {
     meeting_reminder_day: 'Recordatorio de reunión',
     meeting_reminder_hour: 'Recordatorio de reunión',
     campaign_autoclosed: 'Campaña finalizada',
+    campaign_due_soon: 'Táctica por vencer',
     ad_autoclosed: 'Ad finalizado',
     av_pauta_solicitada: 'Pauta solicitada',
     av_pauta_programada: 'Pauta agendada',
@@ -117,6 +119,8 @@ export function notifRoute(notif) {
     }
     return '/reportes'
   }
+  // Aviso de vencimiento: abre el detalle de la táctica (AdsPage lee ?campaignId=).
+  if (type === 'campaign_due_soon' && entity_id) return `/ads?campaignId=${entity_id}`
   if (entity_type === 'campaign' || entity_type === 'ad') return '/ads'
   if (entity_type === 'client') return '/empresa/clientes'
   if (entity_type === 'employee') return '/empresa/empleados'

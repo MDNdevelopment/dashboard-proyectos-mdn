@@ -1,10 +1,10 @@
 /**
  * Celda de cliente para las tablas de Tácticas y Ads: logo circular (o
- * inicial si no hay logo) + nombre. Extraído de AdsCard.jsx para no
- * duplicarlo en AdsSpendView.jsx.
+ * inicial si no hay logo) + nombre. Compartida para no duplicarla entre
+ * Tácticas y AdsSpendView.jsx.
  */
 export default function ClientCell({ name, logoUrl }) {
-  if (!name) return <span className="text-[#bbb]">—</span>;
+  if (!name) return <span className="text-[#bbb]">—</span>
   return (
     <div className="flex items-center gap-1.5">
       {logoUrl ? (
@@ -20,5 +20,5 @@ export default function ClientCell({ name, logoUrl }) {
       )}
       <span>{name}</span>
     </div>
-  );
+  )
 }

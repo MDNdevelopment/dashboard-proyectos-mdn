@@ -39,6 +39,7 @@ import {
   FORMAT_KEYS,
 } from './audiovisual'
 import { computePlataformasProductividad } from './chequeo'
+import { closeDateOf } from './tacticas'
 import { CHEQUEO_PRODUCTIVIDAD_START } from '../components/metricas/constants'
 
 export { INDICATOR_KEYS }
@@ -342,7 +343,7 @@ export function calcReuniones(ctx) {
 
 // ─── 7. Campañas ─────────────────────────────────────────────────────────────
 
-/** Campañas pagadas con resultados cargados + campañas orgánicas por checklist. */
+/** Campañas pagadas con resultados cargados + tácticas orgánicas (por % del checklist, al cierre). */
 export function calcCampanas(ctx) {
   const { userId, monthIdx, paidCampaigns, campaigns } = ctx
 
@@ -351,9 +352,12 @@ export function calcCampanas(ctx) {
     const d = parseD((c.updated_at ?? c.created_at ?? '').slice(0, 10))
     return d ? d.getFullYear() * 12 + d.getMonth() === monthIdx : false
   })
+  // Una táctica cuenta en el mes en que se CIERRA (no en el que se creó), con su % final de acciones
+  // cumplidas. Sin checklist no hay nada que medir: no cuenta como 0 %, no entra al promedio.
   const misOrganicas = (campaigns ?? []).filter((c) => {
-    if (c.assignee !== userId) return false
-    const d = parseD((c.created_at ?? '').slice(0, 10))
+    if (c.assignee !== userId || c.status !== 'Finalizado') return false
+    if (!Array.isArray(c.checklist) || c.checklist.length === 0) return false
+    const d = parseD(closeDateOf(c) ?? '')
     return d ? d.getFullYear() * 12 + d.getMonth() === monthIdx : false
   })
 

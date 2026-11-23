@@ -1,6 +1,6 @@
 /**
  * Export a Excel (.xlsx) de la tabla de Ads (pauta pagada, `paid_campaigns`).
- * Reemplaza al export CSV que antes vivía en la tab Tácticas (AdsList.jsx).
+ * Reemplaza al export CSV que antes vivía en la tab Tácticas (hoy vista Base).
  *
  * Usa ExcelJS (import dinámico) porque es la única librería viable para
  * aplicar estilos de celda (relleno amarillo de marca) e incrustar el logo —
@@ -13,14 +13,31 @@ const BRAND_YELLOW = 'FFFFB800'
 const RESULT_HIGHLIGHT = 'FFFFF3CC'
 
 const HEADERS = [
-  'Cliente', 'Nombre de campaña', 'Inicio', 'Fecha fin',
-  'Duración', 'Objetivo', 'Pieza', 'Monto', 'Estado',
-  ...RESULT_FIELDS.map(f => f.label),
+  'Cliente',
+  'Nombre de campaña',
+  'Inicio',
+  'Fecha fin',
+  'Duración',
+  'Objetivo',
+  'Pieza',
+  'Monto',
+  'Estado',
+  ...RESULT_FIELDS.map((f) => f.label),
 ]
 
 const MESES = [
-  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+  'Enero',
+  'Febrero',
+  'Marzo',
+  'Abril',
+  'Mayo',
+  'Junio',
+  'Julio',
+  'Agosto',
+  'Septiembre',
+  'Octubre',
+  'Noviembre',
+  'Diciembre',
 ]
 
 /**
@@ -29,7 +46,7 @@ const MESES = [
  * Separada de la generación del workbook para poder testearla sin ExcelJS.
  */
 export function buildAdRows(ads) {
-  return ads.map(a => {
+  return ads.map((a) => {
     const duration = durationDays(a.start_date, a.end_date)
     const isFinalizado = a.status === 'Finalizado'
     return [
@@ -42,7 +59,7 @@ export function buildAdRows(ads) {
       a.piece_url ?? null,
       Number(a.amount) || 0,
       a.status ?? '—',
-      ...RESULT_FIELDS.map(f => (isFinalizado ? a[f.key] ?? '' : '')),
+      ...RESULT_FIELDS.map((f) => (isFinalizado ? (a[f.key] ?? '') : '')),
     ]
   })
 }
@@ -53,7 +70,8 @@ export function buildAdRows(ads) {
  * Así siempre se usa el logo real de marca, sin mantener un binario aparte.
  */
 function logoPngUrl() {
-  const LOGO_URL = 'https://res.cloudinary.com/mdnclientes/image/upload/v1779727686/MDN-LOGO-PNG-2_1_f8o5gk.webp'
+  const LOGO_URL =
+    'https://res.cloudinary.com/mdnclientes/image/upload/v1779727686/MDN-LOGO-PNG-2_1_f8o5gk.webp'
   return LOGO_URL.replace('/upload/', '/upload/f_png/')
 }
 
@@ -82,8 +100,15 @@ export async function exportAdsToExcel({ ads, responsablesById, periodo }) {
   const sheet = workbook.addWorksheet('Ads')
 
   sheet.columns = [
-    { width: 20 }, { width: 26 }, { width: 12 }, { width: 12 },
-    { width: 12 }, { width: 22 }, { width: 14 }, { width: 12 }, { width: 14 },
+    { width: 20 },
+    { width: 26 },
+    { width: 12 },
+    { width: 12 },
+    { width: 12 },
+    { width: 22 },
+    { width: 14 },
+    { width: 12 },
+    { width: 14 },
     ...RESULT_FIELDS.map(() => ({ width: 14 })),
   ]
 
@@ -113,7 +138,7 @@ export async function exportAdsToExcel({ ads, responsablesById, periodo }) {
   const headerRow = sheet.getRow(3)
   headerRow.values = HEADERS
   headerRow.height = 22
-  headerRow.eachCell(cell => {
+  headerRow.eachCell((cell) => {
     cell.font = { bold: true, size: 13, color: { argb: 'FF111111' } }
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BRAND_YELLOW } }
     cell.alignment = { vertical: 'middle', horizontal: 'left' }
@@ -122,7 +147,7 @@ export async function exportAdsToExcel({ ads, responsablesById, periodo }) {
   const resultStartCol = HEADERS.length - RESULT_FIELDS.length + 1
 
   const rows = buildAdRows(ads)
-  rows.forEach(row => {
+  rows.forEach((row) => {
     const excelRow = sheet.addRow(row)
     excelRow.height = 20
     excelRow.font = { size: 12 }
@@ -140,7 +165,11 @@ export async function exportAdsToExcel({ ads, responsablesById, periodo }) {
 
     // Realce de las columnas de resultado con amarillo tenue de marca.
     for (let c = resultStartCol; c <= HEADERS.length; c++) {
-      excelRow.getCell(c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: RESULT_HIGHLIGHT } }
+      excelRow.getCell(c).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: RESULT_HIGHLIGHT },
+      }
     }
   })
 

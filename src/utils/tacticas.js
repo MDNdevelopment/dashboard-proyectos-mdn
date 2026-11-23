@@ -1,0 +1,388 @@
+// Lógica pura de Tácticas por marca (tab Tácticas de /ads). Sin React ni Supabase,
+// para poder testearla y reutilizar `parseDriveId` desde netlify/functions.
+
+const MS_DAY = 24 * 60 * 60 * 1000
+
+// Estados que cuentan como "en marcha". `Descartado` es legado y no cubre a la marca.
+const ACTIVE_STATUSES = ['Pendiente', 'En Curso']
+
+// Umbrales de la pill de días (rojo ≤ 3 o vencida, amarillo ≤ 10, verde el resto).
+export const DAYS_RED = 3
+export const DAYS_YELLOW = 10
+
+/** Hoy en Caracas como YYYY-MM-DD (el mismo "hoy" que usa el cron de cierre). */
+export function todayCaracas(now = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Caracas',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now)
+}
+
+function toUtcMs(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  return Date.UTC(y, m - 1, d)
+}
+
+/** Días enteros de `from` a `to` (YYYY-MM-DD). Negativo si `to` ya pasó. */
+export function diffDays(from, to) {
+  return Math.round((toUtcMs(to) - toUtcMs(from)) / MS_DAY)
+}
+
+/** Vigente = en marcha (Pendiente/En Curso) y con la fecha de fin sin vencer. */
+export function isVigente(campaign, today = todayCaracas()) {
+  if (!campaign?.end_date) return false
+  return ACTIVE_STATUSES.includes(campaign.status) && campaign.end_date >= today
+}
+
+/** Vigente que todavía no empezó: cubre a la marca, pero se muestra como "programada". */
+export function isProgramada(campaign, today = todayCaracas()) {
+  return isVigente(campaign, today) && !!campaign.start_date && campaign.start_date > today
+}
+
+/**
+ * En marcha pero con la fecha de fin ya pasada. El cron de cierre las pasa a Finalizado cada
+ * noche, así que solo deberían verse unas horas (o si el cron falla).
+ */
+export function isVencidaSinCerrar(campaign, today = todayCaracas()) {
+  if (!campaign?.end_date) return false
+  return ACTIVE_STATUSES.includes(campaign.status) && campaign.end_date < today
+}
+
+/**
+ * Opciones del filtro Estado de la vista Base: las mismas que los grupos de la torta del
+ * Dashboard, para que cada clic en un color caiga en su opción. `sin_tactica` no filtra
+ * tácticas: cambia la tabla a una fila por marca sin táctica vigente (ver `TacticasBase`).
+ */
+export const ESTADOS_BASE = [
+  { key: 'todas', label: 'Todas' },
+  { key: 'al_dia', label: 'Al día' },
+  { key: 'por_vencer', label: 'Por vencer' },
+  { key: 'urgentes', label: 'Urgentes' },
+  { key: 'sin_tactica', label: 'Sin táctica' },
+  { key: 'finalizadas', label: 'Finalizadas' },
+  { key: 'sin_fecha', label: 'Sin fecha' },
+]
+
+/** Táctica cargada sin inicio o sin fin: queda "Sin fecha" hasta que se le ponga. */
+export function isSinFecha(campaign) {
+  return !campaign?.start_date || !campaign?.end_date
+}
+
+/** Grupo de la torta (`COVERAGE_GROUPS`) → opción del filtro Estado de Base. */
+export const ESTADO_OF_GROUP = {
+  green: 'al_dia',
+  none: 'sin_tactica',
+  yellow: 'por_vencer',
+  red: 'urgentes',
+}
+
+/**
+ * ¿La táctica entra en la opción `estado` del filtro Estado de Base? Al día / Por vencer /
+ * Urgentes son las vigentes según los días que les quedan (mismos umbrales que la torta).
+ */
+export function matchesEstado(campaign, estado, today = todayCaracas()) {
+  const tone = () => daysPillTone(daysLeft(campaign, today))
+  switch (estado) {
+    case 'al_dia':
+      return isVigente(campaign, today) && tone() === 'green'
+    case 'por_vencer':
+      return isVigente(campaign, today) && tone() === 'yellow'
+    case 'urgentes':
+      return isVigente(campaign, today) && tone() === 'red'
+    case 'finalizadas':
+      return campaign.status === 'Finalizado'
+    case 'sin_fecha':
+      return isSinFecha(campaign)
+    default:
+      return true
+  }
+}
+
+/** Vigentes que vencen en ≤ 10 días (aviso del Dashboard), la que vence antes primero. */
+export function vencenPronto(campaigns, today = todayCaracas()) {
+  return (campaigns ?? [])
+    .filter((c) => isVigente(c, today) && daysLeft(c, today) <= DAYS_YELLOW)
+    .sort((a, b) => a.end_date.localeCompare(b.end_date))
+}
+
+/**
+ * Agrupa las marcas por línea (team) para las mini tortas del Dashboard, en el orden de las
+ * líneas por nombre; las marcas sin línea van al final en "Sin línea" (`lineId: null`).
+ *
+ * @returns {Array<{ lineId: string|null, name: string, brands: Array }>}
+ */
+export function brandsByLine(brands, linesById) {
+  const map = new Map()
+  for (const b of brands ?? []) {
+    const id = b.line_id && linesById?.has(b.line_id) ? b.line_id : null
+    if (!map.has(id)) map.set(id, [])
+    map.get(id).push(b)
+  }
+  return [...map.entries()]
+    .map(([lineId, list]) => ({
+      lineId,
+      name: lineId ? (linesById.get(lineId)?.name ?? 'Sin nombre') : 'Sin línea',
+      brands: list,
+    }))
+    .sort((a, b) => {
+      if (!a.lineId) return 1
+      if (!b.lineId) return -1
+      return a.name.localeCompare(b.name, 'es')
+    })
+}
+
+/** Días que le quedan a la táctica (0 = vence hoy, negativo = ya venció). null sin fecha. */
+export function daysLeft(campaign, today = todayCaracas()) {
+  if (!campaign?.end_date) return null
+  return diffDays(today, campaign.end_date)
+}
+
+/** 'red' | 'yellow' | 'green' según los días que quedan. */
+export function daysPillTone(days) {
+  if (days == null) return 'green'
+  if (days <= DAYS_RED) return 'red'
+  if (days <= DAYS_YELLOW) return 'yellow'
+  return 'green'
+}
+
+/** Texto de la pill: "Vence hoy", "1 día", "13 días", "Venció hace 2 días". */
+export function daysLabel(days) {
+  if (days == null) return '—'
+  if (days === 0) return 'Vence hoy'
+  if (days === 1) return '1 día'
+  if (days > 1) return `${days} días`
+  const ago = Math.abs(days)
+  return `Venció hace ${ago} ${ago === 1 ? 'día' : 'días'}`
+}
+
+/** % (0-100) del período transcurrido entre start_date y end_date, acotado. */
+export function periodProgress(campaign, today = todayCaracas()) {
+  if (!campaign?.start_date || !campaign?.end_date) return 0
+  const total = diffDays(campaign.start_date, campaign.end_date)
+  if (total <= 0) return today >= campaign.end_date ? 100 : 0
+  const elapsed = diffDays(campaign.start_date, today)
+  return Math.min(100, Math.max(0, Math.round((elapsed / total) * 100)))
+}
+
+/**
+ * La táctica más reciente de cada marca: max(start_date), desempate por created_at.
+ * Las tácticas sin client_id no pertenecen a ninguna marca y se ignoran.
+ * @returns {Map<string, object>} client_id → táctica
+ */
+export function latestByBrand(campaigns) {
+  const latest = new Map()
+  for (const c of campaigns ?? []) {
+    if (!c.client_id) continue
+    const prev = latest.get(c.client_id)
+    if (!prev) {
+      latest.set(c.client_id, c)
+      continue
+    }
+    const a = `${c.start_date ?? ''}|${c.created_at ?? ''}`
+    const b = `${prev.start_date ?? ''}|${prev.created_at ?? ''}`
+    if (a > b) latest.set(c.client_id, c)
+  }
+  return latest
+}
+
+/** Marcas (clientes) sin ninguna táctica vigente ni programada. */
+export function brandsWithoutVigente(clients, campaigns, today = todayCaracas()) {
+  const covered = new Set(
+    (campaigns ?? []).filter((c) => c.client_id && isVigente(c, today)).map((c) => c.client_id),
+  )
+  return (clients ?? []).filter((cl) => !covered.has(cl.id))
+}
+
+/** Ítems de checklist hechos y totales. */
+export function checklistCounts(checklist) {
+  const items = Array.isArray(checklist) ? checklist : []
+  return { done: items.filter((it) => it?.done).length, total: items.length }
+}
+
+/** % de cumplimiento de las acciones. null si no hay checklist (no es lo mismo que 0 %). */
+export function completionPct(checklist) {
+  const { done, total } = checklistCounts(checklist)
+  return total ? Math.round((done / total) * 100) : null
+}
+
+/**
+ * Agrupa ítems por mes ('YYYY-MM'). Los que no traen mes van al grupo ''.
+ * @returns {Array<{ month: string, items: object[] }>} ordenado por mes; '' al final.
+ */
+export function groupByMonth(items) {
+  const groups = new Map()
+  for (const it of Array.isArray(items) ? items : []) {
+    const key = it?.month || ''
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key).push(it)
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => {
+      if (a === b) return 0
+      if (a === '') return 1
+      if (b === '') return -1
+      return a < b ? -1 : 1
+    })
+    .map(([month, list]) => ({ month, items: list }))
+}
+
+const MONTH_NAMES = [
+  'Enero',
+  'Febrero',
+  'Marzo',
+  'Abril',
+  'Mayo',
+  'Junio',
+  'Julio',
+  'Agosto',
+  'Septiembre',
+  'Octubre',
+  'Noviembre',
+  'Diciembre',
+]
+
+/** 'YYYY-MM' → 'Noviembre 2026'. '' → 'Sin mes'. */
+export function monthLabel(month) {
+  if (!month) return 'Sin mes'
+  const [y, m] = month.split('-').map(Number)
+  return MONTH_NAMES[m - 1] ? `${MONTH_NAMES[m - 1]} ${y}` : month
+}
+
+// ── Cobertura de marcas (torta de la vista Vigentes) ─────────────────────────
+
+/** Grupos de la torta, en el orden en que se dibujan y se listan: Al día, Sin táctica, Por vencer, Urgente. */
+export const COVERAGE_GROUPS = ['green', 'none', 'yellow', 'red']
+
+/**
+ * Agrupa las marcas según su táctica vigente que vence primero:
+ * 'red' (≤ 3 días o vence hoy), 'yellow' (≤ 10), 'green' (más de 10) o 'none' (sin vigente).
+ * Una marca con solo una táctica programada cuenta como cubierta, con el tono de su fin.
+ * Dentro de cada grupo: primero las que vencen antes; las sin táctica, por nombre.
+ *
+ * @returns {{ red: Row[], yellow: Row[], green: Row[], none: Row[] }}
+ *   Row = { brand, campaign (la vigente que vence primero | null), days, progress, programada }
+ */
+export function brandCoverage(brands, campaigns, today = todayCaracas()) {
+  const soonest = new Map()
+  for (const c of campaigns ?? []) {
+    if (!c?.client_id || !isVigente(c, today)) continue
+    const prev = soonest.get(c.client_id)
+    if (!prev || c.end_date < prev.end_date) soonest.set(c.client_id, c)
+  }
+  const groups = { red: [], yellow: [], green: [], none: [] }
+  for (const brand of brands ?? []) {
+    const campaign = soonest.get(brand.id) ?? null
+    if (!campaign) {
+      groups.none.push({ brand, campaign: null, days: null, progress: 0, programada: false })
+      continue
+    }
+    const days = daysLeft(campaign, today)
+    groups[daysPillTone(days)].push({
+      brand,
+      campaign,
+      days,
+      progress: periodProgress(campaign, today),
+      programada: isProgramada(campaign, today),
+    })
+  }
+  for (const key of ['red', 'yellow', 'green']) groups[key].sort((x, y) => x.days - y.days)
+  groups.none.sort((x, y) => (x.brand.name ?? '').localeCompare(y.brand.name ?? '', 'es'))
+  return groups
+}
+
+/** Duración inclusive en días ("del 1 al 21" = 21). null sin fechas o si el fin es anterior. */
+export function tacticDuration(campaign) {
+  const { start_date: s, end_date: e } = campaign ?? {}
+  if (!s || !e) return null
+  const d = diffDays(s, e)
+  return d >= 0 ? d + 1 : null
+}
+
+/** "21 días" / "1 día" / null. */
+export function durationLabel(campaign) {
+  const d = tacticDuration(campaign)
+  if (d == null) return null
+  return `${d} ${d === 1 ? 'día' : 'días'}`
+}
+
+/**
+ * Saca el id de un link de Drive: carpeta, archivo o Google Doc.
+ * Acepta /folders/<id>, /drive/u/N/folders/<id>, /file/d/<id>, /document/d/<id> y ?id=<id>.
+ * @returns {{ id: string, kind: 'folder' | 'file' | 'document' | 'unknown' } | null}
+ */
+export function parseDriveId(url) {
+  if (typeof url !== 'string') return null
+  let u
+  try {
+    u = new URL(url.trim())
+  } catch {
+    return null
+  }
+  if (u.hostname !== 'drive.google.com' && u.hostname !== 'docs.google.com') return null
+  const ID = '([A-Za-z0-9_-]{10,})'
+  const folder = u.pathname.match(new RegExp(`/folders/${ID}`))
+  if (folder) return { id: folder[1], kind: 'folder' }
+  const file = u.pathname.match(new RegExp(`/file/d/${ID}`))
+  if (file) return { id: file[1], kind: 'file' }
+  const doc = u.pathname.match(new RegExp(`/document/d/${ID}`))
+  if (doc) return { id: doc[1], kind: 'document' }
+  const param = u.searchParams.get('id')
+  if (param && new RegExp(`^${ID}$`).test(param)) return { id: param, kind: 'unknown' }
+  return null
+}
+
+/**
+ * Fecha (YYYY-MM-DD) a la que se atribuye una táctica cerrada, para el score: la menor entre
+ * el cierre real (en Caracas) y su fecha de fin. Así una táctica que el cierre automático pasó a
+ * Finalizado el día siguiente a su fin no se corre al mes siguiente; y si se cerró antes de
+ * tiempo, cuenta en el mes en que se cerró. Sin `closed_at` usa `end_date`.
+ * Espejo de la RPC `employee_score_inputs` (migración 20261126100000).
+ * @returns {string | null}
+ */
+export function closeDateOf(campaign) {
+  if (!campaign?.end_date) return null
+  if (!campaign.closed_at) return campaign.end_date
+  const closed = todayCaracas(new Date(campaign.closed_at))
+  return closed < campaign.end_date ? closed : campaign.end_date
+}
+
+/**
+ * Contenido de un insumo (lo que la táctica de origen deja para la siguiente), derivado EN VIVO
+ * de su checklist: no se guarda una copia, así que tildar algo después de cerrar lo refleja.
+ * @returns {{ done: object[], pending: object[], total: number, pct: number | null }}
+ */
+export function handoffContent(source) {
+  const items = Array.isArray(source?.checklist) ? source.checklist : []
+  const done = items.filter((it) => it?.done)
+  const pending = items.filter((it) => !it?.done)
+  return { done, pending, total: items.length, pct: completionPct(items) }
+}
+
+/**
+ * Convierte acciones pendientes de la táctica anterior en acciones de la nueva: sin tildar, sin el
+ * mes viejo, y marcadas con la táctica de la que vienen. Conservan su `id`, que es lo que permite
+ * saber cuáles ya se arrastraron.
+ */
+export function carryOverItem(item, sourceId) {
+  const { month: _month, ...rest } = item
+  return { ...rest, done: false, carried_from: sourceId }
+}
+
+/**
+ * Nombre de la jefa de la línea de una marca. La línea se deriva del cliente
+ * (metric_clients.line_id) y la jefa es el miembro con is_lead (lead_user_id).
+ * @returns {string | null}
+ */
+export function leadNameOf(clientId, clientsById, linesById, usersMap) {
+  const line = linesById?.get(clientsById?.get(clientId)?.line_id)
+  if (!line?.lead_user_id) return null
+  return usersMap?.get(line.lead_user_id) ?? null
+}
+
+/** Normaliza el campo del formulario: vacío → null (patrón de meetings.minuta_url). */
+export function normalizeDriveUrl(value) {
+  const v = typeof value === 'string' ? value.trim() : ''
+  return v || null
+}

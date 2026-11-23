@@ -13,12 +13,12 @@
 - Sin ruta propia (widget global).
 - `src/components/notifications/NotificationBell.jsx`: montada en barra mobile de `AppLayout.jsx` y sección de usuario de `Sidebar.jsx` (desktop). Carga últimas 40, suscribe `postgres_changes` (INSERT + UPDATE) filtrado por `user_id`; badge de no leídas; marcar una/todas; clic navega a la entidad.
 - `src/utils/notificationFormat.js`: ícono, etiqueta, ruta, tiempo relativo.
-- Navegación: tarea → `/tareas`; proyecto → `/?projectId=<id>` (`AppLayout.jsx` abre `ProjectModal`); cliente → `/empresa/clientes`; empleado → `/empresa/empleados`; reunión → `/reuniones?meetingId=<id>` (`ReunionesPage.jsx` abre `MeetingDetail`, solo lectura); `campaign`/`ad` → `/ads`; `metric_report` → `/reportes/linea/:id?tab=operaciones&year=&month=`.
+- Navegación: tarea → `/tareas`; proyecto → `/?projectId=<id>` (`AppLayout.jsx` abre `ProjectModal`); cliente → `/empresa/clientes`; empleado → `/empresa/empleados`; reunión → `/reuniones?meetingId=<id>` (`ReunionesPage.jsx` abre `MeetingDetail`, solo lectura); `campaign`/`ad` → `/ads` (`campaign_due_soon` con `entity_id` → `/ads?campaignId=<id>`, abre el detalle); `metric_report` → `/reportes/linea/:id?tab=operaciones&year=&month=`.
 - Correo: `supabase/functions/notify-dispatch/index.ts` → Resend. Secrets `RESEND_API_KEY`, `SENDER_EMAIL`.
 
 ## Datos
 - `notifications`: `id, company_id, user_id, type, title, body, entity_type, entity_id, email, read, dedupe_key, created_at`. En `supabase_realtime`.
-- Types: `task_assigned` · `checklist_item_assigned` · `project_added` · `meeting_invite` · `meeting_reminder_day` · `meeting_reminder_hour` · `client_anniversary` · `client_mdn_anniversary` · `client_contact_birthday` · `employee_birthday` · `employee_mdn_anniversary` · `campaign_autoclosed` · `ad_autoclosed` (entity_type `campaign`/`ad`) · `report_close_reminder` · `report_autoclosed` (entity_type `metric_report`, entity_id `<lineId>:<year>:<month>`, §2.5).
+- Types: `task_assigned` · `checklist_item_assigned` · `project_added` · `meeting_invite` · `meeting_reminder_day` · `meeting_reminder_hour` · `client_anniversary` · `client_mdn_anniversary` · `client_contact_birthday` · `employee_birthday` · `employee_mdn_anniversary` · `campaign_autoclosed` · `campaign_due_soon` · `ad_autoclosed` (entity_type `campaign`/`ad`) · `report_close_reminder` · `report_autoclosed` (entity_type `metric_report`, entity_id `<lineId>:<year>:<month>`, §2.5).
 - `notif_cron_runs`: `id, job_name, ran_at, notifications_inserted, errors_count, error_sample, ok` (una fila por corrida; observabilidad del job de fechas).
 - Fechas de empleado: `users.birth_date`, `users.hire_date` (editables en `EmployeeModal.jsx`).
 
@@ -45,6 +45,7 @@
   - Cada evento (cliente/contacto/empleado) en su propio `BEGIN/EXCEPTION`; cada corrida registra en `notif_cron_runs`.
 - **Recordatorios de reunión** — cada 15 min, `enqueue_meeting_reminders()`. Ventanas `[+24h, +24h15m)` y `[+1h, +1h15m)` sobre `meetings.starts_at` con `status='programada'`. `dedupe_key` incluye `starts_at` (reprogramar genera recordatorios nuevos).
 - **Cierre de campañas** — diario 07:00 Caracas (11:00 UTC), `enqueue_campaign_closures()`. `campaigns` y `paid_campaigns` con `end_date < hoy` (Caracas) y `status in ('Pendiente','En Curso')` → `status='Finalizado'`; en ads además `results_pending=true` (§2.10). In-app (`email=false`) a responsable + Marketing Managers vía `notif_campaign_recipients(company_id, responsable)` (match `lower(position_name)='marketing manager'`). `company_id` de táctica derivado de `assignee`/`created_by`. `dedupe_key` = `campaign_autoclosed:`/`ad_autoclosed:` + id + user_id.
+- **Aviso de vencimiento de tácticas** — diario 07:05 Caracas (11:05 UTC), `enqueue_tactic_expiry_reminders()` (job aparte de `enqueue-campaign-closures`, para que un error aquí no frene los cierres; `BEGIN/EXCEPTION` por fila). `campaigns` en `Pendiente`/`En Curso` con `end_date` a 3 días o hoy → `campaign_due_soon`, in-app (`email=false`), al responsable + la jefa (`is_lead`) de la línea de su marca vía `notif_tactic_recipients(client_id, assignee)`. No avisa si la marca ya tiene otra táctica en marcha que termina después. `company_id` de `metric_clients` (o del responsable). `dedupe_key` = `campaign_due_soon:<id>:<end_date>:<días>:<user_id>` (incluye `end_date`: si se mueve el fin, se vuelve a avisar).
 - **Cierre de reportes** — diario 07:30 Caracas (11:30 UTC), `enqueue_metric_report_closures()` (§2.5 "Cierre de reporte"). Solo días 1-5 del mes; recorre `metric_lines` no-generales sobre el mes anterior en `metric_reports`:
   - Días 1-4: `report_close_reminder` a la jefa (`metric_report_close_recipients(line_id, company_id, false)`); `dedupe_key` con la fecha del día (un aviso diario).
   - Día 5: cierre incondicional (`closed_auto=true`, crea la fila si no existe) + `report_autoclosed` a jefa y nivel ≥4 (`metric_report_close_recipients(..., true)`); `dedupe_key` solo con el mes.
@@ -62,5 +63,5 @@
 - Proyectos → Notificaciones: `projects.members`.
 - Reuniones → Notificaciones: `meetings.attendee_ids`, `meetings.starts_at`.
 - Empresa → Notificaciones: fechas de `metric_clients`/`users`; destinatarios por `metric_lines.member_user_ids` y `users.access_level`.
-- Ads → Notificaciones: cierre de `campaigns`/`paid_campaigns`.
+- Ads → Notificaciones: cierre y aviso de vencimiento de `campaigns`; cierre de `paid_campaigns`.
 - Reportes → Notificaciones: cierre de `metric_reports`.

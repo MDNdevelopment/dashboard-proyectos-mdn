@@ -4,6 +4,7 @@ import { canViewClientFee } from '../../lib/permissions'
 import { fmtUSD } from '../../utils/metricsFinance'
 import { MONTHS } from './constants'
 import { EmployeeChip, EmployeeChipList } from '../common/EmployeeChip'
+import SinTacticaAviso from '../ads/tacticas/SinTacticaAviso'
 
 /**
  * Cuerpo embebible de la ficha técnica de un cliente (metric_clients).
@@ -80,6 +81,15 @@ export default function ClientFichaContent({ client, line, onClose, employees = 
 
       {/* Cuerpo */}
       <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
+        {/* Tácticas: avisa si la marca no tiene una vigente (no muestra nada si no se puede comprobar) */}
+        <SinTacticaAviso
+          clientId={client.id}
+          onOpen={(id) => {
+            onClose()
+            navigate(`/ads?client=${id}`)
+          }}
+        />
+
         {/* Datos financieros — nivel ≥ 3 / admin / empresa.clientes.mensualidad */}
         {privileged && (
           <div className="grid grid-cols-2 gap-3">

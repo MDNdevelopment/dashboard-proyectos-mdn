@@ -21,7 +21,7 @@
 vista con filtros nueva. **Los filtros van en COLUMNAS (una grilla), nunca uno debajo
 del otro**: cada control ocupa su celda con la etiqueta encima, y todos quedan alineados
 a la misma altura y con el mismo ancho. El patrón viejo (`flex items-center gap-2
-flex-wrap` con selects de ancho automático, como todavía usan `AdsList.jsx`,
+flex-wrap` con selects de ancho automático, como todavía usan
 `LeadsTable.jsx`, `BaseView.jsx` y `CnpBaseView.jsx`) los apilaba en cuanto la pantalla
 se angostaba y daba anchos desparejos según el largo del texto de cada `<option>`.
 
@@ -61,7 +61,7 @@ está abierto) — no queda recortado por contenedores con `overflow` (p. ej. ta
 scroll horizontal). **No hace llamadas a datos**: cada pantalla conserva su propia
 función de persistencia y se la pasa como `onChange`.
 
-Adoptado hoy solo en el módulo **Ads** (`AdsCard.jsx`, `AdsDetail.jsx`,
+Adoptado hoy solo en el módulo **Ads** (`TacticasBaseTable.jsx`, `AdsDetail.jsx`,
 `AdsSpendDetail.jsx`, `AdsSpendView.jsx` — reemplazó el botón click-to-cycle y los
 `<select>` nativos coloreados que tenía cada uno). Antes de este componente, un
 relevamiento encontró **6 mapas de color distintos** (Ads, Tareas, Proyectos, Tickets,

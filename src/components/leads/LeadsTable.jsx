@@ -1,74 +1,86 @@
-import { useState } from "react";
-import { STATUS_LABELS, STATUS_BADGE } from "./constants";
+import { useState } from 'react'
+import { STATUS_LABELS, STATUS_BADGE } from './constants'
 
 const COLUMNS = [
-  { key: "nombre", label: "Nombre", sortable: true },
-  { key: "empresa", label: "Empresa", sortable: true },
-  { key: "servicios", label: "Servicios / Página", sortable: false },
-  { key: "status", label: "Estado", sortable: true },
-  { key: "created_at", label: "Recibido", sortable: true },
-];
+  { key: 'nombre', label: 'Nombre', sortable: true },
+  { key: 'empresa', label: 'Empresa', sortable: true },
+  { key: 'servicios', label: 'Servicios / Página', sortable: false },
+  { key: 'status', label: 'Estado', sortable: true },
+  { key: 'created_at', label: 'Recibido', sortable: true },
+]
 
 /**
  * Tabla de leads con sorting por columna y filtros de búsqueda/servicio — mismo patrón
- * de src/components/ads/AdsList.jsx (COLUMNS declarativo, handleSort/SortIcon, filtered→sorted).
+ * de la antigua lista de Tácticas (COLUMNS declarativo, handleSort/SortIcon, filtered→sorted).
  * `leads` ya viene filtrado por periodo + estado (cards de resumen) desde LeadsPage; esta
  * tabla añade solo búsqueda de texto y filtro por servicio sobre ese subconjunto.
  */
 export default function LeadsTable({ leads, onSelectLead }) {
-  const [search, setSearch] = useState("");
-  const [filterServicio, setFilterServicio] = useState("all");
-  const [sortKey, setSortKey] = useState("created_at");
-  const [sortAsc, setSortAsc] = useState(false);
+  const [search, setSearch] = useState('')
+  const [filterServicio, setFilterServicio] = useState('all')
+  const [sortKey, setSortKey] = useState('created_at')
+  const [sortAsc, setSortAsc] = useState(false)
 
-  const servicios = [...new Set(leads.flatMap((l) => l.servicios ?? []))].sort();
+  const servicios = [...new Set(leads.flatMap((l) => l.servicios ?? []))].sort()
 
   const filtered = leads.filter((l) => {
-    if (filterServicio !== "all" && !(l.servicios ?? []).includes(filterServicio)) return false;
+    if (filterServicio !== 'all' && !(l.servicios ?? []).includes(filterServicio)) return false
     if (search) {
-      const q = search.toLowerCase();
+      const q = search.toLowerCase()
       if (
         !l.nombre?.toLowerCase().includes(q) &&
         !l.empresa?.toLowerCase().includes(q) &&
         !l.email?.toLowerCase().includes(q) &&
         !l.telefono?.toLowerCase().includes(q) &&
         !l.mensaje?.toLowerCase().includes(q)
-      ) return false;
+      )
+        return false
     }
-    return true;
-  });
+    return true
+  })
 
   const sorted = [...filtered].sort((a, b) => {
-    let va = a[sortKey] ?? "";
-    let vb = b[sortKey] ?? "";
-    if (typeof va === "string") va = va.toLowerCase();
-    if (typeof vb === "string") vb = vb.toLowerCase();
-    if (va < vb) return sortAsc ? -1 : 1;
-    if (va > vb) return sortAsc ? 1 : -1;
-    return 0;
-  });
+    let va = a[sortKey] ?? ''
+    let vb = b[sortKey] ?? ''
+    if (typeof va === 'string') va = va.toLowerCase()
+    if (typeof vb === 'string') vb = vb.toLowerCase()
+    if (va < vb) return sortAsc ? -1 : 1
+    if (va > vb) return sortAsc ? 1 : -1
+    return 0
+  })
 
   function handleSort(key) {
-    if (sortKey === key) setSortAsc((a) => !a);
-    else { setSortKey(key); setSortAsc(true); }
+    if (sortKey === key) setSortAsc((a) => !a)
+    else {
+      setSortKey(key)
+      setSortAsc(true)
+    }
   }
 
   function clearFilters() {
-    setSearch("");
-    setFilterServicio("all");
+    setSearch('')
+    setFilterServicio('all')
   }
 
   const SortIcon = ({ col }) => {
-    if (!col.sortable) return null;
-    const active = sortKey === col.key;
+    if (!col.sortable) return null
+    const active = sortKey === col.key
     return (
-      <svg width="8" height="8" viewBox="0 0 8 8" fill="none" className={`inline ml-1 flex-shrink-0 ${active ? "opacity-100" : "opacity-30"}`}>
-        {sortAsc && active
-          ? <path d="M4 1L7 6H1L4 1Z" fill="currentColor" />
-          : <path d="M4 7L1 2H7L4 7Z" fill="currentColor" />}
+      <svg
+        width="8"
+        height="8"
+        viewBox="0 0 8 8"
+        fill="none"
+        className={`inline ml-1 flex-shrink-0 ${active ? 'opacity-100' : 'opacity-30'}`}
+      >
+        {sortAsc && active ? (
+          <path d="M4 1L7 6H1L4 1Z" fill="currentColor" />
+        ) : (
+          <path d="M4 7L1 2H7L4 7Z" fill="currentColor" />
+        )}
       </svg>
-    );
-  };
+    )
+  }
 
   return (
     <div>
@@ -77,7 +89,12 @@ export default function LeadsTable({ leads, onSelectLead }) {
         <div className="relative flex-1 min-w-[160px] sm:min-w-[200px]">
           <svg
             className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#999] pointer-events-none"
-            width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"
+            width="12"
+            height="12"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
           >
             <circle cx="6.5" cy="6.5" r="5" />
             <path d="M10.5 10.5L14 14" strokeLinecap="round" />
@@ -97,10 +114,14 @@ export default function LeadsTable({ leads, onSelectLead }) {
             className="input-base text-[14px] py-1.5"
           >
             <option value="all">Todos los servicios</option>
-            {servicios.map((s) => <option key={s} value={s}>{s}</option>)}
+            {servicios.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
           </select>
         )}
-        {(search || filterServicio !== "all") && (
+        {(search || filterServicio !== 'all') && (
           <button
             onClick={clearFilters}
             className="px-3 py-1.5 rounded-lg border border-[#e0ddd4] text-[14px] font-medium text-[#555] hover:bg-[#f5f3eb] transition-colors"
@@ -111,14 +132,16 @@ export default function LeadsTable({ leads, onSelectLead }) {
       </div>
 
       <p className="text-[13px] font-mono text-[#888] mb-2">
-        {sorted.length} {sorted.length === 1 ? "resultado" : "resultados"}
+        {sorted.length} {sorted.length === 1 ? 'resultado' : 'resultados'}
         {filtered.length !== leads.length && ` de ${leads.length}`}
       </p>
 
       {sorted.length === 0 ? (
         <div className="bg-white rounded-xl border border-[#e0ddd4] p-10 text-center">
           <p className="text-[15px] text-[#888]">
-            {leads.length === 0 ? "No hay leads para mostrar." : "Sin resultados para esos filtros."}
+            {leads.length === 0
+              ? 'No hay leads para mostrar.'
+              : 'Sin resultados para esos filtros.'}
           </p>
         </div>
       ) : (
@@ -131,7 +154,7 @@ export default function LeadsTable({ leads, onSelectLead }) {
                     key={col.key}
                     onClick={col.sortable ? () => handleSort(col.key) : undefined}
                     className={`px-3 py-2.5 text-[12px] font-mono font-bold tracking-[0.14em] uppercase text-[#888] whitespace-nowrap ${
-                      col.sortable ? "cursor-pointer select-none hover:text-[#111]" : ""
+                      col.sortable ? 'cursor-pointer select-none hover:text-[#111]' : ''
                     }`}
                   >
                     {col.label}
@@ -147,25 +170,42 @@ export default function LeadsTable({ leads, onSelectLead }) {
                   onClick={() => onSelectLead(lead)}
                   className="border-b border-[#f0ede3] last:border-0 hover:bg-[#fafaf7] transition-colors cursor-pointer"
                 >
-                  <td className="px-3 py-2.5 text-[14px] font-medium text-[#111] max-w-[160px] truncate">{lead.nombre}</td>
-                  <td className="px-3 py-2.5 text-[14px] text-[#444] max-w-[160px] truncate">{lead.empresa}</td>
+                  <td className="px-3 py-2.5 text-[14px] font-medium text-[#111] max-w-[160px] truncate">
+                    {lead.nombre}
+                  </td>
+                  <td className="px-3 py-2.5 text-[14px] text-[#444] max-w-[160px] truncate">
+                    {lead.empresa}
+                  </td>
                   <td className="px-3 py-2.5 text-[13px] text-[#666] max-w-[220px]">
                     <div className="flex flex-wrap gap-1">
                       {(lead.servicios ?? []).map((s) => (
-                        <span key={s} className="font-mono px-1.5 py-0.5 rounded bg-[#f5f3eb] text-[11.5px] whitespace-nowrap">{s}</span>
+                        <span
+                          key={s}
+                          className="font-mono px-1.5 py-0.5 rounded bg-[#f5f3eb] text-[11.5px] whitespace-nowrap"
+                        >
+                          {s}
+                        </span>
                       ))}
                       {lead.tipo_pagina && (
-                        <span className="font-mono px-1.5 py-0.5 rounded bg-[#f5f3eb] text-[11.5px] whitespace-nowrap">{lead.tipo_pagina}</span>
+                        <span className="font-mono px-1.5 py-0.5 rounded bg-[#f5f3eb] text-[11.5px] whitespace-nowrap">
+                          {lead.tipo_pagina}
+                        </span>
                       )}
                     </div>
                   </td>
                   <td className="px-3 py-2.5">
-                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${STATUS_BADGE[lead.status]}`}>
+                    <span
+                      className={`text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${STATUS_BADGE[lead.status]}`}
+                    >
                       {STATUS_LABELS[lead.status]}
                     </span>
                   </td>
                   <td className="px-3 py-2.5 text-[13px] text-[#888] whitespace-nowrap">
-                    {new Date(lead.created_at).toLocaleDateString("es-VE", { day: "2-digit", month: "short", year: "numeric" })}
+                    {new Date(lead.created_at).toLocaleDateString('es-VE', {
+                      day: '2-digit',
+                      month: 'short',
+                      year: 'numeric',
+                    })}
                   </td>
                 </tr>
               ))}
@@ -174,5 +214,5 @@ export default function LeadsTable({ leads, onSelectLead }) {
         </div>
       )}
     </div>
-  );
+  )
 }
