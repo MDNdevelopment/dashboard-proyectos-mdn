@@ -301,6 +301,29 @@ export async function upsertLote(companyId, pautaId, editorUserId, formato, fiel
     .single()
 }
 
+/**
+ * Videos (una fila por unidad) de un lote, en orden. Los crea/borra el trigger
+ * `av_pauta_piezas_sync_videos` al cambiar `cantidad`; el cliente solo los lee y actualiza.
+ */
+export async function loadVideosDeLote(piezaId) {
+  return supabase
+    .from('av_pauta_videos')
+    .select('*')
+    .eq('pieza_id', piezaId)
+    .order('position', { ascending: true })
+}
+
+/**
+ * Cambia el estado o el nombre de un video. `listas` del lote NO se escribe aquí: el trigger
+ * `av_pauta_videos_sync_listas` lo recalcula (cuenta los 'listo') en la misma transacción.
+ */
+export async function updateVideo(videoId, fields) {
+  const updates = {}
+  if ('status' in fields) updates.status = fields.status
+  if ('nombre' in fields) updates.nombre = fields.nombre || null
+  return supabase.from('av_pauta_videos').update(updates).eq('id', videoId).select().single()
+}
+
 export async function deleteLote(loteId) {
   return supabase.from('av_pauta_piezas').delete().eq('id', loteId)
 }
