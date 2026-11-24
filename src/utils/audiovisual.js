@@ -56,6 +56,97 @@ export const GRILLA_STATUS_LABELS = {
   incumple: 'Incumple',
 }
 
+/**
+ * Estados de un video dentro de un lote de edición (`av_pauta_videos`). `PIEZA_STATUS_META`
+ * sigue el contrato de StatusPill (common/StatusPill.jsx): clases Tailwind LITERALES, nunca
+ * armadas en runtime (el JIT no las generaría). Solo `listo` cuenta para `listas` del lote
+ * (lo mantiene el trigger `av_pauta_videos_sync_listas`).
+ */
+export const PIEZA_STATUS_LABELS = {
+  pendiente: 'Pendiente',
+  en_edicion: 'En edición',
+  espera_aprobacion: 'Espera de aprobación',
+  listo: 'Listo',
+  cancelado: 'Cancelado',
+}
+
+export const PIEZA_STATUS_META = {
+  pendiente: {
+    label: 'Pendiente',
+    bg: 'bg-[#fdf4de]',
+    text: 'text-[#9a7400]',
+    dot: 'bg-[#e0b23d]',
+  },
+  en_edicion: {
+    label: 'En edición',
+    bg: 'bg-[#e6f0ff]',
+    text: 'text-[#2563eb]',
+    dot: 'bg-[#2563eb]',
+  },
+  espera_aprobacion: {
+    label: 'Espera de aprobación',
+    bg: 'bg-[#f3e8ff]',
+    text: 'text-[#7c3aed]',
+    dot: 'bg-[#7c3aed]',
+  },
+  listo: { label: 'Listo', bg: 'bg-[#e9f7ec]', text: 'text-[#1f8a43]', dot: 'bg-[#1f8a43]' },
+  cancelado: { label: 'Cancelado', bg: 'bg-[#f2f0ea]', text: 'text-[#888]', dot: 'bg-[#999]' },
+}
+
+export const PIEZA_STATUS_ORDER = [
+  'pendiente',
+  'en_edicion',
+  'espera_aprobacion',
+  'listo',
+  'cancelado',
+]
+
+/** Videos de un lote ordenados por `position` (la lista llega sin garantía de orden). */
+export function videosDeLote(videos, piezaId) {
+  return (videos ?? [])
+    .filter((v) => v.pieza_id === piezaId)
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+}
+
+/** Conteo de videos por estado, solo con los estados que tienen al menos uno. */
+export function conteoEstadosVideos(videos) {
+  const counts = {}
+  ;(videos ?? []).forEach((v) => {
+    counts[v.status] = (counts[v.status] ?? 0) + 1
+  })
+  return counts
+}
+
+const RESUMEN_VIDEO = {
+  listo: ['listo', 'listos'],
+  espera_aprobacion: ['en espera de aprobación', 'en espera de aprobación'],
+  en_edicion: ['en edición', 'en edición'],
+  pendiente: ['pendiente', 'pendientes'],
+  cancelado: ['cancelado', 'cancelados'],
+}
+
+/**
+ * Resumen corto de un lote, p. ej. "4 listos · 1 en espera de aprobación · 1 pendiente".
+ * Va de lo más cercano a terminar a lo menos; cadena vacía sin videos.
+ */
+export function resumenEstadosVideos(videos) {
+  const counts = conteoEstadosVideos(videos)
+  return Object.keys(RESUMEN_VIDEO)
+    .filter((s) => counts[s])
+    .map((s) => `${counts[s]} ${RESUMEN_VIDEO[s][counts[s] === 1 ? 0 : 1]}`)
+    .join(' · ')
+}
+
+/** Siguiente estado al avanzar un video con un toque (Mi trabajo). `listo`/`cancelado` no avanzan. */
+export function siguienteEstadoVideo(status) {
+  const flujo = {
+    pendiente: 'en_edicion',
+    en_edicion: 'espera_aprobacion',
+    espera_aprobacion: 'listo',
+  }
+  return flujo[status] ?? null
+}
+
 const DAYNAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 const MON3 = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 
@@ -626,6 +717,9 @@ export function pautaErrorMessage(err) {
   }
   if (err.code === '23505' && /lote_unico/.test(raw)) {
     return 'Ese editor ya tiene ese formato asignado en esta pauta. Recarga la página.'
+  }
+  if (/no se puede bajar la cantidad/i.test(raw)) {
+    return 'No se pueden bajar las asignadas: hay videos en edición o listos. Devuélvelos a Pendiente o cancélalos primero.'
   }
   return 'No se pudo guardar el cambio. Vuelve a intentarlo; si sigue pasando, avisa a soporte.'
 }

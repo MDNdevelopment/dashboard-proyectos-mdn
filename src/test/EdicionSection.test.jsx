@@ -1,8 +1,18 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { vi } from 'vitest'
 
-const api = vi.hoisted(() => ({ upsertLote: vi.fn(), deleteLote: vi.fn(), updatePieza: vi.fn() }))
+const api = vi.hoisted(() => ({
+  upsertLote: vi.fn(),
+  deleteLote: vi.fn(),
+  updatePieza: vi.fn(),
+  loadVideosDeLote: vi.fn(),
+  updateVideo: vi.fn(),
+}))
 vi.mock('../components/pautas/avPautasApi', () => api)
+vi.mock('../supabase', () => {
+  const channel = { on: vi.fn(() => channel), subscribe: vi.fn(() => channel) }
+  return { supabase: { channel: vi.fn(() => channel), removeChannel: vi.fn() } }
+})
 
 import EdicionSection from '../components/pautas/EdicionSection'
 
@@ -49,6 +59,13 @@ function setup(props = {}) {
   return { onPiezaChanged, onPiezaDeleted }
 }
 
+// Lote z1: 6 asignadas, 4 listas → 4 listo + 1 espera de aprobación + 1 pendiente.
+const VIDEOS = [
+  ...[0, 1, 2, 3].map((i) => ({ id: `v${i}`, pieza_id: 'z1', status: 'listo', position: i })),
+  { id: 'v4', pieza_id: 'z1', status: 'espera_aprobacion', position: 4 },
+  { id: 'v5', pieza_id: 'z1', status: 'pendiente', position: 5 },
+].map((v, i) => ({ nombre: null, ...v, position: i }))
+
 const inc = (label) => screen.getByRole('button', { name: new RegExp(`Agregar ${label}`) })
 const dec = (label) => screen.getByRole('button', { name: new RegExp(`Quitar ${label}`) })
 
@@ -57,6 +74,8 @@ beforeEach(() => {
   api.upsertLote.mockResolvedValue({ data: { id: 'new' }, error: null })
   api.updatePieza.mockResolvedValue({ data: { id: 'z1' }, error: null })
   api.deleteLote.mockResolvedValue({ data: null, error: null })
+  api.loadVideosDeLote.mockResolvedValue({ data: VIDEOS, error: null })
+  api.updateVideo.mockResolvedValue({ data: { ...VIDEOS[5], status: 'listo' }, error: null })
 })
 
 describe('EdicionSection', () => {
@@ -104,16 +123,45 @@ describe('EdicionSection', () => {
     expect(onPiezaDeleted).toHaveBeenCalledWith('z1')
   })
 
-  it('listas no supera asignadas', () => {
+  it('listas es de solo lectura: no hay stepper, lo deriva el trigger de los videos', () => {
     setup({ piezas: [lote({ cantidad: 4, listas: 4 })] })
-    expect(inc('listas de Reel de Eva Ed')).toBeDisabled()
+    expect(
+      screen.queryByRole('button', { name: /listas de Reel de Eva Ed/ }),
+    ).not.toBeInTheDocument()
   })
 
-  it('un editor solo mueve sus propias listas', () => {
+  it('cada lote resume sus videos por estado y los despliega', async () => {
+    setup()
+    const toggle = screen.getByRole('button', { name: 'Ver videos de Reel de Eva Ed' })
+    await waitFor(() =>
+      expect(toggle).toHaveTextContent('4 listos · 1 en espera de aprobación · 1 pendiente'),
+    )
+    fireEvent.click(toggle)
+    expect(screen.getByRole('list', { name: 'Videos de Reel de Eva Ed' }).children).toHaveLength(6)
+  })
+
+  it('cambiar el estado de un video escribe solo el video, nunca listas del lote', async () => {
+    setup()
+    fireEvent.click(await screen.findByRole('button', { name: 'Ver videos de Reel de Eva Ed' }))
+    fireEvent.click(screen.getByText('Pendiente'))
+    // El menú de StatusPill se monta en un portal al final del body: su opción es la última.
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Listo' })).at(-1))
+    await waitFor(() => expect(api.updateVideo).toHaveBeenCalledWith('v5', { status: 'listo' }))
+    expect(api.updatePieza).not.toHaveBeenCalled()
+  })
+
+  it('un editor mueve el estado de sus videos pero no las asignadas', async () => {
     setup({ canEdit: false, userId: 'e1' })
     expect(screen.queryByRole('button', { name: /Agregar asignadas/ })).not.toBeInTheDocument()
-    expect(inc('listas de Reel de Eva Ed')).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: 'Ver videos de Reel de Eva Ed' }))
+    expect(screen.getByLabelText('Nombre del video 1')).toBeInTheDocument()
     expect(screen.queryByText('+ agregar editor')).not.toBeInTheDocument()
+  })
+
+  it('quien no es el editor ve los videos sin poder cambiarlos', async () => {
+    setup({ canEdit: false, userId: 'otro' })
+    fireEvent.click(await screen.findByRole('button', { name: 'Ver videos de Reel de Eva Ed' }))
+    expect(screen.queryByLabelText('Nombre del video 1')).not.toBeInTheDocument()
   })
 
   it('agregar editor crea su primer lote en el formato con cupo', async () => {
@@ -149,5 +197,36 @@ describe('EdicionSection', () => {
     setup({ pauta: { ...pauta, piezas_por_formato: {} }, piezas: [] })
     expect(screen.getByText(/Registra primero la captura/)).toBeInTheDocument()
     expect(screen.getByText('Sin editores asignados.')).toBeInTheDocument()
+  })
+})
+
+describe('EdicionSection — cancelar videos', () => {
+  const abrir = async () =>
+    fireEvent.click(await screen.findByRole('button', { name: 'Ver videos de Reel de Eva Ed' }))
+  const opcionesDelMenu = async () => {
+    fireEvent.click(screen.getByText('Pendiente'))
+    return (await screen.findAllByRole('button')).map((b) => b.textContent)
+  }
+
+  it('quien edita la pauta puede cancelar un video', async () => {
+    setup()
+    await abrir()
+    expect(await opcionesDelMenu()).toContain('Cancelado')
+  })
+
+  it('el editor no ofrece Cancelado: dejaría el lote sin poder completarse', async () => {
+    setup({ canEdit: false, userId: 'e1' })
+    await abrir()
+    expect(await opcionesDelMenu()).not.toContain('Cancelado')
+  })
+
+  it('un video cancelado avisa que hay que bajar las asignadas', async () => {
+    api.loadVideosDeLote.mockResolvedValue({
+      data: VIDEOS.map((v, i) => (i === 5 ? { ...v, status: 'cancelado' } : v)),
+      error: null,
+    })
+    setup()
+    await abrir()
+    expect(await screen.findByText(/baja las asignadas para quitarlo/)).toBeInTheDocument()
   })
 })

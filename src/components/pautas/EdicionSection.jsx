@@ -3,6 +3,7 @@ import Stepper from '../common/Stepper'
 import { Block } from './CapturaSection'
 import { upsertLote, deleteLote, updatePieza } from './avPautasApi'
 import FechaEntregaPauta from './FechaEntregaPauta'
+import VideosLote from './VideosLote'
 import {
   FORMAT_KEYS,
   FORMAT_LABELS,
@@ -23,9 +24,10 @@ import {
 
 /**
  * Edición: matriz editor × formato con dos contadores por celda — asignadas (cuántas le
- * tocan) y listas (cuántas entregó). Cada celda es un lote (`av_pauta_piezas.es_lote`).
+ * tocan) y listas (cuántas entregó, derivado de los videos en «Listo»). Cada celda es un lote (`av_pauta_piezas.es_lote`).
  * El cupo de un formato es `salieron − asignadas a todos`, con `salieron` derivado de la
- * captura. Un editor puede mover solo sus "listas"; quien puede editar la pauta mueve todo.
+ * captura. Cada lote despliega sus videos con estado; un editor mueve solo los suyos y quien
+ * puede editar la pauta mueve todos.
  */
 export default function EdicionSection({
   pauta,
@@ -299,12 +301,19 @@ function EditorRow({
               <Counter
                 label="listas"
                 value={listas}
-                editable={canAct && cantidad > 0}
+                editable={false}
                 max={cantidad}
-                onChange={(d) => onChange(editorId, code, 'listas', d)}
                 aria={`listas de ${FORMAT_LABELS[code]} de ${name}`}
               />
             </div>
+            {lote && (
+              <VideosLote
+                lote={lote}
+                etiqueta={`${FORMAT_LABELS[code]} de ${name}`}
+                editable={canAct}
+                puedeCancelar={canEdit}
+              />
+            )}
             {realizada && lote && (lote.fecha_entrega || canSetFecha) && (
               <LoteFecha
                 lote={lote}
