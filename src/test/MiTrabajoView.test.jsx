@@ -389,3 +389,44 @@ describe('MiTrabajoView — tomar cupo', () => {
     expect(screen.queryByRole('region', { name: 'Disponible para tomar' })).not.toBeInTheDocument()
   })
 })
+
+describe('MiTrabajoView — fotos se llevan por cantidad', () => {
+  const FOTO = {
+    id: 'f1',
+    pauta_id: 'lun',
+    editor_user_id: ME,
+    formato: 'F',
+    es_lote: true,
+    cantidad: 20,
+    listas: 5,
+  }
+
+  it('un lote de fotos no pide videos y muestra el stepper de listas', async () => {
+    setup({ piezas: [...PIEZAS, FOTO] })
+    expect(
+      screen.getByRole('button', { name: 'Agregar listas de Foto de Push' }),
+    ).toBeInTheDocument()
+    await screen.findByLabelText('Videos de Reel de Push')
+    expect(loadVideosDeLote).toHaveBeenCalledWith('l1')
+    expect(loadVideosDeLote).not.toHaveBeenCalledWith('f1')
+  })
+
+  it('+1 sube las listas de la foto y avisa al padre', async () => {
+    updatePieza.mockResolvedValue({ data: { id: 'f1', listas: 6 }, error: null })
+    const { onPiezaChanged } = setup({ piezas: [...PIEZAS, FOTO] })
+    fireEvent.click(screen.getByRole('button', { name: 'Agregar listas de Foto de Push' }))
+    await waitFor(() => expect(updatePieza).toHaveBeenCalledWith('f1', { listas: 6 }))
+    expect(onPiezaChanged).toHaveBeenCalledWith({ id: 'f1', listas: 6 })
+    expect(updateVideo).not.toHaveBeenCalled()
+  })
+
+  it('"todo listo" de una foto pone listas = asignadas', async () => {
+    updatePieza.mockResolvedValue({ data: { id: 'f1', listas: 20 }, error: null })
+    setup({ piezas: [...PIEZAS, FOTO] })
+    const card = screen
+      .getByRole('button', { name: 'Agregar listas de Foto de Push' })
+      .closest('li')
+    fireEvent.click(within(card).getByRole('button', { name: '✓ todo listo' }))
+    await waitFor(() => expect(updatePieza).toHaveBeenCalledWith('f1', { listas: 20 }))
+  })
+})

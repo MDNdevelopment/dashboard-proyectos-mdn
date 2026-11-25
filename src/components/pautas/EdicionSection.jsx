@@ -8,6 +8,7 @@ import {
   FORMAT_KEYS,
   FORMAT_LABELS,
   FORMAT_ICONS,
+  FOTO_FORMAT,
   piezasPorFormato,
   lotesMatrix,
   loteFor,
@@ -24,7 +25,7 @@ import {
 
 /**
  * Edición: matriz editor × formato con dos contadores por celda — asignadas (cuántas le
- * tocan) y listas (cuántas entregó, derivado de los videos en «Listo»). Cada celda es un lote (`av_pauta_piezas.es_lote`).
+ * tocan) y listas (cuántas entregó; en Video y Reel se deriva de los videos en «Listo», en Foto se lleva por cantidad). Cada celda es un lote (`av_pauta_piezas.es_lote`).
  * El cupo de un formato es `salieron − asignadas a todos`, con `salieron` derivado de la
  * captura. Cada lote despliega sus videos con estado; un editor mueve solo los suyos y quien
  * puede editar la pauta mueve todos.
@@ -301,12 +302,13 @@ function EditorRow({
               <Counter
                 label="listas"
                 value={listas}
-                editable={false}
+                editable={code === FOTO_FORMAT && canAct && cantidad > 0}
                 max={cantidad}
+                onChange={(d) => onChange(editorId, code, 'listas', d)}
                 aria={`listas de ${FORMAT_LABELS[code]} de ${name}`}
               />
             </div>
-            {lote && (
+            {lote && code !== FOTO_FORMAT && (
               <VideosLote
                 lote={lote}
                 etiqueta={`${FORMAT_LABELS[code]} de ${name}`}
