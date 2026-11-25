@@ -230,3 +230,52 @@ describe('EdicionSection — cancelar videos', () => {
     expect(await screen.findByText(/baja las asignadas para quitarlo/)).toBeInTheDocument()
   })
 })
+
+describe('EdicionSection — fotos se llevan por cantidad', () => {
+  const pautaFotos = {
+    id: 'p1',
+    formats: ['F'],
+    piezas_por_formato: { F: { salieron: 50, editadas: 4 } },
+  }
+  const foto = (o) => lote({ formato: 'F', cantidad: 10, listas: 4, ...o })
+
+  it('un lote de fotos no tiene videos: ni se piden ni se ofrece desplegarlos', () => {
+    setup({ pauta: pautaFotos, piezas: [foto()] })
+    expect(screen.queryByRole('button', { name: /videos de/i })).not.toBeInTheDocument()
+    expect(api.loadVideosDeLote).not.toHaveBeenCalled()
+  })
+
+  it('las listas de fotos se mueven con el stepper, como antes', async () => {
+    setup({ pauta: pautaFotos, piezas: [foto()] })
+    fireEvent.click(inc('listas de Foto de Eva Ed'))
+    await waitFor(() => expect(api.updatePieza).toHaveBeenCalledWith('z1', { listas: 5 }))
+    expect(api.updateVideo).not.toHaveBeenCalled()
+  })
+
+  it('listas de fotos no supera las asignadas', () => {
+    setup({ pauta: pautaFotos, piezas: [foto({ cantidad: 4, listas: 4 })] })
+    expect(inc('listas de Foto de Eva Ed')).toBeDisabled()
+  })
+
+  it('el editor de fotos mueve sus propias listas pero no las asignadas', () => {
+    setup({ pauta: pautaFotos, piezas: [foto()], canEdit: false, userId: 'e1' })
+    expect(screen.queryByRole('button', { name: /Agregar asignadas/ })).not.toBeInTheDocument()
+    expect(inc('listas de Foto de Eva Ed')).toBeInTheDocument()
+  })
+
+  it('Video y Reel siguen con videos aunque la pauta también tenga fotos', async () => {
+    setup({
+      pauta: {
+        ...pauta,
+        formats: ['R', 'F'],
+        piezas_por_formato: { R: { salieron: 10, editadas: 4 }, F: { salieron: 50, editadas: 0 } },
+      },
+      piezas: [lote(), foto({ id: 'z9', cantidad: 5, listas: 0 })],
+    })
+    expect(
+      await screen.findByRole('button', { name: 'Ver videos de Reel de Eva Ed' }),
+    ).toBeVisible()
+    expect(screen.queryByRole('button', { name: /Ver videos de Foto/ })).not.toBeInTheDocument()
+    expect(api.loadVideosDeLote).toHaveBeenCalledTimes(1)
+  })
+})

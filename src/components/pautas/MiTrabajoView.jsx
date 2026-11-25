@@ -152,13 +152,23 @@ export default function MiTrabajoView({
         ) : (
           <ul className="space-y-2">
             {mio.porEditar.map(({ lote, pauta }) => (
-              <EdicionRapida key={lote.id} lote={lote} pauta={pauta} onPautaClick={onPautaClick} />
+              <EdicionRapida
+                key={lote.id}
+                lote={lote}
+                pauta={pauta}
+                onPiezaChanged={onPiezaChanged}
+                onPautaClick={onPautaClick}
+              />
             ))}
           </ul>
         )}
       </Seccion>
 
-      <Entregadas entregadas={mio.entregadas} onPautaClick={onPautaClick} />
+      <Entregadas
+        entregadas={mio.entregadas}
+        onPiezaChanged={onPiezaChanged}
+        onPautaClick={onPautaClick}
+      />
 
       {disponibles.length > 0 && (
         <Seccion titulo="Disponible para tomar" tour="mt-disponible">
@@ -184,8 +194,8 @@ export default function MiTrabajoView({
 
 const ENTREGADAS_VISIBLES = 10
 
-/** Lotes propios ya completos, colapsados; EdicionRapida permite devolver un video a edición y deshacer. */
-function Entregadas({ entregadas, onPautaClick }) {
+/** Lotes propios ya completos, colapsados; EdicionRapida permite devolver un video (o bajar las listas de una foto) y deshacer. */
+function Entregadas({ entregadas, onPiezaChanged, onPautaClick }) {
   const [abierta, setAbierta] = useState(false)
   const [todas, setTodas] = useState(false)
   if (entregadas.length === 0) return null
@@ -207,7 +217,13 @@ function Entregadas({ entregadas, onPautaClick }) {
         <div className="space-y-2">
           <ul className="space-y-2">
             {visibles.map(({ lote, pauta }) => (
-              <EdicionRapida key={lote.id} lote={lote} pauta={pauta} onPautaClick={onPautaClick} />
+              <EdicionRapida
+                key={lote.id}
+                lote={lote}
+                pauta={pauta}
+                onPiezaChanged={onPiezaChanged}
+                onPautaClick={onPautaClick}
+              />
             ))}
           </ul>
           {!todas && entregadas.length > ENTREGADAS_VISIBLES && (
