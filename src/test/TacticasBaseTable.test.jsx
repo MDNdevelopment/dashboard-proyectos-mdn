@@ -65,13 +65,16 @@ describe('TacticasBaseTable', () => {
     expect(bodyRows()[1]).toHaveTextContent('Nueva')
   })
 
-  it('pinta la pill según la urgencia: rojo si vence en ≤3 días, verde si hay margen', () => {
+  it('la columna Días muestra los días que quedan en texto, sin color', () => {
     renderTable([
       camp({ id: 'a', name: 'Urgente', end_date: '2026-11-20', client_id: 'b2' }),
       camp({ id: 'b', name: 'Holgada', end_date: '2026-12-31', client_id: 'b3' }),
     ])
-    expect(screen.getByText('1 día').className).toContain('bg-[#fce4e4]')
-    expect(screen.getByText('42 días').className).toContain('bg-[#e3f2e5]')
+    for (const label of ['1 día', '42 días']) {
+      const cell = screen.getByText(label)
+      expect(cell.tagName).toBe('TD')
+      expect(cell.className).not.toMatch(/bg-\[/)
+    }
   })
 
   it('avisa "Vence hoy" el mismo día del vencimiento', () => {
@@ -105,11 +108,29 @@ describe('TacticasBaseTable', () => {
       camp({ id: 'b', name: 'Sin acciones', client_id: 'b3' }),
     ])
     expect(screen.getByText('1/2 · 50%')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Avance: 50% (En curso)' })).toBeInTheDocument()
+    const sin = screen.getByText('Sin acciones').closest('tr')
+    expect(within(sin).queryByRole('img', { name: /Avance/ })).not.toBeInTheDocument()
   })
 
-  it('marca como "Programada" la que todavía no empezó', () => {
+  it('marca como "Programada" la que todavía no empezó, sin repetir la fecha de inicio', () => {
     renderTable([camp({ start_date: '2026-12-01' })])
-    expect(screen.getByText(/Programada · empieza el/)).toBeInTheDocument()
+    const row = screen.getByText('Programada').closest('tr')
+    // La fecha sale una sola vez: en la columna Inicio.
+    expect(within(row).getAllByText(/^1 dic\. 2026$/)).toHaveLength(1)
+    expect(within(row).queryByText(/empieza/)).not.toBeInTheDocument()
+  })
+
+  it('la táctica presentación abre en pestaña nueva y no abre el detalle', async () => {
+    const user = userEvent.setup()
+    const onSelect = vi.fn()
+    renderTable([camp({ presentation_url: 'https://superfina.netlify.app' })], { onSelect })
+
+    const link = screen.getByRole('link', { name: 'Táctica presentación' })
+    expect(link).toHaveAttribute('href', 'https://superfina.netlify.app')
+    expect(link).toHaveAttribute('target', '_blank')
+    await user.click(link)
+    expect(onSelect).not.toHaveBeenCalled()
   })
 
   it('el link de Drive abre en pestaña nueva y no abre el detalle', async () => {

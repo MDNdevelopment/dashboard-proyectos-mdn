@@ -115,6 +115,18 @@ describe('AdsDetail — objetivo, Drive, avance y cumplimiento', () => {
     expect(link).toHaveAttribute('rel', expect.stringContaining('noreferrer'))
   })
 
+  it('el botón «Táctica presentación» abre la página en una pestaña nueva', () => {
+    renderDetail({ campaign: { ...CAMPAIGN, presentation_url: 'https://superfina.netlify.app' } })
+    const link = screen.getByRole('link', { name: 'Táctica presentación' })
+    expect(link).toHaveAttribute('href', 'https://superfina.netlify.app')
+    expect(link).toHaveAttribute('target', '_blank')
+  })
+
+  it('sin táctica presentación no muestra el botón', () => {
+    renderDetail()
+    expect(screen.queryByRole('link', { name: 'Táctica presentación' })).not.toBeInTheDocument()
+  })
+
   it('sin link de Drive no muestra el botón', () => {
     renderDetail()
     expect(screen.queryByRole('link', { name: 'Abrir documento' })).not.toBeInTheDocument()

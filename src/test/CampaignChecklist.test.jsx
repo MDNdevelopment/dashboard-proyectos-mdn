@@ -41,13 +41,16 @@ describe('CampaignChecklist', () => {
         ]}
       />,
     )
-    // 0 de 2 → 0%
-    expect(screen.getByText('Acciones (0/2)')).toBeInTheDocument()
-    expect(screen.getByText('0%')).toBeInTheDocument()
+    // 0 de 2 → 0%, tramo gris "Sin comenzar"
+    expect(screen.getByText('0/2 · 0%')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Avance: 0% (Sin comenzar)' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('checkbox', { name: 'Completar Uno' }))
-    expect(screen.getByText('Acciones (1/2)')).toBeInTheDocument()
-    expect(screen.getByText('50%')).toBeInTheDocument()
+    expect(screen.getByText('1/2 · 50%')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Avance: 50% (En curso)' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('checkbox', { name: 'Completar Dos' }))
+    expect(screen.getByRole('img', { name: 'Avance: 100% (Completada)' })).toBeInTheDocument()
   })
 
   it('elimina una acción con el botón de borrar', async () => {
@@ -113,8 +116,8 @@ describe('CampaignChecklist — agrupado por mes y badges', () => {
 
   it('el progreso cuenta todas las acciones, estén en el mes que estén', () => {
     render(<Harness initial={ITEMS} editable={false} />)
-    expect(screen.getByText('Acciones (1/3)')).toBeInTheDocument()
-    expect(screen.getByText('33%')).toBeInTheDocument()
+    expect(screen.getByText('1/3 · 33%')).toBeInTheDocument()
+    expect(screen.getByText('Iniciada')).toBeInTheDocument()
   })
 
   it('tildar una acción agrupada persiste el cambio', async () => {

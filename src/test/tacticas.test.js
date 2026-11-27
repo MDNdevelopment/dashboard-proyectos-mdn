@@ -13,6 +13,7 @@ import {
   groupByMonth,
   monthLabel,
   parseDriveId,
+  isWebUrl,
   leadNameOf,
   normalizeDriveUrl,
   closeDateOf,
@@ -24,6 +25,8 @@ import {
   ESTADO_OF_GROUP,
   vencenPronto,
   brandsByLine,
+  AVANCE_TRAMOS,
+  avanceTramo,
 } from '../utils/tacticas'
 
 const TODAY = '2026-11-19'
@@ -244,6 +247,23 @@ describe('groupByMonth / monthLabel', () => {
   })
 })
 
+describe('isWebUrl', () => {
+  it('acepta links web completos, de Netlify u otra página', () => {
+    expect(isWebUrl('https://presentacionpush.netlify.app')).toBe(true)
+    expect(isWebUrl('  https://example.com/deck?x=1  ')).toBe(true)
+    expect(isWebUrl('http://planmdn.netlify.app/')).toBe(true)
+  })
+
+  it('rechaza lo que no es un link web', () => {
+    expect(isWebUrl('presentacionpush.netlify.app')).toBe(false)
+    expect(isWebUrl('https://localhost')).toBe(false)
+    expect(isWebUrl('javascript:alert(1)')).toBe(false)
+    expect(isWebUrl('ftp://example.com')).toBe(false)
+    expect(isWebUrl('')).toBe(false)
+    expect(isWebUrl(null)).toBe(false)
+  })
+})
+
 describe('parseDriveId', () => {
   const ID = '1AbCdEfGhIjKlMnOpQrStUvWxYz012345'
 
@@ -423,6 +443,26 @@ describe('isVencidaSinCerrar', () => {
   })
 })
 
+describe('avanceTramo (escala de colores del avance)', () => {
+  it('reparte el % en 5 tramos, de gris (0 %) a verde fuerte (100 %)', () => {
+    const key = (pct) => avanceTramo(pct).key
+    expect(key(0)).toBe('sin_comenzar')
+    expect(key(1)).toBe('iniciada')
+    expect(key(33)).toBe('iniciada')
+    expect(key(34)).toBe('en_curso')
+    expect(key(66)).toBe('en_curso')
+    expect(key(67)).toBe('avanzada')
+    expect(key(99)).toBe('avanzada')
+    expect(key(100)).toBe('completada')
+    expect(AVANCE_TRAMOS[0].hex).toBe('#bdb9ad')
+    expect(AVANCE_TRAMOS.at(-1).hex).toBe('#1e8e3e')
+  })
+
+  it('sin acciones (null) no tiene tramo', () => {
+    expect(avanceTramo(null)).toBeNull()
+  })
+})
+
 describe('matchesEstado (filtro Estado de Base)', () => {
   const urgente = camp({ status: 'En Curso', start_date: '2026-11-01', end_date: '2026-11-21' }) // 2 días
   const porVencer = camp({ status: 'En Curso', start_date: '2026-11-01', end_date: '2026-11-27' }) // 8 días
@@ -464,8 +504,13 @@ describe('matchesEstado (filtro Estado de Base)', () => {
     expect(isVigente(nf, TODAY)).toBe(false)
   })
 
-  it('las opciones son los grupos de la torta más Todas, Finalizadas y Sin fecha', () => {
+  it('"vigentes" son las en marcha o programadas, sin vencidas ni cerradas', () => {
+    expect(pick('vigentes')).toEqual(['urgente', 'porVencer', 'lejana', 'programada'])
+  })
+
+  it('las opciones son Vigentes (la de por defecto), los grupos de la torta, Todas, Finalizadas y Sin fecha', () => {
     expect(ESTADOS_BASE.map((e) => e.key)).toEqual([
+      'vigentes',
       'todas',
       'al_dia',
       'por_vencer',

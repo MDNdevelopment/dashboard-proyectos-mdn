@@ -1,5 +1,6 @@
 import { checklistProgress } from '../tareas/taskChecklist'
 import { groupByMonth, monthLabel } from '../../utils/tacticas'
+import AvanceBar from './tacticas/AvanceBar'
 
 /**
  * Checklist de "acciones" de una Táctica (campaigns.checklist, jsonb).
@@ -26,7 +27,6 @@ export default function CampaignChecklist({
 }) {
   const items = Array.isArray(value) ? value : []
   const { done, total } = checklistProgress(items)
-  const percent = total ? Math.round((done / total) * 100) : 0
 
   function newId() {
     return globalThis.crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2)
@@ -116,20 +116,12 @@ export default function CampaignChecklist({
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-1.5">
-        <span className={labelClass}>Acciones{total > 0 ? ` (${done}/${total})` : ''}</span>
-        {total > 0 && (
-          <span className="text-[12px] font-mono font-semibold text-[#555]">{percent}%</span>
-        )}
-      </div>
+      <span className={`${labelClass} mb-1.5`}>Acciones</span>
 
-      {/* Barra de progreso */}
+      {/* Barra de avance con el color de su tramo (gris 0 % → verde fuerte 100 %) */}
       {total > 0 && (
-        <div className="h-1.5 bg-[#f0ede3] rounded-full overflow-hidden mb-2.5">
-          <div
-            className="h-full rounded-full bg-[#FFB800] transition-all"
-            style={{ width: `${percent}%` }}
-          />
+        <div className="mb-3">
+          <AvanceBar done={done} total={total} size="lg" />
         </div>
       )}
 

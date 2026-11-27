@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import TacticasTorta from './TacticasTorta'
 import TacticasPorHacer from './TacticasPorHacer'
 import TacticasBase from './TacticasBase'
 import TacticasMarcaModal from './TacticasMarcaModal'
-import TacticasVencenModal, { markVencenSeen, vencenSeen } from './TacticasVencenModal'
+import TacticasVencen from './TacticasVencen'
 import {
   brandsWithoutVigente,
   completionPct,
@@ -39,7 +39,7 @@ function viewFromParam(value) {
  * `?line=`, para poder enlazar desde otro módulo.
  *
  * - Dashboard: torta de cobertura con una torta chica por team (`TacticasTorta`), tarjeta de
- *   marcas por hacer y, una vez por sesión, el aviso de lo que vence pronto. Cada color lleva a
+ *   tarjeta "Vencen pronto" debajo de las tortas y tarjeta de marcas por hacer. Cada color lleva a
  *   Base con su filtro.
  * - Base: todas las tácticas con filtros (`TacticasBase`); el Estado "Sin táctica" lista marcas.
  * - Ficha de una marca: ventana emergente (`TacticasMarcaModal`) abierta por `?client=`, desde
@@ -85,9 +85,7 @@ export default function TacticasView({
   const clientId = searchParams.get('client') ?? ''
   // Filtro con el que abre Base al llegar desde el Dashboard. `n` cambia en cada navegación
   // para remontar Base aunque se repita el mismo estado.
-  const [baseNav, setBaseNav] = useState({ estado: 'todas', n: 0 })
-  // Aviso "vencen pronto": una vez por sesión, solo en el Dashboard.
-  const [vencenOpen, setVencenOpen] = useState(() => !vencenSeen())
+  const [baseNav, setBaseNav] = useState({ estado: 'vigentes', n: 0 })
 
   const today = todayCaracas()
 
@@ -106,13 +104,12 @@ export default function TacticasView({
   }
 
   function setView(key) {
-    setBaseNav((prev) => ({ estado: 'todas', n: prev.n + 1 }))
+    setBaseNav((prev) => ({ estado: 'vigentes', n: prev.n + 1 }))
     patchParams({ view: key === 'dashboard' ? null : key })
   }
 
   /** Abre Base con un Estado y, si se pasa, con el team (línea) elegido en las pills. */
   function goToBase(estado, lineId) {
-    setVencenOpen(false)
     setBaseNav((prev) => ({ estado, n: prev.n + 1 }))
     // Una sola escritura de la URL: dos setSearchParams seguidos se pisan.
     if (lineId && onSelectLine) onSelectLine(lineId, { view: 'base' })
@@ -143,11 +140,6 @@ export default function TacticasView({
   }, [vigentes, brands, sinVigente])
 
   const proximas = useMemo(() => vencenPronto(campaigns, today), [campaigns, today])
-  const showVencen =
-    vencenOpen && !loading && view === 'dashboard' && !clientId && proximas.length > 0
-  useEffect(() => {
-    if (showVencen) markVencenSeen()
-  }, [showVencen])
 
   if (loading) {
     return (
@@ -196,6 +188,16 @@ export default function TacticasView({
             onGoToBase={goToBase}
           />
 
+          {proximas.length > 0 && (
+            <TacticasVencen
+              campaigns={proximas}
+              today={today}
+              clientsById={clientsById}
+              onSelect={onSelect}
+              onGoToBase={goToBase}
+            />
+          )}
+
           <TacticasPorHacer
             brands={sinVigente}
             insumoClientIds={insumoClientIds}
@@ -243,20 +245,6 @@ export default function TacticasView({
           onDiscardInsumo={onDiscardInsumo}
           onCreate={onCreate}
           onUpdated={onUpdated}
-        />
-      )}
-
-      {showVencen && (
-        <TacticasVencenModal
-          campaigns={proximas}
-          today={today}
-          clientsById={clientsById}
-          onSelect={(c) => {
-            setVencenOpen(false)
-            onSelect(c)
-          }}
-          onGoToBase={goToBase}
-          onClose={() => setVencenOpen(false)}
         />
       )}
     </div>

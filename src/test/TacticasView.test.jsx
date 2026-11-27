@@ -6,7 +6,6 @@ import { vi } from 'vitest'
 vi.mock('../supabase', () => ({ supabase: { from: vi.fn() } }))
 
 import TacticasView from '../components/ads/tacticas/TacticasView'
-import { VENCEN_SEEN_KEY } from '../components/ads/tacticas/TacticasVencenModal'
 
 const brands = [
   { id: 'b1', name: 'RE/MAX', logo_url: null, line_id: 'l1' },
@@ -90,8 +89,6 @@ describe('TacticasView', () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.setSystemTime(new Date('2026-11-19T12:00:00'))
-    // El aviso "vencen pronto" sale una vez por sesión: aquí ya se vio, salvo en sus tests.
-    window.sessionStorage.setItem(VENCEN_SEEN_KEY, '1')
   })
   afterEach(() => {
     vi.useRealTimers()
@@ -218,53 +215,45 @@ describe('TacticasView', () => {
     })
   })
 
-  describe('aviso "vencen pronto"', () => {
-    beforeEach(() => window.sessionStorage.removeItem(VENCEN_SEEN_KEY))
+  describe('tarjeta "Vencen pronto"', () => {
+    const tarjeta = () => screen.getByRole('region', { name: '1 táctica vence en 10 días o menos' })
 
-    it('al entrar al Dashboard muestra las tácticas que vencen en ≤ 10 días', () => {
+    it('está en el Dashboard, debajo de la torta, sin ventana emergente', () => {
       renderView()
-      const aviso = screen.getByRole('dialog', { name: '1 táctica vence en 10 días o menos' })
-      expect(within(aviso).getByText('Plan RE/MAX')).toBeInTheDocument()
-      expect(within(aviso).getByText('2 días')).toBeInTheDocument()
-      expect(within(aviso).queryByText('Plan Capitas')).not.toBeInTheDocument()
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      const resumen = screen.getByRole('region', { name: 'Resumen de tácticas' })
+      expect(
+        resumen.compareDocumentPosition(tarjeta()) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy()
+      expect(within(tarjeta()).getByText('Plan RE/MAX')).toBeInTheDocument()
+      expect(within(tarjeta()).getByText('2 días')).toBeInTheDocument()
+      expect(within(tarjeta()).queryByText('Plan Capitas')).not.toBeInTheDocument()
     })
 
-    it('"Ver urgentes en Base" cierra el aviso y abre Base filtrada', async () => {
+    it('"Ver urgentes" abre Base filtrada', async () => {
       const user = userEvent.setup()
       renderView()
-      await user.click(screen.getByRole('button', { name: 'Ver urgentes en Base (1)' }))
+      await user.click(screen.getByRole('button', { name: 'Ver urgentes (1)' }))
 
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
       expect(screen.getByLabelText('Estado')).toHaveValue('urgentes')
       expect(bodyRows()).toHaveLength(1)
     })
 
-    it('clic en una táctica del aviso abre su detalle', async () => {
+    it('clic en una táctica abre su detalle', async () => {
       const user = userEvent.setup()
       const onSelect = vi.fn()
       renderView({ onSelect })
-      await user.click(screen.getByText('Plan RE/MAX'))
+      await user.click(within(tarjeta()).getByText('Plan RE/MAX'))
       expect(onSelect).toHaveBeenCalledWith(campaigns[0])
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    })
-
-    it('se muestra una sola vez por sesión', async () => {
-      const user = userEvent.setup()
-      const { unmount } = renderView()
-      await user.click(screen.getByRole('button', { name: 'Cerrar aviso' }))
-      unmount()
-
-      renderView()
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     })
 
     it('no sale en Base, ni si nada vence pronto', () => {
       const { unmount } = renderView({}, '/ads?view=base')
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(screen.queryByText('Vencen pronto')).not.toBeInTheDocument()
       unmount()
 
       renderView({ campaigns: campaigns.slice(1) })
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(screen.queryByText('Vencen pronto')).not.toBeInTheDocument()
     })
   })
 
@@ -272,8 +261,9 @@ describe('TacticasView', () => {
     it('abre con ?view=base (y con el viejo ?view=historial) y lista todas las tácticas', () => {
       const { unmount } = renderView({}, '/ads?view=base')
       expect(screen.getByRole('button', { name: 'Base', pressed: true })).toBeInTheDocument()
-      expect(bodyRows()).toHaveLength(3)
-      expect(screen.getByText('Plan viejo Flexmed')).toBeInTheDocument()
+      // Abre en "Vigentes": la finalizada no sale hasta elegir "Todas".
+      expect(bodyRows()).toHaveLength(2)
+      expect(screen.queryByText('Plan viejo Flexmed')).not.toBeInTheDocument()
       expect(screen.queryByRole('region', { name: 'Resumen de tácticas' })).not.toBeInTheDocument()
       unmount()
 
@@ -285,10 +275,23 @@ describe('TacticasView', () => {
       renderView({}, '/ads?view=base')
       expect(screen.getByLabelText('Buscar')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Marca' })).toBeInTheDocument()
-      expect(screen.getByLabelText('Estado')).toHaveValue('todas')
+      expect(screen.getByLabelText('Estado')).toHaveValue('vigentes')
       expect(screen.queryByLabelText('Jefa')).not.toBeInTheDocument()
       expect(screen.queryByLabelText('Vence en')).not.toBeInTheDocument()
+      expect(screen.getByText('2 de 3 tácticas')).toBeInTheDocument()
+    })
+
+    it('"Todas" muestra también las finalizadas; la leyenda del avance tiene 5 tramos', async () => {
+      const user = userEvent.setup()
+      renderView({}, '/ads?view=base')
+      await user.selectOptions(screen.getByLabelText('Estado'), 'todas')
+      expect(bodyRows()).toHaveLength(3)
       expect(screen.getByText('3 tácticas')).toBeInTheDocument()
+
+      const leyenda = screen.getByRole('list', { name: 'Escala de avance' })
+      for (const t of ['Sin comenzar', 'Iniciada', 'En curso', 'Avanzada', 'Completada']) {
+        expect(within(leyenda).getByText(t)).toBeInTheDocument()
+      }
     })
 
     it('filtra por estado: al día, urgentes y finalizadas', async () => {
@@ -326,15 +329,17 @@ describe('TacticasView', () => {
     it('la búsqueda también encuentra por jefa', async () => {
       const user = userEvent.setup()
       renderView({}, '/ads?view=base')
+      await user.selectOptions(screen.getByLabelText('Estado'), 'todas')
       await user.type(screen.getByLabelText('Buscar'), 'daniellys')
 
       expect(bodyRows()).toHaveLength(2)
       expect(screen.queryByText('Plan RE/MAX')).not.toBeInTheDocument()
     })
 
-    it('filtra por marca y "Limpiar" restablece todos los filtros', async () => {
+    it('filtra por marca y "Limpiar" vuelve a Vigentes sin marca ni búsqueda', async () => {
       const user = userEvent.setup()
       renderView({}, '/ads?view=base')
+      await user.selectOptions(screen.getByLabelText('Estado'), 'todas')
       await user.click(screen.getByRole('button', { name: 'Marca' }))
       await user.click(screen.getByRole('option', { name: /Capitas/ }))
 
@@ -343,7 +348,8 @@ describe('TacticasView', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 
       await user.click(screen.getByRole('button', { name: 'Limpiar' }))
-      expect(bodyRows()).toHaveLength(3)
+      expect(screen.getByLabelText('Estado')).toHaveValue('vigentes')
+      expect(bodyRows()).toHaveLength(2)
     })
 
     it('sin coincidencias muestra el estado vacío con "Limpiar filtros"', async () => {
@@ -353,7 +359,7 @@ describe('TacticasView', () => {
 
       expect(screen.getByText('No hay tácticas con esos filtros')).toBeInTheDocument()
       await user.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
-      expect(bodyRows()).toHaveLength(3)
+      expect(bodyRows()).toHaveLength(2)
     })
   })
 

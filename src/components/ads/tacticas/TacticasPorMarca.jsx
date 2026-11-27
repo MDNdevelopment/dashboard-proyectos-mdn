@@ -214,6 +214,16 @@ export default function TacticasPorMarca({
                   </div>
                   <div className="flex items-center gap-2">
                     <DaysPill days={daysLeft(c, today)} />
+                    {c.presentation_url && (
+                      <a
+                        href={c.presentation_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[14px] font-semibold px-3 py-1.5 rounded-lg bg-[#111] text-white hover:bg-[#222] transition-colors"
+                      >
+                        Táctica presentación
+                      </a>
+                    )}
                     {c.drive_url ? (
                       <a
                         href={c.drive_url}
@@ -306,6 +316,16 @@ export default function TacticasPorMarca({
                       >
                         {c.status}
                       </span>
+                      {c.presentation_url && (
+                        <a
+                          href={c.presentation_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-semibold text-[#111] underline decoration-[#FFB800] underline-offset-2"
+                        >
+                          Táctica presentación
+                        </a>
+                      )}
                       {c.drive_url ? (
                         <a
                           href={c.drive_url}

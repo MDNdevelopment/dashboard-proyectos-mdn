@@ -6,7 +6,7 @@ import { useUnsavedChanges } from '../../hooks/useUnsavedChanges'
 import { useScopedClients } from '../../hooks/useScopedClients'
 import DateInput from '../common/DateInput'
 import CampaignChecklist from './CampaignChecklist'
-import { carryOverItem, normalizeDriveUrl, parseDriveId } from '../../utils/tacticas'
+import { carryOverItem, isWebUrl, normalizeDriveUrl, parseDriveId } from '../../utils/tacticas'
 import { updateHandoff } from './tacticas/tacticasApi'
 
 /**
@@ -41,6 +41,7 @@ export default function AdsForm({
     objective: campaign?.objective ?? '',
     drive_url: campaign?.drive_url ?? '',
     drive_folder_url: campaign?.drive_folder_url ?? '',
+    presentation_url: campaign?.presentation_url ?? '',
     status: campaign?.status ?? 'Pendiente',
     notes: campaign?.notes ?? '',
     checklist: campaign?.checklist ?? [],
@@ -116,6 +117,9 @@ export default function AdsForm({
   const driveInvalid = driveUrl !== null && parseDriveId(driveUrl) === null
   const folderUrl = normalizeDriveUrl(fields.drive_folder_url)
   const folderInvalid = folderUrl !== null && parseDriveId(folderUrl) === null
+  // La táctica presentación puede estar en Netlify u otra página: basta con que sea un link web.
+  const presentationUrl = normalizeDriveUrl(fields.presentation_url)
+  const presentationInvalid = presentationUrl !== null && !isWebUrl(presentationUrl)
 
   // Sin fecha está permitido (se agrega después), pero una sola fecha no.
   const halfDated = !fields.start_date !== !fields.end_date
@@ -126,7 +130,7 @@ export default function AdsForm({
   async function handleSubmit(e) {
     e.preventDefault()
     if (!fields.name.trim() || !fields.client_id) return
-    if (driveInvalid || folderInvalid || datesInvalid) return
+    if (driveInvalid || folderInvalid || presentationInvalid || datesInvalid) return
     setSubmitting(true)
     setError(null)
 
@@ -137,6 +141,7 @@ export default function AdsForm({
       objective: fields.objective.trim() || null,
       drive_url: driveUrl,
       drive_folder_url: folderUrl,
+      presentation_url: presentationUrl,
     }
     // Al crear, la táctica es de la jefa del team de la marca (no hay responsable que elegir).
     if (!isEdit) payload.assignee = jefa?.id ?? ''
@@ -380,6 +385,30 @@ export default function AdsForm({
               )}
             </div>
 
+            {/* Táctica presentación: la táctica publicada como página web (Netlify u otra) */}
+            <div className="col-span-1 sm:col-span-2">
+              <label className={labelClass} htmlFor="tactica-presentacion">
+                Táctica presentación (link)
+              </label>
+              <input
+                id="tactica-presentacion"
+                type="url"
+                className="input-base w-full"
+                placeholder="https://….netlify.app"
+                value={fields.presentation_url}
+                onChange={(e) => set('presentation_url', e.target.value)}
+              />
+              {presentationInvalid ? (
+                <p className="mt-1 text-[12.5px] text-red-600">
+                  Ese link no es válido. Pega la dirección completa, con https://.
+                </p>
+              ) : (
+                <p className="mt-1 text-[12.5px] text-[#999]">
+                  Si la táctica se presentó como página web (por ejemplo en Netlify).
+                </p>
+              )}
+            </div>
+
             {/* Link a la carpeta de la marca en TÁCTICAS MDN — full width */}
             <div className="col-span-1 sm:col-span-2">
               <label className={labelClass} htmlFor="tactica-carpeta">
@@ -477,7 +506,8 @@ export default function AdsForm({
               !fields.client_id ||
               datesInvalid ||
               driveInvalid ||
-              folderInvalid
+              folderInvalid ||
+              presentationInvalid
             }
             className="flex-1 py-2.5 rounded-xl bg-[#111] text-white text-[15px] font-bold hover:bg-[#222] transition-colors disabled:opacity-50"
           >
