@@ -56,6 +56,7 @@ export function isVencidaSinCerrar(campaign, today = todayCaracas()) {
  * tácticas: cambia la tabla a una fila por marca sin táctica vigente (ver `TacticasBase`).
  */
 export const ESTADOS_BASE = [
+  { key: 'vigentes', label: 'Vigentes' },
   { key: 'todas', label: 'Todas' },
   { key: 'al_dia', label: 'Al día' },
   { key: 'por_vencer', label: 'Por vencer' },
@@ -85,6 +86,8 @@ export const ESTADO_OF_GROUP = {
 export function matchesEstado(campaign, estado, today = todayCaracas()) {
   const tone = () => daysPillTone(daysLeft(campaign, today))
   switch (estado) {
+    case 'vigentes':
+      return isVigente(campaign, today)
     case 'al_dia':
       return isVigente(campaign, today) && tone() === 'green'
     case 'por_vencer':
@@ -205,6 +208,24 @@ export function checklistCounts(checklist) {
 export function completionPct(checklist) {
   const { done, total } = checklistCounts(checklist)
   return total ? Math.round((done / total) * 100) : null
+}
+
+/**
+ * Escala de colores del avance (cumplimiento de acciones), en 5 tramos: de gris (0 %) a
+ * verde fuerte (100 %). `max` es el tope inclusivo del tramo.
+ */
+export const AVANCE_TRAMOS = [
+  { key: 'sin_comenzar', label: 'Sin comenzar', range: '0%', max: 0, hex: '#bdb9ad' },
+  { key: 'iniciada', label: 'Iniciada', range: '1–33%', max: 33, hex: '#f2994a' },
+  { key: 'en_curso', label: 'En curso', range: '34–66%', max: 66, hex: '#FFB800' },
+  { key: 'avanzada', label: 'Avanzada', range: '67–99%', max: 99, hex: '#8bc34a' },
+  { key: 'completada', label: 'Completada', range: '100%', max: 100, hex: '#1e8e3e' },
+]
+
+/** Tramo de `AVANCE_TRAMOS` para un % (0-100). null si no hay % (táctica sin acciones). */
+export function avanceTramo(pct) {
+  if (pct == null) return null
+  return AVANCE_TRAMOS.find((t) => pct <= t.max) ?? AVANCE_TRAMOS[AVANCE_TRAMOS.length - 1]
 }
 
 /**
@@ -379,6 +400,20 @@ export function leadNameOf(clientId, clientsById, linesById, usersMap) {
   const line = linesById?.get(clientsById?.get(clientId)?.line_id)
   if (!line?.lead_user_id) return null
   return usersMap?.get(line.lead_user_id) ?? null
+}
+
+/**
+ * ¿Es un link web válido (http/https)? Para la presentación de la táctica, que puede vivir en
+ * Netlify u otra página, así que no se exige un dominio concreto como con Drive.
+ */
+export function isWebUrl(value) {
+  if (typeof value !== 'string') return false
+  try {
+    const u = new URL(value.trim())
+    return (u.protocol === 'https:' || u.protocol === 'http:') && u.hostname.includes('.')
+  } catch {
+    return false
+  }
 }
 
 /** Normaliza el campo del formulario: vacío → null (patrón de meetings.minuta_url). */

@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import ClientCell from '../ClientCell'
 import StatusPill from '../../common/StatusPill'
-import DaysPill from './DaysPill'
+import AvanceBar from './AvanceBar'
 import { STATUS, STATUSES } from '../constants'
 import { fmtDate } from '../campaignSpendApi'
 import {
   checklistCounts,
   completionPct,
+  daysLabel,
   daysLeft,
   isProgramada,
   isSinFecha,
@@ -107,7 +108,9 @@ export default function TacticasBaseTable({
 
   return (
     <div className="bg-white rounded-xl border border-[#e0ddd4] overflow-hidden">
-      <div className="overflow-x-auto">
+      {/* `relative`: los `sr-only` (absolute) de la tabla se anclan aquí; sin esto escapan del
+          scroll interno y le agregan un scroll horizontal a toda la página. */}
+      <div className="relative overflow-x-auto">
         <table className="w-full text-left text-[15px] min-w-[960px]">
           <thead>
             <tr className="border-b border-[#ece9df] bg-[#faf9f5]">
@@ -161,8 +164,9 @@ export default function TacticasBaseTable({
                   <td className="px-4 py-3 text-[#333] max-w-[240px]">
                     <span className="font-medium line-clamp-2">{c.name}</span>
                     {programada && (
-                      <span className="block text-[12px] font-mono font-semibold text-[#1565c0] mt-0.5">
-                        Programada · empieza el {fmtDate(c.start_date)}
+                      // La fecha ya está en la columna Inicio: aquí solo la etiqueta.
+                      <span className="inline-block text-[11px] font-mono font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-[#e3f2fd] text-[#1565c0] mt-1">
+                        Programada
                       </span>
                     )}
                     {vencida && (
@@ -203,17 +207,28 @@ export default function TacticasBaseTable({
                       </td>
                     </>
                   )}
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 text-[14px] font-mono text-[#555] whitespace-nowrap">
                     {enMarcha ? (
-                      <DaysPill days={daysLeft(c, today)} />
+                      daysLabel(daysLeft(c, today))
                     ) : (
                       <span className="text-[#bbb]">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-[13px] font-mono font-semibold text-[#555] whitespace-nowrap">
-                    {total > 0 ? `${done}/${total} · ${completionPct(c.checklist)}%` : '—'}
+                  <td className="px-4 py-3">
+                    <AvanceBar done={done} total={total} />
                   </td>
                   <td className="px-4 py-3 text-[14px] whitespace-nowrap">
+                    {c.presentation_url && (
+                      <a
+                        href={c.presentation_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="block font-semibold text-[#111] underline decoration-[#FFB800] underline-offset-2 mb-1"
+                      >
+                        Táctica presentación
+                      </a>
+                    )}
                     {c.drive_url ? (
                       <a
                         href={c.drive_url}

@@ -189,8 +189,18 @@ export default function AdsDetail({
             </div>
           )}
 
-          {(campaign.drive_url || campaign.drive_folder_url) && (
+          {(campaign.drive_url || campaign.drive_folder_url || campaign.presentation_url) && (
             <div className="flex flex-wrap gap-2 mb-4">
+              {campaign.presentation_url && (
+                <a
+                  href={campaign.presentation_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[14px] font-semibold px-3 py-1.5 rounded-lg bg-[#111] text-white hover:bg-[#222] transition-colors"
+                >
+                  Táctica presentación
+                </a>
+              )}
               {campaign.drive_url && (
                 <a
                   href={campaign.drive_url}

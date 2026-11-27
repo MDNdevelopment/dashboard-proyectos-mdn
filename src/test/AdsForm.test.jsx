@@ -430,6 +430,43 @@ describe('AdsForm — objetivo, link de Drive y marca precargada', () => {
     expect(mockInsertPayload).not.toHaveBeenCalled()
   })
 
+  it('guarda la táctica presentación (link de Netlify) al crear', async () => {
+    const user = userEvent.setup()
+    renderForm()
+    await fillRequired(user)
+
+    await user.type(
+      screen.getByLabelText('Táctica presentación (link)'),
+      '  https://presentacionpush.netlify.app  ',
+    )
+    await user.click(screen.getByRole('button', { name: 'Crear táctica' }))
+
+    await waitFor(() => expect(mockInsertPayload).toHaveBeenCalled())
+    expect(mockInsertPayload.mock.calls[0][0]).toMatchObject({
+      presentation_url: 'https://presentacionpush.netlify.app',
+    })
+  })
+
+  it('táctica presentación vacía se guarda como null', async () => {
+    const user = userEvent.setup()
+    renderForm()
+    await fillRequired(user)
+    await user.click(screen.getByRole('button', { name: 'Crear táctica' }))
+
+    await waitFor(() => expect(mockInsertPayload).toHaveBeenCalled())
+    expect(mockInsertPayload.mock.calls[0][0]).toMatchObject({ presentation_url: null })
+  })
+
+  it('una táctica presentación que no es un link bloquea el guardado', async () => {
+    const user = userEvent.setup()
+    renderForm()
+    await fillRequired(user)
+
+    await user.type(screen.getByLabelText('Táctica presentación (link)'), 'presentacionpush')
+    expect(screen.getByText(/Pega la dirección completa, con https/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Crear táctica' })).toBeDisabled()
+  })
+
   it('la carpeta de la marca también tiene que ser un link de Drive', async () => {
     const user = userEvent.setup()
     renderForm()

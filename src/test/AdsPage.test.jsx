@@ -98,7 +98,6 @@ vi.mock('../context/AuthContext', () => ({
 
 import { useAuth } from '../context/AuthContext'
 import AdsPage from '../pages/AdsPage'
-import { VENCEN_SEEN_KEY } from '../components/ads/tacticas/TacticasVencenModal'
 
 function renderPage(route = '/ads') {
   useAuth.mockReturnValue({
@@ -122,8 +121,6 @@ describe('AdsPage — tabs Tácticas/Ads', () => {
     // sistema y se rompe cada vez que deja de ser julio.
     vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.setSystemTime(new Date('2026-07-15T12:00:00'))
-    // El aviso "vencen pronto" del Dashboard sale una vez por sesión: aquí ya se vio.
-    window.sessionStorage.setItem(VENCEN_SEEN_KEY, '1')
   })
   afterEach(() => {
     vi.useRealTimers()
@@ -198,7 +195,7 @@ describe('AdsPage — tabs Tácticas/Ads', () => {
   })
 
   describe('subvistas de Tácticas', () => {
-    it('Base lista todas las tácticas, estén vigentes o no', async () => {
+    it('Base abre con las vigentes y "Todas" muestra también las vencidas', async () => {
       const user = userEvent.setup()
       renderPage()
       await waitDashboard()
@@ -206,16 +203,21 @@ describe('AdsPage — tabs Tácticas/Ads', () => {
       await user.click(screen.getByRole('button', { name: 'Base' }))
 
       await waitFor(() => {
-        expect(screen.getByText('Táctica Junio')).toBeInTheDocument()
+        expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
       })
-      expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
+      expect(screen.getByLabelText('Estado')).toHaveValue('vigentes')
+      expect(screen.queryByText('Táctica Junio')).not.toBeInTheDocument()
+      expect(screen.queryByText('Táctica Cruzada')).not.toBeInTheDocument()
+
+      await user.selectOptions(screen.getByLabelText('Estado'), 'todas')
+      expect(screen.getByText('Táctica Junio')).toBeInTheDocument()
       expect(screen.getByText('Táctica Cruzada')).toBeInTheDocument()
     })
 
     it('la subvista vive en la URL: ?view=base abre Base directamente', async () => {
       renderPage('/ads?view=base')
       await waitFor(() => {
-        expect(screen.getByText('Táctica Junio')).toBeInTheDocument()
+        expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
       })
       expect(screen.getByRole('button', { name: 'Base', pressed: true })).toBeInTheDocument()
     })
@@ -223,7 +225,7 @@ describe('AdsPage — tabs Tácticas/Ads', () => {
     it('el viejo ?view=historial abre Base', async () => {
       renderPage('/ads?view=historial')
       await waitFor(() => {
-        expect(screen.getByText('Táctica Junio')).toBeInTheDocument()
+        expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
       })
       expect(screen.getByRole('button', { name: 'Base', pressed: true })).toBeInTheDocument()
     })
@@ -262,12 +264,12 @@ describe('AdsPage — tabs Tácticas/Ads', () => {
       expect(screen.getByText('Táctica Julio')).toBeInTheDocument()
     })
 
-    it('el aviso "vencen pronto" sale al entrar al Dashboard', async () => {
-      window.sessionStorage.removeItem(VENCEN_SEEN_KEY)
+    it('la tarjeta "vencen pronto" está en el Dashboard, no como ventana', async () => {
       renderPage()
       expect(
-        await screen.findByRole('dialog', { name: '1 táctica vence en 10 días o menos' }),
+        await screen.findByRole('region', { name: '1 táctica vence en 10 días o menos' }),
       ).toBeInTheDocument()
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     })
   })
 

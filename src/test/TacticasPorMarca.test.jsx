@@ -182,6 +182,29 @@ describe('TacticasPorMarca', () => {
     expect(items[1]).toHaveTextContent('Cumplimiento: sin acciones registradas')
   })
 
+  it('la táctica presentación sale en la vigente y en el historial', () => {
+    renderMarca([
+      camp({ presentation_url: 'https://superfina.netlify.app' }),
+      camp({
+        id: 'old',
+        name: 'Anterior',
+        status: 'Finalizado',
+        end_date: '2026-10-31',
+        presentation_url: 'https://anterior.netlify.app',
+      }),
+    ])
+    const sec = screen.getByRole('region', { name: /Táctica vigente: Tácticas noviembre/ })
+    expect(within(sec).getByRole('link', { name: 'Táctica presentación' })).toHaveAttribute(
+      'href',
+      'https://superfina.netlify.app',
+    )
+    const hist = screen.getByRole('region', { name: 'Historial de tácticas' })
+    expect(within(hist).getByRole('link', { name: 'Táctica presentación' })).toHaveAttribute(
+      'href',
+      'https://anterior.netlify.app',
+    )
+  })
+
   it('el link de Drive de una táctica pasada abre en pestaña nueva', () => {
     renderMarca([
       camp(),

@@ -4,11 +4,13 @@ import FilterBar, { FilterField } from '../../common/FilterBar'
 import DescribedSelect from '../../common/DescribedSelect'
 import TacticasBaseTable from './TacticasBaseTable'
 import TacticasPorHacerTable from './TacticasPorHacerTable'
+import { AvanceLeyenda } from './AvanceBar'
 import { ESTADOS_BASE, isVigente, matchesEstado } from '../../../utils/tacticas'
 
 /**
  * Vista "Base" de Tácticas: todas las tácticas (vigentes e historial) en una tabla, con
- * filtros por texto, marca y estado (los mismos grupos de la torta). El Estado "Sin táctica" cambia
+ * filtros por texto, marca y estado (los mismos grupos de la torta). Abre con el Estado
+ * "Vigentes"; el team se elige con las pills de línea de `AdsPage`. El Estado "Sin táctica" cambia
  * la tabla a una fila por marca sin táctica vigente. Mismo patrón que la Base de Tareas.
  *
  * @param {object}   props
@@ -47,7 +49,7 @@ export default function TacticasBase({
   onDeleted,
   onCreate,
   onOpenBrand,
-  initialEstado = 'todas',
+  initialEstado = 'vigentes',
 }) {
   const [search, setSearch] = useState('')
   const [marca, setMarca] = useState('')
@@ -102,11 +104,12 @@ export default function TacticasBase({
       ? 'táctica'
       : 'tácticas'
 
-  const hasFilters = !!search || !!marca || estado !== 'todas'
+  // "Vigentes" es el Estado por defecto: limpiar filtros vuelve a él.
+  const hasFilters = !!search || !!marca || estado !== 'vigentes'
   function clearFilters() {
     setSearch('')
     setMarca('')
-    setEstado('todas')
+    setEstado('vigentes')
   }
 
   async function handleStatusChange(campaign, status) {
@@ -161,9 +164,12 @@ export default function TacticasBase({
             </select>
           </FilterField>
         </FilterBar>
-        <p className="text-[14px] text-[#888]">
-          {shown !== total ? `${shown} de ${total}` : total} {noun}
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+          <p className="text-[14px] text-[#888]">
+            {shown !== total ? `${shown} de ${total}` : total} {noun}
+          </p>
+          {!porHacer && <AvanceLeyenda />}
+        </div>
       </div>
 
       {total === 0 ? (
