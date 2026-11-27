@@ -194,7 +194,7 @@ export default function MiTrabajoView({
 
 const ENTREGADAS_VISIBLES = 10
 
-/** Lotes propios ya completos, colapsados; EdicionRapida permite bajar listas y deshacer. */
+/** Lotes propios ya completos, colapsados; EdicionRapida permite devolver un video (o bajar las listas de una foto) y deshacer. */
 function Entregadas({ entregadas, onPiezaChanged, onPautaClick }) {
   const [abierta, setAbierta] = useState(false)
   const [todas, setTodas] = useState(false)

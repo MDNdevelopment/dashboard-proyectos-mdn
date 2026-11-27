@@ -4,6 +4,10 @@
 import { describe, it, expect } from 'vitest'
 import {
   STUDIO_WINDOW_HOURS,
+  videosDeLote,
+  conteoEstadosVideos,
+  resumenEstadosVideos,
+  siguienteEstadoVideo,
   lugarLabel,
   studioWindow,
   estudioConflicts,
@@ -595,5 +599,47 @@ describe('briefComplete / pautaErrorMessage (rediseño)', () => {
       }),
     ).toMatch(/ya tiene ese formato/)
     expect(pautaErrorMessage({ code: '23505', message: 'otra cosa' })).toMatch(/No se pudo guardar/)
+  })
+})
+
+describe('estado por video de un lote', () => {
+  const v = (id, pieza_id, status, position) => ({ id, pieza_id, status, position })
+
+  it('videosDeLote filtra por lote y ordena por position', () => {
+    const todos = [v('c', 'z1', 'listo', 2), v('x', 'z2', 'listo', 0), v('a', 'z1', 'pendiente', 0)]
+    expect(videosDeLote(todos, 'z1').map((x) => x.id)).toEqual(['a', 'c'])
+    expect(videosDeLote(undefined, 'z1')).toEqual([])
+  })
+
+  it('conteoEstadosVideos cuenta solo los estados presentes', () => {
+    const vs = [v(1, 'z', 'listo', 0), v(2, 'z', 'listo', 1), v(3, 'z', 'pendiente', 2)]
+    expect(conteoEstadosVideos(vs)).toEqual({ listo: 2, pendiente: 1 })
+    expect(conteoEstadosVideos(null)).toEqual({})
+  })
+
+  it('resumenEstadosVideos va de lo más cercano a terminar y concuerda el número', () => {
+    const vs = [
+      v(1, 'z', 'pendiente', 0),
+      v(2, 'z', 'listo', 1),
+      v(3, 'z', 'espera_aprobacion', 2),
+      v(4, 'z', 'listo', 3),
+      v(5, 'z', 'pendiente', 4),
+    ]
+    expect(resumenEstadosVideos(vs)).toBe('2 listos · 1 en espera de aprobación · 2 pendientes')
+    expect(resumenEstadosVideos([v(1, 'z', 'cancelado', 0)])).toBe('1 cancelado')
+    expect(resumenEstadosVideos([])).toBe('')
+  })
+
+  it('siguienteEstadoVideo recorre el flujo y se detiene en Listo y Cancelado', () => {
+    expect(siguienteEstadoVideo('pendiente')).toBe('en_edicion')
+    expect(siguienteEstadoVideo('en_edicion')).toBe('espera_aprobacion')
+    expect(siguienteEstadoVideo('espera_aprobacion')).toBe('listo')
+    expect(siguienteEstadoVideo('listo')).toBeNull()
+    expect(siguienteEstadoVideo('cancelado')).toBeNull()
+  })
+
+  it('bajar asignadas con videos en curso o listos da un mensaje claro', () => {
+    const err = { code: '23514', message: 'No se puede bajar la cantidad: hay videos en edición' }
+    expect(pautaErrorMessage(err)).toMatch(/No se pueden bajar las asignadas/)
   })
 })

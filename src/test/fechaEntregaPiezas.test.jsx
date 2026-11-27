@@ -7,8 +7,14 @@ const api = vi.hoisted(() => ({
   updatePieza: vi.fn(),
   setFechaEntregaPauta: vi.fn(),
   setFechaEntregaFormato: vi.fn(),
+  loadVideosDeLote: vi.fn(async () => ({ data: [], error: null })),
+  updateVideo: vi.fn(),
 }))
 vi.mock('../components/pautas/avPautasApi', () => api)
+vi.mock('../supabase', () => {
+  const channel = { on: vi.fn(() => channel), subscribe: vi.fn(() => channel) }
+  return { supabase: { channel: vi.fn(() => channel), removeChannel: vi.fn() } }
+})
 
 import EdicionSection from '../components/pautas/EdicionSection'
 import { alertas, pautaErrorMessage, pautaPermissions } from '../utils/audiovisual'

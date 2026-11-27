@@ -3,10 +3,18 @@ import { vi } from 'vitest'
 
 const upsertLote = vi.fn()
 const updatePieza = vi.fn()
+const loadVideosDeLote = vi.fn()
+const updateVideo = vi.fn()
 vi.mock('../components/pautas/avPautasApi', () => ({
   upsertLote: (...a) => upsertLote(...a),
   updatePieza: (...a) => updatePieza(...a),
+  loadVideosDeLote: (...a) => loadVideosDeLote(...a),
+  updateVideo: (...a) => updateVideo(...a),
 }))
+vi.mock('../supabase', () => {
+  const channel = { on: vi.fn(() => channel), subscribe: vi.fn(() => channel) }
+  return { supabase: { channel: vi.fn(() => channel), removeChannel: vi.fn() } }
+})
 
 import MiTrabajoView from '../components/pautas/MiTrabajoView'
 
@@ -91,6 +99,20 @@ const PIEZAS = [
     listas: 0,
   },
 ]
+// l1 (6 asignadas): 4 listo + 2 pendiente. Los lotes `done*` (2 asignadas): 2 listo.
+const videosDe = (piezaId) => {
+  const estados =
+    piezaId === 'l1'
+      ? ['listo', 'listo', 'listo', 'listo', 'pendiente', 'pendiente']
+      : ['listo', 'listo']
+  return estados.map((status, i) => ({
+    id: `${piezaId}-v${i}`,
+    pieza_id: piezaId,
+    nombre: null,
+    status,
+    position: i,
+  }))
+}
 const byPauta = (list) => {
   const m = new Map()
   list.forEach((pz) => {
@@ -131,6 +153,10 @@ const seccion = (name) => within(screen.getByRole('region', { name }))
 beforeEach(() => {
   upsertLote.mockReset().mockResolvedValue({ data: { id: 'nuevo' }, error: null })
   updatePieza.mockReset().mockResolvedValue({ data: { id: 'l1', listas: 5 }, error: null })
+  loadVideosDeLote
+    .mockReset()
+    .mockImplementation(async (id) => ({ data: videosDe(id), error: null }))
+  updateVideo.mockReset().mockImplementation(async (id, f) => ({ data: { id, ...f }, error: null }))
 })
 
 describe('MiTrabajoView — cabecera y secciones', () => {
@@ -157,7 +183,7 @@ describe('MiTrabajoView — cabecera y secciones', () => {
     )
     const editar = seccion('Por editar (2)')
     expect(editar.getByText('Push')).toBeInTheDocument()
-    expect(editar.getByLabelText('Cantidad de listas de Reel de Push')).toHaveValue('4')
+    expect(editar.getByLabelText('Videos de Reel de Push')).toBeInTheDocument()
     expect(editar.getByRole('button', { name: 'Ver pauta Push' })).toBeInTheDocument()
   })
 
@@ -187,20 +213,25 @@ describe('MiTrabajoView — entregadas', () => {
     expect(screen.queryByRole('region', { name: /Entregadas/ })).not.toBeInTheDocument()
   })
 
-  it('aparece colapsada y al abrirla lista el lote entregado; bajar una lo regresa a edición', async () => {
+  it('aparece colapsada y al abrirla lista el lote entregado; devolver un video lo regresa a edición', async () => {
     const piezas = [...PIEZAS, ...lotesListos(1)]
-    const { onPiezaChanged } = setup({ piezas })
+    setup({ piezas })
     const region = screen.getByRole('region', { name: 'Entregadas (1)' })
     expect(within(region).queryByText('Push')).not.toBeInTheDocument()
 
     fireEvent.click(within(region).getByRole('button', { name: /Entregadas \(1\)/ }))
     expect(within(region).getByText('Push')).toBeInTheDocument()
-    expect(within(region).getByRole('button', { name: '✓ todo listo' })).toBeDisabled()
+    // Un video listo ya no ofrece avanzar: el flujo termina en "Listo".
+    await within(region).findAllByRole('button', { name: 'Listo' })
+    expect(within(region).queryByRole('button', { name: /^Pasar video/ })).not.toBeInTheDocument()
 
-    updatePieza.mockResolvedValue({ data: { id: 'done0', listas: 1 }, error: null })
-    fireEvent.click(within(region).getByRole('button', { name: /Quitar listas|Restar listas/i }))
-    await waitFor(() => expect(onPiezaChanged).toHaveBeenCalled())
-    expect(updatePieza).toHaveBeenCalledWith('done0', expect.objectContaining({ listas: 1 }))
+    fireEvent.click(within(region).getAllByRole('button', { name: 'Listo' })[0])
+    // El menú de StatusPill se monta en un portal al final del body: su opción es la última.
+    fireEvent.click((await screen.findAllByRole('button', { name: 'En edición' })).at(-1))
+    await waitFor(() =>
+      expect(updateVideo).toHaveBeenCalledWith('done0-v0', { status: 'en_edicion' }),
+    )
+    expect(updatePieza).not.toHaveBeenCalled()
   })
 
   it('muestra 10 y "ver todas" despliega el resto', () => {
@@ -287,31 +318,36 @@ describe('MiTrabajoView — captura rápida', () => {
 })
 
 describe('MiTrabajoView — edición rápida', () => {
-  it('+1 sube "listas" del lote propio y avisa al padre', async () => {
-    const { onPiezaChanged } = setup()
-    fireEvent.click(screen.getByRole('button', { name: 'Agregar listas de Reel de Push' }))
-    await waitFor(() => expect(updatePieza).toHaveBeenCalledWith('l1', { listas: 5 }))
-    expect(onPiezaChanged).toHaveBeenCalledWith({ id: 'l1', listas: 5 })
+  it('muestra los videos de mi lote y avanza uno de un toque, sin tocar listas del lote', async () => {
+    setup()
+    const lista = screen.getByLabelText('Videos de Reel de Push')
+    await within(lista).findByRole('button', { name: 'Pasar video 5 a En edición' })
+    fireEvent.click(within(lista).getByRole('button', { name: 'Pasar video 5 a En edición' }))
+    await waitFor(() => expect(updateVideo).toHaveBeenCalledWith('l1-v4', { status: 'en_edicion' }))
+    expect(updatePieza).not.toHaveBeenCalled()
   })
 
-  it('escribir más que las asignadas se recorta al tope', async () => {
+  it('un video en espera de aprobación avanza a Listo', async () => {
+    loadVideosDeLote.mockImplementation(async (id) => ({
+      data: videosDe(id).map((v, i) => (i === 4 ? { ...v, status: 'espera_aprobacion' } : v)),
+      error: null,
+    }))
     setup()
-    const input = screen.getByLabelText('Cantidad de listas de Reel de Push')
-    fireEvent.focus(input)
-    fireEvent.change(input, { target: { value: '99' } })
-    fireEvent.keyDown(input, { key: 'Enter' })
-    await waitFor(() => expect(updatePieza).toHaveBeenCalledWith('l1', { listas: 6 }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Pasar video 5 a Listo' }))
+    await waitFor(() => expect(updateVideo).toHaveBeenCalledWith('l1-v4', { status: 'listo' }))
   })
 
-  it('"todo listo" pone listas = asignadas', async () => {
+  it('un video listo no ofrece avanzar', async () => {
     setup()
-    fireEvent.click(screen.getByRole('button', { name: '✓ todo listo' }))
-    await waitFor(() => expect(updatePieza).toHaveBeenCalledWith('l1', { listas: 6 }))
+    await screen.findByRole('button', { name: 'Pasar video 5 a En edición' })
+    expect(screen.queryByRole('button', { name: 'Pasar video 1 a En edición' })).toBeNull()
   })
 
-  it('no ofrece lotes de otros editores', () => {
+  it('no ofrece lotes de otros editores', async () => {
     setup()
-    expect(screen.getAllByRole('button', { name: /^Agregar listas/ })).toHaveLength(1)
+    await screen.findByRole('button', { name: 'Pasar video 5 a En edición' })
+    expect(screen.getAllByLabelText(/^Videos de /)).toHaveLength(1)
+    expect(loadVideosDeLote).not.toHaveBeenCalledWith('l2')
   })
 })
 
@@ -351,5 +387,46 @@ describe('MiTrabajoView — tomar cupo', () => {
   it('si no puedo editar piezas de la pauta, no aparece para tomar', () => {
     setup({ permsFor: (p) => ({ canEditPiezas: p.id !== 'ajena', canMarkRealizada: false }) })
     expect(screen.queryByRole('region', { name: 'Disponible para tomar' })).not.toBeInTheDocument()
+  })
+})
+
+describe('MiTrabajoView — fotos se llevan por cantidad', () => {
+  const FOTO = {
+    id: 'f1',
+    pauta_id: 'lun',
+    editor_user_id: ME,
+    formato: 'F',
+    es_lote: true,
+    cantidad: 20,
+    listas: 5,
+  }
+
+  it('un lote de fotos no pide videos y muestra el stepper de listas', async () => {
+    setup({ piezas: [...PIEZAS, FOTO] })
+    expect(
+      screen.getByRole('button', { name: 'Agregar listas de Foto de Push' }),
+    ).toBeInTheDocument()
+    await screen.findByLabelText('Videos de Reel de Push')
+    expect(loadVideosDeLote).toHaveBeenCalledWith('l1')
+    expect(loadVideosDeLote).not.toHaveBeenCalledWith('f1')
+  })
+
+  it('+1 sube las listas de la foto y avisa al padre', async () => {
+    updatePieza.mockResolvedValue({ data: { id: 'f1', listas: 6 }, error: null })
+    const { onPiezaChanged } = setup({ piezas: [...PIEZAS, FOTO] })
+    fireEvent.click(screen.getByRole('button', { name: 'Agregar listas de Foto de Push' }))
+    await waitFor(() => expect(updatePieza).toHaveBeenCalledWith('f1', { listas: 6 }))
+    expect(onPiezaChanged).toHaveBeenCalledWith({ id: 'f1', listas: 6 })
+    expect(updateVideo).not.toHaveBeenCalled()
+  })
+
+  it('"todo listo" de una foto pone listas = asignadas', async () => {
+    updatePieza.mockResolvedValue({ data: { id: 'f1', listas: 20 }, error: null })
+    setup({ piezas: [...PIEZAS, FOTO] })
+    const card = screen
+      .getByRole('button', { name: 'Agregar listas de Foto de Push' })
+      .closest('li')
+    fireEvent.click(within(card).getByRole('button', { name: '✓ todo listo' }))
+    await waitFor(() => expect(updatePieza).toHaveBeenCalledWith('f1', { listas: 20 }))
   })
 })
